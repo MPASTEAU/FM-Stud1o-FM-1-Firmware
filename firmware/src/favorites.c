@@ -56,6 +56,12 @@ static const char *palette_name(uint32_t v) { return v == NPALETTES ? "CUSTOM" :
 /* the palette in use into gfx.c (the settings changed under it: a start, an import, a restore, a STYLE change) */
 static void palette_apply(void)
 {
+#if defined(FELUCCA_DEMO) && FELUCCA_DEMO
+    if (favorites.factory[15][13] != 'H') {         /* HA HA HE HU's first start: its HAHA palette once (byte 13: free); */
+        favorites.factory[15][13] = 'H';            /* saved with the settings, so a palette picked later stays */
+        settings.palette = NPALETTES - 1u;
+    }
+#endif
     if (cpal_on()) {
         palette_custom_load(ui_cpal);
         palette_set(NPALETTES);
