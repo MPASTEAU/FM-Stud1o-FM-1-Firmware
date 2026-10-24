@@ -31,7 +31,7 @@ static struct {
     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
     uint8_t rec;
     uint32_t carry;
-} chain;
+} chain __attribute__((section(".pool")));   /* (HA HA HE HU: eight tracks' sources, out of RAM's .bss) */
 /* a silent lane: its steps (empty: nothing plays) and its timing (a 4/4 bar of 1/16: the section's length when every
  * track is silent) */
 static const step_t chain_silent[NSTEP] = {{{0}}};
@@ -86,6 +86,33 @@ static int chain_from_v9(chain_config_t *c, const chain_v9_t *o)
     }
     c->count = o->count;
     return 1;
+}
+/* HA HA HE HU: the sections of FUN10 (four tracks a row) <-> today's (eight): tracks base..base + 3 of each row, the
+ * others silent (from), the repeats and CUT as they are. 0: not a valid one */
+static int chain_from_v10(chain_config_t *c, const chain_v10_t *o)
+{
+    uint32_t i, k;
+    chain_defaults(c);
+    if (o->count > CHAIN_ROWS)
+        return 0;
+    for (i = 0; i < CHAIN_ROWS; i++) {
+        for (k = 0; k < NTRK; k++)
+            c->row[i].slot[k] = k < NTRK_V10 ? o->row[i].slot[k] : (uint8_t)CHAIN_SILENT;
+        c->row[i].repeat = o->row[i].repeat;
+    }
+    c->count = o->count;
+    return chain_valid(c);
+}
+static void chain_to_v10(chain_v10_t *o, const chain_config_t *c, uint32_t base)
+{
+    uint32_t i, k;
+    memset(o, 0, sizeof *o);
+    o->count = c->count;
+    for (i = 0; i < CHAIN_ROWS; i++) {
+        for (k = 0; k < NTRK_V10; k++)
+            o->row[i].slot[k] = c->row[i].slot[base + k];
+        o->row[i].repeat = c->row[i].repeat;
+    }
 }
 /* the track whose loops count section r's length: the first one not silent; every track silent: track 1 (a bar) */
 static uint32_t chain_clock(const chain_row_t *r)

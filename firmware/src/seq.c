@@ -654,7 +654,7 @@ static void input_off(track_t *t, uint32_t note)
 static uint32_t perf_key(uint32_t k)
 {
     uint32_t p = key_place(k);
-    return !key_black(k) ? (p < PF_KEYS ? perf_map[p] : PF_N) : p < NTRK ? PF_M1 + p : PF_N;
+    return !key_black(k) ? (p < PF_KEYS ? perf_map[p] : PF_N) : p < 4u ? PF_M1 + trk_bank() + p : PF_N;   /* (the bank's) */
 }
 
 /* a key of the FX layer down (FX held) / up: the effect it holds. kb_fx: the one it took (+ 1, 0 none), so a key

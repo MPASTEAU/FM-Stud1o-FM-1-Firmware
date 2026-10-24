@@ -43,6 +43,8 @@ static uint32_t pow2_q16(int32_t d16)
  * smp_zone_t layout (off relative to the slot's data at +512) + IMA ADPCM data. */
 #include "../hal/fm1_xip.h"   /* relative: hostsim includes this file too */
 #define SMP_USER_SLOTS 3
+#define SMP_USER_WRITABLE 2                         /* HA HA HE HU: USR3's flash (0xC8000..) holds tracks 5..8 of the
+                                                     * projects (storage.c OBJ_PROJX0..): USR3 is always empty */
 #define SMP_USER_BASE 0xA0000u
 #define SMP_USER_SIZE 0x14000u
 #define SMP_USER_DATA 512u
@@ -82,7 +84,7 @@ static void smp_user_scan(uint32_t k)
     smp_user_gen++;
     usr_nz[k] = 0;
     slc_user_scan(k, 0);
-    if (h->magic == SMP_USER_MAGIC && h->version == 1 && h->nz && h->nz <= 16u &&
+    if (k < SMP_USER_WRITABLE && h->magic == SMP_USER_MAGIC && h->version == 1 && h->nz && h->nz <= 16u &&
         h->data_len <= SMP_USER_SIZE - SMP_USER_DATA) {
         base = (uint32_t)(uintptr_t)(smp_user_xip(k) + SMP_USER_DATA) - (uint32_t)(uintptr_t)SMP_DATA;
         for (nz = h->nz, i = 0; i < nz; i++) {

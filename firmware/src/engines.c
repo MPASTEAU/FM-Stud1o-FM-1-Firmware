@@ -13,12 +13,21 @@
  * Sized by the largest, PHYS (3 x SYMP's slot); an engine that needs more than ENG_MEM_PART grows it for
  * every part (x NPART of the pool). Zero-initialised pool section: main.c fm1_cstart clears it. */
 #define ENG_MEM_PART 12888u
+/* HA HA HE HU: parts 1..2 (NPART_BIG) keep the region above; parts 3..8 a small one, ENG_MEM_SMALL (DRUM's lanes, the
+ * largest of DRUM FM6 SLICE): PHYS and GRAIN play on tracks 1..2 only (eng_fits; the FM-1's RAM has no room for more
+ * large regions with eight tracks) */
+#define NPART_BIG 2u
+#define ENG_MEM_SMALL 1824u
 static union {
     uint64_t align;
     uint8_t b[ENG_MEM_PART];
-} eng_mem[NPART] __attribute__((section(".pool")));
+} eng_mem[NPART_BIG] __attribute__((section(".pool")));
+static union {
+    uint64_t align;
+    uint8_t b[ENG_MEM_SMALL];
+} eng_mem_s[NPART - NPART_BIG] __attribute__((section(".pool")));
 static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in the region, 0 = none (zeros) */
-#define ENG_MEM(p) ((void *)eng_mem[p].b)  /* part p's region (p < NPART) */
+#define ENG_MEM(p) ((p) < NPART_BIG ? (void *)eng_mem[p].b : (void *)eng_mem_s[(p) - NPART_BIG].b)   /* part p's region */
 #define ENG_MEM_FITS(name, size) _Static_assert((size) <= ENG_MEM_PART, name " state over ENG_MEM_PART")
 
 #include "../engines/src/eng_analog.c"   /* Felucca-Engines (MIT): ANALOG LOFI TRIO WHEEL NOISE */
@@ -73,6 +82,13 @@ static const engine_t *const ENGINES[NENGINES] = {
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
 static inline uint32_t eng_idx(uint32_t e) { return e < NENGINES ? e : 0u; }
+/* engine e can play on part p: its state fits the part's region (HA HA HE HU: PHYS and GRAIN on tracks 1..2 only) */
+static int eng_fits(uint32_t p, uint32_t e) { return p < NPART_BIG || ENGINES[eng_idx(e)]->mem <= ENG_MEM_SMALL; }
+_Static_assert(sizeof(drum_lane_t) * DV_NLANE <= ENG_MEM_SMALL && sizeof(fm6_note_t) * FM6_POLY <= ENG_MEM_SMALL
+#if FELUCCA_SLICE
+               && sizeof(slc_rbuf_t) <= ENG_MEM_SMALL
+#endif
+               , "DRUM FM6 SLICE fit the light parts");
 
 /* part t's engine memory goes to its engine (t->engine; voice.c engine_block, once a block: on a switch, after
  * the old engine's fade, before any note on the new one): zeroed (its engine_t.mem bytes) when another
@@ -196,6 +212,8 @@ static const struct {
 #define NPATTERNS (sizeof PATTERNS / sizeof PATTERNS[0])
 
 /* the parts at power-on (engine, preset, PATTERNS[n - 1] in the sequencer, 0 = empty: all are): bass, pad, lead, drums */
-static const uint8_t TRK_DEF[NPART][3] = {{0, 4, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0}}; /* ANALOG ACID,
+static const uint8_t TRK_DEF[NPART][3] = {{0, 4, 0}, {ENGI_FM6, 4, 0}, {3, 0, 0}, {ENGI_DRUM, 0, 0},
+                                          {ENGI_FM6, 1, 0}, {0, 8, 0}, {5, 0, 0}, {ENGI_DRUM, 3, 0}};
+                                          /* (HA HA HE HU: 5..8 FM6 BELL, ANALOG PLUCK, VOICE CHOIR AAH, DRUM PERC KIT) ANALOG ACID,
                                                                        * FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT */
 static uint32_t trk_def_engine(uint32_t i) { return TRK_DEF[i % NPART][0]; }

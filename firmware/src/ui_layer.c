@@ -246,9 +246,9 @@ static void layer_opened(uint32_t l)
     for (k = 0; k < 4u; k++)
         if (l == LAYER_SEQ) {
             lys.v[k] = TSEL->p[P_SLEN + k];
-        } else if (l == LAYER_GLO) {
-            lys.v[k] = trk[k].p[P_MUTE];
-            lys.v[4u + k] = trk[k].p[P_LEVEL];
+        } else if (l == LAYER_GLO) {                    /* (HA HA HE HU: the bank's four tracks) */
+            lys.v[k] = trk[trk_bank() + k].p[P_MUTE];
+            lys.v[4u + k] = trk[trk_bank() + k].p[P_LEVEL];
         } else {
             lys.v[k] = TSEL->p[P_ROOT + k];
             lys.v[4u + k] = k < 2u ? TSEL->p[P_CHRD + k] : 0;
@@ -636,9 +636,9 @@ static void layer_key(uint32_t l, uint32_t k)
             lys.fxk = (uint8_t)(k + 1u);                /* (PRESETS assigns it while held) */
     } else if (l == LAYER_GLO) {
         if (key_black(k)) {
-            if (p < NTRK)
-                trk[p].p[P_MUTE] = (int16_t)!trk[p].p[P_MUTE];
-        } else if (p < NTRK) {
+            if (p < 4u)                                 /* (HA HA HE HU: the selected track's bank of four) */
+                trk[trk_bank() + p].p[P_MUTE] = (int16_t)!trk[trk_bank() + p].p[P_MUTE];
+        } else if (p < 4u) {
             lys.solo |= 1u << k;                        /* (layer_masks: perf_solo while held) */
         } else if (p == 4u) {
             for (i = 0; i < NTRK; i++)
@@ -694,7 +694,7 @@ static void layer_keys(uint32_t keys)
     }
     for (k = 0; k < 27u; k++)
         if ((lys.solo >> k) & 1u)
-            s |= 1u << key_place(k);
+            s |= 1u << (trk_bank() + key_place(k));    /* (HA HA HE HU: the bank's tracks) */
     perf_solo = (uint8_t)s;
 }
 
@@ -706,12 +706,13 @@ static void layer_knob(uint32_t k, int32_t s)
         if (k == 3u && !perf_harm_on())
             s = -s;                                     /* DEPTH (100 - perf_k[3]) rises to the right (#40: it fell) */
         perf_k[k] = (int8_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
-    } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER */
-        int16_t *vp = &trk[k].p[P_LEVEL];
+    } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER (HA HA HE HU: the bank's) */
+        track_t *bt = &trk[trk_bank() + (k & 3u)];
+        int16_t *vp = &bt->p[P_LEVEL];
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
                              TP[P_LEVEL].max);
-        motion_capture(&trk[k], P_LEVEL, *vp);
-        ml_knob(&trk[k], P_LEVEL);                      /* (MIDI LEARN: Tk LEVEL picked) */
+        motion_capture(bt, P_LEVEL, *vp);
+        ml_knob(bt, P_LEVEL);                           /* (MIDI LEARN: Tk LEVEL picked) */
     } else if (l == LAYER_EDIT) {                       /* ENG, No., FAV */
         if (k == 0u)
             edit_load(eng_step(TSEL->eng_req, s), 0);
@@ -811,9 +812,9 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 ui_message(lys.l == LAYER_REC ? "REC PUT BACK" : "SEQUENCE PUT BACK");
             }
         } else if (lys.l == LAYER_GLO) {
-            for (k = 0; k < NTRK; k++) {
-                trk[k].p[P_MUTE] = lys.v[k];
-                trk[k].p[P_LEVEL] = lys.v[4u + k];
+            for (k = 0; k < 4u; k++) {                  /* (the bank's four) */
+                trk[trk_bank() + k].p[P_MUTE] = lys.v[k];
+                trk[trk_bank() + k].p[P_LEVEL] = lys.v[4u + k];
             }
             song.g[G_BPM] = lys.v[8];
             ui_message("MIX PUT BACK");
@@ -846,9 +847,9 @@ static uint32_t layer_leds(uint32_t *br)
             can = e < PF_N && ((ok >> e) & 1u);
             on = can && ((held >> e) & 1u);
         } else if (l == LAYER_GLO) {                    /* sounding lit; SOLO held lit, the others, C4, F4 breathe */
-            on = b ? p < NTRK && glo_sounding(p) : (p < NTRK && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
+            on = b ? p < 4u && glo_sounding(trk_bank() + p) : (p < 4u && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
                  (p == 6u && seq_fill);
-            can = !b && (p < NTRK || p == 4u || p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
+            can = !b && (p < 4u || p == 4u || p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
         } else if (l == LAYER_SCL) {                    /* the root lit, the scale's notes breathe */
             e = (k + 5u + 12u - root) % 12u;
             on = e == 0u;
@@ -881,7 +882,7 @@ static uint32_t layer_leds(uint32_t *br)
  * short name, 4 a row); the footer the keycaps. A cell: RAISE
  * (can be pressed), the selection's fill (the value now, SET), the accent (held, HOLD), DIM (cannot now: pressing
  * it says why), KEY (a muted track, as the MUTE badge); HOLD cells in a SET layer: a corner triangle */
-static const char B_NOTE[NTRK] = {'F', 'G', 'A', 'C'};  /* black keys 1..4: F# G# A# C# */
+static const char B_NOTE[4] = {'F', 'G', 'A', 'C'};     /* black keys 1..4: F# G# A# C# */
 #define LC_X(c) (6 + 58 * (int32_t)(c))                 /* cell column c: 54 px wide, 4 px apart */
 #define LC_W 54
 #define LC_H 42                                          /* the big cells: rows at y 4 and 50 */
@@ -992,18 +993,19 @@ static void layer_fx(void)
         lcell(LC_X(p % 4u), 4 + (LF_H + 4) * (int32_t)(p / 4u), LF_H, n, 0, 0, e < PF_NFX ? PF_CELL[e] : "",
               st | (p & 1u ? LS_ALT : 0u), 0);           /* (#173: the 2nd and 4th columns' idle cells their own fill) */
     }
-    for (e = 0; e < NTRK; e++) {                        /* the mutes of the black keys 1..4 */
+    for (e = 0; e < 4u; e++) {                          /* the mutes of the black keys 1..4 (the bank's tracks) */
         bnote(n, e);
-        lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(e, 0), 0, (held >> (PF_M1 + e)) & 1u ? LS_MUTE : LS_OFF, 0);
+        lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(trk_bank() + e, 0), 0,
+              (held >> (PF_M1 + trk_bank() + e)) & 1u ? LS_MUTE : LS_OFF, 0);
     }
 }
 static void layer_glo(void)
 {
     uint32_t e;
     char n[3] = {0, 0, 0};
-    for (e = 0; e < NTRK; e++) {                        /* F3 .. B3: SOLO while held */
+    for (e = 0; e < 4u; e++) {                          /* F3 .. B3: SOLO while held (the bank's tracks) */
         n[0] = W_NOTE[e];
-        lcell(LC_X(e), 4, LC_H, n, trk_icon(e, 0), 0, "SOLO", (perf_solo >> e) & 1u ? LS_HELD : LS_OFF, 1);
+        lcell(LC_X(e), 4, LC_H, n, trk_icon(trk_bank() + e, 0), 0, "SOLO", (perf_solo >> (trk_bank() + e)) & 1u ? LS_HELD : LS_OFF, 1);
     }
     n[0] = 'C';
     lcell(LC_X(0), 50, LC_H, n, ICON_MUTE, 0, "ALL", LS_OFF, 0);   /* (unmute all) */
@@ -1013,9 +1015,9 @@ static void layer_glo(void)
     lcell(LC_X(2), 50, LC_H, n, ICON_STEPS, 0, "FILL", seq_fill ? LS_HELD : LS_OFF, 1);   /* (FILL while held, 1.5.5) */
     n[0] = 'F';
     lcell(LC_X(3), 50, LC_H, n, ICON_TEMPO, 0, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF, 0);
-    for (e = 0; e < NTRK; e++) {                        /* the black keys 1..4: MUTE, latched */
+    for (e = 0; e < 4u; e++) {                          /* the black keys 1..4: MUTE, latched (the bank's tracks) */
         bnote(n, e);
-        lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(e, 0), 0, trk[e].p[P_MUTE] ? LS_MUTE : LS_OFF, 0);
+        lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(trk_bank() + e, 0), 0, trk[trk_bank() + e].p[P_MUTE] ? LS_MUTE : LS_OFF, 0);
     }
 }
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
@@ -1186,10 +1188,11 @@ static void layer_cards(uint32_t l)
             draw_column(3, "DEPTH", val, "%", VAL(3u), (100 - perf_k[3]) * 10, ICON_MIX);
         }
     } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL (the track's icon; muted: dim) */
-        for (c = 0; c < NTRK; c++) {
-            param_format(&TP[P_LEVEL], trk[c].p[P_LEVEL], val, &unit);
-            draw_column(c, "LEVEL", val, unit, glo_sounding(c) ? VAL(c) : T_DIM, RATIO(&TP[P_LEVEL], trk[c].p[P_LEVEL]),
-                        trk_icon(c, 1));
+        for (c = 0; c < 4u; c++) {                     /* (HA HA HE HU: the bank's four) */
+            uint32_t k = trk_bank() + c;
+            param_format(&TP[P_LEVEL], trk[k].p[P_LEVEL], val, &unit);
+            draw_column(c, "LEVEL", val, unit, glo_sounding(k) ? VAL(c) : T_DIM, RATIO(&TP[P_LEVEL], trk[k].p[P_LEVEL]),
+                        trk_icon(k, 1));
         }
     } else if (l == LAYER_EDIT) {
         engine_columns();

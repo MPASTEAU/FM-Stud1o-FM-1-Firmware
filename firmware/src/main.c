@@ -236,11 +236,42 @@ static void dm_drop_drums(uint32_t at, int crash, int busy)
     }
     d->step[at + 22].hit = (uint8_t)((d->step[at + 22].hit & ~(1u << DV_HATC)) | 1u << DV_HATO);
 }
+/* HA HA HE HU's eight tracks: the intro's instruments on tracks 5..8, in F minor over the pad's chords (DM_CHORD):
+ *   track 5  FM6 BELL: the chords' tones arpeggiated on the 1/8 (a delay, a long reverb)
+ *   track 6  ANALOG PLUCK: the root and fifth, an octave up, on the offbeats (the delay)
+ *   track 7  VOICE CHOIR AAH: each chord's top tone held, an octave up (a big reverb, quiet)
+ *   track 8  DRUM PERC KIT: claves and congas, the intro's percussion */
+static const uint8_t DM_ARP[4][4] = {{65, 68, 72, 68}, {65, 68, 73, 68}, {67, 70, 75, 70}, {67, 72, 76, 72}};
+static void dm_intro_inst(uint32_t at, uint32_t len, uint32_t n)
+{
+    uint32_t i, k;
+    for (i = 0; i < n; i++) {
+        uint32_t c0 = at + i * len;
+        for (k = 0; k < len; k += 2u)                 /* the bell's arpeggio, 1/8 */
+            demo_note(&trk[4].step[c0 + k], DM_ARP[i % 4u][(k / 2u) % 4u], 80);
+        for (k = 2; k < len; k += 4u) {               /* the pluck's offbeats: root and fifth */
+            demo_note(&trk[5].step[c0 + k], DM_CHORD[i % 4u][0] + 12u, 85);
+            demo_note(&trk[5].step[c0 + k], DM_CHORD[i % 4u][2] + 12u, 85);
+        }
+        demo_note(&trk[6].step[c0], DM_CHORD[i % 4u][2] + 12u, 70);   /* the choir's held top tone */
+        demo_hold(&trk[6], c0, len);
+    }
+}
+static void dm_perc(uint32_t at, uint32_t len)        /* claves on the "and"s, congas before the backbeats */
+{
+    uint32_t i;
+    for (i = 0; i < len; i += 8u) {
+        demo_hit(&trk[7], at + i + 3u, 1u << DV_RIM, 70);
+        demo_hit(&trk[7], at + i + 6u, 1u << DV_TOM, 80);
+    }
+}
 /* the loop at power-on: two bars of intro (the build in the second), two of the drop */
 static void dm_loop(void)
 {
     dm_clear();
     dm_chords(0, 8, 4);
+    dm_intro_inst(0, 8, 4);
+    dm_perc(0, 32);
     dm_riser(16, 16);
     dm_intro_drums(0, 16, 0);
     dm_roll(16, 16);
@@ -305,6 +336,19 @@ static void felucca_demo(void)
     p->p[P_DLY] = 30;
     p->p[P_LEVEL] = (int16_t)(p->p[P_LEVEL] - 6);   /* -3 dB (LEVEL: 0.5 dB a step) */
     d->p[P_REV] = 24;
+    demo_sound(&trk[4], ENGI_FM6, 1);         /* BELL */
+    trk[4].p[P_LEVEL] = 96;
+    trk[4].p[P_DLY] = 45;
+    trk[4].p[P_REV] = 70;
+    demo_sound(&trk[5], 0, 8);                /* ANALOG PLUCK */
+    trk[5].p[P_LEVEL] = 94;
+    trk[5].p[P_DLY] = 55;
+    demo_sound(&trk[6], 5, 0);                /* VOICE CHOIR AAH */
+    trk[6].p[P_LEVEL] = 88;
+    trk[6].p[P_REV] = 100;
+    demo_sound(&trk[7], ENGI_DRUM, 3);        /* PERC KIT */
+    trk[7].p[P_LEVEL] = 96;
+    trk[7].p[P_REV] = 40;
     dm_loop();
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
@@ -329,7 +373,6 @@ static void demo_save(uint32_t slot, const char *name)
 
 /* boot, after the autosave: with every PROJECT slot empty, the song's four sections into A..D and the SONG set; the
  * tracks then hold what they held: the session the autosave restored (restored), else the loop (felucca_demo's) */
-static project_t demo_keep __attribute__((section(".pool")));
 static void demo_song_boot(int restored)
 {
     static const uint8_t ROWS[][2] = {{0, 2}, {1, 1}, {2, 2 | CHAIN_CUT}, {3, 2}, {0, 1}, {1, 1}, {2, 2 | CHAIN_CUT},
@@ -343,8 +386,7 @@ static void demo_song_boot(int restored)
                 chain_config = proj_scratch.chain;
             return;
         }
-    if (restored)
-        project_capture(&demo_keep);
+
     chain_defaults(&chain_config);
     chain_config.count = (uint8_t)NELEM(ROWS);
     for (i = 0; i < NELEM(ROWS); i++) {
@@ -352,12 +394,17 @@ static void demo_song_boot(int restored)
             chain_config.row[i].slot[k] = ROWS[i][0];
         chain_config.row[i].repeat = ROWS[i][1];
     }
-    dm_clear();                               /* A: INTRO, the pad, then soft hats and a kick on each 1 */
+    dm_clear();                               /* A: INTRO, the pad, then soft hats and a kick on each 1; 5..8 the bell,
+                                               * the pluck, the choir, the percussion from bar 3 */
     dm_chords(0, 16, 4);
+    dm_intro_inst(0, 16, 4);
+    dm_perc(32, 32);
     dm_intro_drums(32, 32, 1);
     demo_save(0, "INTRO");
-    dm_clear();                               /* B: BUILD, the pad turned into noise, the kick on the beats, the roll */
+    dm_clear();                               /* B: BUILD, the pad turned into noise, the kick on the beats, the roll; the
+                                               * bell and the pluck on */
     dm_chords(0, 16, 4);
+    dm_intro_inst(0, 16, 4);
     dm_riser(0, 64);
     for (i = 0; i < 32u; i += 4u)
         demo_hit(&trk[3], i, 1u << DV_KICK, 100);
@@ -375,7 +422,7 @@ static void demo_song_boot(int restored)
     dm_drop_drums(0, 1, 1);
     dm_drop_drums(32, 0, 1);
     demo_save(3, "DROP 2");
-    if (restored && !project_restore_runtime(&demo_keep))
+    if (restored && autosave_boot(1))                /* (the session the autosave restored, again: it is still there) */
         return;
     dm_loop();
     for (i = 0; i < NTRK; i++)

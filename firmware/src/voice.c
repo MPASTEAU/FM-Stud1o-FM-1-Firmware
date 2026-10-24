@@ -524,6 +524,8 @@ static void engine_block(track_t *t)
             v->stage = 0;
             v->env = v->env_out = 0;
         }
+        if (!eng_fits((uint32_t)(t - trk), t->eng_req))   /* (HA HA HE HU: never a large engine on a light part) */
+            t->eng_req = 0;
         t->engine = eng_idx(t->eng_req);
         eng_mem_claim(t);                               /* its state region, before the waiting notes */
         t->xf_on = 0;
@@ -536,7 +538,9 @@ static void engine_block(track_t *t)
                 trk_note_on(t, t->xp_note[i], t->xp_vel[i]);
         }
     }
-    eng_mem_claim(t);                                   /* (an engine set directly: power-on, a test) */
+    if (!eng_fits((uint32_t)(t - trk), t->engine))     /* (an engine set directly: power-on, a test) */
+        t->engine = t->eng_req = 0;
+    eng_mem_claim(t);
     for (i = 0; i < 8u; i++)                            /* the engine's own values, for a later fade */
         t->pe_old[i] = t->p[P_E0 + i];
 }

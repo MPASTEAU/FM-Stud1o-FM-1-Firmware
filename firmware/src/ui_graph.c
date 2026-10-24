@@ -997,8 +997,8 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
 #define SG_Y 3                                         /* the lanes: y 3 .. 88 */
 #define SG_LH 20                                       /* a lane's height (its letter, the pattern's picture), SG_LG between two */
 #define SG_LG 2
-#define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)
-#define SG_LY(k) (SG_Y + (int32_t)(k) * (SG_LH + SG_LG))   /* lane k's top */
+#define SG_H (4 * (SG_LH + SG_LG) - SG_LG)            /* (HA HA HE HU: four lanes shown, a bank of the eight) */
+#define SG_LY(k) (SG_Y + (int32_t)((k) & 3u) * (SG_LH + SG_LG))   /* lane k's top (its row in the bank shown) */
 #define SG_GAP 2                                       /* between two blocks (in a block's width) */
 #define SG_MINW 16                                     /* a block's least width, its gap included: a letter in it */
 #define SG_ADDW 20                                     /* + ADD's slot */
@@ -1708,7 +1708,7 @@ static void track_strip(uint32_t c, uint32_t sel, uint32_t st, uint32_t mute, ui
     cv_rrect(5, TSS_MY, gw, 3, 1, T_RAISE, T_SURF);
     if (m)
         cv_rrect(5, TSS_MY, m < 3 ? 3 : m, 3, 1, T_MID, T_RAISE);
-    cv_blit((uint32_t)CARD_X(c), LG_Y_GRAPH);
+    cv_blit((uint32_t)CARD_X(c % 4u), LG_Y_GRAPH);
 }
 static void draw_tracks(void)
 {
@@ -1719,7 +1719,7 @@ static void draw_tracks(void)
         for (c = 0; c < NTRK; c++)
             ts.meter[c] = 0;
     }
-    for (c = 0; c < NTRK; c++) {
+    for (c = trk_bank(); c < trk_bank() + 4u; c++) {   /* (HA HA HE HU: the selected track's bank of four) */
         track_t *t = &trk[c];
         uint32_t sel = c == song.sel, lvl = trk_level(c), mute = t->p[P_MUTE] != 0, lit = (uint32_t)midi_lit(c);
         uint32_t arm = (song.rec >> c) & 1u, st = arm ? (song.playing ? 1u : 2u) : mute ? 3u : 0u, sig;
@@ -1797,7 +1797,7 @@ static void draw_tracks(void)
             GFX_HOOK_ALIGN(42 - KNOB_SMALL_R, 0, 42 + KNOB_SMALL_R, 0, AL_H, "mixer value under its knob");
             cv_text_in(42 - KNOB_SMALL_R, KS_Y + 17, 2 * KNOB_SMALL_R, &AF_S, v, rc, T_SURF);
         }
-        cv_blit((uint32_t)CARD_X(c), Y_GRAPH);
+        cv_blit((uint32_t)CARD_X(c % 4u), Y_GRAPH);
     }
     ux_tint(ux.trk[song.sel % NTRK]);                  /* (the panel's colour back: draw_graph's) */
 }
@@ -1836,7 +1836,7 @@ static void home_track_row(uint32_t c)
     const step_t *s = seq_steps(t);
     uint32_t sel = c == song.sel, mute = t->p[P_MUTE] != 0, large = (ui_prefs & PREF_LARGE) != 0u, lit = (uint32_t)midi_lit(c);
     uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), np = (len + 15u) / 16u, pg, p0, ph, i, sig, carry = 0;
-    int32_t y = Y_GRAPH + (int32_t)c * TR_PITCH, m, x, xr = 222, ch = large ? AF_M_CAP_H : AF_S_CAP_H;
+    int32_t y = Y_GRAPH + (int32_t)(c & 3u) * TR_PITCH, m, x, xr = 222, ch = large ? AF_M_CAP_H : AF_S_CAP_H;
     uint16_t bg = sel ? T_THEME : T_SURF, half = ux_mix(T_THEME, T_INK, 35);
     uint16_t cn = sel ? (mute ? ux_mix(T_THEME, T_INK, 55) : T_INK) : mute ? T_DIM : T_THEME;   /* a note */
     uint16_t ca = sel || mute ? cn : T_ACCENT, cs = sel ? half : T_RAISE;   /* accented; a stub */
@@ -1927,7 +1927,7 @@ static void draw_home_tracks(void)
         lcd_fill(3 + TR_W, Y_GRAPH, 240 - 3 - TR_W, H_GRAPH, T_BG);
         for (c = 0; c < NTRK; c++)
             ts.meter[c] = 0;
-        for (c = 1; c < NTRK; c++) {                 /* the 2 rows between two rows; LINE: a rule on the first */
+        for (c = 1; c < 4u; c++) {                   /* the 2 rows between two rows; LINE: a rule on the first */
             uint32_t y = (uint32_t)(Y_GRAPH + (int32_t)c * TR_PITCH - 2);
             if (ux.style) {
                 lcd_fill(3, y, TR_W, 1, T_RULE);
@@ -1936,7 +1936,7 @@ static void draw_home_tracks(void)
             lcd_fill(3, ux.style ? y + 1u : y, TR_W, ux.style ? 1u : 2u, T_BG);
         }
     }
-    for (c = 0; c < NTRK; c++)
+    for (c = trk_bank(); c < trk_bank() + 4u; c++)   /* (HA HA HE HU: the selected track's bank of four) */
         home_track_row(c);
 }
 /* oscilloscope of the output, triggered on a rising zero crossing: a RAISE centre line, the trace 2 px (in silence
@@ -2141,6 +2141,7 @@ static void graph_song(void)
     const aafont_t *fl = &AF_M;                       /* the line: the selected cell's detail and the length, M */
     int32_t off, px, sp, hi = SG_X0 + SG_W, bx, x0, ly = SG_IY - (AF_M_CAP_Y + AF_M_CAP_H);
     uint32_t i, j, k, c = song_cur(), lane = ui.song_trk, total, bars;   /* (lane NTRK: SEC, no lane picked) */
+    uint32_t sb = (lane < NTRK ? lane : song.sel) & ~3u;   /* (HA HA HE HU: the bank of four lanes shown) */
     char b[24], a[12];
     song_layout(&L);
     off = song_follow(&L);
@@ -2148,7 +2149,7 @@ static void graph_song(void)
     sp = px >= 0 ? SG_X0 + px - off : -100;
     total = L.u0[L.n];
     bars = (total + SG_BARU - 1u) / SG_BARU;
-    for (k = 0; k < NTRK; k++)                        /* the lanes' cushions */
+    for (k = sb; k < sb + 4u; k++)                    /* the lanes' cushions */
         cv_trk(SG_TX, SG_LY(k) + (SG_LH - 16) / 2, 16, k, k == lane ? T_ACCENT : T_MID, T_SURF);
     for (i = 1; i < L.n; i++) {                       /* the sections' boundaries, faint, behind the blocks */
         int32_t x = SG_X0 + L.x[i] - off - 1;
@@ -2160,7 +2161,7 @@ static void graph_song(void)
         if ((chain_config.row[i].repeat & CHAIN_CUT) && x >= SG_X0 && x + 2 <= hi)
             cv_rect(x, SG_Y, 2, SG_H, T_ACCENT);
     }
-    for (k = 0; k < NTRK; k++)                        /* the lanes: a block per run of one slot, "-" a faint line */
+    for (k = sb; k < sb + 4u; k++)                    /* the lanes: a block per run of one slot, "-" a faint line */
         for (ux_tint(ux.trk[k]), i = 0; i < L.n; i = j) {   /* (HA HA HE HU: each lane in its track's colour) */
             uint32_t s = chain_config.row[i].slot[k];
             for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
@@ -2199,11 +2200,11 @@ static void graph_song(void)
         r1 = r1 < hi ? r1 : hi;
         if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
-            for (k = 0; k < NTRK; k++) {
+            for (k = sb; k < sb + 4u; k++) {
                 uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
                 int on = k == lane && s < 4u && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
-                cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < NTRK ? SG_LG : 0), on ? T_INK : T_ACCENT);
+                cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < sb + 4u ? SG_LG : 0), on ? T_INK : T_ACCENT);
             }
             cv_rect(sp, SG_Y + SG_H, 2, SG_RY - SG_Y - SG_H + 6, T_ACCENT);
         }

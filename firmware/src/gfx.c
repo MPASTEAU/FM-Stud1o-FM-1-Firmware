@@ -83,7 +83,7 @@ static uint8_t cv_flip;          /* cv_alpha_hc: the cell mirrored left <-> righ
 static struct {
     uint16_t bg, surf, text, theme, accent;
     uint16_t mid, dim, line, sel, tint, ink, rec, raise, key, lane, grid;
-    uint16_t trk[4], fam[12], drum[8];   /* HA HA HE HU: the meaning colours (ux_hues): tracks, page families, drum lanes */
+    uint16_t trk[8], fam[12], drum[8];   /* HA HA HE HU: the meaning colours (ux_hues): tracks, page families, drum lanes */
     uint8_t light, mono;
     uint8_t style;               /* MENU > STYLE (ui.c style_apply): ST_FLAT, ST_LINE */
     uint32_t gen;                /* bumped by palette_set (the text ramps follow) */
@@ -153,7 +153,8 @@ static void palette_custom_load(const uint8_t *b)
  * magenta, GLO sky, SAVE grey, ARP mint, SEQ blue, TRK, the knob cards' values and gauges: where one is), the drum lanes
  * (KICK red, SNARE orange, CLAP yellow, HAT CL teal, HAT OP cyan, TOM green, RIM violet, BELL pink: the grid's hits).
  * GREY and MONO keep one colour (their theme: what they promise), CUSTOM takes these too */
-static const uint8_t UX_TRK[4][3] = {{64, 200, 255}, {170, 132, 255}, {255, 184, 64}, {255, 88, 150}};
+static const uint8_t UX_TRK[8][3] = {{64, 200, 255}, {170, 132, 255}, {255, 184, 64}, {255, 88, 150},
+                                     {120, 226, 110}, {255, 136, 72}, {104, 150, 255}, {236, 226, 140}};   /* (T5 green, T6 orange, T7 blue, T8 sand) */
 static const uint8_t UX_FAM[12][3] = {{0, 0, 0}, {150, 230, 90}, {60, 222, 200}, {255, 140, 60}, {240, 222, 80},
                                       {226, 104, 255}, {110, 172, 255}, {176, 178, 190}, {90, 222, 150}, {96, 150, 255},
                                       {0, 0, 0}, {0, 0, 0}};   /* (0: the palette's THEME) */
@@ -170,7 +171,7 @@ static uint16_t ux_hue(const uint8_t *c, uint16_t theme)
 static void ux_hues(int bw)
 {
     uint32_t k;
-    for (k = 0; k < 4u; k++)
+    for (k = 0; k < 8u; k++)
         ux.trk[k] = bw ? ux.theme : ux_hue(UX_TRK[k], ux.theme);
     for (k = 0; k < 12u; k++)
         ux.fam[k] = bw ? ux.theme : ux_hue(UX_FAM[k], ux.theme);

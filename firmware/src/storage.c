@@ -28,8 +28,12 @@
  * copy (st_save_to), so a power cut never loses both.
  * The FM6 voice bank (1.4.1, fm6_vbank.c): 0xE7000, the sector above the autosave, with a commit record of the same
  * kind (type OBJ_FM6VB, not an st_load object); a new bank is first staged in the autosave's older copy (fm6_vbank.c). */
+/* HA HA HE HU: tracks 5..8 of each project (project.c "FUNX", proj_pack_x) and of the autosave, objects of their own in
+ * what was user sample slot USR3 (eng_sample.c SMP_USER_WRITABLE): OBJ_PROJX0..3 0xC8000..0xCFFFF (A/B pairs as the
+ * projects'), OBJ_AUTOX 0xD0000 / 0xD1000. A project is then its object (tracks 1..4, Felucca's FUN10, as any firmware
+ * reads it) and its X object, tied by the first's hash (a missing or stale X: tracks 5..8 as at power-on) */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_UPFM6,
-       OBJ_AUTOSAVE, OBJ_COUNT };
+       OBJ_AUTOSAVE, OBJ_PROJX0, OBJ_AUTOX = OBJ_PROJX0 + 4, OBJ_COUNT };
 #define OBJ_FM6VB 32u                          /* the voice bank's commit records (fm6_vbank.c; >= OBJ_COUNT: st_load
                                                 * never takes one, no object here takes its sectors) */
 
@@ -69,6 +73,10 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return copy ? 0xFE000u : 0x9F000u;
     if (obj == OBJ_AUTOSAVE)
         return 0xE5000u + copy * ST_SECTOR;
+    if (obj == OBJ_AUTOX)                                /* (HA HA HE HU: tracks 5..8, in USR3's flash) */
+        return 0xD0000u + copy * ST_SECTOR;
+    if (obj >= OBJ_PROJX0)
+        return 0xC8000u + (obj - OBJ_PROJX0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     if (obj >= OBJ_UPRESET0)
         return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;

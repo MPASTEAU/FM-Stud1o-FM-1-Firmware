@@ -990,7 +990,8 @@ static void draw_columns_in(void)
             card_mot_of(vp);
             card_span_of(d);
             if (home_levels())                         /* 1.5: T1..T4 LEVEL, the track's cushion, muted: DIM */
-                draw_column(c, "LEVEL", val, unit, trk[c].p[P_MUTE] ? T_DIM : VAL(c), RATIO(d, *vp), trk_icon(c, 1));
+                draw_column(c, "LEVEL", val, unit, trk[trk_bank() + c].p[P_MUTE] ? T_DIM : VAL(c), RATIO(d, *vp),
+                            trk_icon(trk_bank() + c, 1));   /* (HA HA HE HU: the selected track's bank) */
             else
                 draw_column(c, d->label, val, unit, VAL(c), RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
         }

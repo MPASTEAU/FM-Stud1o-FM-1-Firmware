@@ -1291,7 +1291,7 @@ static uint32_t preset_rank(const engine_t *e, uint32_t k)
     return n;
 }
 
-#define preset_shown(e) (ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))
+#define preset_shown(e) (!eng_fits(song.sel, e) ? 0u : ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))   /* (HA HA HE HU: none of an engine the track cannot play) */
 
 #if !FELUCCA_FM4
 /* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own
@@ -1388,8 +1388,11 @@ static void apply_preset_to(track_t *t, uint32_t pi)
  * its values or the new one with its own (voice.c engine_block), never one with the other's */
 static void set_engine_of(track_t *t, uint32_t ei)
 {
-    const engine_t *e = ENGINES[ei % NENGINES];
+    const engine_t *e;
     uint32_t i;
+    if (!eng_fits((uint32_t)(t - trk), ei % NENGINES))   /* (HA HA HE HU: PHYS GRAIN on tracks 1..4) */
+        ei = 0;
+    e = ENGINES[ei % NENGINES];
 #if !FELUCCA_FM4
     if (ei % NENGINES == ENGI_DIGITAL) {             /* DIGITAL (retired): its first preset, as FM6 */
         fm4_load_preset(t, 0);
@@ -1734,7 +1737,7 @@ static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 
 /* HOME: the track KNOB k edits (MENU > HOME LEVELS, 1.5: track k; else the selected one) and what: the engine's four
  * main parameters, or (LEVELS) the track's LEVEL, as the GLO layer's knobs */
-static track_t *home_trk(uint32_t k) { return home_levels() ? &trk[k & 3u] : TSEL; }
+static track_t *home_trk(uint32_t k) { return home_levels() ? &trk[trk_bank() + (k & 3u)] : TSEL; }
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
     uint32_t id = home_levels() ? (uint32_t)P_LEVEL : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];

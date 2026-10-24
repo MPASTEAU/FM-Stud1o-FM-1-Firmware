@@ -500,11 +500,11 @@ EXPORT uint8_t *web_anim_levels(void)
 }
 
 /* for the test and the bench (web/emu/emu_test.mjs), a heavy song straight into the tracks (as hostsim's
- * renders set them): T1 FM6 PAD, T2 PHYS DRONE STRING (SYMP), T3 GRAIN CLOUD PAD, 4-note chords on all 16
+ * renders set them): T1 PHYS DRONE STRING (SYMP), T2 GRAIN CLOUD PAD, T3 FM6 PAD, 4-note chords on all 16
  * steps, held; T4 DRUM, kick snare and hats. PLAY is the page's (or the test's) to press */
 EXPORT void web_test_heavy(void)
 {
-    static const uint8_t ENG[3][2] = {{12, 4}, {ENGI_PHYS, 7}, {8, 0}};
+    static const uint8_t ENG[3][2] = {{ENGI_PHYS, 7}, {8, 0}, {12, 4}};   /* (HA HA HE HU: PHYS and GRAIN on tracks 1..2) */
     static const uint8_t CH[4][4] = {{48, 55, 60, 64}, {45, 52, 57, 60}, {41, 48, 53, 57}, {43, 50, 55, 59}};
     uint32_t p, i;
     for (p = 0; p < 3u; p++) {
@@ -520,6 +520,7 @@ EXPORT void web_test_heavy(void)
         }
     }
     host_drums(&trk[3]);
+    chain_config.count = 0;                   /* (HA HA HE HU: no SONG, so PLAY on HOME plays these) */
     for (i = 0; i < 16u; i++) {
         uint8_t n[4];
         uint32_t k = 0;
