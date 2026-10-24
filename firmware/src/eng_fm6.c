@@ -229,33 +229,75 @@ static void fm6_track_loaded(const track_t *t)
     }
 }
 
-/* DRUM's designed lanes (eng_drum.c dl_*) in track tr's patch: lane l's field f = v. A patch without them first gets
- * every lane's default and the mark (its FM6 voice gives way: a DRUM track does not play it). Main loop */
-static void dl_set(uint32_t tr, uint32_t l, uint32_t f, uint32_t v)
+/* DRUM's designed lanes (eng_drum.c dl_*) in patch p: without the mark, every lane at its default and the mark (its FM6
+ * voice gives way: a DRUM track does not play it); without the layer sets' (phase 2: a patch of before, or none), the
+ * five sets at DV_SYN_DEF and their mark. dl_on / ds_on of the track read the track's patch: tr is the one p is for */
+static void dl_fill(uint32_t tr, uint8_t *p)
 {
-    uint8_t p[FP_SIZE + 1u];
     uint32_t k, i;
-    tr %= NTRK;
-    memcpy(p, fm6_patch[tr], FP_SIZE + 1u);
     if (!dl_on(tr)) {
         for (k = 0; k < DV_NLANE; k++)
             for (i = 0; i < DL_NF; i++)
                 p[dl_byte(k, i)] = DL_DEF[i];
         memcpy(p + DL_NAME, DL_SIG, sizeof DL_SIG);
     }
+    if (!ds_on(tr)) {
+        for (k = 0; k < DS_NSET; k++)
+            for (i = 0; i < DS_NF; i++)
+                p[DS_AT[k][i]] = DV_SYN_DEF[k][i];
+        p[DS_MARK_AT] = DS_MARK;
+        p[DS_MARK2_AT] = DS_MARK2;
+    }
+}
+
+/* .. lane l's field f = v in track tr's patch. Main loop */
+static void dl_set(uint32_t tr, uint32_t l, uint32_t f, uint32_t v)
+{
+    uint8_t p[FP_SIZE + 1u];
+    tr %= NTRK;
+    memcpy(p, fm6_patch[tr], FP_SIZE + 1u);
+    dl_fill(tr, p);
     p[dl_byte(l, f)] = (uint8_t)(v > DL_MAX[f] ? DL_MAX[f] : v);
     fm6_set_patch(tr, p);
 }
 
-/* a factory sound load into a DRUM track (a kit, an engine change): its lanes back to the kit's (the init voice) */
+/* .. layer set k's value f = v (drum_voice.c DS_*). Main loop */
+static void ds_set(uint32_t tr, uint32_t k, uint32_t f, uint32_t v)
+{
+    uint8_t p[FP_SIZE + 1u];
+    tr %= NTRK;
+    f %= DS_NF;
+    memcpy(p, fm6_patch[tr], FP_SIZE + 1u);
+    dl_fill(tr, p);
+    p[DS_AT[k % DS_NSET][f]] = (uint8_t)(v > DS_MAX[f] ? DS_MAX[f] : v);
+    fm6_set_patch(tr, p);
+}
+
+/* a factory sound load into a DRUM track (a kit, an engine change): its lanes back to the kit's (the init voice), or
+ * the preset's lanes designed (eng_drum.c DRUM_DESIGN: the dubstep kits) on the init voice */
 static void drum_track_loaded(const track_t *t)
 {
-    uint32_t tr = (uint32_t)(t - trk);
-    if (tr < NTRK && t->eng_req == ENGI_DRUM && dl_on(tr)) {
-        uint8_t v[FP_SIZE + 1u];
-        fm6_unpack(FM6_INIT, v);
-        fm6_set_patch(tr, v);
+    uint32_t tr = (uint32_t)(t - trk), k, i;
+    const dl_design_t *D;
+    uint8_t v[FP_SIZE + 1u];
+    if (tr >= NTRK || t->eng_req != ENGI_DRUM)
+        return;
+    D = drum_design(t->preset);
+    if (!D && !dl_on(tr))
+        return;
+    fm6_unpack(FM6_INIT, v);
+    if (D) {
+        for (k = 0; k < DV_NLANE; k++)
+            for (i = 0; i < DL_NF; i++)
+                v[dl_byte(k, i)] = D->lane[k][i] > DL_MAX[i] ? DL_MAX[i] : D->lane[k][i];
+        for (k = 0; k < DS_NSET; k++)
+            for (i = 0; i < DS_NF; i++)
+                v[DS_AT[k][i]] = D->set[k][i] > DS_MAX[i] ? DS_MAX[i] : D->set[k][i];
+        memcpy(v + DL_NAME, DL_SIG, sizeof DL_SIG);
+        v[DS_MARK_AT] = DS_MARK;
+        v[DS_MARK2_AT] = DS_MARK2;
     }
+    fm6_set_patch(tr, v);
 }
 
 /* power-on: every track the init voice (what a project stores for the tracks that never played FM6) */

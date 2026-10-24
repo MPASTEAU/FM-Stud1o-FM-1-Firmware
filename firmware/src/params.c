@@ -446,7 +446,8 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_BROWSE, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_TOOLS, GR_CHORD, GR_SLICES, GR_EVENTS,
-       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DLANE, GR_DLANE2 };   /* (GR_DLANE..: DRUM's lane pages, ui_drumlane.c) */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
+       GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DLANE, GR_DLANE2, GR_DSYN, GR_DSYN2, GR_DSYN3, GR_DSYN4, GR_DSYN5 };   /* (GR_DLANE..: DRUM's lane
+                                 * pages, ui_drumlane.c; GR_DSYN..: a SYN lane's layer set) */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
 
 typedef struct {
     const char *title;
@@ -479,6 +480,11 @@ static const page_t PAGES[] = {
     {"LANES 2", FAM_EDIT, SC_TRACK, GR_NONE, {P_LN4, P_LN5, P_LN6, P_LN7}},
     {"DESIGN", FAM_EDIT, SC_TRACK, GR_DLANE, {0xFF, 0xFF, 0xFF, 0xFF}},     /* DRUM only: KNOB 1 the lane, then its */
     {"DESIGN 2", FAM_EDIT, SC_TRACK, GR_DLANE2, {0xFF, 0xFF, 0xFF, 0xFF}},  /* VOICE TUNE DECAY / TONE SNAP STACK */
+    {"SYN TONE", FAM_EDIT, SC_TRACK, GR_DSYN, {0xFF, 0xFF, 0xFF, 0xFF}},    /* the lane picked plays SYN 1..5: */
+    {"SYN TONE 2", FAM_EDIT, SC_TRACK, GR_DSYN2, {0xFF, 0xFF, 0xFF, 0xFF}}, /* KNOB 1 the lane, then its layer set's */
+    {"SYN NOISE", FAM_EDIT, SC_TRACK, GR_DSYN3, {0xFF, 0xFF, 0xFF, 0xFF}},  /* LEVEL PITCH DECAY / BEND SWEEP SHAPE / */
+    {"SYN NOISE 2", FAM_EDIT, SC_TRACK, GR_DSYN4, {0xFF, 0xFF, 0xFF, 0xFF}},   /* LEVEL CUT DECAY / FILTER CLAP SPACE */
+    {"SYN METAL", FAM_EDIT, SC_TRACK, GR_DSYN5, {0xFF, 0xFF, 0xFF, 0xFF}},  /* / LEVEL TONE DECAY (HA HA HE HU) */
     {"SLICES", FAM_EDIT, SC_TRACK, GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SLICE only: the slices by hand (ui_slice.c) */
     {"OPERATOR", FAM_EDIT, SC_TRACK, GR_FMOP, {0xFF, 0xFF, 0xFF, 0xFF}},    /* FM6 only: KNOB 1 the operator, then its */
     {"OP ENV", FAM_EDIT, SC_TRACK, GR_FMENV, {0xFF, 0xFF, 0xFF, 0xFF}},     /* bytes of the track's patch (ui_fm6op.c): */

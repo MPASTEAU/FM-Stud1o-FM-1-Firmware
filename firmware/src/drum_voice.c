@@ -63,6 +63,18 @@
  * voices peak near -7 dBFS (the snare's, the clap's and the closed hat's spikes a little higher);
  * louder settings go into the output's soft knee.
  *
+ * SYNTH (HA HA HE HU, DVT_SYNTH: a run of its own after the 12, a lane's VOICE SYN 1..5, eng_drum.c ds_*): three
+ * layers struck together and mixed, each with its own level and decay (slow envelopes, the level folded in per block):
+ *   TONAL  a sine or a triangle swept down from BEND semitones above PITCH (the kick's sweep: the increment above the
+ *          pitch decays with SWEEP's tau), a soft-clip DRIVE (off, x2..x8, the level kept) after its envelope
+ *   NOISE  white noise through dsp.c's trapezoidal SVF (LP / BP / HP at CUT, 4 resonances: the input halved per
+ *          doubling of the Q so that no state passes the band-pass's bounds), CLAP re-strikes it 2..8 times SPACE
+ *          apart (teeth of 4 ms at most, the last one rings for its DECAY)
+ *   METAL  the metal source (the six squares of the hats, at their 205 Hz with TUNE) through a band-pass at TONE (Q 0.8)
+ *   The lane's TUNE moves the tonal pitch and the metal source, DECAY scales the three decays (x 1/4 .. x 4), TONE
+ *   moves CUT and the metal band (+-12 semitones), SNAP the noise's level (x 0 .. 2), accent as Felucca's own.
+ *   A layer at level 0 or rung out (-84 dB) is skipped (no loop); the voice ends when all three have. Choked (on the
+ *   open hat's lane, by the closed one) every layer goes in 1.5 ms.
  * Use: dv_setup when a parameter changes (dv_param_t compared as two words), dv_trigger on a hit,
  * dv_run per block (n <= CTL) into y: the voice at its level, Q15, linear up to -6 dBFS and never at full
  * scale (a soft knee above).
@@ -74,6 +86,19 @@ enum {
     DVT_PUNCH, DVT_ROUND, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_CONGA, DVT_RIM, DVT_CLAVE,
     DVT_BELL, DVT_CYM, DVT_COUNT
 };
+/* the layered voice (HA HA HE HU): a run of its own after Felucca's 12 (outside DV_DEF; eng_drum.c's VOICE values keep
+ * DVT_COUNT as they were). Its parameters: a layer set (ds_*), DS_NF bytes */
+#define DVT_SYNTH DVT_COUNT
+enum {
+    DS_TLVL, DS_TPIT, DS_TBEND, DS_TSWP, DS_TDEC, DS_TDRV, DS_TWAV,   /* TONAL: level, pitch, bend, sweep, decay, drive,
+                                                                     * wave */
+    DS_NLVL, DS_NFLT, DS_NCUT, DS_NRES, DS_NDEC, DS_NCLP, DS_NSPC,   /* NOISE: level, LP BP HP, cut, reso, decay, clap,
+                                                                     * its spacing */
+    DS_MLVL, DS_MTON, DS_MDEC,                                       /* METAL: level, band, decay */
+    DS_NF
+};
+/* each value's range (0..max) */
+static const uint8_t DS_MAX[DS_NF] = {99, 99, 48, 14, 31, 7, 1, 99, 2, 99, 3, 99, 7, 3, 99, 14, 99};
 /* a lane of a model kit as a type: the kit (1..DV_NKIT) in the high 4 bits, the lane in the low 3 (Felucca's own
  * types: 0 above). Its run (the DVT_* it plays through) is the kit's (DV_KIT) */
 #define DV_NKIT 8                                        /* (1.5.6, #216: DEEP TIGHT PERC after 77) */
@@ -99,6 +124,10 @@ typedef struct {                                         /* coefficients (dv_set
                                                           * tooth spacing (samples), teeth */
     uint8_t type, mrow;                                  /* mrow: the metal source's ratios (DV_METAL_R) */
     int16_t metal;                                       /* the metal source's pitch (p16) for this lane */
+    uint32_t kx[3];                                      /* SYNTH: the metal layer's decay, the clap teeth's, the
+                                                          * choke's (per block, Q16) */
+    uint8_t mode, wave, nsh, pad;                        /* SYNTH: the noise filter (0 LP 1 BP 2 HP), 1 = triangle,
+                                                          * the noise's shift (16 + the input halved per reso step) */
 } dv_coef_t;
 
 typedef struct {
@@ -106,7 +135,7 @@ typedef struct {
     uint16_t n, cnt;                                     /* counters: samples, teeth / hold blocks */
     uint32_t ph[3];
     uint32_t e[3];                                       /* fast envelopes, Q16 */
-    int32_t q[2];                                        /* slow envelopes, Q30 */
+    int32_t q[3];                                        /* slow envelopes, Q30 (q[2]: SYNTH's metal layer) */
     int32_t s[5];                                        /* filter states */
     int32_t rng;
 } dv_voice_t;
@@ -640,9 +669,89 @@ static void dv_setup_kit(dv_coef_t *c, const dv_param_t *p)
     }
 }
 
+/* SYNTH (HA HA HE HU): the layer sets SYN 1..DS_NSET start from (eng_drum.c ds_get: a patch without them), in DS_*
+ * order: a kick (a swept sine, a click of high-passed noise), a snare (185 Hz, band noise), a clap (band noise struck 4
+ * times), a closed hat (the metal over high-passed noise), an open hat / crash (the same, long) */
+#define DS_NSET 5
+static const uint8_t DV_SYN_DEF[DS_NSET][DS_NF] = {
+    {90, 19, 36, 8, 22, 2, 0, 30, 2, 72, 0, 20, 0, 0, 0, 7, 30},
+    {85, 42, 7, 5, 14, 1, 0, 95, 1, 75, 0, 56, 0, 1, 0, 7, 30},
+    {0, 42, 0, 5, 10, 0, 0, 90, 1, 62, 1, 60, 3, 1, 0, 7, 30},
+    {0, 60, 0, 0, 5, 0, 0, 55, 2, 90, 0, 34, 0, 0, 90, 10, 40},
+    {0, 60, 0, 0, 5, 0, 0, 40, 2, 80, 0, 85, 0, 0, 60, 6, 95},
+};
+/* SWEEP's taus (us), CLAP SPACE's spacings (blocks: 5.8 8.0 10.2 13.1 ms), the resonances' damping (Q12: Q 0.71 1.25
+ * 2.5 5) and their level kept (Q12: the input halved per doubling of the Q, a part of it given back) */
+static const uint32_t DS_SWEEP[15] = {500, 800, 1200, 1800, 2700, 4000, 6000, 9000, 13000, 20000, 30000, 45000,
+                                      70000, 100000, 150000};
+static const uint8_t DS_SPACE[4] = {8, 11, 14, 18};
+static const uint16_t DS_RESO_K[4] = {5793, 3277, 1638, 819}, DS_RESO_G[4] = {4096, 4096, 5793, 8192};
+#define DS_GAIN 2400                                     /* the output gain (Q12): a full layer near -7 dBFS */
+/* a SYNTH decay v (0..99: 1 ms x 2^(v / 10), 1 ms .. 0.96 s) moved by DECAY d (64: as set, 0 / 127: -2 / +2 octaves),
+ * as a tau (us) */
+static uint32_t ds_tau(uint32_t v, uint32_t d)
+{
+    int32_t e = (int32_t)v * 4096 / 10 + ((int32_t)d - 64) * 128;   /* log2 (ms), Q12 */
+    return ((dv_exp2((uint32_t)clamp(e, 0, 15 * 4096)) >> 8) * 1000u) >> 8;
+}
+/* 0..99 -> a level, Q15 (square law: 99 = 32767) */
+static int32_t ds_lvl(uint32_t v) { return (int32_t)(v * v * 32767u / 9801u); }
+/* TONAL's pitch (p16): PITCH 0..99 = MIDI note 12..111 (16 Hz .. 5 kHz) */
+static int32_t ds_pitch(uint32_t v) { return ((int32_t)v + 12) * 16; }
+/* NOISE's cut, METAL's band (p16): 0..99 -> 70 Hz .. 15 kHz, 0..14 -> 2.6 .. 13 kHz */
+static int32_t ds_cut(uint32_t v) { return 600 + (int32_t)v * 15; }
+static int32_t ds_band(uint32_t v) { return 1600 + (int32_t)v * 32; }
+
+/* the layered voice: p the lane's (TUNE DECAY TONE SNAP LEVEL accent; 64: as the set makes it), s its layer set (DS_NF
+ * values, each within DS_MAX: the caller's) */
+static void dv_setup_synth(dv_coef_t *c, const dv_param_t *p, const uint8_t *s)
+{
+    uint32_t d = p->decay, i, r = s[DS_NRES] & 3u, tn;
+    int32_t acc = p->accent, dt = ((int32_t)p->tone - 64) * 3, p16, g;
+    uint32_t taun = ds_tau(s[DS_NDEC], d);
+    for (i = 0; i < sizeof *c / 4u; i++)
+        ((uint32_t *)c)[i] = 0;
+    c->type = DVT_SYNTH;
+    c->out = (int32_t)(DS_GAIN * (uint32_t)p->level / 127u);
+    c->out += (c->out * acc * 75) >> 14;                 /* accent: + 0..4 dB, as Felucca's own */
+    /* TONAL: the pitch, the sweep above it, its decay; the drive after the envelope, before the level */
+    p16 = ds_pitch(s[DS_TPIT]) + p->tune;
+    c->inc[0] = DV_P16(p16);
+    c->span[0] = DV_P16(p16 + (int32_t)s[DS_TBEND] * 16) - c->inc[0];
+    c->k[0] = dv_k(DS_SWEEP[s[DS_TSWP] % 15u]);
+    c->kb[0] = dv_kb(ds_tau((uint32_t)s[DS_TDEC] * 99u / 31u, d));
+    c->g[0] = ds_lvl(s[DS_TLVL]);
+    if (s[DS_TDRV]) {
+        dv_drive(&c->g[1], &g, 4096 + (int32_t)s[DS_TDRV] * 4096);   /* x2 .. x8 */
+        c->g[2] = (g * c->g[0]) >> 15;                   /* the level kept, x the layer's */
+    }
+    c->wave = s[DS_TWAV] != 0;
+    /* NOISE: the filter, its level (x SNAP / 64, the resonance's share given back), the teeth */
+    tsvf_coef_k(&c->f[0], dv_cut(ds_cut(s[DS_NCUT]) + dt), DS_RESO_K[r]);
+    c->hp = DS_RESO_K[r];
+    c->mode = (uint8_t)(s[DS_NFLT] > 2u ? 2u : s[DS_NFLT]);
+    c->nsh = (uint8_t)(16u + (r > 1u ? r - 1u : 0u));
+    g = (int32_t)((uint32_t)ds_lvl(s[DS_NLVL]) * p->extra / 32u);   /* (x2: white noise through a band is quiet) */
+    c->g[3] = clamp((g >> 1) * DS_RESO_G[r] >> 11, 0, 131071);
+    c->kb[1] = dv_kb(taun);
+    c->kx[1] = dv_kb(taun < 4000u ? taun : 4000u);       /* a tooth: 4 ms at most */
+    tn = s[DS_NCLP] & 7u;
+    c->click = (uint16_t)(tn ? tn + 1u : 1u);            /* strikes */
+    c->hold = DS_SPACE[s[DS_NSPC] & 3u];                 /* blocks between them */
+    /* METAL: the hats' six squares (205 Hz with TUNE) through a band-pass */
+    c->metal = (int16_t)clamp(DV_DEF[DVT_HATC].p16 + p->tune, 0, 2047);
+    c->mrow = 0;
+    tsvf_coef_k(&c->f[1], dv_cut(ds_band(s[DS_MTON]) + dt), 5120);   /* Q 0.8 */
+    c->g[4] = ds_lvl(s[DS_MLVL]) * 4;                    /* (x4: a band of the squares) */
+    c->kx[0] = dv_kb(ds_tau(s[DS_MDEC], d));
+    c->kx[2] = dv_kb(1500);                              /* choked (an open hat's lane by the closed one's) */
+}
+
 static void dv_setup(dv_coef_t *c, const dv_param_t *p)
 {
-    if (DV_KITOF(p->type) - 1u < DV_NKIT)
+    if (p->type == DVT_SYNTH)                            /* (a set of its own: dv_setup_synth; here SYN 1's) */
+        dv_setup_synth(c, p, DV_SYN_DEF[0]);
+    else if (DV_KITOF(p->type) - 1u < DV_NKIT)
         dv_setup_kit(c, p);
     else
         dv_setup_own(c, p);
@@ -879,6 +988,110 @@ static __attribute__((noinline)) void dv_cym_run(const dv_coef_t *c, dv_voice_t 
     v->live = v->q[0] > DV_QUIET;
 }
 
+/* a slow envelope's block with a gain g (Q15, at most 131071: x4) folded in: the ramp start (Q20) and step per sample */
+static inline void dv_slow_g(int32_t *q, uint32_t kb, int32_t g, int32_t *a, int32_t *d)
+{
+    *a = ((*q >> 16) * g) >> 9;
+    *q = mulq16(*q, kb);
+    *d = ((((*q >> 16) * g) >> 9) - *a) >> CTL_LOG2;
+}
+
+/* SYNTH's layers, one block each, specialised (wave, drive, filter: constants of the call), every coefficient and state
+ * in a local (y may alias them for the compiler). TONAL writes y, NOISE and METAL add to it */
+static inline __attribute__((always_inline)) void ds_tonal(const dv_coef_t *c, dv_voice_t *v, int32_t *y, uint32_t n,
+                                                          int32_t a, int32_t d, const int tri, const int drv)
+{
+    uint32_t i, ph = v->ph[0], p = v->e[0], s = c->span[0] >> 16, inc = c->inc[0], k = c->k[0];
+    int32_t g = c->g[1], keep = c->g[2];
+    for (i = 0; i < n; i++) {
+        int32_t x;
+        ph += inc + s * p;
+        p = (p * k) >> 15;
+        if (tri) {                                       /* (the triangle from 0 rising, as the sine) */
+            int32_t t = (int32_t)((ph + 0x40000000u) >> 15) - 65536;
+            x = 32768 - (t < 0 ? -t : t);
+        } else {
+            x = sine_i(ph);
+        }
+        a += d;
+        x = (x * (a >> 5)) >> 15;
+        if (drv)
+            x = (softclip((x * g) >> 12) * keep) >> 15;
+        y[i] = x;
+    }
+    v->ph[0] = ph, v->e[0] = p;
+}
+static inline __attribute__((always_inline)) void ds_noise(const dv_coef_t *c, dv_voice_t *v, int32_t *y, uint32_t n,
+                                                          int32_t a, int32_t d, const uint32_t mode)
+{
+    uint32_t i, sh = c->nsh;
+    int32_t s0 = v->s[0], s1 = v->s[1], a1 = c->f[0].a1, a2 = c->f[0].a2, a3 = c->f[0].a3, k = c->hp, rng = v->rng;
+    for (i = 0; i < n; i++) {
+        int32_t nz = (int32_t)noise32(&rng) >> sh, v3 = nz - s1, v1, v2, x;
+        v1 = (a1 * s0 + a2 * v3) >> 13;
+        v2 = s1 + ((a2 * s0 + a3 * v3) >> 13);
+        s0 = 2 * v1 - s0;
+        s1 = 2 * v2 - s1;
+        x = mode == 0 ? v2 : mode == 1 ? v1 : nz - v2 - ((k * v1) >> 12);   /* LP, BP, HP */
+        a += d;
+        y[i] += ((x >> 4) * (a >> 5)) >> 11;              /* (the level up to x4: the product in 31 bits) */
+    }
+    v->s[0] = s0, v->s[1] = s1, v->rng = rng;
+}
+
+/* SYNTH: the three layers added into y, each skipped at level 0 or once rung out (metal: the source's block, or 0) */
+static __attribute__((noinline)) void dv_synth_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *m, int32_t *y,
+                                                   uint32_t n)
+{
+    uint32_t i, ch = v->choke;
+    int32_t a, d;
+    if (ch)                                              /* choked: every layer out in 1.5 ms, no tooth to come */
+        v->cnt = 0;
+    if (v->q[0] <= DV_QUIET) {                           /* TONAL: sine / triangle, swept; the drive, then the level */
+        for (i = 0; i < n; i++)
+            y[i] = 0;
+    } else {
+        dv_slow_g(&v->q[0], ch ? c->kx[2] : c->kb[0], c->g[1] ? 32767 : c->g[0], &a, &d);
+        if (c->wave && c->g[1])
+            ds_tonal(c, v, y, n, a, d, 1, 1);
+        else if (c->wave)
+            ds_tonal(c, v, y, n, a, d, 1, 0);
+        else if (c->g[1])
+            ds_tonal(c, v, y, n, a, d, 0, 1);
+        else
+            ds_tonal(c, v, y, n, a, d, 0, 0);
+    }
+    if (v->cnt && !--v->n) {                             /* CLAP: the next tooth, struck at the block's start */
+        v->q[1] = 1 << 30;
+        v->n = c->hold;
+        v->cnt--;
+    }
+    if (v->q[1] > DV_QUIET) {                            /* NOISE: LP / BP / HP (the SVF's three outputs) */
+        dv_slow_g(&v->q[1], ch ? c->kx[2] : v->cnt ? c->kx[1] : c->kb[1], c->g[3], &a, &d);   /* (teeth to come: a
+                                                          * tooth's decay) */
+        if (c->mode == 0)
+            ds_noise(c, v, y, n, a, d, 0);
+        else if (c->mode == 1)
+            ds_noise(c, v, y, n, a, d, 1);
+        else
+            ds_noise(c, v, y, n, a, d, 2);
+    }
+    if (m && c->g[4] && v->q[2] > DV_QUIET) {            /* METAL: the source through its band (dv_bp, in locals; m
+                                                          * holds a block exactly then: dv_wants_metal) */
+        int32_t s0 = v->s[2], s1 = v->s[3], a1 = c->f[1].a1, a2 = c->f[1].a2, a3 = c->f[1].a3;
+        dv_slow_g(&v->q[2], ch ? c->kx[2] : c->kx[0], c->g[4], &a, &d);
+        for (i = 0; i < n; i++) {
+            int32_t v3 = m[i] - s1, v1 = (a1 * s0 + a2 * v3) >> 13, v2 = s1 + ((a2 * s0 + a3 * v3) >> 13);
+            s0 = 2 * v1 - s0;
+            s1 = 2 * v2 - s1;
+            a += d;
+            y[i] += ((v1 >> 2) * (a >> 5)) >> 13;          /* (up to x4) */
+        }
+        v->s[2] = s0, v->s[3] = s1;
+    }
+    v->live = v->cnt || v->q[0] > DV_QUIET || v->q[1] > DV_QUIET || (m && c->g[4] && v->q[2] > DV_QUIET);
+}
+
 /* a model kit's metal: the source (c->span[0], Q15) and white noise (c->span[1]) mixed into y */
 static __attribute__((noinline)) void dv_metal_mix(const dv_coef_t *c, dv_voice_t *v, const int32_t *m, int32_t *y,
                                                    uint32_t n)
@@ -901,6 +1114,15 @@ static void dv_init(dv_voice_t *v, uint32_t type)
 static void dv_trigger(dv_voice_t *v) { v->trig = 1; }
 static void dv_choke(dv_voice_t *v) { v->choke = 1; }
 static uint32_t dv_uses_metal(uint32_t type) { return type == DVT_HATC || type == DVT_HATO || type == DVT_CYM; }
+/* the voice tunes a metal source (SYNTH: when its METAL layer has a level) */
+static uint32_t dv_has_metal(const dv_coef_t *c) { return dv_uses_metal(c->type) || (c->type == DVT_SYNTH && c->g[4]); }
+/* .. and needs its block now: struck, or sounding (SYNTH: its METAL layer) */
+static uint32_t dv_wants_metal(const dv_coef_t *c, const dv_voice_t *v)
+{
+    if (c->type == DVT_SYNTH)
+        return c->g[4] && (v->trig || (v->live && v->q[2] > DV_QUIET));
+    return dv_uses_metal(c->type) && (v->live || v->trig);
+}
 
 /* a hit: every state from rest (phases, filters, noise seed), so that each hit renders the same */
 static void dv_strike(const dv_coef_t *c, dv_voice_t *v)
@@ -924,6 +1146,13 @@ static void dv_strike(const dv_coef_t *c, dv_voice_t *v)
         break;
     case DVT_CYM:
         v->q[1] = 1 << 30;
+        break;
+    case DVT_SYNTH:                                      /* the layers with a level, the sweep, the teeth to come */
+        v->q[0] = c->g[0] ? 1 << 30 : 0;
+        v->q[1] = c->g[3] ? 1 << 30 : 0;
+        v->q[2] = c->g[4] ? 1 << 30 : 0;
+        v->cnt = c->g[3] ? (uint16_t)(c->click - 1u) : 0;
+        v->n = c->hold;
         break;
     }
 }
@@ -984,6 +1213,9 @@ static void dv_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *metal, int3
     case DVT_BELL:
         dv_bell_run(c, v, y, n);
         break;
+    case DVT_SYNTH:
+        dv_synth_run(c, v, metal, y, n);
+        break;
     default:
         dv_cym_run(c, v, metal, y, n);
         break;
@@ -994,13 +1226,13 @@ static void dv_run(const dv_coef_t *c, dv_voice_t *v, const int32_t *metal, int3
 /* the run a type plays through (DVT_*): itself, or its model kit's lane's */
 static uint32_t dv_run_type(uint32_t type)
 {
-    return DV_KITOF(type) - 1u < DV_NKIT ? DV_KIT[DV_KITOF(type) - 1u][type & 7u].run : type < DVT_COUNT ? type : 0u;
+    return DV_KITOF(type) - 1u < DV_NKIT ? DV_KIT[DV_KITOF(type) - 1u][type & 7u].run : type <= DVT_SYNTH ? type : 0u;
 }
 
-/* the designed parameters of a type (LEVEL 100, no accent); a model kit's lane: 64 each */
+/* the designed parameters of a type (LEVEL 100, no accent); a model kit's lane, SYNTH: 64 each */
 static void dv_default(dv_param_t *p, uint32_t type)
 {
-    uint32_t own = DV_KITOF(type) == 0;
+    uint32_t own = DV_KITOF(type) == 0 && type < DVT_COUNT;
     p->type = (uint8_t)type;
     p->decay = own ? DV_DEF[type].def[0] : 64;
     p->tone = own ? DV_DEF[type].def[1] : 64;

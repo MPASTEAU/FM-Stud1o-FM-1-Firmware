@@ -3657,6 +3657,66 @@ static int test_edit_cycle(void)
                 dl_voice_name(1u + DVT_COUNT + 2u * DV_NLANE + 1u, nm);   /* kit 66's snare */
                 bad += check("DESIGN: a model kit's piece named by its kit and lane (66 SD)", str_eq(nm, "66 SD"));
             }
+            {   /* phase 2: a lane on SYN 1..5 (the layered voice) shows its layer set's pages, SYN TONE .. SYN METAL */
+                static const char *const CYC_S[] = {"EDIT 1", "EDIT 2", "LANES", "LANES 2", "DESIGN", "DESIGN 2",
+                                                    "SYN TONE", "SYN TONE 2", "SYN NOISE", "SYN NOISE 2", "SYN METAL",
+                                                    "VOICE", "VOICE 2", "VOICE 3", "EDIT 1"};
+                const char *lb, *u;
+                char val[12];
+                int32_t r;
+                uint32_t ic, c0 = ds_get(tr, 2, DS_NCLP), r0 = ds_get(tr, 2, DS_NRES);
+                char nm[12];
+                dl_voice_name(DL_NVOICE + 2u, nm);
+                bad += check("DESIGN: VOICE SYN 3 named, plays the layered voice", str_eq(nm, "SYN 3") &&
+                             dl_role(DL_NVOICE + 2u) == DVT_SYNTH && dl_syn(DL_NVOICE + 2u) == 2 && DL_MAX[DL_VOICE] ==
+                             DL_NVOICE + DS_NSET - 1u);
+                ui.lane = DV_SNARE;
+                bad += check("EDIT cycle (DRUM): no SYN pages while the lane picked plays no layer set",
+                             engine_cycle(CYC_K, NELEM(CYC_K)));
+                go_title("DESIGN"); frame();
+                ui.lane = DV_CLAP;
+                turn(EN_K2, (int32_t)(DL_NVOICE + 2u) - (int32_t)dl_get(tr, DV_CLAP, DL_VOICE));
+                frame();
+                bad += check("DESIGN: KNOB 2 puts the CLAP lane on SYN 3", dl_syn_of(tr, DV_CLAP) == 2 && ds_on(tr));
+                bad += check("EDIT cycle (DRUM, the CLAP lane on SYN 3): .. DESIGN 2 SYN TONE SYN TONE 2 SYN NOISE SYN NOISE 2 "
+                             "SYN METAL VOICE ..", engine_cycle(CYC_S, NELEM(CYC_S)));
+                go_title("SYN TONE"); frame();
+                (void)dln_card(2, &lb, val, &u, &r, &ic);
+                bad += check("SYN TONE: PITCH of SYN 3 shown in Hz (185 HZ), its layer at LEVEL 0 DIM",
+                             str_eq(lb, "PITCH") && str_eq(val, "185") && str_eq(u, "HZ") && !dln_card(2, &lb, val, &u, &r, &ic));
+                turn(EN_K1, 1);
+                frame();
+                bad += check("SYN TONE: KNOB 1 stays on the CLAP lane (no other lane plays a set)", ui.lane == DV_CLAP);
+                dl_set(tr, DV_KICK, DL_VOICE, DL_NVOICE);
+                turn(EN_K1, -1);
+                frame();
+                bad += check("SYN TONE: KNOB 1 steps over the lanes playing no set (CLAP -> KICK)", ui.lane == DV_KICK &&
+                             str_eq(cur_page()->title, "SYN TONE"));
+                turn(EN_K2, -3);
+                frame();
+                bad += check("SYN TONE: KNOB 2 the KICK's set's tonal LEVEL (SYN 1), not the CLAP's",
+                             ds_get(tr, 0, DS_TLVL) == DV_SYN_DEF[0][DS_TLVL] - 3u && ds_get(tr, 2, DS_TLVL) == 0u);
+                turn(EN_K1, 1);
+                go_title("SYN NOISE 2"); frame();
+                turn(EN_K2, 1);
+                turn(EN_K3, 2);
+                frame();
+                (void)dln_card(1, &lb, val, &u, &r, &ic);
+                bad += check("SYN NOISE 2: FILTER steps the resonance (BP 1 -> BP 2), CLAP 4 -> 6 strikes", ui.lane == DV_CLAP &&
+                             ds_get(tr, 2, DS_NRES) == r0 + 1u && ds_get(tr, 2, DS_NFLT) == 1u && str_eq(val, "BP 2") &&
+                             ds_get(tr, 2, DS_NCLP) == c0 + 2u);
+                ui.lane = DV_SNARE;                      /* (as the grid's lane, an undo of the VOICE) */
+                ok = !dln_ok() && !page_visible(ui.page);
+                frame();
+                bad += check("SYN NOISE 2: the lane picked elsewhere plays no set: its knobs do nothing, the page gives way to "
+                             "DESIGN", ok && str_eq(cur_page()->title, "DESIGN"));
+                ui.lane = DV_CLAP;
+                apply_preset_to(TSEL, 4);
+                bad += check("DUB KIT: a factory kit with its lanes designed loads them (SYN 1..5 on 6 lanes, the sets)",
+                             str_eq(ENG_DRUM.presets[4].name, "DUB KIT") && dl_on(tr) && ds_on(tr) &&
+                             dl_syn_of(tr, DV_KICK) == 0 && dl_syn_of(tr, DV_HATO) == 3 && dl_syn_of(tr, DV_TOM) < 0 &&
+                             ds_get(tr, 1, DS_TPIT) == DRUM_DESIGN[0].set[1][DS_TPIT] && preset_cat(ENGI_DRUM, 5) == CAT_DRUM);
+            }
             apply_preset_to(TSEL, 0);
             bad += check("DESIGN: a factory kit load puts every lane back (no lanes in the patch)", !dl_on(tr));
         }
