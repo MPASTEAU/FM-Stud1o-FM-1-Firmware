@@ -369,6 +369,7 @@ static void demo_save(uint32_t slot, const char *name)
         return;
 #endif
     memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
+    (void)proj_x_save(p, OBJ_PROJX0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));   /* (tracks 5..8) */
 }
 
 /* boot, after the autosave: with every PROJECT slot empty, the song's four sections into A..D and the SONG set; the

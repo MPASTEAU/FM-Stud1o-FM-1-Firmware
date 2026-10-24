@@ -60,6 +60,7 @@ static void palette_apply(void)
     if (favorites.factory[15][13] != 'H') {         /* HA HA HE HU's first start: its HAHA palette once (byte 13: free); */
         favorites.factory[15][13] = 'H';            /* saved with the settings, so a palette picked later stays */
         settings.palette = NPALETTES - 1u;
+        favorites.factory[15][26] = 1u;             /* .. and HOME's TRACKS, the channel rack (ui.c ui_home_view HV_TRACKS) */
     }
 #endif
     if (cpal_on()) {

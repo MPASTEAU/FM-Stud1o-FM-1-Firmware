@@ -179,6 +179,48 @@ static int32_t roll_text(uint32_t k, int32_t x, int32_t y, const char *s, uint16
  * metronome's ink (mx0 .. mx1, past it); the BPM's rolling strip (sx0 .. sx1: between the metronome's cell, either
  * way round, and the lock's) */
 typedef struct { int32_t bx, b[4], mx0, mx1, sx0, sx1, px0, px1, gx0, gx1; } head_geo_t;
+/* HA HA HE HU: the track rail, the eight tracks left in the header while no message shows (head_rail_on): a cell each
+ * (RAIL_W x 16, RAIL_P apart from x 3: 3 .. 98), the track's colour bright while it sounds, faint while silent, a well
+ * when muted; the selected one ringed (TEXT), an armed one ringed REC. The play group then starts at RAIL_GX (not
+ * centred on 120) and the cushion, the slot letter and the REC mark of before give way to it */
+#define RAIL_W 11
+#define RAIL_P 12
+#define RAIL_GX 104
+static int head_rail_on(void) { return !(ui.msg_t || ui.layer); }
+static uint32_t rail_sounding(void)                    /* bit k: track k has a voice sounding */
+{
+    uint32_t k, i, m = 0;
+    for (k = 0; k < NTRK; k++)
+        for (i = 0; i < NVOICE; i++)
+            if (trk[k].v[i].active && trk[k].v[i].env_out > 64) {
+                m |= 1u << k;
+                break;
+            }
+    return m;
+}
+static uint32_t rail_muted(void)
+{
+    uint32_t k, m = 0;
+    for (k = 0; k < NTRK; k++)
+        if (trk[k].p[P_MUTE] || (perf_solo && !((perf_solo >> k) & 1u)))
+            m |= 1u << k;
+    return m;
+}
+static void head_rail(void)
+{
+    uint32_t k, snd = rail_sounding(), mu = rail_muted();
+    for (k = 0; k < NTRK; k++) {
+        int32_t x = 3 + (int32_t)k * RAIL_P, y = 4;
+        int sel = k == song.sel, arm = (song.rec >> k) & 1u, on = (snd >> k) & 1u, m = (mu >> k) & 1u;
+        uint16_t fill = m ? T_RAISE : on ? ux.trk[k] : ux_mix(ux.bg, ux.trk[k], 38);
+        char d[2] = {(char)('1' + k), 0};
+        if (sel || arm)
+            cv_rrect(x - 1, y - 2, RAIL_W + 2, 20, 4, arm ? T_REC : T_TEXT, T_BG);
+        cv_rrect(x, y, RAIL_W, 16, 3, fill, sel || arm ? (arm ? T_REC : T_TEXT) : T_BG);
+        GFX_HOOK_ALIGN(x, y, x + RAIL_W, y + 16, AL_HV, "rail digit centred");
+        cv_text_in(x, y + CAP_IN(S, 16), RAIL_W, &AF_S, d, m ? T_DIM : on ? T_INK : ux.trk[k], fill);
+    }
+}
 static void head_geo(head_geo_t *g, const char *bpm)
 {
     int32_t ib[4], lb[4], pb[4], c = 16, pw, lw = 0;
@@ -197,7 +239,7 @@ static void head_geo(head_geo_t *g, const char *bpm)
     icon_ink(16, ICON_X_LOCK, lb);
     if (ui_prefs & PREF_BPM_LOCK)
         lw = HEAD_GAP + lb[2] - lb[0];
-    g->gx0 = HALF_UP(240 - (pw + HEAD_PLAY_GAP + (ib[2] - ib[0]) + HEAD_GAP + (g->b[2] - g->b[0]) + lw));
+    g->gx0 = head_rail_on() ? RAIL_GX : HALF_UP(240 - (pw + HEAD_PLAY_GAP + (ib[2] - ib[0]) + HEAD_GAP + (g->b[2] - g->b[0]) + lw));
     g->px0 = g->gx0;
     g->px1 = g->px0 + pw;
     g->mx0 = g->px1 + HEAD_PLAY_GAP;
@@ -314,9 +356,14 @@ static void head_group(void)
     } else {
         str_cpy(b, song.octave > 0 ? "+" : "", sizeof b);
         fmt_int(b + str_len(b), song.octave);
-        x = HEAD_GRP_R - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
-        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-        x = cv_text(x, HEAD_SY, &AF_S, "OCT", T_MID);
+        if (head_rail_on()) {                          /* (HA HA HE HU: the rail's BPM further right, no room for OCT:
+                                                        * the signed number alone) */
+            x = HEAD_GRP_R - 4 - text_w(&AF_M, b);
+        } else {
+            x = HEAD_GRP_R - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
+            GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
+            x = cv_text(x, HEAD_SY, &AF_S, "OCT", T_MID);
+        }
     }
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
     cv_text(x + 4, HEAD_MY, &AF_M, b, T_THEME);
@@ -335,7 +382,8 @@ static void draw_head(void)
                    (ui.msg_t ? str_hash(7u, ui.msg) : ui.layer * 7919u + (uint32_t)layer_locked() * 3u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
-                   (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u;   /* (1.5.5) */
+                   (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u +   /* (1.5.5) */
+                   (head_rail_on() ? (rail_sounding() * 2654435761u) ^ (rail_muted() * 40503u) ^ song.rec * 977u : 0u);   /* (the rail) */
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
@@ -370,9 +418,12 @@ static void draw_head(void)
     ui.head_sig = sig;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
-    cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
+    if (head_rail_on())                                /* (HA HA HE HU: the eight tracks) */
+        head_rail();
+    else
+        cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
                                                        * a MIDI IN note into it, #208: lit) */
-    if (slot && (centre || !msg)) {                    /* the slot letter (not under a message centred: its room) */
+    if (slot && !head_rail_on() && (centre || !msg)) { /* the slot letter (not under a message centred: its room) */
         char l[2] = {sl[0], 0};
         GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
         rx = cv_text(HEAD_SLOT_X, HEAD_MY, &AF_M, l, sl[0] == '-' ? T_MID : T_THEME);
@@ -380,7 +431,8 @@ static void draw_head(void)
             rx = cv_text(rx, HEAD_MY, &AF_M, "*", T_MID);
         rx += 1;                                       /* (the REC mark's cell after it, its ink 3 px on) */
     }
-    draw_rec_mark(rx, T_BG);
+    if (!head_rail_on())
+        draw_rec_mark(rx, T_BG);
     if (centre) {
         int32_t ib[4], lx = g.bx + g.b[2];             /* lx: the right end of the BPM (and its lock) */
         uint32_t id = song.playing ? (chain.running ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;
