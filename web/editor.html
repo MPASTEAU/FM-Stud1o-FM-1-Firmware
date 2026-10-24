@@ -1047,12 +1047,15 @@ function buildSlot(name, zonesIn) {
    matched by name. The old single-sound file ("felucca-patch" version 1, "Save to file") is read too. */
 const LIB = { FORMAT: "felucca-library", VERSION: 1 };
 
-/* parameter keys by id from the instrument DESCs */
+/* parameter keys by id from the instrument DESCs. HA HA HE HU: id 8 (FX, read by nothing) is DUCK's release REL, keyed
+   DKREL so the REL#n after it (the operators') stay those of Felucca's files */
+const KEY_AT = { 8: ["REL", "DKREL"] };
 function paramKeys(pdesc, pe0, pcount) {
   const seen = {}, out = [];
   for (let i = 0; i < pcount; i++) {
     if (i >= pe0) { out.push("E" + (i - pe0)); continue; }
     const l = (pdesc[i] && pdesc[i].label) || "P" + i;
+    if (KEY_AT[i] && KEY_AT[i][0] === l) { out.push(KEY_AT[i][1]); continue; }
     seen[l] = (seen[l] || 0) + 1;
     out.push(seen[l] > 1 ? `${l}#${seen[l]}` : l);
   }
@@ -1667,7 +1670,7 @@ function makeMockDevice(opt = {}) {
   const TP = [
     D("LVL", F.DB, 0, 127, 104),
     D("ATK", F.TIME, 0, 127, 10), D("DEC", F.TIME, 0, 127, 70), D("SUS", F.PCT, 0, 127, 90), D("REL", F.TIME, 0, 127, 60),
-    D("FLT", F.BIPCT, -64, 63, 0), D("PIT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("FX", F.BIPCT, -64, 63, 0),
+    D("FLT", F.BIPCT, -64, 63, 0), D("PIT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("REL", F.BIPCT, -64, 63, 0),   /* REL: DUCK's release (was FX, unused) */
     D("RATE", F.LFOHZ, 0, 127, 60), E("WAVE", ["SIN", "TRI", "SAW", "SQR", "S&H"], 0), D("PHS", F.INT, 0, 127, 0), D("FADE", F.TIME, 0, 127, 0),
     D("PIT", F.BIPCT, -64, 63, 0), D("FLT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("AMP", F.PCT, 0, 127, 0),
     E("MODE", ["OFF", "UP", "DN", "UPDN", "RND", "ORD", "REPEAT", "DNUP", "UP+8", "CONV", "DIVG", "PINKY", "THUMB", "WALK", "CHORD"], 0), E("RATE", NDIV, 2), D("OCT", F.INT, 1, 4, 1), D("GATE", F.PCT, 1, 127, 64),
@@ -1687,7 +1690,7 @@ function makeMockDevice(opt = {}) {
     E("MIDI", ["USB", "TRS"], 0), E("SYNC", NDASH, 0), E("ROUT", ["CH1-4", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"], 0), D("CPU", F.INT, 0, 0, 0),
     D("SLOT", F.INT, 1, 4, 1), E("NAME", NDASH, 0), E("LOAD", NGO, 0), E("SAVE", NGO, 0),
     E("ENG", ["ANALOG", "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL",
-      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE"], 0), E("SET", NGO, 0),
+      "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE", "GROWL"], 0), E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
     D("-", F.INT, 0, 0, 0), D("-", F.INT, 0, 0, 0),   /* G_DRLVL, G_DRREV: inert since 1.0 */
@@ -1774,6 +1777,13 @@ function makeMockDevice(opt = {}) {
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
+    /* 14: GROWL (HA HA HE HU, eng_growl.c) */
+    { name: "GROWL", titles: ["FM", "TONE"], edit: [E("WAVE", ["SAW", "SQR", "TRI", "SIN"], 0),
+        E("RATIO", ["0.5", "1", "1.5", "2", "3", "4", "5", "7"], 1), D("FM", F.PCT, 0, 127, 60), D("FB", F.PCT, 0, 127, 20),
+        D("CUT", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("DRV", F.PCT, 0, 127, 60), D("SUB", F.PCT, 0, 127, 40)],
+      presets: [P("RIDDIM", [0, 1, 70, 40, 72, 40, 90, 60], [0, 60, 127, 12], 1, 8), P("YOI", [1, 3, 50, 20, 52, 70, 100, 40], [0, 50, 110, 12], 1, 8),
+        P("METAL", [3, 7, 100, 80, 100, 20, 70, 50], [0, 70, 120, 15], 1, 8), P("WOB SUB", [3, 0, 30, 0, 90, 0, 30, 100], [0, 60, 127, 12], 1, 8),
+        P("TEAROUT", [0, 2, 110, 100, 64, 50, 127, 50], [0, 60, 127, 10], 1, 8)] },
   ];
   const FM6_E = ENG.findIndex((e) => e.name === "FM6"), FM6_OWN = FM6.FACTORY_PK.length, DRUM_E = ENG.findIndex((e) => e.name === "DRUM");
   /* factory PATTERNS[] (engines.c; the device loads them from SAVE > PHRASES, presets only suggest one): absolute
@@ -1803,8 +1813,10 @@ function makeMockDevice(opt = {}) {
     D("SPRD", F.PCT, 0, 127, 0),   /* SPREAD (95, #148) */
     E("INSRT", ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"], 0),   /* 1.5: the INSERT (96..100) */
     D("INS A", F.PCT, 0, 127, 64), D("INS B", F.PCT, 0, 127, 96), D("INS C", F.PCT, 0, 127, 96), D("MIX", F.PCT, 0, 127, 127),
-    E("TYPE", ["LP", "BP", "HP"], 0), E("ESYNC", ["OFF", "ON"], 0));   /* 1.5: ANALOG's filter TYPE (101, #104), ENV SYNC (102, #175) */
-  const P_COUNT = 111, G_COUNT = 27, NSTEP = 64, P_E0 = 103, G_ENGSEL = 20, P_SLCR = 45;
+    E("TYPE", ["LP", "BP", "HP"], 0), E("ESYNC", ["OFF", "ON"], 0),   /* 1.5: ANALOG's filter TYPE (101, #104), ENV SYNC (102, #175) */
+    E("ORDER", ["D I S", "D S I", "I D S", "I S D", "S D I", "S I D"], 0),   /* HA HA HE HU: FX ORDER (103), DUCK source, */
+    E("DUCK", ["OFF", "T1", "T2", "T3", "T4"], 0), D("DEPTH", F.PCT, 0, 127, 100));   /* depth (104, 105) */
+  const P_COUNT = 114, G_COUNT = 27, NSTEP = 64, P_E0 = 106, G_ENGSEL = 20, P_SLCR = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const enumOrig = (d, v) => d.fmt === F.ENUM && d.names ? aliasOf(d.names, v - d.min) + d.min : v;   /* params.c enum_orig */
   /* four tracks (firmware v3), four synth parts (1.0); engine / preset / p / step below are the selected track's */
@@ -2426,7 +2438,7 @@ function enumShown(d) {
    the engine numbers. engineOrder(names): the indices of names in that order, "-" (a reserved number) left out; a name
    the list does not know (another firmware) follows in index order */
 const ENGINE_ORDER = ["ANALOG", "FM6", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "NOISE",
-  "SLICE", "DRUM"];
+  "SLICE", "GROWL", "DRUM"];
 function engineOrder(names) {
   const rank = (n) => { const k = ENGINE_ORDER.indexOf(n); return k < 0 ? ENGINE_ORDER.length : k; };
   return (names || []).map((n, i) => i).filter((i) => names[i] !== "-")
@@ -2507,7 +2519,7 @@ const TEXT = {
     fm6Init: "初期音色", fm6Voice: "ボイス", fm6Ops: "オペレーター", fm6Carriers: "キャリア", fm6Feedback: "フィードバック",
     fm6PitchEg: "ピッチ EG", fm6Freq: "周波数",
     fm6Legend: "R1〜R4 / L1〜L4: EG のレートとレベル、BP LD RD LC RC: キーボードレベルスケーリング、RS: レートスケーリング、AMS: LFO 音量変調、KVS: ベロシティ、OL: 出力レベル、MODE: 比率 / 固定、FC FF: 周波数（粗・細）、DET: デチューン（7 が中央）。● はキャリア。",
-    fm6Pick: "読み込んだファイルの音色（押すと編集へ）:", fm6Picked: "編集中:", fm6Sent: "トラックへ送りました:", fm6Read: "トラックから読みました",
+    fm6Pick: "読み込んだファイルの音色（押すと編集へ）:", fm6Picked: "編集中:", fm6Sent: "トラックへ送りました:", fm6Read: "トラックから読みました", fm6Drum: "DRUM のトラック（パッチはレーンの DESIGN、読み書きしません）:",
     fm6Loaded: "読み込みました", fm6BadSum: "チェックサム不一致あり",
     fm6Keep: "残すには、トラックへ送ってから本体でユーザープリセット（SAVE）かプロジェクトに保存してください。",
     fm6Short: "途中で切れたデータあり", fm6Skipped: "音色以外の {x} 件は無視",
@@ -2610,7 +2622,7 @@ const TEXT = {
     fm6Init: "Init voice", fm6Voice: "Voice", fm6Ops: "Operators", fm6Carriers: "carriers", fm6Feedback: "feedback",
     fm6PitchEg: "Pitch EG", fm6Freq: "Frequency",
     fm6Legend: "R1..R4 / L1..L4: EG rates and levels; BP LD RD LC RC: keyboard level scaling; RS: rate scaling; AMS: LFO amplitude modulation; KVS: velocity; OL: output level; MODE: ratio / fixed; FC FF: coarse / fine frequency; DET: detune (7 = centre). ● = carrier.",
-    fm6Pick: "Voices of the imported file (click to edit):", fm6Picked: "Editing:", fm6Sent: "Sent to track", fm6Read: "Read from track",
+    fm6Pick: "Voices of the imported file (click to edit):", fm6Picked: "Editing:", fm6Sent: "Sent to track", fm6Read: "Read from track", fm6Drum: "A DRUM track (its patch holds the lanes' DESIGN; not read or sent):",
     fm6Loaded: "Loaded", fm6BadSum: "a checksum did not match",
     fm6Keep: "To keep a voice, send it to a track, then save a user preset (SAVE) or a project on the device.",
     fm6Short: "some data was cut short", fm6Skipped: "{x} non-voice blocks skipped",
@@ -4993,12 +5005,23 @@ async function fm6Refresh(d = dev) {
   try { fm6List = parse[CMD.FM6_LIST](await sessionRequest(d, req.fm6List())); } finally { fm6Listing = false; }
   renderFm6();
 }
+/* a DRUM track's patch is its lanes' DESIGN (HA HA HE HU: eng_drum.c dl_*, the voice named "DRUM LANES"), no FM6
+   voice: READ and SEND leave it alone (TRACK: the track's engine) */
+async function fm6Lanes(tr) {
+  if (!hasTracks()) return false;
+  const k = parse[CMD.TRACK](await sessionRequest(dev, req.track())).tracks[tr];
+  if (!k || dev.info.engines[k.engine] !== "DRUM") return false;
+  sayK("fm6Drum", ` ${tr + 1}`);
+  return true;
+}
 async function fm6Send(quiet) {
+  if (await fm6Lanes(fm6Track())) return;
   const r = parse[CMD.FM6_PUT](await sessionRequest(dev, req.fm6Put(FM6.TARGET.TRACK, fm6Track(), FM6.pack(fm6v))));
   checkRc(r.rc);
   if (!quiet) sayK("fm6Sent", ` ${fm6Track() + 1}`);
 }
 $("fm6read").addEventListener("click", () => op(async () => {
+  if (await fm6Lanes(fm6Track())) return;
   const r = parse[CMD.FM6_GET](await sessionRequest(dev, req.fm6Get(FM6.TARGET.TRACK, fm6Track())));
   checkRc(r.rc);
   fm6v = FM6.unpack(r.packed);

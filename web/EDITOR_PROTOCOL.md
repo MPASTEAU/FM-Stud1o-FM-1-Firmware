@@ -67,6 +67,18 @@ insert effect with a dry / wet mix, Discussions #78 #177), then `TYPE` (101, ANA
 P_COUNT and P_E0 from `INFO` keeps working. Projects stay FUN10 (3840 bytes, 111 at byte 66; 16 bytes to spare). See
 "1.5: the INSERT" and "1.5: filter TYPE, ENV SYNC" below.
 
+**HA HA HE HU (this fork: 114 parameters, NENGINES 15, FUN10 as it was):** three track parameters went in before the
+engine parameters, which moved from 103..110 to 106..113: P_COUNT 114, P_E0 106. `ORDER` (103, FX ORDER: the order
+of DIST (D), the INSERT (I) and the SLICER (S), enum `D I S` `D S I` `I D S` `I S D` `S D I` `S I D`, default `D I S`),
+`DUCK` (104, the sidechain's source: OFF, T1..T4) and `DEPTH` (105, its depth 0..127, default 100). Id 8 (`FX`, ENV
+DEST's fourth, read by nothing before) is DUCK's release `REL` (-64..63, default 0); the editor's library files key it
+`DKREL`, so the `REL#n` after it (the FM operators') keep the keys of Felucca's files. Engine 14 is GROWL (appended:
+the user-slot engine of `FAV_GET` / `FAV_SET` is NENGINES, 15 here, 14 in Felucca). A DRUM track's FM6 patch (`FM6_GET`
+/ `FM6_PUT` target 0) holds its lanes' DESIGN (the voice named `DRUM LANES`), not an FM6 voice: the editor neither
+reads nor sends it on a DRUM track. A song section's repeat byte has bit 7 CUT in the project; `SONG` replies give the
+repeats with it masked, and a set (7-bit bytes) writes sections without CUT. No command changed; an editor that takes
+P_COUNT, P_E0 and the engines from `INFO` keeps working.
+
 ## Framing
 
 A request is `F0 7D 46 4C <cmd> <args...> F7`:
@@ -90,9 +102,9 @@ watches (v2, `WATCH`), the device also sends push frames (cmds 23, 24, 26) at an
 | string | ASCII bytes, ended by a 0 byte |
 | scope | 0 = parameter of the selected track (`P_*`, 0..P_COUNT−1); 1 = global parameter (`G_*`, 0..G_COUNT−1) |
 | track | 0..3: tracks 1..4 (synth parts) |
-| engine byte | 0..NENGINES−1 (firmware before 1.0: NENGINES = its drum track, no engine). The numbers are fixed, new engines are appended: 0 ANALOG, 1 reserved (DIGITAL before 1.0: see below), 2 PHASE, 3 LOFI, 4 SAMPLE, 5 VOICE, 6 TRIO, 7 WHEEL, 8 GRAIN, 9 PHYS, 10 DRUM, 11 NOISE, 12 FM6, 13 SLICE (NENGINES 14; a build with `FELUCCA_SLICE=0` has 13). The device and the editor list them in another order (ANALOG FM6 PHASE LOFI SAMPLE VOICE TRIO WHEEL GRAIN PHYS NOISE SLICE DRUM: `ENGINE_ORDER`); the numbers stay |
+| engine byte | 0..NENGINES−1 (firmware before 1.0: NENGINES = its drum track, no engine). The numbers are fixed, new engines are appended: 0 ANALOG, 1 reserved (DIGITAL before 1.0: see below), 2 PHASE, 3 LOFI, 4 SAMPLE, 5 VOICE, 6 TRIO, 7 WHEEL, 8 GRAIN, 9 PHYS, 10 DRUM, 11 NOISE, 12 FM6, 13 SLICE, 14 GROWL (this fork; NENGINES 15, Felucca 14; a build with `FELUCCA_SLICE=0` has 13, no SLICE or GROWL). The device and the editor list them in another order (ANALOG FM6 PHASE LOFI SAMPLE VOICE TRIO WHEEL GRAIN PHYS NOISE SLICE GROWL DRUM: `ENGINE_ORDER`); the numbers stay |
 
-The engine parameters are `P_E0..P_E7`: P_COUNT−8 .. P_COUNT−1 (103..110 since 1.5; 96..103 in 1.2 .. 1.4; 91..98 in
+The engine parameters are `P_E0..P_E7`: P_COUNT−8 .. P_COUNT−1 (106..113 in this fork; 103..110 since 1.5; 96..103 in 1.2 .. 1.4; 91..98 in
 1.1), and `INFO` gives `P_E0`.
 Their meaning, range and names depend on the current engine, so re-read `DESC` for them
 after an engine change.

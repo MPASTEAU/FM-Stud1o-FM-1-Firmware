@@ -81,6 +81,9 @@ static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-",
 #if FELUCCA_SLICE
                                              "SLICE",
 #endif
+#if FELUCCA_GROWL
+                                             "GROWL",      /* 14 (HA HA HE HU): DESC of G_ENGSEL lists every engine */
+#endif
 };
 
 #define PD(l, f, mn, mx, df) {l, f, mn, mx, df, 0, 0}
