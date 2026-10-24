@@ -66,6 +66,10 @@ a { color: inherit; }
 .keys, footer { margin: 16px 0 0; color: var(--dim); text-align: center; }
 .keys span { white-space: nowrap; margin: 0 8px; }
 .keys select { font: inherit; font-size: 12px; }
+.reset { margin: 12px 0 0; text-align: center; }
+.reset button { font: inherit; font-size: 12px; padding: 4px 12px; background: transparent; color: var(--dim);
+                border: 1px solid var(--rule); cursor: pointer; }
+.reset button:hover { color: var(--fg); }
 .cpu { margin: 12px 0 0; color: var(--dim); text-align: center; font-variant-numeric: tabular-nums; }
 .cpu meter { width: 160px; vertical-align: middle; }
 .cpu input { font: inherit; font-size: 12px; width: 56px; }
@@ -82,6 +86,8 @@ footer small { font-size: 11px; opacity: .8; }
   <canvas id="screen" width="240" height="240" role="img" aria-label="The screen"></canvas>
   <div class="start" id="start"><button id="go" type="button">Switch on</button><p id="status" hidden></p></div>
 </div>
+
+<p class="reset"><button id="factory" type="button" title="Erase the emulator's saved flash (projects, presets, settings) and start again from the factory state with the demo">Factory reset</button></p>
 
 <p class="cpu" id="cpu" hidden>
   CPU (device estimate) <meter id="cpumeter" min="0" max="100" low="70" high="85" optimum="0" value="0"></meter>
@@ -433,7 +439,15 @@ function loadFlash() {
     return out;
   } catch { return {}; }
 }
+let resetting = false;                                           // (Factory reset: no save may land after it)
+document.getElementById("factory").onclick = () => {
+  if (!confirm("Factory reset: erase this emulator's projects, presets and settings, and start again with the demo?")) return;
+  resetting = true;
+  try { localStorage.removeItem(STORE); } catch {}
+  location.reload();
+};
 function saveFlash(sectors) {
+  if (resetting) return true;
   try {
     const raw = {};
     for (const [off, u8] of Object.entries(sectors)) {
