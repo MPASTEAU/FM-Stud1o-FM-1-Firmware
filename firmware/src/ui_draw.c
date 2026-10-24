@@ -344,12 +344,35 @@ static int head_slot(char *b)
         b[1] = '*';
     return 1;
 }
-/* the octave, or the song row while a song plays, its right end at HEAD_GRP_R */
+/* HA HA HE HU: the pattern worked on, at the right while the rail shows: the selected track's slot letter (A..D; a song
+ * playing: its lane's) on a badge in the track's colour, "*" after it when edited since; no slot: "-" outlined */
+#define HEAD_PAT_W 22
+#define HEAD_PAT_X (HEAD_GRP_R - HEAD_PAT_W)
+static void head_pattern(int slot, const char *sl)
+{
+    uint16_t tc = ux.trk[song.sel % NTRK];
+    char l[3] = {slot ? sl[0] : '-', slot ? sl[1] : 0, 0};
+    int on = slot && sl[0] != '-';
+    if (on)
+        cv_rrect(HEAD_PAT_X, 3, HEAD_PAT_W, 18, 4, tc, T_BG);
+    else
+    {
+        cv_rrect(HEAD_PAT_X, 3, HEAD_PAT_W, 18, 4, T_LINE, T_BG);
+        cv_rrect(HEAD_PAT_X + 1, 4, HEAD_PAT_W - 2, 16, 3, T_BG, T_LINE);
+    }
+    GFX_HOOK_ALIGN(HEAD_PAT_X, 3, HEAD_PAT_X + HEAD_PAT_W, 21, AL_HV, "header pattern letter on its badge");
+    cv_text_in(HEAD_PAT_X, 3 + CAP_IN(M, 18), HEAD_PAT_W, &AF_M, l, on ? T_INK : T_DIM, on ? tc : T_BG);
+}
+/* the octave, or the song row while a song plays, its right end at HEAD_GRP_R (the rail: left of the pattern's badge,
+ * the song row without its disc: the play state shows it) */
 static void head_group(void)
 {
     char b[8];
     int32_t x;
-    if (chain.running) {
+    if (chain.running && head_rail_on()) {
+        fmt_int(b, (int32_t)chain.row + 1);
+        x = HEAD_PAT_X - 4 - 4 - text_w(&AF_M, b);
+    } else if (chain.running) {
         fmt_int(b, (int32_t)chain.row + 1);
         x = HEAD_GRP_R - (16 + 4 + text_w(&AF_M, b));
         x += cv_icon_mid(x, H_HEAD / 2, 16, ICON_X_SONG, T_MID, T_BG);   /* SONG: the disc */
@@ -358,7 +381,7 @@ static void head_group(void)
         fmt_int(b + str_len(b), song.octave);
         if (head_rail_on()) {                          /* (HA HA HE HU: the rail's BPM further right, no room for OCT:
                                                         * the signed number alone) */
-            x = HEAD_GRP_R - 4 - text_w(&AF_M, b);
+            x = HEAD_PAT_X - 4 - 4 - text_w(&AF_M, b);
         } else {
             x = HEAD_GRP_R - (text_w(&AF_S, "OCT") + 4 + text_w(&AF_M, b));
             GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
@@ -433,6 +456,8 @@ static void draw_head(void)
     }
     if (!head_rail_on())
         draw_rec_mark(rx, T_BG);
+    else
+        head_pattern(slot, sl);                        /* (HA HA HE HU: the pattern, top right) */
     if (centre) {
         int32_t ib[4], lx = g.bx + g.b[2];             /* lx: the right end of the BPM (and its lock) */
         uint32_t id = song.playing ? (chain.running ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;

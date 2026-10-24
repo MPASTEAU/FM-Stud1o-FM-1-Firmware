@@ -33,7 +33,7 @@ static int check(const char *what, int ok)
 /* the value parameter k (old id) of track t had in the old project */
 static int16_t oldv(uint32_t t, uint32_t k) { return (int16_t)(t * 100u + k * 3u + 1u); }
 
-static const uint8_t OLD_ENG[NTRK] = {7, 0, 6, 0};   /* WHEEL, ANALOG, TRIO; the drum track: 0 (no engine) */
+static const uint8_t OLD_ENG[NTRK_V10] = {7, 0, 6, 0};   /* WHEEL, ANALOG, TRIO; the drum track: 0 (no engine) */
 static void fill_v2_track(proj_trk_v2_t *d, uint32_t t)
 {
     uint32_t k;
@@ -90,7 +90,7 @@ static void to_v4(project_v4_t *v, const project_t *q)
     v->sel = q->sel;
     v->parts = q->parts;
     v->phys = q->phys;
-    for (t = 0; t < NTRK; t++) {
+    for (t = 0; t < NTRK_V10; t++) {
         for (k = 0; k < 61u; k++) v->t[t].p[k] = q->t[t].p[k];
         for (k = 0; k < 8u; k++) v->t[t].p[61u + k] = q->t[t].p[P_E0 + k];
         v->t[t].engine = q->t[t].engine;
@@ -187,7 +187,7 @@ int main(void)
     for (i = 0; i < PROJ_NG_V2; i++)
         v2.g[i] = (int16_t)(500 + i);
     v2.sel = 2;
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK_V10; t++)
         fill_v2_track(&v2.t[t], t);
     v2.sum = proj_hash(&v2, sizeof v2 - 4u);
     bad += check("FUN2 image is 2552 bytes (as stored)", sizeof v2 == 2552u);
@@ -199,7 +199,7 @@ int main(void)
         ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(500 + i));
     bad += check("FUN2 -> FUN6: globals (id 24, the old drum channel: ROOM) and selected track", ok);
     ok = 1;
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK_V10; t++)
         ok &= track_ok(&q.t[t], &v2.t[t], t, t == 3u, 127, 127);   /* (G_DRLVL / G_DRREV 525 / 526: 127) */
     bad += check("FUN2 -> FUN6: every parameter mapped, SLICER and matrix OFF (4 tracks)", ok);
 
@@ -219,7 +219,7 @@ int main(void)
         v3.g[i] = (int16_t)(600 + i);
     v3.sel = 3;
     v3.parts = NPART;
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK_V10; t++)
         fill_v3_track(&v3.t[t], t);
     v3.sum = proj_hash(&v3, sizeof v3 - 4u);
     bad += check("FUN3 image is 2584 bytes (as stored)", sizeof v3 == 2584u);
@@ -228,7 +228,7 @@ int main(void)
          q.parts == NPART;
     for (i = 0; i < G_COUNT; i++)
         ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(600 + i));
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK_V10; t++)
         ok &= track_v3_ok(&q.t[t], &v3.t[t], t);
     bad += check("FUN3 -> FUN6: every parameter kept, the matrix OFF, steps, globals (24: ROOM)", ok);
 
@@ -269,7 +269,7 @@ int main(void)
         project_v5_t old;
         memset(&old, 0, sizeof old);
         memcpy(old.g, q.g, sizeof old.g); old.sel = q.sel; old.parts = q.parts; old.phys = q.phys;
-        for (uint32_t k = 0; k < NTRK; k++) {
+        for (uint32_t k = 0; k < NTRK_V10; k++) {
             for (uint32_t j = 0; j < 61u; j++) old.t[k].p[j] = q.t[k].p[j];
             for (uint32_t j = 0; j < 8u; j++) old.t[k].p[61u + j] = q.t[k].p[P_E0 + j];
             old.t[k].engine = q.t[k].engine; old.t[k].preset = q.t[k].preset;
@@ -302,7 +302,7 @@ int main(void)
     memcpy(&buf, &v4, sizeof v4);
     ok = proj_import(&q2, &buf, (int)sizeof v4) && proj_ok(&q2) && q2.magic == PROJ_MAGIC && q2.sel == q.sel &&
          !memcmp(q2.g, q.g, sizeof q.g);
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK_V10; t++)
         ok &= !memcmp(q2.t[t].p, q.t[t].p, sizeof q.t[t].p) && q2.t[t].engine == q.t[t].engine &&
               steps_same(q2.t[t].step, v4.t[t].step);
     bad += check("FUN4 -> FUN6: parameters, engines, globals; steps as they were, no hits", ok);
@@ -358,7 +358,7 @@ int main(void)
     memcpy(&buf, &v1, sizeof v1);
     ok = proj_import(&q, &buf, (int)sizeof v1) && proj_ok(&q) && track_ok(&q.t[0], &v1.t, 0, 0, 0, 0) && q.g[5] == 705 &&
          q.parts == NPART;
-    for (t = 1; t < NTRK; t++)
+    for (t = 1; t < NTRK_V10; t++)
         ok &= q.t[t].preset == PROJ_DEF_SOUND && q.t[t].engine == trk_def_engine(t) && q.t[t].p[P_SLCR] == 0 && q.t[t].p[P_LEVEL] == TP[P_LEVEL].def &&
               q.t[t].p[P_E0] == ENGINES[trk_def_engine(t)]->edit[0].def && q.t[t].step[0].time == ST_REST;
     bad += check("FUN1 -> FUN6: track 1 mapped, tracks 2..4 defaults", ok);
@@ -419,8 +419,8 @@ int main(void)
         project_store_t st, st2;
         uint32_t i, zero = 1;
         bad += check("FUN10 name at the end of the reserved tail, the FM6 patches before it, after the data (4 spare: HA HA HE HU took 12)",
-                     PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + NTRK * (P_COUNT + 2u + NSTEP * 9u) +
-                     sizeof(chain_config_t) + sizeof(motion_store_t) + 4u == PROJ_FM6_OFF);   /* (HA HA HE HU: 12 taken) */
+                     PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + NTRK_V10 * (P_COUNT + 2u + NSTEP * 9u) +
+                     sizeof(chain_v10_t) + sizeof(motion_store_v10_t) + 4u == PROJ_FM6_OFF);   /* (HA HA HE HU: 12 taken) */
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
@@ -462,7 +462,7 @@ int main(void)
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
-        for (k = 0; k < NTRK; k++) {
+        for (k = 0; k < NTRK_V10; k++) {
             memcpy(a.fm6[k], FM6_FACTORY[k * 2u], FM6_PACKED);
             a.t[k].engine = ENGI_FM6;
             a.t[k].p[P_E7] = (int16_t)(k * 2u);
@@ -470,7 +470,7 @@ int main(void)
         memcpy(a.name, "FM SONG", 7);
         a.sum = proj_sum(&a);
         ok = proj_pack(&st, &a) && ((uint32_t *)st.raw)[0] == 0x46554E41u && proj_import(&c, &st, sizeof st);
-        for (k = 0; k < NTRK; k++)
+        for (k = 0; k < NTRK_V10; k++)
             ok &= !memcmp(c.fm6[k], FM6_FACTORY[k * 2u], FM6_PACKED) && c.t[k].engine == ENGI_FM6 &&
                   !memcmp(st.raw + PROJ_FM6_OFF + k * FM6_PACKED, FM6_FACTORY[k * 2u], FM6_PACKED);
         bad += check("FUN10: the four FM6 patches round trip (bytes at PROJ_FM6_OFF)", ok && !memcmp(c.name, "FM SONG", 7));
@@ -494,7 +494,7 @@ int main(void)
                 f.sum = proj_sum(&f);
                 ok = proj_pack(&st, &f) && proj_import(&g, &st, sizeof st) && !memcmp(&f.motion, &g.motion, sizeof f.motion);
                 bad += check("FUN10 round trip: locks on a lane level (P_LN2) and an engine value (P_E5) kept", ok &&
-                             st.raw[68u + NTRK * (P_COUNT + 2u + NSTEP * 9u) + sizeof(chain_config_t) + 4u + 6u + 1u] ==
+                             st.raw[68u + NTRK_V10 * (P_COUNT + 2u + NSTEP * 9u) + sizeof(chain_v10_t) + 4u + 6u + 1u] ==
                              (P_LN2 | MOTION_LOCK) && g.motion.event[3].param == (P_E5 | MOTION_LOCK));
             }
             e.motion.count = 3;   /* a FUN8 of a 1.1 development build (91 parameters) could hold a lock: its E5 then */
@@ -502,7 +502,7 @@ int main(void)
             e.sum = proj_sum(&e);
             ok = old_pack(v8, &e, OLD_FUN8, 91u) == sizeof v8;   /* (its E3 at 86, its E5 lock at 88) */
             ok = ok && proj_import(&c, v8, sizeof v8);
-            for (k = 0; ok && k < NTRK; k++) {
+            for (k = 0; ok && k < NTRK_V10; k++) {
                 for (j = P_LN0; j <= P_LN7; j++) ok &= c.t[k].p[j] == 127;
                 ok &= !memcmp(c.fm6[k], FM6_FACTORY[k * 2u], FM6_PACKED);
             }
@@ -520,7 +520,7 @@ int main(void)
         }
         /* the same music as FUN7 (3388 bytes, 91 parameters, no patches): the name at 3372 */
         ok = old_pack(v7, &a, OLD_FUN7, 91u) == sizeof v7 && proj_import(&c, v7, sizeof v7);
-        for (k = 0; k < NTRK; k++)
+        for (k = 0; k < NTRK_V10; k++)
             init &= !memcmp(c.fm6[k], FM6_INIT, FM6_PACKED);
         bad += check("FUN7 -> FUN10: the music and name kept, every track the init patch",
                      ok && init && c.t[2].engine == ENGI_FM6 && c.t[2].p[P_E7] == 4 && !memcmp(c.name, "FM SONG", 7));
@@ -573,7 +573,7 @@ int main(void)
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
-        for (t = 0; t < NTRK; t++) {
+        for (t = 0; t < NTRK_V10; t++) {
             for (i = 0; i < P_COUNT; i++)
                 a.t[t].p[i] = param_desc_of(t == 1u ? ENGI_DIGITAL : 0u, i)->def;
             a.t[t].engine = t == 1u ? ENGI_DIGITAL : 0u;
@@ -647,7 +647,7 @@ int main(void)
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
         chain_defaults(&a.chain);
-        for (t = 0; t < NTRK; t++) {
+        for (t = 0; t < NTRK_V10; t++) {
             for (i = 0; i < P_COUNT; i++)
                 a.t[t].p[i] = param_desc_of(ENGI_SAMPLE, i)->def;
             a.t[t].engine = ENGI_SAMPLE;

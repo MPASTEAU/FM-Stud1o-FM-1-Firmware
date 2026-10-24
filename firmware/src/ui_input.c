@@ -1692,8 +1692,8 @@ static void ui_input(void)
                 break;
             if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
-            else if ((!ui.home && cur_page()->graph == GR_SONG) || (ui.home && chain_config.count))
-                chain_play_ui();                        /* (HA HA HE HU: HOME plays the SONG when there is one) */
+            else if (!ui.home && cur_page()->graph == GR_SONG)
+                chain_play_ui();                        /* (HA HA HE HU: PLAY elsewhere plays the pattern) */
             else
                 transport_req = 1;
             break;

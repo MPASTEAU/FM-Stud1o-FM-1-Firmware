@@ -266,17 +266,14 @@ static void dm_perc(uint32_t at, uint32_t len)        /* claves on the "and"s, c
     }
 }
 /* the loop at power-on: two bars of intro (the build in the second), two of the drop */
-static void dm_loop(void)
+static void dm_pat_a(void)                      /* A: the pad, then soft hats and a kick on each 1; 5..8 the bell, the
+                                                 * pluck, the choir, the percussion from bar 3 */
 {
     dm_clear();
-    dm_chords(0, 8, 4);
-    dm_intro_inst(0, 8, 4);
-    dm_perc(0, 32);
-    dm_riser(16, 16);
-    dm_intro_drums(0, 16, 0);
-    dm_roll(16, 16);
-    dm_bass(32, DM_DROP1, NELEM(DM_DROP1));
-    dm_drop_drums(32, 1, 0);
+    dm_chords(0, 16, 4);
+    dm_intro_inst(0, 16, 4);
+    dm_perc(32, 32);
+    dm_intro_drums(32, 32, 1);
 }
 static void felucca_demo(void)
 {
@@ -349,7 +346,7 @@ static void felucca_demo(void)
     demo_sound(&trk[7], ENGI_DRUM, 3);        /* PERC KIT */
     trk[7].p[P_LEVEL] = 96;
     trk[7].p[P_REV] = 40;
-    dm_loop();
+    dm_pat_a();
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
@@ -395,13 +392,8 @@ static void demo_song_boot(int restored)
             chain_config.row[i].slot[k] = ROWS[i][0];
         chain_config.row[i].repeat = ROWS[i][1];
     }
-    dm_clear();                               /* A: INTRO, the pad, then soft hats and a kick on each 1; 5..8 the bell,
-                                               * the pluck, the choir, the percussion from bar 3 */
-    dm_chords(0, 16, 4);
-    dm_intro_inst(0, 16, 4);
-    dm_perc(32, 32);
-    dm_intro_drums(32, 32, 1);
-    demo_save(0, "INTRO");
+    dm_pat_a();
+    demo_save(0, "");
     dm_clear();                               /* B: BUILD, the pad turned into noise, the kick on the beats, the roll; the
                                                * bell and the pluck on */
     dm_chords(0, 16, 4);
@@ -410,24 +402,25 @@ static void demo_song_boot(int restored)
     for (i = 0; i < 32u; i += 4u)
         demo_hit(&trk[3], i, 1u << DV_KICK, 100);
     dm_roll(32, 32);
-    demo_save(1, "BUILD");
+    demo_save(1, "");
     dm_clear();                               /* C: DROP */
     dm_bass(0, DM_DROP1, NELEM(DM_DROP1));
     dm_bass(32, DM_DROP1B, NELEM(DM_DROP1B));
     dm_drop_drums(0, 1, 0);
     dm_drop_drums(32, 0, 0);
-    demo_save(2, "DROP");
+    demo_save(2, "");
     dm_clear();                               /* D: DROP 2 */
     dm_bass(0, DM_DROP2, NELEM(DM_DROP2));
     dm_bass(32, DM_DROP2, NELEM(DM_DROP2));
     dm_drop_drums(0, 1, 1);
     dm_drop_drums(32, 0, 1);
-    demo_save(3, "DROP 2");
+    demo_save(3, "");
     if (restored && autosave_boot(1))                /* (the session the autosave restored, again: it is still there) */
         return;
-    dm_loop();
+    dm_pat_a();                               /* (power-on: on pattern A, the header's badge says so) */
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
+    pat_from_set(1);
 }
 #endif
 
