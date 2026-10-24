@@ -392,6 +392,8 @@ static void mono_remove(track_t *t, uint32_t note)
     t->nmono = (uint8_t)k;
 }
 
+/* HA HA HE HU: DUCK's triggers (fx.c duck_part): bit k, track k started a note in this block (a DRUM track: a KICK) */
+static volatile uint8_t duck_hit;
 static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t any = 0, i, mode = trk_vmode(t);
@@ -408,6 +410,8 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         return;
     }
     vel = mod_note(t, note, vel);                       /* the matrix's VEL / KEY / RAND (1.5.6: VEL as a destination) */
+    if (t->engine != ENGI_DRUM || drum_lane(note) == DV_KICK)
+        duck_hit |= (uint8_t)(1u << ((uint32_t)(t - trk) % NPART));
     for (i = 0; i < NVOICE; i++)
         any |= t->v[i].gate;
     if (!any) {                                        /* fresh phrase: LFO retrigger (TRIG NOTE) and fade */

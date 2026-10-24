@@ -1030,7 +1030,7 @@ static void song_layout(song_lay_t *L)
     L->add = n < CHAIN_ROWS;
     L->u0[0] = 0;
     for (i = 0; i < n; i++)
-        L->u0[i + 1u] = L->u0[i] + chain_config.row[i].repeat * song_unit(&chain_config.row[i]);
+        L->u0[i + 1u] = L->u0[i] + CHAIN_REP(chain_config.row[i]) * song_unit(&chain_config.row[i]);
     wb = SG_W - (L->add ? SG_ADDW : 0u);
     while (chg) {                                      /* fitted: shared by length, SG_MINW the least */
         chg = 0; nf = 0; uf = 0;
@@ -1081,7 +1081,7 @@ static int32_t song_playx(const song_lay_t *L)
         return -1;
     len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u;
     idx = t->seq_pos >= 0x7FFFFFFFu ? 0u : t->seq_idx % len;
-    reps = chain.config.row[r].repeat ? chain.config.row[r].repeat : 1u;
+    reps = CHAIN_REP(chain.config.row[r]) ? CHAIN_REP(chain.config.row[r]) : 1u;
     return L->x[r] + (int32_t)sg_muldiv((reps - (chain.remaining <= reps ? chain.remaining : reps)) * len + idx,
                                         (uint32_t)(L->x[r + 1u] - L->x[r] - SG_GAP), reps * len);
 }
@@ -2039,7 +2039,7 @@ static void sg_picture(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i,
         return;
     for (q = i; q < j; q++) {
         int32_t sx = SG_X0 + L->x[q] - off, wt = L->x[q + 1u] - L->x[q] - SG_GAP, a, b;
-        uint32_t reps = chain_config.row[q].repeat ? chain_config.row[q].repeat : 1u, unit = song_unit(&chain_config.row[q]);
+        uint32_t reps = CHAIN_REP(chain_config.row[q]) ? CHAIN_REP(chain_config.row[q]) : 1u, unit = song_unit(&chain_config.row[q]);
         uint32_t tot = reps * unit, pc = 0xFFFFFFFFu, pl = 0xFFFFFFFFu, pp = 0xFFFFFFFFu, gaps, notch;
         if (wt < 1)
             continue;

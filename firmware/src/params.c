@@ -59,6 +59,9 @@ static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_O
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 /* the INSERT's types (1.5, fx.c IT_*; append-only: stored). Its three values A B C mean what the type says (ins_desc) */
 static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"};
+/* HA HA HE HU: ORDER, DIST (D) INSERT (I) SLICER (S) in a row (fx.c FX_ORDER); DUCK's source (fx.c duck_part) */
+static const char *const N_FXORD[] = {"D I S", "D S I", "I D S", "I S D", "S D I", "S I D"};
+static const char *const N_DKSRC[] = {"OFF", "T1", "T2", "T3", "T4"};
 /* CRUSH: BITS 1..16 and RATE (the held sample's rate, fx.c INS_HOLD) over the range in 16 even parts (0-terminated) */
 static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                                       "16", 0};
@@ -89,7 +92,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_ED_FLT] = PD("FLT", F_BIPCT, -64, 63, 0),
     [P_ED_PIT] = PD("PIT", F_BIPCT, -64, 63, 0),
     [P_ED_SHP] = PD("SHP", F_BIPCT, -64, 63, 0),
-    [P_ED_FX] = PD("FX", F_BIPCT, -64, 63, 0),
+    [P_ED_FX] = PD("REL", F_BIPCT, -64, 63, 0),   /* (P_DKREL, HA HA HE HU: DUCK's release; 0 ~210 ms; nothing else reads it) */
     [P_LRATE] = PD("RATE", F_LFOHZ, 0, 127, 60),
     [P_LWAVE] = PE("WAVE", N_LWAVE, 0),
     [P_LPHASE] = PD("PHS", F_INT, 0, 127, 0),
@@ -165,6 +168,9 @@ static const param_desc_t TP[P_COUNT] = {
     [P_IMIX] = PD("MIX", F_PCT, 0, 127, 127),
     [P_FTYPE] = PE("TYPE", N_FTYPE, 0),           /* 1.5 (#104): ANALOG's filter, LP = as before (eng_analog.c) */
     [P_ESYNC] = PE("ESYNC", N_ONOFF, 0),          /* 1.5 (#175): OFF = ATK DEC REL in ms, as before (voice.c esync) */
+    [P_FXORD] = PE("ORDER", N_FXORD, 0),          /* D I S: as before */
+    [P_DKSRC] = PE("DUCK", N_DKSRC, 0),           /* OFF: as before */
+    [P_DKAMT] = PD("DEPTH", F_PCT, 0, 127, 100),
 };
 
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
@@ -453,7 +459,8 @@ static const page_t PAGES[] = {
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
-    {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
+    {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, P_FXORD, 0xFF, 0xFF}},   /* .. its dry / wet; ORDER (HA HA HE HU) */
+    {"DUCK", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* the sidechain (HA HA HE HU, fx.c) */
     {"DLY", FAM_FX, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
     {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},

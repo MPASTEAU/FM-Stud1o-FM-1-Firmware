@@ -84,3 +84,8 @@ cpu/mix/idle 286
 cpu/mix/idle_drums 552
 cpu/mix/3parts_full_drums 1574
 cpu/mix/idle_click 334
+cpu/GROWL/00_RIDDIM 1215
+cpu/GROWL/01_YOI 1205
+cpu/GROWL/02_METAL 1292
+cpu/GROWL/03_WOB_SUB 1286
+cpu/GROWL/04_TEAROUT 1221

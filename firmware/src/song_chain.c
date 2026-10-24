@@ -66,7 +66,7 @@ static int chain_valid(const chain_config_t *c)
         for (k = 0; k < NTRK; k++)
             if (c->row[i].slot[k] > CHAIN_SILENT)
                 return 0;
-        if (!c->row[i].repeat || c->row[i].repeat > 16u)
+        if (!CHAIN_REP(c->row[i]) || CHAIN_REP(c->row[i]) > 16u)
             return 0;
     }
     return 1;
@@ -133,6 +133,7 @@ static __attribute__((noinline)) void chain_apply(void)
         t->rh_n = t->rskip_n = 0;
     }
 }
+static void chain_cut(uint32_t r);
 static void chain_start(void)
 {
     uint32_t i;
@@ -145,7 +146,8 @@ static void chain_start(void)
         chain.qnt[i] = (uint8_t)trk[i].p[P_SQNT];
     }
     chain.row = 0;
-    chain.remaining = chain.config.row[0].repeat;
+    chain.remaining = CHAIN_REP(chain.config.row[0]);
+    chain_cut(0);
     chain.carry = 0;
     chain.running = 1;
     chain.armed = 0;
@@ -163,6 +165,18 @@ static void chain_stop(void)
     }
     song.rec = chain.rec;
     chain.running = 0;
+}
+/* HA HA HE HU: section r starts; with CUT, the FX buses' tails cleared (fx.c fx_cut) and every voice faded at once */
+static void chain_cut(uint32_t r)
+{
+    uint32_t k, i;
+    if (!(chain.config.row[r].repeat & CHAIN_CUT))
+        return;
+    fx_cut = 1;
+    for (k = 0; k < NTRK; k++)
+        for (i = 0; i < NVOICE; i++)
+            if (trk[k].v[i].active)
+                voice_kill(&trk[k].v[i]);
 }
 static void chain_tick(uint32_t n)
 {
@@ -183,6 +197,7 @@ static void chain_tick(uint32_t n)
     }
     chain.carry = t->seq_pos + n - length;
     chain.row++;
-    chain.remaining = chain.config.row[chain.row].repeat;
+    chain.remaining = CHAIN_REP(chain.config.row[chain.row]);
+    chain_cut(chain.row);
     chain_apply();
 }

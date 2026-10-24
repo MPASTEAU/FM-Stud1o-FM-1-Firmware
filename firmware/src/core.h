@@ -39,7 +39,14 @@
                                             * second core (mod.c, voice.c SPREAD, eng_formant.c): one each with two cores,
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
-#define NENGINES (13 + FELUCCA_SLICE)   /* SLICE (13) comes last: the other engines keep their numbers */
+#ifndef FELUCCA_GROWL
+#define FELUCCA_GROWL FELUCCA_SLICE   /* HA HA HE HU's GROWL (14, eng_growl.c): after SLICE, so with it */
+#endif
+#if FELUCCA_GROWL && !FELUCCA_SLICE
+#error "FELUCCA_GROWL (engine 14) needs FELUCCA_SLICE (engine 13)"
+#endif
+#define NENGINES (13 + FELUCCA_SLICE + FELUCCA_GROWL)   /* SLICE (13), GROWL (14) last: the others keep their numbers */
+#define ENGI_GROWL 14u
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define NENG_SHOWN (NENGINES - !FELUCCA_FM4)   /* the engines one can pick: PRESETS, the EDIT layer, the editor,
                                                 * in the display order of engines.c ENGINE_ORDER */
@@ -80,9 +87,13 @@ enum {                          /* per-track parameters */
     P_ITYPE, P_IA, P_IB, P_IC, P_IMIX,         /* 1.5 (#78, #177): the INSERT, its TYPE, three values and MIX (fx.c) */
     P_FTYPE,                                   /* 1.5 (#104): ANALOG's filter TYPE, LP (as before) / BP / HP (eng_analog.c) */
     P_ESYNC,                                   /* 1.5 (#175): ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
+    P_FXORD,                                   /* HA HA HE HU: the order of DIST, INSERT and SLICER (fx.c mix_part) */
+    P_DKSRC, P_DKAMT,                          /* HA HA HE HU: DUCK, the sidechain: its source track, depth (fx.c); its release
+                                                * is P_DKREL (P_ED_FX's byte: a project has room for three more only) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
+#define P_DKREL P_ED_FX                  /* HA HA HE HU: DUCK's release in the byte P_ED_FX kept (nothing read it) */
 
 enum {                          /* global parameters */
     G_BPM, G_SWING, G_CLOCK, G_TUNE,
@@ -245,6 +256,10 @@ _Static_assert(sizeof(motion_store_t) == 388u, "motion disk layout (FUN10)");
  * nothing there) and its repeats (1..16). Up to 1.1 a row was {slot, repeat}, all four tracks on that slot
  * (chain_v9_t, FUN6..FUN9): it loads as a section with the four on it (song_chain.c chain_from_v9) */
 #define CHAIN_SILENT 4u
+/* HA HA HE HU: a section's repeat byte, bit 7 CUT: as it starts the FX tails go (the reverb and delay buses cleared,
+ * every sounding voice faded out at once): the drop dry and alone (song_chain.c chain_cut). Bits 0..6 the repeats */
+#define CHAIN_CUT 0x80u
+#define CHAIN_REP(r) ((uint32_t)(r).repeat & 0x7Fu)
 typedef struct { uint8_t slot[NTRK], repeat; } chain_row_t;
 typedef struct {
     uint8_t count, rsv[3];
@@ -321,9 +336,9 @@ typedef struct track {
     uint8_t lfo_wrap;            /* the LFO's phase wrapped this block: its S&H is drawn after the parts (voice.c) */
     uint32_t esync_k[3];         /* ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
     uint8_t spread_on;           /* SPREAD this block (fx.c mix_part, voice.c track_render) */
-    uint8_t rsv_sz[1];           /* (sizeof(track_t) a multiple of 16: below) */
+    uint8_t rsv_sz[12];          /* (sizeof(track_t) a multiple of 16: below; HA HA HE HU: 12 with its 3 parameters) */
 #else
-    uint8_t rsv_sz[14];          /* (sizeof(track_t) a multiple of 16: below) */
+    uint8_t rsv_sz[13];          /* (sizeof(track_t) a multiple of 16: below; HA HA HE HU: 13) */
 #endif
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */

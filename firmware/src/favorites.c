@@ -7,23 +7,33 @@ typedef struct {
     uint32_t user, filter;
 } favorites_t;
 static favorites_t favorites __attribute__((section(".pool")));
+/* an engine's row of factory[]: its number; GROWL (14, HA HA HE HU) takes DIGITAL's (1: retired, no presets), as row 14
+ * holds MIDI LEARN's map (midi_learn.c) and row 15 the CUSTOM palette */
+#if defined(FELUCCA_GROWL) && FELUCCA_GROWL && FELUCCA_FM4
+#error "GROWL's favourites take DIGITAL's row: not with FELUCCA_FM4"
+#endif
+#ifdef ENGI_GROWL
+static uint32_t fav_row(uint32_t engine) { return FELUCCA_GROWL && engine == ENGI_GROWL ? 1u : engine; }
+#else
+static uint32_t fav_row(uint32_t engine) { return engine; }   /* (a host build without the engines) */
+#endif
 static int favorite_has(uint32_t engine, uint32_t preset)
 {
     if (engine == NENGINES)
         return preset < UP_SLOTS && ((favorites.user >> preset) & 1u);
-    return engine < NENGINES && engine < 16u && preset < 256u &&
-        ((favorites.factory[engine][preset / 8u] >> (preset % 8u)) & 1u);
+    return engine < NENGINES && fav_row(engine) < 14u && preset < 256u &&
+        ((favorites.factory[fav_row(engine)][preset / 8u] >> (preset % 8u)) & 1u);
 }
 static int favorite_set(uint32_t engine, uint32_t preset, int on)
 {
-    if (engine > NENGINES || (engine == NENGINES ? preset >= UP_SLOTS : engine >= 16u || preset >= 256u))
+    if (engine > NENGINES || (engine == NENGINES ? preset >= UP_SLOTS : fav_row(engine) >= 14u || preset >= 256u))
         return 0;
     if (favorite_has(engine, preset) == !!on) return 0;
     if (engine == NENGINES) {
         if (on) favorites.user |= 1u << preset;
         else favorites.user &= ~(1u << preset);
     } else {
-        uint8_t *b = &favorites.factory[engine][preset / 8u];
+        uint8_t *b = &favorites.factory[fav_row(engine)][preset / 8u];
         if (on) *b |= (uint8_t)(1u << (preset % 8u));
         else *b &= (uint8_t)~(1u << (preset % 8u));
     }

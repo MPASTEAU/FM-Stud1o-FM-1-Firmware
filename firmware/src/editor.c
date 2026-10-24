@@ -896,7 +896,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                 for (k = 0; k < NTRK; k++) ed_b(r->slot[k]);
             else                                         /* v6: the clock track's slot (every track "-": A) */
                 ed_b(r->slot[chain_clock(r)] < 4u ? r->slot[chain_clock(r)] : 0u);
-            ed_b(r->repeat);
+            ed_b(CHAIN_REP(*r));
         }
         break;
     }

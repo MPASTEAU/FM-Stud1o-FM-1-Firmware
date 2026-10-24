@@ -968,7 +968,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         if (slot == 2u)
             r->slot[ui.song_trk % NTRK] = (uint8_t)clamp((int32_t)r->slot[ui.song_trk % NTRK] + steps, 0, CHAIN_SILENT);
         else
-            r->repeat = (uint8_t)clamp((int32_t)r->repeat + steps, 1, 16);
+            r->repeat = (uint8_t)((r->repeat & CHAIN_CUT) | (uint32_t)clamp((int32_t)CHAIN_REP(*r) + steps, 1, 16));
         return;
     }
     if (chain_busy() && (pg->scope == SC_STEP || pg->graph == GR_STEPS ||

@@ -993,7 +993,7 @@ static void draw_columns(void)
         if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
         else str_cpy(val, "--", sizeof val);
         draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
-        if (used) fmt_int(val, chain_config.row[row].repeat);
+        if (used) fmt_int(val, (int32_t)CHAIN_REP(chain_config.row[row]));
         else str_cpy(val, "--", sizeof val);
         draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
         return;

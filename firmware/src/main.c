@@ -252,30 +252,33 @@ static void felucca_demo(void)
     track_t *b = &trk[0], *u = &trk[1], *p = &trk[2], *d = &trk[3];
     uint32_t i;
     song.g[G_BPM] = 145;
-    /* track 1: the riddim bass (ANALOG: WAVE DTN MIX NOIS CUT RES DRV KTR) */
-    b->p[P_E0] = 5;                           /* WAVE SYNC: a saw synced to a saw */
-    b->p[P_E1] = 76;                          /* DTN (shown SYNC): the synced saw ~14 semitones up */
-    b->p[P_E2] = 104;                         /* MIX: mostly the synced one */
-    b->p[P_E3] = 0;
-    b->p[P_E4] = 62;                          /* CUT: bright, the LFO opens it more */
-    b->p[P_E5] = 40;                          /* RES */
-    b->p[P_E6] = 120;                         /* DRV */
-    b->p[P_E7] = 64;
+    /* track 1: the bass, GROWL (WAVE RATIO FM FB CUT RES DRV SUB): a saw phase-modulated by a sine at the note, the
+     * modulation's depth swept by LFO 2 on the 1/8 (a saw, unipolar, from each note: round -> bright -> metal, the
+     * groove in the timbre), a soft clip after for the crunch, the filter open (the definition kept) */
+    demo_sound(b, ENGI_GROWL, 0);
+    b->p[P_E0] = 0;                           /* WAVE SAW */
+    b->p[P_E1] = 1;                           /* RATIO 1 */
+    b->p[P_E2] = 40;                          /* FM: ~30 %, the LFO adds the rest */
+    b->p[P_E3] = 20;                          /* FB */
+    b->p[P_E4] = 100;                         /* CUT */
+    b->p[P_E5] = 20;                          /* RES */
+    b->p[P_E6] = 60;                          /* DRV: crunchy, not destroyed */
+    b->p[P_E7] = 0;                           /* SUB: track 2's */
     b->p[P_DEC] = 50;
     b->p[P_ED_FLT] = 0;
-    b->p[P_ED_SHP] = 40;                      /* each stab's attack sweeps the sync down: "yoi" */
-    b->p[P_LWAVE] = 1;                        /* TRI */
-    b->p[P_LSYNC] = 8;                        /* 1/16 (N_LSYNC) */
+    b->p[P_ED_SHP] = 0;
+    b->p[P_LWAVE] = 2;                        /* SAW */
+    b->p[P_LSYNC] = 6;                        /* 1/8 (N_LSYNC) */
     b->p[P_LTRIG] = 0;                        /* NOTE */
     b->p[P_LPOL] = 1;                         /* UNI */
-    b->p[P_LD_SHP] = 63;                      /* the sync swept: the metal moves */
-    b->p[P_LD_FLT] = 40;
-    b->p[P_DIST] = 70;
-    b->p[P_ITYPE] = 3;                        /* INSERT FOLD (N_ITYPE) */
-    b->p[P_IA] = 76;                          /* DRIVE */
+    b->p[P_LD_SHP] = 63;                      /* LFO -> the FM's depth */
+    b->p[P_LD_FLT] = 0;
+    b->p[P_DIST] = 25;
+    b->p[P_ITYPE] = 1;                        /* INSERT SOFT (N_ITYPE): the tube-ish clip */
+    b->p[P_IA] = 50;                          /* DRIVE */
     b->p[P_IB] = 110;                         /* TONE */
-    b->p[P_IC] = 100;                         /* LEVEL */
-    b->p[P_IMIX] = 90;
+    b->p[P_IC] = 104;                         /* LEVEL */
+    b->p[P_IMIX] = 70;
     /* track 2: the sub, ANALOG's sine an octave down */
     demo_sound(u, 0, 7);                      /* SUB BASS */
     u->p[P_E0] = 3;                           /* SIN */
@@ -290,6 +293,9 @@ static void felucca_demo(void)
         trk[i].p[P_SUS] = 127;
         trk[i].p[P_REL] = 12;
         trk[i].p[P_CHOR] = trk[i].p[P_DLY] = trk[i].p[P_REV] = 0;
+        trk[i].p[P_DKSRC] = 4;                /* DUCK under track 4's kick: the pump */
+        trk[i].p[P_DKAMT] = 80;
+        trk[i].p[P_DKREL] = -37;              /* (~100 ms) */
     }
     /* track 3: the intro pad, then the riser */
     demo_sound(p, 0, 1);                      /* SOFT PAD */
@@ -297,6 +303,7 @@ static void felucca_demo(void)
     p->p[P_E4] = 46;                          /* CUT (automated) */
     p->p[P_REV] = 80;
     p->p[P_DLY] = 30;
+    p->p[P_LEVEL] = (int16_t)(p->p[P_LEVEL] - 6);   /* -3 dB (LEVEL: 0.5 dB a step) */
     d->p[P_REV] = 24;
     dm_loop();
     for (i = 0; i < NTRK; i++)
@@ -325,12 +332,17 @@ static void demo_save(uint32_t slot, const char *name)
 static project_t demo_keep __attribute__((section(".pool")));
 static void demo_song_boot(int restored)
 {
-    static const uint8_t ROWS[][2] = {{0, 2}, {1, 1}, {2, 2}, {3, 2}, {0, 1}, {1, 1}, {2, 2}, {3, 1}};   /* {slot, repeat} */
+    static const uint8_t ROWS[][2] = {{0, 2}, {1, 1}, {2, 2 | CHAIN_CUT}, {3, 2}, {0, 1}, {1, 1}, {2, 2 | CHAIN_CUT},
+                                      {3, 1}};   /* {slot, repeat}; the drops after a build CUT: the build's tails gone */
     char nm[PROJ_NAME_LEN + 1u];
     uint32_t i, k;
     for (i = 0; i < 4u; i++)
-        if (project_name(i, nm))
-            return;                           /* (a slot in use: the user's music, nothing written) */
+        if (project_name(i, nm)) {            /* (a slot in use: the user's music, nothing written; an empty SONG */
+            if (!chain_config.count && project_name(0, nm) &&   /* takes the one PROJECT A was saved with) */
+                proj_import(&proj_scratch, &proj_slot[0], sizeof(project_store_t)) && chain_valid(&proj_scratch.chain))
+                chain_config = proj_scratch.chain;
+            return;
+        }
     if (restored)
         project_capture(&demo_keep);
     chain_defaults(&chain_config);

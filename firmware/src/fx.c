@@ -489,6 +489,9 @@ static __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *o
     hl.side = 1;
 }
 
+/* HA HA HE HU: a section with CUT started (song_chain.c chain_cut): the reverb and delay emptied at the next fx_buses */
+static volatile uint8_t fx_cut;
+
 /* the reverb's buffers and states to silence (the model changed) */
 static void rev_clear(void)
 {
@@ -563,6 +566,13 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
     int32_t dmix = song.g[G_DMIX] * 258;
     int32_t cdepth = song.g[G_CDEPTH] * 6, rt;
+    if (fx_cut) {                                       /* (HA HA HE HU: CUT, the tails gone) */
+        fx_cut = 0;
+        rev_clear();
+        for (i = 0; i < DLY_LEN; i++)
+            dly_buf[i] = 0;
+        fx.dly_lp = 0;
+    }
     uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
     if (pf.ew1 && fb < THR_FB)
         fb += mulq16(THR_FB - fb, (uint32_t)pf.ew1 << 1);   /* ECHO THROW (perform.c): more feedback while held, 0.7
@@ -868,10 +878,62 @@ static uint16_t part_cost[NTRK];                        /* the last block's, per
 static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67, 70, 174, 144, 143, 189, 309, 113, 134,
                                              181,
 #if FELUCCA_SLICE
-                                             129
+                                             129,
+#endif
+#if FELUCCA_GROWL
+                                             125
 #endif
 };
 #endif
+
+/* HA HA HE HU: ORDER (P_FXORD, params.c N_FXORD), the track's DIST (0), INSERT (1) and SLICER (2) in a row, two bits each,
+ * first in the low bits. 0, D I S, is the chain as it always was */
+static const uint8_t FX_ORDER[6] = {0 | 1 << 2 | 2 << 4, 0 | 2 << 2 | 1 << 4, 1 | 0 << 2 | 2 << 4,
+                                    1 | 2 << 2 | 0 << 4, 2 | 0 << 2 | 1 << 4, 2 | 1 << 2 | 0 << 4};
+static void fx_chain(track_t *t, int32_t *b, uint32_t n)
+{
+    uint32_t o = FX_ORDER[(uint32_t)t->p[P_FXORD] < 6u ? (uint32_t)t->p[P_FXORD] : 0u], k;
+    for (k = 0; k < 3u; k++, o >>= 2)
+        switch (o & 3u) {
+        case 0:
+            track_dist(t, b, n);
+            break;
+        case 1:
+            if (t->p[P_ITYPE] | t->ins_run)
+                track_insert(t, b, n);                  /* the INSERT (1.5): off, nothing */
+            break;
+        default:
+            slicer_track(t, b, n);                      /* slicer.c: before the level, pan and sends */
+            break;
+        }
+}
+
+/* HA HA HE HU: DUCK, the sidechain. A track whose DUCK names a source track (T1..T4) dips when that track starts a note
+ * (voice.c duck_hit; a DRUM source: its KICK lane only): its level falls by DEPTH at once and comes back with REL's
+ * time (P_DKREL -64..63: ~20 .. 400 ms, 0 ~210 ms; an exponential per block). Applied to the part's mono buffer after its FX chain, before LEVEL,
+ * PAN and the sends: the sends dip with it. OFF: nothing runs (the track as before) */
+static int32_t duck_env[NPART], duck_att[NPART];       /* the envelope (Q15), the dip applied last block (Q15) */
+static void duck_part(track_t *t, int32_t *b, uint32_t n)
+{
+    uint32_t k = (uint32_t)(t - trk) % NPART, src = (uint32_t)t->p[P_DKSRC], i;
+    int32_t a0 = duck_att[k], a1 = 0;
+    if (src && src <= NPART) {
+        if ((duck_hit >> (src - 1u)) & 1u)
+            duck_env[k] = 32767;
+        else
+            duck_env[k] = (duck_env[k] * (32768 - 23790 / (20 + (t->p[P_DKREL] + 64) * 3))) >> 15;
+        a1 = mulq15(duck_env[k], t->p[P_DKAMT] * 258);
+    } else {
+        duck_env[k] = 0;
+        if (!a0)
+            return;
+    }
+    for (i = 0; i < n; i++) {
+        int32_t a = a0 + (a1 - a0) * (int32_t)i / (int32_t)n;
+        b[i] -= ((b[i] >> 4) * a) >> 11;
+    }
+    duck_att[k] = a1;
+}
 
 /* one synth part into the dry mix and the sends of sm (mx[0]; mx[1] on the second core); a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
@@ -901,13 +963,14 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
             mod_end(t);
         return;
     }
-    if (T_SPREAD(t))
+    if (T_SPREAD(t)) {
+        if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+            duck_part(t, b, n);                         /* (HA HA HE HU) */
         mix_spread(t, b, n SM_ARG(sm));
-    else {
-        track_dist(t, b, n);
-        if (t->p[P_ITYPE] | t->ins_run)
-            track_insert(t, b, n);                      /* the INSERT (1.5): off, nothing */
-        slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
+    } else {
+        fx_chain(t, b, n);                              /* DIST INSERT SLICER, in ORDER (HA HA HE HU) */
+        if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+            duck_part(t, b, n);
         if ((pf.mute >> (t - trk)) & 1u)
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
     }
@@ -1064,6 +1127,7 @@ static void mix_block(int32_t *out, uint32_t n)
     for (i = 0; i < NPART; i++)                         /* (one core: as 1.6) */
         mix_part(&trk[i], n);
 #endif
+    duck_hit = 0;                                       /* (HA HA HE HU: this block's DUCK triggers taken) */
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
     fx_buses(send_c, send_d, send_r, wet, n);
