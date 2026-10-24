@@ -276,7 +276,8 @@ static void graph_grid(const track_t *t, uint16_t c)
     for (l = 0; l < NLANE; l++) {
         int32_t y = y0 + 4 + (int32_t)l * 14;
         int sel = l == ui.lane, mu = (mute >> l) & 1u;
-        uint16_t row = sel ? T_RAISE : T_SURF, hc = mu ? T_DIM : c, ac = mu ? T_DIM : T_ACCENT;
+        uint16_t row = sel ? T_RAISE : T_SURF, hc = mu ? T_DIM : ux.drum[l], ac = mu ? T_DIM : T_ACCENT;   /* (HA HA HE HU:
+                                                         * each lane's hits in its own colour; c unused) */
         if (sel) {
             GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS, "drum lane fill centred");
             cv_rrect(6, y, 228, 14, 3, T_RAISE, T_SURF);   /* (6 .. 234, as a list row; the hits 40 .. 230) */
@@ -1725,7 +1726,9 @@ static void draw_tracks(void)
         uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u;   /* the knob just turned (hot_col + 1): 1 LEVEL, 2 PAN,
                                                                 * 3 REV, 4 MUTE (its badge) */
         int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_REV], 0, 127);
-        uint16_t vc = mute ? T_DIM : T_THEME;
+        uint16_t vc;
+        ux_tint(ux.trk[c]);                            /* (HA HA HE HU) each column in its track's colour */
+        vc = mute ? T_DIM : T_THEME;
         char b[16];
         t->peak = 0;
         trk_short_name(c, b);
@@ -1796,6 +1799,7 @@ static void draw_tracks(void)
         }
         cv_blit((uint32_t)CARD_X(c), Y_GRAPH);
     }
+    ux_tint(ux.trk[song.sel % NTRK]);                  /* (the panel's colour back: draw_graph's) */
 }
 /* HOME > TRACKS (1.3, Discussions #112 / #134: MENU > DISPLAY > HOME TRACKS): the four tracks as rows in the panel, one
  * under the other (29 px, 2 apart), in place of the scope; the cards above stay HOME's four (the selected track's). A row:
@@ -2157,7 +2161,7 @@ static void graph_song(void)
             cv_rect(x, SG_Y, 2, SG_H, T_ACCENT);
     }
     for (k = 0; k < NTRK; k++)                        /* the lanes: a block per run of one slot, "-" a faint line */
-        for (i = 0; i < L.n; i = j) {
+        for (ux_tint(ux.trk[k]), i = 0; i < L.n; i = j) {   /* (HA HA HE HU: each lane in its track's colour) */
             uint32_t s = chain_config.row[i].slot[k];
             for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
                 ;
@@ -2173,6 +2177,7 @@ static void graph_song(void)
                     sg_frame(SG_X0 + L.x[c] - off, L.x[c + 1u] - L.x[c] - SG_GAP, SG_LY(k), SG_LH, 1, SG_X0, hi, T_THEME);
             }
         }
+    ux_tint(ux.trk[song.sel % NTRK]);
     if (L.add) {                                       /* + ADD */
         bx = SG_X0 + L.x[L.n] - off;
         x0 = bx > SG_X0 ? bx : SG_X0;
@@ -2257,7 +2262,15 @@ static void graph_song(void)
                      i < 4u ? "[K3] ADD SECTION" : "[SAVE] PROJECT A-D", T_MID, T_SURF, x0 - 10 - SG_X0);
     }
 }
+static void draw_graph_in(void);
+/* HA HA HE HU: the panel (curves, scope, roll, grid) in the selected track's colour; MIXER and SONG colour each track */
 static void draw_graph(void)
+{
+    ux_tint(ux.trk[song.sel % NTRK]);
+    draw_graph_in();
+    ux_untint();
+}
+static void draw_graph_in(void)
 {
     const page_t *pg = cur_page();
     const track_t *t = TSEL;

@@ -49,6 +49,9 @@ PALETTES = [
     ("NIGHT",  (0, 0, 0),       (0, 24, 10),     (150, 230, 170), (56, 220, 100),  (255, 255, 255)),
     # 1.0.2: black and white (the derived tokens are set, not blended: bw()); the old MONO is GREY (id 0)
     ("MONO",   (0, 0, 0),       (0, 0, 0),       (255, 255, 255), (255, 255, 255), (255, 255, 255)),
+    # HA HA HE HU (appended): a deep night blue, soft white values, white for the one active thing; its colour comes from
+    # the meaning colours (src/gfx.c ux_hues: tracks, page families, drum lanes), set over THEME where they apply
+    ("HAHA",   (8, 8, 20),      (24, 22, 44),    (236, 234, 250), (214, 216, 240), (255, 255, 255)),
 ]
 BW = "MONO"
 BW_GREY = (82, 82, 82)             # MONO's one mid grey (RGB565 10/20/10): DIM LINE RAISE LANE

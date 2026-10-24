@@ -960,7 +960,15 @@ static void engine_columns(void)
     draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
     draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
 }
+static void draw_columns_in(void);
+/* HA HA HE HU: the four cards in the colour of where one is: a page's family (ux.fam), HOME the selected track's */
 static void draw_columns(void)
+{
+    ux_tint(ui.home || ui.layer || cur_page()->fam == FAM_TRK ? ux.trk[song.sel % NTRK] : ux.fam[cur_page()->fam % 12u]);
+    draw_columns_in();
+    ux_untint();
+}
+static void draw_columns_in(void)
 {
     uint32_t c;
     char val[12];

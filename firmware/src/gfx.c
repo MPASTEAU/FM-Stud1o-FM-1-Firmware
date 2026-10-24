@@ -83,6 +83,7 @@ static uint8_t cv_flip;          /* cv_alpha_hc: the cell mirrored left <-> righ
 static struct {
     uint16_t bg, surf, text, theme, accent;
     uint16_t mid, dim, line, sel, tint, ink, rec, raise, key, lane, grid;
+    uint16_t trk[4], fam[12], drum[8];   /* HA HA HE HU: the meaning colours (ux_hues): tracks, page families, drum lanes */
     uint8_t light, mono;
     uint8_t style;               /* MENU > STYLE (ui.c style_apply): ST_FLAT, ST_LINE */
     uint32_t gen;                /* bumped by palette_set (the text ramps follow) */
@@ -146,6 +147,59 @@ static void palette_custom_load(const uint8_t *b)
     ux_cust.accent = (uint16_t)(b[8] | b[9] << 8);
 }
 
+/* HA HA HE HU: the colours that say what a thing is, the same in every coloured palette (a darker shade on a light one):
+ * the four tracks (T1 cyan, T2 violet, T3 amber, T4 rose: their cushions, MIXER columns, SONG lanes, the panel of the
+ * track edited), the page families (ui.c FAM_*, in that order: HOME, ENV lime, LFO aqua, FX orange, SCL yellow, EDIT
+ * magenta, GLO sky, SAVE grey, ARP mint, SEQ blue, TRK, the knob cards' values and gauges: where one is), the drum lanes
+ * (KICK red, SNARE orange, CLAP yellow, HAT CL teal, HAT OP cyan, TOM green, RIM violet, BELL pink: the grid's hits).
+ * GREY and MONO keep one colour (their theme: what they promise), CUSTOM takes these too */
+static const uint8_t UX_TRK[4][3] = {{64, 200, 255}, {170, 132, 255}, {255, 184, 64}, {255, 88, 150}};
+static const uint8_t UX_FAM[12][3] = {{0, 0, 0}, {150, 230, 90}, {60, 222, 200}, {255, 140, 60}, {240, 222, 80},
+                                      {226, 104, 255}, {110, 172, 255}, {176, 178, 190}, {90, 222, 150}, {96, 150, 255},
+                                      {0, 0, 0}, {0, 0, 0}};   /* (0: the palette's THEME) */
+static const uint8_t UX_DRUM[8][3] = {{255, 84, 84}, {255, 150, 60}, {250, 222, 80}, {80, 222, 200}, {96, 190, 255},
+                                      {130, 222, 100}, {182, 140, 255}, {255, 122, 200}};
+static uint16_t ux_hue(const uint8_t *c, uint16_t theme)
+{
+    uint16_t v;
+    if (!(c[0] | c[1] | c[2]) || ux.mono)
+        return theme;
+    v = RGB(c[0], c[1], c[2]);
+    return ux.light ? ux_mix(v, ux.text, 45) : v;     /* (a light palette: the shade 45 % towards its dark TEXT) */
+}
+static void ux_hues(int bw)
+{
+    uint32_t k;
+    for (k = 0; k < 4u; k++)
+        ux.trk[k] = bw ? ux.theme : ux_hue(UX_TRK[k], ux.theme);
+    for (k = 0; k < 12u; k++)
+        ux.fam[k] = bw ? ux.theme : ux_hue(UX_FAM[k], ux.theme);
+    for (k = 0; k < 8u; k++)
+        ux.drum[k] = bw ? ux.theme : ux_hue(UX_DRUM[k], ux.theme);
+}
+/* the THEME family of tokens for a while (a card in its family's colour, the panel in its track's): ux_tint(c) sets
+ * THEME SEL TINT LANE from c, ux_untint puts the palette's back */
+static uint16_t ux_th0, ux_sel0, ux_tint0, ux_lane0;
+static int ux_tinted;
+static void ux_tint(uint16_t c)
+{
+    if (!ux_tinted) {
+        ux_th0 = ux.theme; ux_sel0 = ux.sel; ux_tint0 = ux.tint; ux_lane0 = ux.lane;
+        ux_tinted = 1;
+    }
+    ux.theme = c;
+    ux.sel = ux_mix(ux.bg, c, UI_SEL_PCT);
+    ux.tint = ux_mix(ux.bg, c, UI_TINT_PCT);
+    ux.lane = ux_mix(ux.surf, c, 10);
+}
+static void ux_untint(void)
+{
+    if (!ux_tinted)
+        return;
+    ux.theme = ux_th0; ux.sel = ux_sel0; ux.tint = ux_tint0; ux.lane = ux_lane0;
+    ux_tinted = 0;
+}
+
 static void palette_set(uint32_t i)
 {
     int cust = i == NPALETTES;
@@ -170,6 +224,8 @@ static void palette_set(uint32_t i)
         ux.dim = ux.line = ux.raise = ux.lane = UI_BW_GREY;   /* the one grey: inactive, tracks, wells */
         ux.tint = ux.grid = p->bg;
     }
+    ux_tinted = 0;
+    ux_hues(!cust && (i == UI_BW_INDEX || i == UI_GREY_INDEX));
     ux.gen++;                                    /* the text ramps change with the coverage curve */
 }
 
