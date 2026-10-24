@@ -178,8 +178,8 @@ int main(void)
 
     reset();
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
-    bad += check("LIST captures the runtime: 13 objects (id 8 empty, id 9 the FM6 patches), runtime 3840 B (FUN10)",
-                 list(0, &len, &crc) == 0 && rep[2] == 13u && len == sizeof(project_store_t) && len == 3840u &&
+    bad += check("LIST captures the runtime: 21 objects (id 8 empty, id 9 the FM6 patches, 10..13 tracks 5..8, 14..17 the extras), runtime 3840 B (FUN10)",
+                 list(0, &len, &crc) == 0 && rep[2] == 21u && len == sizeof(project_store_t) && len == 3840u &&
                  crc == st_crc32(ED_BK_RAW, len));
     bad += check("an empty project slot lists as length 0", list(2, &len, &crc) == 0 && len == 0);
     bad += check("GET of the runtime copy", get(0, 0, 64) == 0);
@@ -187,6 +187,30 @@ int main(void)
     bad += check("a project save after LIST reused the staging RAM: GET of the runtime is stale (5)",
                  get(0, 0, 64) == 5u);
     bad += check("a new LIST makes it readable again", list(0, &len, &crc) == 0 && get(0, 0, 64) == 0);
+    {   /* HA HA HE HU: the tracks' extras (LFO DRAW, CURVE) travel with a project in its FUNY */
+        int ok;
+        trkx[2].draw[5] = -40; trkx[2].smooth = 0; trkx[6].curve = 1;
+        project_save(1);
+        trkx[2].draw[5] = 7; trkx[2].smooth = 1; trkx[6].curve = 0;
+        project_load(1);
+        ok = trkx[2].draw[5] == -40 && !trkx[2].smooth && trkx[6].curve == 1;
+        project_erase(1);
+        bad += check("the extras (LFO DRAW, CURVE) saved and loaded with their project (FUNY)", ok);
+    }
+    {   /* HA HA HE HU: id 10, slot A's tracks 5..8 (its FUNX), listed after a save and restored, tagged to the slot */
+        static uint8_t x[PROJX_SIZE];
+        st_hdr_t h;
+        int ok = list(10, &len, &crc) == 0 && len == PROJX_SIZE && st_current(PX_OBJ0, &h) >= 0;
+        memcpy(x, st_buf, sizeof x);
+        ok &= crc == st_crc32(x, sizeof x) && list(11, &len, &crc) == 0 && len == 0;   /* (slot B empty) */
+        trk[5].p[P_LEVEL] = 7;
+        ok &= put_all(10, x, sizeof x, st_crc32(x, sizeof x)) == 0;
+        project_load(0);
+        ok &= trk[5].p[P_LEVEL] != 7;
+        x[20] ^= 1;
+        ok &= put_all(10, x, sizeof x, st_crc32(x, sizeof x)) == 2u;              /* (its hash: refused) */
+        bad += check("ids 10..13: a slot's tracks 5..8 listed (none for an empty slot), restored; a broken one refused (2)", ok);
+    }
     usb.resets++;
     bad += check("a USB reset after LIST: GET is stale (5)", get(2, 0, 16) == 5u);
 
@@ -377,7 +401,7 @@ int main(void)
         bad += check("an id 9 of another layout is refused (2), the patches kept",
                      put_all(9, &got, sizeof got, st_crc32(&got, sizeof got)) == 2u && !upf_get(0, pk));
         bad += check("an id 9 of the wrong size is refused at begin (1)", put_begin(9, sizeof got - 4u, 0) == 1u);
-        bad += check("an id 10 is refused (1)", put_begin(10, 0, 0) == 1u);
+        bad += check("an id 18 is refused (1)", put_begin(18, 0, 0) == 1u);
     }
     memcpy(&st, &proj_slot[2], sizeof st);
     erase_error = 1;

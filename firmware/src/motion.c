@@ -13,6 +13,11 @@ static int16_t motion_base[NTRK][P_COUNT];
 static uint32_t motion_active[NTRK][(P_COUNT + 31u) / 32u];
 static uint32_t motion_locked[NTRK][(P_COUNT + 31u) / 32u];   /* the ids a lock holds now (put back at the next step) */
 static uint8_t motion_base_valid, motion_full;
+#define MRAMP_N 4u
+static struct {
+    uint8_t n, id[MRAMP_N], len[MRAMP_N], at[MRAMP_N];
+    int16_t from[MRAMP_N], to[MRAMP_N];
+} mramp[NTRK];
 static uint32_t motion_guard(void)
 {
 #if defined(FM1_IRQ_TARGET)
@@ -113,6 +118,7 @@ static int16_t motion_base_value(const track_t *t, uint32_t id)
 static void motion_restore(track_t *t)
 {
     uint32_t k = trk_index(t), id, f = motion_guard();
+    mramp[k].n = 0;                                    /* (HA HA HE HU: no line goes on) */
     for (id = 0; id < P_COUNT; id++)
         if ((motion_active[k][id / 32u] >> (id % 32u)) & 1u) t->p[id] = motion_base[k][id];
     memset(motion_active[k], 0, sizeof motion_active[k]);
@@ -263,10 +269,86 @@ static __attribute__((noinline)) void motion_unlock(track_t *t, uint32_t step, c
     }
     memset(motion_locked[k], 0, sizeof motion_locked[k]);
 }
+/* HA HA HE HU: CURVE RAMP (trkx[].curve): an automation event's value moves in a line to the next event of its parameter
+ * (the next one in the pass; none: to what the pass starts with, the event on step 1 or the sound's own value, at the
+ * loop's end), a block at a time (motion_ramp_block); a lock holds its step all the same. MRAMP_N lines a track at once
+ * (more: the newest takes the oldest's place); enum parameters step as always */
+static void motion_ramp_add(uint32_t k, uint32_t id, int16_t from, int16_t to, uint32_t len)
+{
+    uint32_t j;
+    for (j = 0; j < mramp[k].n && mramp[k].id[j] != id; j++)
+        ;
+    if (j == MRAMP_N) {                                 /* (full: the oldest goes; no memmove on the device) */
+        for (j = 0; j + 1u < MRAMP_N; j++) {
+            mramp[k].id[j] = mramp[k].id[j + 1u]; mramp[k].len[j] = mramp[k].len[j + 1u]; mramp[k].at[j] = mramp[k].at[j + 1u];
+            mramp[k].from[j] = mramp[k].from[j + 1u]; mramp[k].to[j] = mramp[k].to[j + 1u];
+        }
+    } else if (j == mramp[k].n) {
+        mramp[k].n++;
+    }
+    mramp[k].id[j] = (uint8_t)id; mramp[k].from[j] = from; mramp[k].to[j] = to;
+    mramp[k].len[j] = (uint8_t)len; mramp[k].at[j] = 0;
+}
+/* the event at step `step` of track k sets id to v: its line to the next event of id (RAMP only) */
+static __attribute__((noinline)) void motion_ramp_from(const track_t *t, const motion_store_t *m, uint32_t step, uint32_t id,
+                                                       int16_t v)
+{
+    uint32_t k = trk_index(t), i, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), best = len, s;
+    const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
+    int16_t to = motion_base[k][id], first = to;
+    int first_set = 0;
+    if (d->fmt == F_ENUM)
+        return;
+    for (i = 0; i < m->count; i++) {
+        const motion_event_t *e = &m->event[i];
+        if ((e->place >> 6) != k || e->param != id)     /* (automation only: e->param == id, no MOTION_LOCK) */
+            continue;
+        s = e->place & 63u;
+        if (s > step && s < best) {
+            best = s;
+            to = (int16_t)param_fit(d, e->value);
+        }
+        if (s == 0u) {
+            first = (int16_t)param_fit(d, e->value);
+            first_set = 1;
+        }
+    }
+    if (best == len)                                    /* (none after it: to the pass's start) */
+        to = first_set ? first : motion_base[k][id];
+    if (best > step)
+        motion_ramp_add(k, id, v, to, best - step);
+}
+/* a block of track t: its lines where they are in their steps (pos samples into a step of cur samples) */
+static __attribute__((noinline)) void motion_ramp_block(track_t *t, uint32_t pos, uint32_t cur)
+{
+    uint32_t k = trk_index(t), j, fr = cur ? (pos < cur ? pos : cur) * 256u / cur : 0u;   /* (a step: < 2^24 samples) */
+    for (j = 0; j < mramp[k].n; j++) {
+        uint32_t id = mramp[k].id[j], span = mramp[k].len[j] * 256u, x = mramp[k].at[j] * 256u + fr;
+        if ((motion_locked[k][id / 32u] >> (id % 32u)) & 1u)
+            continue;                                   /* (a lock holds its step) */
+        t->p[id] = (int16_t)(mramp[k].from[j] + (int32_t)(mramp[k].to[j] - mramp[k].from[j]) * (int32_t)(x < span ? x : span) /
+                                                   (int32_t)span);
+    }
+}
+/* a step starts: the lines one step on, the ones arrived gone (step 1 of a pass: every one) */
+static void motion_ramp_step(uint32_t k, uint32_t step)
+{
+    uint32_t j, n = 0;
+    for (j = 0; j < mramp[k].n; j++)
+        if (step && ++mramp[k].at[j] < mramp[k].len[j]) {
+            mramp[k].id[n] = mramp[k].id[j]; mramp[k].len[n] = mramp[k].len[j]; mramp[k].at[n] = mramp[k].at[j];
+            mramp[k].from[n] = mramp[k].from[j]; mramp[k].to[n] = mramp[k].to[j];
+            n++;
+        }
+    mramp[k].n = (uint8_t)n;
+}
+
 /* step `step` of track t starts (seq.c seq_tick); play: it plays (its chance passed): its locks apply */
 static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, const motion_store_t *m, uint32_t play)
 {
     uint32_t k = trk_index(t), i, w, any = 0;
+    if (mramp[k].n)
+        motion_ramp_step(k, step);
     if (!((m->on >> k) & 1u)) return;
     if (!((motion_base_valid >> k) & 1u)) {
         memcpy(motion_base[k], t->p, sizeof t->p);
@@ -285,6 +367,8 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
         motion_active[k][id / 32u] |= 1u << (id % 32u);
         if (e->param & MOTION_LOCK)
             motion_locked[k][id / 32u] |= 1u << (id % 32u);
+        else if (trkx[k].curve)
+            motion_ramp_from(t, m, step, id, t->p[id]);   /* (HA HA HE HU: RAMP) */
     }
 }
 static void motion_snapshot_track(track_t *t, motion_store_t *out)

@@ -162,10 +162,10 @@ static int select_page(void)
     turn(EN_SELECT, -1);
     ok &= title_is("ENV DEST");
     go_title("LFO"); frame();
-    turn(EN_SELECT, 2);
+    turn(EN_SELECT, 3);
     ok &= title_is("LFO DEST");
-    turn(EN_SELECT, -3);
-    ok &= title_is("MOD");                              /* (LFO LFO 2 LFO DEST MOD, round) */
+    turn(EN_SELECT, -4);
+    ok &= title_is("MOD");                              /* (LFO LFO 2 LFO DRAW LFO DEST MOD, round) */
     ok &= song.g[G_BPM] == b0;
     bad += check("  PAGE: SELECT steps the family's pages, a detent each, round both ways; the tempo stays", ok);
 

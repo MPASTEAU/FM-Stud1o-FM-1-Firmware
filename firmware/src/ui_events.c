@@ -397,9 +397,11 @@ static void ev_knob(uint32_t slot, int32_t s)
     }
     if (ev_busy())
         return;
-    if (k == EVK_TOP) {                                 /* PLAY: KNOB 4 right ON, left OFF */
-        if (slot == 3u)
+    if (k == EVK_TOP) {                                 /* PLAY: KNOB 4 right ON, left OFF; (HA HA HE HU) KNOB 3 CURVE: */
+        if (slot == 3u)                                 /* right RAMP, left STEP (trkx[].curve, motion.c motion_ramp_*) */
             motion_set_enabled(t, s > 0);
+        if (slot == 2u)
+            trkx[song.sel % NTRK].curve = s > 0;
         return;
     }
     if (k == EVK_QNT) {                                 /* QUANTIZE: KNOB 4 OFF 25 % 50 % 75 % ON; (HA HA HE HU) KNOB 2 the */

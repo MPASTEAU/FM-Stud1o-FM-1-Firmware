@@ -763,7 +763,9 @@ repeats (1..16); up to 16 sections.
 | --- | --- | --- |
 | 33 SONG | op 4 query; op 5 set, count 0..16, count × (slot T1, slot T2, slot T3, slot T4 (0..4), repeat 1..16); op 6 start; op 7 stop | op (4..7), rc, count, running 0/1, section 0..15, remaining repeats, count × (slot T1..T4, repeat) |
 
-A set must have exactly `2 + count × 5` argument bytes; rc as for ops 0..3 (1 = invalid sections, 2 = busy, 3..6 = a
+HA HA HE HU: eight tracks (`57 01 8`), so a section is 9 bytes (8 slots, then the repeat byte); with `58 01 1` (after
+`45 01 5`) bit 6 of a section's repeat byte is its CUT (the section starts with the reverb and delay tails cut off):
+repeat 1..16, + 64 with CUT, both ways. A set must have exactly `2 + count × (NTRK + 1)` argument bytes; rc as for ops 0..3 (1 = invalid sections, 2 = busy, 3..6 = a
 slot a lane plays is empty; a silent lane needs none, a song of "-" only plays silence). Ops 0..3 keep their meaning: a
 set (op 1) makes each row a section with the four tracks on its slot (a slot of 4 there is invalid, rc 1); their replies
 list a row per section, the slot of its clock lane (below; every lane "-": 0) and its repeats, so an editor of before
@@ -834,7 +836,13 @@ they are in RAM or flash. Then `BACKUP_GET` reads an object in pieces: `id, offs
 (count 1..256, LSB first 7 bit pair) answers `id, rc, offset u32, count lo, count hi` and the data as pack7. Check each object's CRC
 against the list; if it differs the device changed, so start again.
 
-Restoring: `BACKUP_PUT` takes ids 0..9 (firmware before 1.0.3: 0..8, id 9 answers rc 1 at begin and nothing is written) (the samples are written with `SMP_BEGIN` / `SMP_WRITE` / `SMP_END`,
+HA HA HE HU: `BACKUP_LIST` lists 21 objects: ids 10..13 are the PROJECT slots' tracks 5..8 (each slot's FUNX object,
+3840 bytes; length 0 when the slot is empty or has none), ids 14..17 their extras (FUNY: LFO DRAW's points, CURVE),
+restored after their slot: the firmware checks the object's own
+hash, tags it with the slot's record as restored and writes it. An archive of 13 objects (four-track firmware) still
+restores (its tracks 5..8: the defaults).
+
+Restoring: `BACKUP_PUT` takes ids 0..17 (firmware before 1.0.3: 0..8, id 9 answers rc 1 at begin and nothing is written) (the samples are written with `SMP_BEGIN` / `SMP_WRITE` / `SMP_END`,
 or `SMP_ERASE` for an empty slot). Begin: `0, id, size u32, crc u32`: size is 3840 (FUN10), 3648 (FUN9), 3584 (FUN8) or 3388 (FUN7, FUN6) for id 0,
 the settings record's size for id 1, 3840, 3648, 3584, 3388 or 0 (empty the slot) for ids 2..5, the bank's size or 0 for 6 and 7,
 3472 or 0 for 8 (the FM6 bank: its magic, layout and every byte below 128 are checked), 3728 or 0 for 9 (its magic,

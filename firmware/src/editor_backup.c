@@ -7,8 +7,12 @@
  * Id 8 (the FM6 patch bank of 1.0..1.0.2) is listed empty since 1.0.3; a PUT of it from an older archive moves its
  * patches into the user presets restored before it (ids 6, 7), as the first boot after the update does (up_fm6.c).
  * Id 9 is the user presets' FM6 patches (up_fm6.c), appended in 1.0.3.
+ * HA HA HE HU: ids 10..13 the PROJECT slots' tracks 5..8 (their FUNX objects, project.c proj_pack_x; empty when the
+ * slot is, or its X belongs to no record there), restored after their slot (ids 2..5): tagged again with the slot's
+ * record as restored (an older format is packed again: another hash). Ids 14..17 the same of their extras (FUNY, LFO DRAW
+ * and CURVE, proj_pack_y).
  */
-static const uint8_t ED_BK_IDS[13] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 32, 33, 34};
+static const uint8_t ED_BK_IDS[21] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 32, 33, 34};
 #define ED_BK_N ((uint32_t)sizeof ED_BK_IDS)
 #define ED_BK_MAX ((uint32_t)sizeof proj_wire_u.raw)
 #define ED_BK_RAW (proj_wire_u.raw)  /* reuse the existing serialized main-loop scratch */
@@ -50,6 +54,18 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
         if (upf_valid(&upf)) *len = sizeof upf;
         return (const uint8_t *)&upf;
     }
+#if FELUCCA_FLASH
+    if (id >= 10u && id <= 17u) {                   /* (HA HA HE HU) a slot's tracks 5..8 / extras: st_buf (st_current) */
+        st_hdr_t h;
+        uint32_t k = (id - 10u) & 3u, tag, y = id >= 14u;
+        if (flash_ok && project_used(k) && st_current(y ? PX_YOF(PX_OBJ0 + k) : PX_OBJ0 + k, &h) >= 0 && h.len == PROJX_SIZE) {
+            memcpy(&tag, st_buf + 8, 4);
+            if (tag == proj_tag(&proj_slot[k]))
+                *len = h.len;
+        }
+        return st_buf;
+    }
+#endif
     if (id >= 32u && id < 32u + SMP_USER_WRITABLE) {   /* (HA HA HE HU: no USR3) */
         uint32_t k = id - 32u;
         const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(k);
@@ -128,13 +144,30 @@ static uint32_t ed_bk_commit(void)
         if (ed_bk_len) memcpy(&upf, raw, sizeof upf); else upf_empty();
         sync_reload = 1; ui.force = 1;
         return upf_save() == 2 ? 4u : 0u;           /* (a failed write keeps the restored RAM copy) */
+    } else if (ed_bk_id >= 10u && ed_bk_id <= 17u) {   /* (HA HA HE HU) a slot's tracks 5..8 / extras, its record's tag now */
+        uint32_t k = (ed_bk_id - 10u) & 3u, magic, tag, sum, y = ed_bk_id >= 14u;
+        if (!ed_bk_len) return 0;                   /* (none: the slot's own X, if any, no longer matches it) */
+        memcpy(&magic, raw, 4); memcpy(&sum, raw + PROJX_SIZE - 4u, 4);
+        if (ed_bk_len != PROJX_SIZE || magic != (y ? PROJY_MAGIC : PROJX_MAGIC) || !project_used(k) ||
+            sum != proj_hash(raw, PROJX_SIZE - 4u))
+            return 2;                               /* (its own hash first, as written: then tagged again) */
+        tag = proj_tag(&proj_slot[k]);
+        memcpy(raw + 8, &tag, 4);
+        sum = proj_hash(raw, PROJX_SIZE - 4u); memcpy(raw + PROJX_SIZE - 4u, &sum, 4);
+        if (!proj_import(&proj_scratch, &proj_slot[k], sizeof proj_slot[k]) ||   /* (its slot's music, then every check */
+            (y ? proj_unpack_y(&proj_scratch, raw, (int)PROJY_SIZE, tag) : proj_unpack_x(&proj_scratch, raw, (int)PROJX_SIZE, tag)) != 1)
+            return 2;                               /* proj_x_apply makes) */
+        obj = y ? PX_YOF(PX_OBJ0 + k) : PX_OBJ0 + k;
+        proj_wire_gen++;                            /* (SONG reads the slots again) */
     } else return 1;
 #if FELUCCA_FLASH
     if (!flash_ok || st_save(obj, raw, ed_bk_len)) return 4;
 #else
     (void)obj;
 #endif
-    if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
+    if (ed_bk_id >= 10u) {
+        /* (the X written: nothing in RAM) */
+    } else if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
         memset(&proj_slot[ed_bk_id - 2u], 0, sizeof proj_slot[0]);
         if (proj_cur == ed_bk_id - 2u)
             proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */
@@ -163,7 +196,7 @@ static int proj_store_len(uint32_t len)
 static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 {
     /* the arguments first: a malformed request never stops the transport */
-    if (n < 2u || a[0] > 3u || a[1] > 9u) return 1;
+    if (n < 2u || a[0] > 3u || a[1] > 17u) return 1;
     if (a[0] == 0u) {
         if (n != 12u || a[6] > 15u || a[11] > 15u) return 1;
         uint32_t len = ed_bk_r32(a + 2);
@@ -171,7 +204,8 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
             (a[1] == 1u && len != sizeof(persist_t)) ||
             (a[1] >= 2u && a[1] <= 5u && len && !proj_store_len(len)) ||
             ((a[1] == 6u || a[1] == 7u) && len && len != sizeof(up_bank_t)) ||
-            (a[1] == 8u && len && len != sizeof(fm6_bank_t)) || (a[1] == 9u && len && len != sizeof(upf_t))) return 1;
+            (a[1] == 8u && len && len != sizeof(fm6_bank_t)) || (a[1] == 9u && len && len != sizeof(upf_t)) ||
+            (a[1] >= 10u && len && len != PROJX_SIZE)) return 1;
         if (ed_flash_stop()) return 3;
         ed_bk_valid = 0; ed_bk_put = 1; ed_bk_id = a[1]; ed_bk_len = len; ed_bk_gen = ++proj_wire_gen;
         ed_bk_crc = ed_bk_r32(a + 7); ed_bk_pos = 0;

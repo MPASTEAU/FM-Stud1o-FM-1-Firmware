@@ -1110,8 +1110,8 @@ static void draw_columns_in(void)
             draw_column(0, "ROW", "ALL", "", VAL(0u), -1, ICON_AUTO);
             fmt_int(val, (int32_t)(motion_count(t) - motion_lock_count(t)));
             draw_column(1, "EVENT", val, "", T_MID, -1, ICON_NONE);
-            fmt_int(val, (int32_t)motion_lock_count(t));   /* parameter locks (SEQ > STEP: a step held, a knob) */
-            draw_column(2, "LOCK", val, "", T_MID, -1, ICON_NONE);
+            draw_column(2, "CURVE", trkx[song.sel % NTRK].curve ? "RAMP" : "STEP", "", VAL(2u), -1, ICON_NONE);   /* (HA HA HE HU:
+                                                       * the events held or in lines; the locks counted in the list) */
             draw_column(3, "PLAY", motion_enabled(t) ? "ON" : "OFF", "", VAL(3u), -1, motion_icon());
             return;
         }
@@ -1279,6 +1279,16 @@ static void draw_columns_in(void)
             if (fop_field(c) != FO_OP && fop_field(c) != FO_STG)   /* (OP, STAGE: 1..6, 1..4) */
                 card_span_by(span_fop, 0, 0, (int32_t)fm6_max(fop_byte(fop_field(c))), (int32_t)c);
             draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, ic);
+        }
+        return;
+    }
+    if (xp_page(cur_page()->graph)) {                    /* (HA HA HE HU) LFO DRAW, CURVE: the track's extras (ui_lfodraw.c) */
+        for (c = 0; c < 4u; c++) {
+            const char *lb, *u;
+            int32_t r;
+            uint32_t ic;
+            int on = xp_card(c, &lb, val, &u, &r, &ic);
+            draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, lb[0] ? ic : ICON_NONE);
         }
         return;
     }

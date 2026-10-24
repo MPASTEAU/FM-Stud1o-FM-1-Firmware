@@ -32,8 +32,10 @@
  * what was user sample slot USR3 (eng_sample.c SMP_USER_WRITABLE): OBJ_PROJX0..3 0xC8000..0xCFFFF (A/B pairs as the
  * projects'), OBJ_AUTOX 0xD0000 / 0xD1000. A project is then its object (tracks 1..4, Felucca's FUN10, as any firmware
  * reads it) and its X object, tied by the first's hash (a missing or stale X: tracks 5..8 as at power-on) */
+/* .. and their extras (project.c "FUNY", proj_pack_y: LFO DRAW's points, CURVE), objects of their own in the rest of
+ * USR3: OBJ_PROJY0..3 0xD2000..0xD9FFF, OBJ_AUTOY 0xDA000 / 0xDB000 (a missing or stale Y: the extras as at power-on) */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2, OBJ_UPFM6,
-       OBJ_AUTOSAVE, OBJ_PROJX0, OBJ_AUTOX = OBJ_PROJX0 + 4, OBJ_COUNT };
+       OBJ_AUTOSAVE, OBJ_PROJX0, OBJ_AUTOX = OBJ_PROJX0 + 4, OBJ_PROJY0, OBJ_AUTOY = OBJ_PROJY0 + 4, OBJ_COUNT };
 #define OBJ_FM6VB 32u                          /* the voice bank's commit records (fm6_vbank.c; >= OBJ_COUNT: st_load
                                                 * never takes one, no object here takes its sectors) */
 
@@ -73,6 +75,10 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return copy ? 0xFE000u : 0x9F000u;
     if (obj == OBJ_AUTOSAVE)
         return 0xE5000u + copy * ST_SECTOR;
+    if (obj == OBJ_AUTOY)                                /* (HA HA HE HU: the extras, the rest of USR3) */
+        return 0xDA000u + copy * ST_SECTOR;
+    if (obj >= OBJ_PROJY0)
+        return 0xD2000u + (obj - OBJ_PROJY0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     if (obj == OBJ_AUTOX)                                /* (HA HA HE HU: tracks 5..8, in USR3's flash) */
         return 0xD0000u + copy * ST_SECTOR;
     if (obj >= OBJ_PROJX0)

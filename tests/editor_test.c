@@ -170,8 +170,8 @@ static int preferences(void)
     int bad = 0;
     uint8_t a[4] = {0, 7, 0, 0};
     reset();
-    uint32_t n = request(ED_INFO, a, 0);
-    uint32_t e = n - 6u;                                  /* (1.5.5: 4B 01 NCOND, 1.6: 45 01 5 last, below) */
+    uint32_t nx = request(ED_INFO, a, 0), n = nx - 3u;   /* (HA HA HE HU: 58 01 1 last; the rest as before it) */
+    uint32_t e = n - 6u;                                  /* (1.5.5: 4B 01 NCOND, 1.6: 45 01 5, below) */
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
         host_wire[e - 47] == CHAIN_ROWS && host_wire[e - 46] == 0x55 &&
@@ -193,8 +193,10 @@ static int preferences(void)
         host_wire[e - 4] == 0x43 && host_wire[e - 3] == 1 && host_wire[e - 2] == ML_N);   /* 1.5: MIDI LEARN */
     bad += check("INFO 1.5.5: 4B 01 11, a step's condition after its nudge",
         host_wire[n - 7] == 0x4B && host_wire[n - 6] == 1 && host_wire[n - 5] == NCOND);
-    bad += check("INFO 1.6: 45 01 5, CUSTOM's colours, last",
+    bad += check("INFO 1.6: 45 01 5, CUSTOM's colours",
         host_wire[n - 4] == 0x45 && host_wire[n - 3] == 1 && host_wire[n - 2] == 5);
+    bad += check("INFO HA HA HE HU: 58 01 1, a section's CUT (bit 6 of its repeat byte), last",
+        host_wire[nx - 4] == 0x58 && host_wire[nx - 3] == 1 && host_wire[nx - 2] == 1);
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -470,6 +472,16 @@ static int song_protocol(void)
                      chain_config.row[1].slot[0] == CHAIN_SILENT && chain_config.row[1].repeat == 1);
         n = request(ED_SONG, q4, 1);
         bad += check("SONG op 4 queries them as set", n == 12u + 2u * (NTRK + 1u) && host_wire[5] == 4 && !memcmp(host_wire + 11, set + 2, 2u * (NTRK + 1u)));
+        {   /* HA HA HE HU (`58 01 1`): bit 6 of a section's repeat byte is its CUT, both ways */
+            uint8_t c5[sizeof set];
+            memcpy(c5, set, sizeof set);
+            c5[2u + NTRK] |= 0x40u;
+            n = request(ED_SONG, c5, sizeof c5);
+            bad += check("SONG op 5: bit 6 of a repeat byte is the section's CUT (3 repeats kept), replied so",
+                         !host_wire[6] && (chain_config.row[0].repeat & CHAIN_CUT) && CHAIN_REP(chain_config.row[0]) == 3u &&
+                         host_wire[11u + NTRK] == (3u | 0x40u) && !(chain_config.row[1].repeat & CHAIN_CUT));
+            request(ED_SONG, set, sizeof set);
+        }
         n = request(ED_SONG, q0, 1);
         bad += check("SONG op 0 (v6 editors): a row per section, its clock lane's slot (T1 A; all - : A)",
                      n == 16u && host_wire[11] == 0 && host_wire[12] == 3 && host_wire[13] == 0 && host_wire[14] == 1);

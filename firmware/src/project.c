@@ -128,6 +128,7 @@ typedef struct {
     motion_store_t motion;
     uint8_t fm6[NTRK][FM6_PACKED];             /* each track's FM6 patch, packed (eng_fm6.c) */
     uint8_t mch[NTRK];                         /* 1.5.5: MIDI IN TRACK's channels, as song.mch (PROJ_MIDI_OFF) */
+    trkx_t x[NTRK];                            /* HA HA HE HU: the tracks' extras (LFO DRAW, CURVE: the FUNY object) */
     char name[PROJ_NAME_LEN];                  /* the project's name: upper-case ASCII 32..126, 0-padded; "" = none */
     uint32_t sum;
 } project_t;
@@ -406,6 +407,8 @@ static void proj_x_defaults(project_t *q)
         for (k = 0; k < CHAIN_ROWS; k++)
             q->chain.row[k].slot[i] = CHAIN_SILENT;
     }
+    for (i = 0; i < NTRK; i++)                          /* (the extras of every track: their FUNY, when there is one) */
+        trkx_defaults(&q->x[i]);
 }
 
 /* a format 4 project (n bytes in *v4) -> slot q as format 6 */
@@ -840,6 +843,43 @@ bad:
     q->sum = proj_sum(q);
     return 0;
 }
+/* HA HA HE HU's extras ("FUNY", one storage object: storage.c OBJ_PROJY0 / OBJ_AUTOY): magic, size, tag (the FUN10
+ * record's hash, as FUNX), the extras' size (a later firmware's longer ones: their head read), 3 reserved; NTRK trkx_t;
+ * zeros; the hash */
+#define PROJY_MAGIC 0x594E5546u               /* "FUNY" */
+#define PROJY_SIZE 3840u
+_Static_assert(16u + NTRK * sizeof(trkx_t) + 4u <= PROJY_SIZE, "FUNY");
+static int proj_pack_y(uint8_t *b, const project_t *q, uint32_t tag)
+{
+    uint32_t magic = PROJY_MAGIC, size = PROJY_SIZE, sum;
+    memset(b, 0, PROJY_SIZE);
+    memcpy(b, &magic, 4); memcpy(b + 4, &size, 4); memcpy(b + 8, &tag, 4); b[12] = (uint8_t)sizeof(trkx_t);
+    memcpy(b + 16, q->x, sizeof q->x);
+    sum = proj_hash(b, PROJY_SIZE - 4u); memcpy(b + PROJY_SIZE - 4u, &sum, 4);
+    return 1;
+}
+/* n bytes of a FUNY at b for the record tagged tag -> q's extras; 0 = none (q's as they were) */
+static int proj_unpack_y(project_t *q, const uint8_t *b, int n, uint32_t tag)
+{
+    uint32_t magic, size, tg, sum, w, k, i;
+    if (n != (int)PROJY_SIZE)
+        return 0;
+    memcpy(&magic, b, 4); memcpy(&size, b + 4, 4); memcpy(&tg, b + 8, 4); memcpy(&sum, b + PROJY_SIZE - 4u, 4);
+    w = b[12];
+    if (magic != PROJY_MAGIC || size != PROJY_SIZE || tg != tag || sum != proj_hash(b, PROJY_SIZE - 4u) ||
+        w < sizeof(trkx_t) || 16u + NTRK * w + 4u > PROJY_SIZE)
+        return 0;
+    for (k = 0; k < NTRK; k++) {
+        memcpy(&q->x[k], b + 16u + k * w, sizeof(trkx_t));
+        for (i = 0; i < LDRAW_N; i++)
+            q->x[k].draw[i] = (int8_t)clamp(q->x[k].draw[i], -64, 63);
+        q->x[k].smooth = q->x[k].smooth != 0;
+        q->x[k].curve = q->x[k].curve != 0;
+    }
+    q->sum = proj_sum(q);
+    return 1;
+}
+
 /* the motion of a FUN7 / FUN8 written with np parameters (np < P_COUNT: a FUN7 of 89 before the chord keys, every
  * FUN8 of 91 before the DRUM lane levels) -> today's ids: an event names a parameter id, and the ids from that
  * store's P_E0 (np - 8) on moved up with P_E0, as its values did (params_by_count); the ones below kept theirs. A
@@ -1025,9 +1065,11 @@ static void proj_fetch(uint32_t slot)
 #if FELUCCA_FLASH
 #define PX_OBJ0 OBJ_PROJX0                       /* the FUNX objects (storage.c) */
 #define PX_AUTO OBJ_AUTOX
+#define PX_YOF(o) ((o) == OBJ_AUTOX ? (uint32_t)OBJ_AUTOY : OBJ_PROJY0 + ((o) - OBJ_PROJX0))   /* .. their FUNY (the extras) */
 #else
 #define PX_OBJ0 0u                               /* (no storage: no FUNX objects; proj_x_* do nothing) */
 #define PX_AUTO 0u
+#define PX_YOF(o) (o)
 #endif
 /* HA HA HE HU: q's tracks 5..8 from the FUNX in storage object obj, when it belongs to the FUN10 record tagged tag
  * (st_buf holds it: no other buffer); 0 = none there (q as it was) */
@@ -1035,9 +1077,14 @@ static int proj_x_apply(project_t *q, uint32_t obj, uint32_t tag)
 {
 #if FELUCCA_FLASH
     st_hdr_t h;
-    if (!flash_ok || st_current(obj, &h) < 0)
+    int r;
+    if (!flash_ok)
         return 0;
-    return proj_unpack_x(q, st_buf, (int)h.len, tag);
+    r = st_current(obj, &h) >= 0 && proj_unpack_x(q, st_buf, (int)h.len, tag);   /* (a stale X: the extras' defaults
+                                                                                 * too, proj_x_defaults) */
+    if (st_current(PX_YOF(obj), &h) >= 0)             /* (HA HA HE HU: then the extras, st_buf free again) */
+        (void)proj_unpack_y(q, st_buf, (int)h.len, tag);
+    return r;
 #else
     (void)q; (void)obj; (void)tag;
     return 0;
@@ -1050,6 +1097,8 @@ static int proj_x_save(const project_t *q, uint32_t obj, uint32_t tag)
     if (!flash_ok)
         return 0;
     proj_wire_gen++;
+    if (!proj_pack_y(proj_wire.raw, q, tag) || st_save(PX_YOF(obj), &proj_wire, PROJY_SIZE))   /* (HA HA HE HU: the extras) */
+        return 1;
     if (!proj_pack_x(proj_wire.raw, q, tag))
         return 1;
     return st_save(obj, &proj_wire, PROJX_SIZE) != 0;
@@ -1081,6 +1130,7 @@ static void project_capture(project_t *p)
     }
     p->motion = motion;
     memcpy(p->mch, song.mch, sizeof p->mch);
+    memcpy(p->x, trkx, sizeof p->x);                   /* (HA HA HE HU) */
     motion_unguard(f);
     memcpy(p->name, proj_name, str_len(proj_name));
     p->sum = proj_sum(p);
@@ -1333,6 +1383,13 @@ static int project_restore_runtime(const project_t *input)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);
+    for (k = 0; k < NTRK; k++) {                        /* (HA HA HE HU) the extras, bounded */
+        trkx[k] = p->x[k];
+        for (i = 0; i < LDRAW_N; i++)
+            trkx[k].draw[i] = (int8_t)clamp(trkx[k].draw[i], -64, 63);
+        trkx[k].smooth = trkx[k].smooth != 0;
+        trkx[k].curve = trkx[k].curve != 0;
+    }
     midi_route = MIDI_ROUTE_AGAIN;                      /* (events_block: what the channels no longer hear let go) */
     for (k = 0; k < NTRK; k++) {
         track_t *t = &trk[k];

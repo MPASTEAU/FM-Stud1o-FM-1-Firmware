@@ -188,6 +188,9 @@ static void ui_power_on(void)
     uint32_t i;
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
+    for (i = 0; i < NTRK; i++)                    /* (HA HA HE HU: the tracks' extras as at power-on) */
+        trkx_defaults(&trkx[i]);
+    xp_point = xp_shape = 0;
     memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (.bss at power-on: the engines' regions) */
     memset(midi_lit_ms, 0, sizeof midi_lit_ms); midi_seen = 0;   /* (1.5.5: no MIDI IN light) */
     memset(&chain, 0, sizeof chain);
@@ -9496,6 +9499,64 @@ static int test_help(void)
     return bad;
 }
 
+/* HA HA HE HU: the tracks' extras (ui_lfodraw.c): LFO DRAW's points (WAVE DRAW, stepped or joined), CURVE RAMP (motion.c
+ * motion_ramp_*: an automation event's value moves in a line to the next) */
+static int test_extras(void)
+{
+    int bad = 0, ok;
+    track_t *t;
+    int8_t tri[LDRAW_N];
+    uint32_t i, n;
+    ui_power_on();
+    t = TSEL;
+    go_title("LFO DRAW"); frame();
+    ok = cur_page()->graph == GR_LDRAW && cur_page()->fam == FAM_LFO && t->p[P_LWAVE] != 5;
+    turn(EN_K1, 3);
+    turn(EN_K2, 5);
+    ok &= xp_point == 3u && trkx[0].draw[3] == 58 + 5 && t->p[P_LWAVE] == 5;
+    turn(EN_K3, 1);
+    ldraw_template(tri, 1);
+    ok &= !memcmp(trkx[0].draw, tri, sizeof tri);
+    turn(EN_K4, -1);
+    ok &= !trkx[0].smooth && lfo_wave(t, 3u << 28) == trkx[0].draw[3] * 520 && lfo_wave(t, (3u << 28) + (1u << 27)) == trkx[0].draw[3] * 520;
+    turn(EN_K4, 1);
+    ok &= trkx[0].smooth && lfo_wave(t, (3u << 28) + (1u << 27)) == (trkx[0].draw[3] * 520 + trkx[0].draw[4] * 520) / 2;
+    bad += check("LFO DRAW: POINT VALUE (WAVE to DRAW) SHAPE (a template) SMOOTH (stepped / joined), as the LFO plays it", ok);
+
+    go_title("AUTOMATION"); frame();                 /* the PLAY row: KNOB 3 CURVE */
+    ok = cur_page()->graph == GR_EVENTS && !trkx[0].curve;
+    turn(EN_K3, 1);
+    ok &= trkx[0].curve == 1;
+    turn(EN_K3, -1);
+    ok &= trkx[0].curve == 0;
+    bad += check("AUTOMATION's PLAY row: KNOB 3 CURVE STEP (as always) / RAMP, the track's", ok);
+
+    for (n = 0; n < 2u; n++) {                       /* REV 0 on step 1, 96 on step 9: halfway at step 5 (RAMP), 0 (STEP) */
+        int16_t mid;
+        ui_power_on();
+        t = &trk[0];
+        track_defaults_steps(t);
+        t->p[P_SLEN] = 16; t->p[P_SDIV] = 2; t->p[P_SSWING] = 0; song.g[G_SWING] = 0; t->p[P_REV] = 30;
+        trkx[0].curve = (uint8_t)n;
+        motion_set_enabled(t, 1);
+        motion_set_event(t, 0, P_REV, 0);
+        motion_set_event(t, 8, P_REV, 96);
+        seq_start();
+        for (i = 0; i < 400000u && !(t->seq_idx == 4u && t->seq_pos >= step_samples(t, div_samples(2), 4) / 2u); i++)
+            seq_tick(t, CTL);
+        mid = t->p[P_REV];
+        for (i = 0; i < 400000u && t->seq_idx != 12u; i++)
+            seq_tick(t, CTL);
+        ok = n ? mid >= 52 - 4 && mid <= 52 + 4 : mid == 0;
+        ok &= n ? t->p[P_REV] >= 48 - 4 && t->p[P_REV] <= 48 + 4 : t->p[P_REV] == 96;   /* (back to step 1's 0 at the loop) */
+        seq_stop();
+        ok &= t->p[P_REV] == 30;
+        bad += check(n ? "CURVE RAMP: REV 0 -> 96 in a line (halfway at step 4.5: ~52), then to step 1's 0 by the loop's end; stop: back"
+                       : "CURVE STEP: REV holds 0 to step 9, then 96 (as always); stop: back", ok);
+    }
+    ui_power_on();
+    return bad;
+}
 /* (HA HA HE HU) the rack's pixels: row c's y, step i's column (+2: inside its 6 px), a column x of the row, its bg */
 static uint16_t rk_at(int32_t x, uint32_t c, int32_t dy) { return tr_px(3 + x, Y_GRAPH + 1 + (int32_t)c * RK_PITCH + dy); }
 static uint16_t rk_px(uint32_t i, uint32_t c, int32_t dy) { return rk_at(RK_SX + (int32_t)i * 8 + 2, c, dy); }
@@ -10057,6 +10118,7 @@ int main(void)
     bad += test_fm6_charts();
     bad += test_fm6_ops();
     bad += test_home_tracks();
+    bad += test_extras();
     bad += test_fx_map_columns();
     bad += test_help();
     bad += test_no_flash();

@@ -397,6 +397,15 @@ typedef struct {
 
 static track_t trk[NTRK];        /* the instrument: four parts */
 static song_t song;
+/* HA HA HE HU: a track's extras (project.c "FUNY", ui_lfodraw.c): LFO WAVE DRAW's 16 points (-64..63, voice.c lfo_wave),
+ * stepped or joined by lines (smooth), and how its automation moves between two events (curve: 0 STEP, as always; 1 RAMP,
+ * motion.c motion_ramp) */
+#define LDRAW_N 16u
+typedef struct {
+    int8_t draw[LDRAW_N];
+    uint8_t smooth, curve, rsv[2];
+} trkx_t;
+static trkx_t trkx[NTRK];
 /* HA HA HE HU: the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and
  * mutes on F3..B3 and the black keys 1..4): the selected track's, 1..4 or 5..8 */
 static inline uint32_t trk_bank(void) { return (uint32_t)song.sel & ~3u; }

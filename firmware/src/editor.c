@@ -492,6 +492,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0x43); ed_b(1); ed_b(ML_N);   /* 1.5: MIDI LEARN's map (cmds 78, 79; editor_learn.c) */
         ed_b(0x4B); ed_b(1); ed_b(NCOND);   /* 1.5.5: a step's condition (1..11) after its nudge */
         ed_b(0x45); ed_b(1); ed_b(ED_PAL_N);   /* 1.6: CUSTOM, the user's palette: 5 colours (cmds 80, 81; editor_palette.c) */
+        ed_b(0x58); ed_b(1); ed_b(1);   /* HA HA HE HU: a section's CUT, bit 6 of its repeat byte (SONG ops 4..7) */
         break;
     case ED_GET:
     case ED_SET:
@@ -876,7 +877,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                     const uint8_t *r = a + 2u + w * i;
                     if (lanes) {
                         memcpy(c.row[i].slot, r, NTRK);
-                        c.row[i].repeat = r[NTRK];
+                        c.row[i].repeat = (uint8_t)((r[NTRK] & 0x3Fu) | (r[NTRK] & 0x40u ? CHAIN_CUT : 0u));   /* (HA HA HE
+                                                 * HU: CUT in bit 6, `58 01 1`) */
                     } else if (r[0] < 4u)       /* (a row of one slot: all four tracks on it) */
                         c.row[i] = chain_row_of(r[0], r[1]);
                     else
@@ -896,7 +898,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                 for (k = 0; k < NTRK; k++) ed_b(r->slot[k]);
             else                                         /* v6: the clock track's slot (every track "-": A) */
                 ed_b(r->slot[chain_clock(r)] < 4u ? r->slot[chain_clock(r)] : 0u);
-            ed_b(CHAIN_REP(*r));
+            ed_b(CHAIN_REP(*r) | (lanes && (r->repeat & CHAIN_CUT) ? 0x40u : 0u));
         }
         break;
     }

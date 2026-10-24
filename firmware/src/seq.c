@@ -1186,6 +1186,8 @@ static void seq_tick(track_t *t, uint32_t n)
         else
             seq_nd_start(t, period, len);
     }
+    if (mramp[(uint32_t)(t - trk) % NTRK].n)          /* (HA HA HE HU: automation in lines, motion.c) */
+        motion_ramp_block(t, t->seq_pos, step_samples(t, period, t->seq_idx));
     if (t->rat_left)
         seq_ratchet(t, period);
 }

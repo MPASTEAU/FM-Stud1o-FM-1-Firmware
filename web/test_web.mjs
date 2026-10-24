@@ -1442,6 +1442,19 @@ async function editorSong() {
   await ask(1, []);
   r = await ask(2);
   ok(r.rc === 1 && !r.playing, "SONG: empty chain does not PLAY");
+  /* sections (1.2 ops 4..7; HA HA HE HU: eight lanes, CUT in bit 6 of the repeat byte) */
+  ok(info.lanes === 8 && info.cutCaps === 1, "SONG: INFO says the sections (57 01 8) and their CUT (58 01 1)");
+  const secs = [{ slots: [0, 1, 4, 0, 4, 4, 1, 0], repeat: 3, cut: false }, { slots: [1, 1, 1, 1, 0, 0, 0, 0], repeat: 2, cut: true }];
+  r = await ask(5, secs);
+  const back = await ask(4);
+  ok(!r.rc && JSON.stringify(back.rows) === JSON.stringify(secs) && back.op === 4,
+    "SONG: sections round trip (a slot per track, - silent, repeats, CUT)");
+  r = await ask(0);
+  ok(r.rows[0].slot === 0 && r.rows[1].slot === 1 && r.rows[1].repeat === 2, "SONG: op 0 still lists a row per section (its clock lane's slot)");
+  r = await ask(6);
+  ok(!r.rc && r.playing, "SONG: op 6 plays the sections (their slots saved)");
+  await ask(7);
+  await ask(5, []);
   link.close(); m.stop();
   const old = E.makeMockDevice({ auto: false, v5: true });
   const l = new E.Link((d) => [...old.access.outputs.values()][0].send(d));

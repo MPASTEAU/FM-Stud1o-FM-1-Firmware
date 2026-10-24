@@ -928,9 +928,10 @@ static void duck_part(track_t *t, int32_t *b, uint32_t n)
         if (!a0)
             return;
     }
-    for (i = 0; i < n; i++) {
-        int32_t a = a0 + (a1 - a0) * (int32_t)i / (int32_t)n;
-        b[i] -= ((b[i] >> 4) * a) >> 11;
+    {   /* (the dip from last block's to this one's, a step a sample: one divide a block) */
+        int32_t acc = a0 << 8, da = ((a1 - a0) << 8) / (int32_t)n;
+        for (i = 0; i < n; i++, acc += da)
+            b[i] -= ((b[i] >> 4) * (acc >> 8)) >> 11;
     }
     duck_att[k] = a1;
 }

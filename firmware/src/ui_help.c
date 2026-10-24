@@ -18,6 +18,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ENV DEST", "[K1-4]ENV AMOUNTS[ENV]ENV"},
     {"LFO", "[K1-4]SHAPE[LFO]HOLD: MOMENTARY"},
     {"LFO 2", "[K1]SYNC TO BPM[LFO]LFO DEST"},
+    {"LFO DRAW", "[K1]POINT[K2]VALUE[K3]SHAPE"},   /* (HA HA HE HU) */
     {"LFO DEST", "[K1-4]LFO AMOUNTS[LFO]MOD"},
     {"MOD", "[K1]SLOT[K2]SOURCE[K3]DEST"},
     {"FX", "[K1-4]SENDS[FX]HOLD: PERFORM"},

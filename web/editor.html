@@ -454,6 +454,12 @@ const parse = {
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
+    o.lanes = 0; o.cutCaps = 0;                   /* 1.2 `57 01 n`: SONG sections, a slot per track (ops 4..7); HA HA HE HU
+                                                     `58 01 1`: a section's CUT in bit 6 of its repeat byte */
+    for (let i = 1; i + 2 < trailer.length; i++) {
+      if (trailer[i] === 0x57 && trailer[i + 1] === 1 && (trailer[i + 2] === 4 || trailer[i + 2] === 8)) o.lanes = trailer[i + 2];
+      if (trailer[i] === 0x58 && trailer[i + 1] === 1 && trailer[i + 2] === 1) o.cutCaps = 1;
+    }
     return o;
   },
   [CMD.UI_STATE](a) {
@@ -499,6 +505,14 @@ const parse = {
   [CMD.SONG](a) {
     const r = new Reader(a);
     const o = { op: r.b(), rc: r.b(), count: r.b(), playing: r.b(), row: r.b(), remaining: r.b(), rows: [] };
+    if (o.op >= 4) {                              /* sections: a slot per track (4 = "-"), the repeats, CUT (bit 6) */
+      const lanes = o.count ? (a.length - 6) / o.count - 1 : 0;
+      for (let i = 0; i < o.count; i++) {
+        const slots = Array.from({ length: lanes }, () => r.b()), x = r.b();
+        o.rows.push({ slots, repeat: x & 0x3F, cut: !!(x & 0x40) });
+      }
+      return o;
+    }
     for (let i = 0; i < o.count; i++) o.rows.push({ slot: r.b(), repeat: r.b() });
     return o;
   },
@@ -614,6 +628,11 @@ const req = {
   preset: (e, p) => [CMD.PRESET, [e & 0x7F, p & 0x7F]],
   project: (op, slot) => { if (![0, 1, 2].includes(op)) throw new Error("bad PROJECT op"); return [CMD.PROJECT, [op, slot & 3]]; },   /* 0 load, 1 save, 2 query */
   song: (op = 0, rows = []) => {
+    if (op >= 4 && op <= 7) {                     /* sections (1.2): {slots: [a slot per track, 4 = "-"], repeat, cut} */
+      if (rows.length > 16 || rows.some((r) => !Array.isArray(r.slots) || r.slots.some((x) => !Number.isInteger(x) || x < 0 || x > 4) ||
+          !Number.isInteger(r.repeat) || r.repeat < 1 || r.repeat > 16)) throw new Error("bad SONG sections");
+      return [CMD.SONG, op === 5 ? [op, rows.length, ...rows.flatMap((r) => [...r.slots, r.repeat | (r.cut ? 0x40 : 0)])] : [op]];
+    }
     if (![0, 1, 2, 3].includes(op) || rows.length > 16 || rows.some((r) => !Number.isInteger(r.slot) || r.slot < 0 || r.slot > 3 || !Number.isInteger(r.repeat) || r.repeat < 1 || r.repeat > 16)) throw new Error("bad SONG rows");
     return [CMD.SONG, op === 1 ? [op, rows.length, ...rows.flatMap((r) => [r.slot, r.repeat])] : [op]];
   },
@@ -1671,7 +1690,7 @@ function makeMockDevice(opt = {}) {
     D("LVL", F.DB, 0, 127, 104),
     D("ATK", F.TIME, 0, 127, 10), D("DEC", F.TIME, 0, 127, 70), D("SUS", F.PCT, 0, 127, 90), D("REL", F.TIME, 0, 127, 60),
     D("FLT", F.BIPCT, -64, 63, 0), D("PIT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("REL", F.BIPCT, -64, 63, 0),   /* REL: DUCK's release (was FX, unused) */
-    D("RATE", F.LFOHZ, 0, 127, 60), E("WAVE", ["SIN", "TRI", "SAW", "SQR", "S&H"], 0), D("PHS", F.INT, 0, 127, 0), D("FADE", F.TIME, 0, 127, 0),
+    D("RATE", F.LFOHZ, 0, 127, 60), E("WAVE", ["SIN", "TRI", "SAW", "SQR", "S&H", "DRAW"], 0), D("PHS", F.INT, 0, 127, 0), D("FADE", F.TIME, 0, 127, 0),
     D("PIT", F.BIPCT, -64, 63, 0), D("FLT", F.BIPCT, -64, 63, 0), D("SHP", F.BIPCT, -64, 63, 0), D("AMP", F.PCT, 0, 127, 0),
     E("MODE", ["OFF", "UP", "DN", "UPDN", "RND", "ORD", "REPEAT", "DNUP", "UP+8", "CONV", "DIVG", "PINKY", "THUMB", "WALK", "CHORD"], 0), E("RATE", NDIV, 2), D("OCT", F.INT, 1, 4, 1), D("GATE", F.PCT, 1, 127, 64),
     D("SWG", F.PCT, 0, 100, 0), D("PROB", F.PCT, 0, 127, 127), E("HOLD", NONOFF, 0), E("ORD", ["NOTE", "PLAY"], 0),
@@ -2089,7 +2108,8 @@ function makeMockDevice(opt = {}) {
         if (!opt.legacy && !opt.v3 && !opt.v5) {
           b(16);
           if (st.uiCaps) { b(0x55); b(1); b(st.uiCaps); b(0x4d); b(1); b(64); b(1); if (!opt.noFm6) { b(0x46); b(1); b(FM6.FACTORY_PK.length); b(0); }
-            if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); } } }   /* (FM6 v2: no bank, preset patches) */
+            if (syncCaps()) { b(0x53); b(1); b(syncCaps()); if (!opt.noFm6) { b(0x50); b(1); b(3); } if (ratchetOn()) { b(0x52); b(1); b(4); b(0x57); b(1); b(NTRK); b(0x58); b(1); b(1); } } }   /* (FM6 v2: no bank, preset
+                                                         patches; the sections: a slot per track, CUT) */
         }
         break;
       case CMD.GET: case CMD.SET: {
@@ -2198,25 +2218,34 @@ function makeMockDevice(opt = {}) {
         }
         b(st.engine); b(st.preset);
         break;
-      case CMD.SONG: {
-        if (!a.length || a[0] > 3) return null;
+      case CMD.SONG: {                          /* ops 0..3 rows of one slot; 4..7 sections, a slot per track (st.songRows:
+                                                   {slots, repeat, cut}) */
+        if (!a.length || a[0] > 7) return null;
+        const op = a[0] & 3, lanes = a[0] >> 2, w = lanes ? NTRK + 1 : 2;
         let rc = 0;
-        if (a[0] === 1) {
-          const rows = Array.from({ length: a[1] || 0 }, (_, i) => ({ slot: a[2 + 2 * i], repeat: a[3 + 2 * i] }));
-          if (a.length < 2 || a[1] > 16 || a.length !== 2 + 2 * a[1] || rows.some((r) => r.slot > 3 || r.repeat < 1 || r.repeat > 16)) rc = 1;
+        if (op === 1) {
+          const rows = Array.from({ length: a[1] || 0 }, (_, i) => {
+            const r = a.slice(2 + w * i, 2 + w * (i + 1));
+            return lanes ? { slots: r.slice(0, NTRK), repeat: r[NTRK] & 0x3F, cut: !!(r[NTRK] & 0x40) }
+              : { slots: new Array(NTRK).fill(r[0]), repeat: r[1], cut: false };
+          });
+          if (a.length < 2 || a[1] > 16 || a.length !== 2 + w * a[1] || rows.some((r) => r.slots.some((x) => x > (lanes ? 4 : 3)) || r.repeat < 1 || r.repeat > 16)) rc = 1;
           else if (st.chainPlaying) rc = 2;
           else st.songRows = rows;
-        } else if (a[0] === 2) {
+        } else if (op === 2) {
           if (st.chainPlaying) rc = 2;
           else if (!st.songRows.length) rc = 1;
           else {
-            const missing = st.songRows.find((r) => !st.slots[r.slot]);
-            if (missing) rc = 3 + missing.slot;
+            const missing = st.songRows.flatMap((r) => r.slots).find((x) => x < 4 && !st.slots[x]);
+            if (missing != null) rc = 3 + missing;
             else { st.chainPlaying = true; st.chainRow = 0; st.chainRemaining = st.songRows[0].repeat; }
           }
-        } else if (a[0] === 3) st.chainPlaying = false;
+        } else if (op === 3) st.chainPlaying = false;
         b(a[0]); b(rc); b(st.songRows.length); b(st.chainPlaying ? 1 : 0); b(st.chainRow); b(st.chainRemaining);
-        st.songRows.forEach((r) => { b(r.slot); b(r.repeat); });
+        st.songRows.forEach((r) => {
+          if (lanes) { r.slots.forEach(b); b(r.repeat | (r.cut ? 0x40 : 0)); }
+          else { const c = r.slots.find((x) => x < 4); b(c ?? 0); b(r.repeat); }
+        });
         break;
       }
       case CMD.PROJECT: {
@@ -2574,7 +2603,7 @@ const TEXT = {
     noreply: "応答がありません", error: "エラー: ", busy: "処理中",
     applying: "書き込み中 ", applied: "読み込みました", badfile: "ファイルを読み込めません: ",
     savedSlot: "保存しました: スロット ", loadedSlot: "読み込みました: スロット ", emptySlot: "空のスロットです: ",
-    confirmSave: "スロット {n} に上書き保存しますか？", confirmLoad: "スロット {n} を読み込みますか？ 4 トラックすべての音色とシーケンスが置き換わります（元に戻せません）。",
+    confirmSave: "スロット {n} に上書き保存しますか？", confirmLoad: "スロット {n} を読み込みますか？ 8 トラックすべての音色とシーケンスが置き換わります（元に戻せません）。",
     confirmClear: "シーケンスを全部消しますか？", confirmInit: "音色を初期化しますか？ シーケンスはそのままです（本体の SAVE 長押しで元に戻せます）。",
     samples: "サンプル", smpHelp: "ファイルを選択、または入力から録音。波形の両端でトリム、ホイールで拡大。1枠に16音、合計約7秒。",
     zones: "ゾーン", smpName: "名前", chooseFiles: "ファイルを選ぶ", upload: "書き込む", erase: "消去", clearList: "リストを消す",
@@ -2610,10 +2639,10 @@ const TEXT = {
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
     needDevice: "FM-1 を接続すると編集できます。", smpNone: "このファームウェアにはユーザーサンプルのスロットがありません。",
     bankConnect: "FM-1 を接続すると本体のユーザープリセットも扱えます。", bankNone: "このファームウェアにはユーザープリセットがありません。",
-    mixer: "ミキサー", mixHelp: "本体の MIXER ページと同じ 4 トラック。フェーダーはレベル。パンはどのトラックも選択を変えずに書き込みます（0.8 のファームウェアでは一瞬そのトラックを選びます）。REC は本体での録音待機の表示です。",
+    mixer: "ミキサー", mixHelp: "本体の MIXER ページと同じ 8 トラック。フェーダーはレベル。パンはどのトラックも選択を変えずに書き込みます（0.8 のファームウェアでは一瞬そのトラックを選びます）。REC は本体での録音待機の表示です。",
     level: "レベル", pan: "パン", mute: "ミュート", rec: "REC", selectTrack: "選択", selectedTrack: "選択中",
-    projHelp: "プロジェクトは本体の状態をまとめて保存します: 4 トラックの音色とパターン、曲の並び順、選択中のトラック、グローバル設定。",
-    slot: "スロット", songTitle: "ソング", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
+    projHelp: "プロジェクトは本体の状態をまとめて保存します: 8 トラックの音色とパターン、曲の並び順、選択中のトラック、グローバル設定。",
+    slot: "スロット", songCut: "CUT", songSilent: "-", songTitle: "ソング", songHelp: "保存スロットのパターンと繰り返す回数を順に並べます。音色は現在のまま。並び順を残すには、上のプロジェクトを保存してください。切替はトラック1のパターン終端、曲末で停止します。", songAdd: "行を追加", songRemove: "最後の行を削除", songPlay: "先頭から再生", songStop: "停止", songReps: "回", songEmpty: "行を追加してください", songBusy: "停止してから編集してください", songInvalid: "スロットと回数を確認してください", songPlaying: "再生中の行", songSaved: "並び順を変更しました。プロジェクトを保存すると残せます。",
     system: "システム", firmware: "ファームウェア", sync: "同期", tracksN: "トラック", stepsN: "ステップ数", enginesL: "エンジン",
     smpSlots: "サンプルスロット", userBank: "ユーザープリセット", none: "なし",
   },
@@ -2677,7 +2706,7 @@ const TEXT = {
     noreply: "No reply from the device", error: "Error: ", busy: "Busy",
     applying: "Writing ", applied: "Loaded", badfile: "Cannot read the file: ",
     savedSlot: "Saved to slot ", loadedSlot: "Loaded slot ", emptySlot: "Empty slot: ",
-    confirmSave: "Overwrite slot {n}?", confirmLoad: "Load slot {n}? The sounds and sequences of all four tracks are replaced (no undo).",
+    confirmSave: "Overwrite slot {n}?", confirmLoad: "Load slot {n}? The sounds and sequences of all eight tracks are replaced (no undo).",
     confirmClear: "Clear the whole sequence?", confirmInit: "Reset the sound to the engine defaults? The sequence stays (hold SAVE on the device to undo).",
     samples: "Samples", smpHelp: "Choose files or record an input. Drag waveform ends to trim; wheel to zoom. Up to 16 sounds and about 7 s per slot.",
     zones: "zones", smpName: "Name", chooseFiles: "Choose files", upload: "Upload", erase: "Erase", clearList: "Clear list",
@@ -2713,10 +2742,10 @@ const TEXT = {
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",
     needDevice: "Connect the FM-1 to edit.", smpNone: "This firmware has no user sample slots.",
     bankConnect: "Connect the FM-1 to see its user presets too.", bankNone: "This firmware has no user presets.",
-    mixer: "Mixer", mixHelp: "The four tracks of the device's MIXER page. The fader is the level. Pan is written to any track without changing the selection (firmware 0.8: by selecting it for a moment). REC shows a track armed for live recording on the device.",
+    mixer: "Mixer", mixHelp: "The eight tracks of the device's MIXER page. The fader is the level. Pan is written to any track without changing the selection (firmware 0.8: by selecting it for a moment). REC shows a track armed for live recording on the device.",
     level: "Level", pan: "Pan", mute: "Mute", rec: "REC", selectTrack: "Select", selectedTrack: "Selected",
-    projHelp: "A project keeps the sounds and patterns of all four tracks, the song chain, the selected track and the global settings.",
-    slot: "Slot", songTitle: "Song", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
+    projHelp: "A project keeps the sounds and patterns of all eight tracks, the song chain, the selected track and the global settings.",
+    slot: "Slot", songCut: "CUT", songSilent: "-", songTitle: "Song", songHelp: "Arrange patterns from saved slots and choose their repeats. The current sounds stay. Save a project above to keep the chain. Rows change at the end of track 1; the song stops at the end.", songAdd: "Add row", songRemove: "Remove last row", songPlay: "Play from start", songStop: "Stop", songReps: "repeats", songEmpty: "Add a row first", songBusy: "Stop before editing", songInvalid: "Check slots and repeats", songPlaying: "Playing row", songSaved: "Chain changed. Save a project to keep it.",
     system: "System", firmware: "Firmware", sync: "Sync", tracksN: "Tracks", stepsN: "Steps", enginesL: "Engines",
     smpSlots: "Sample slots", userBank: "User presets", none: "none",
   },
@@ -3000,7 +3029,7 @@ async function load(d) {
     assertSession(d);
     if (d.info.ntrk) d.sel = parse[CMD.TRACK](await sessionRequest(d, req.track())).sel;   /* v3: the selected track */
     d.dump = await getDump(d);
-    if (d.info.chainRows) d.song = parse[CMD.SONG](await sessionRequest(d, req.song()));
+    if (d.info.chainRows) d.song = parse[CMD.SONG](await sessionRequest(d, req.song(d.info.lanes ? 4 : 0)));
     buildUI();
     renderPanels();
     await loadSteps(d);
@@ -3319,7 +3348,7 @@ async function project(op, slot) {
     dev.slotUsed[slot] = r.used;
     renderSlots();
     if (!op && r.used) await afterSoundChange();
-    if (dev.info.chainRows) { dev.song = parse[CMD.SONG](await rq(req.song())); renderSong(); }
+    if (dev.info.chainRows) { dev.song = parse[CMD.SONG](await rq(req.song(dev.info.lanes ? 4 : 0))); renderSong(); }
     sayK(op ? "savedSlot" : r.used ? "loadedSlot" : "emptySlot", String(slot + 1));
   } catch (err) { report(err); } finally { releaseBusy(); }
 }
@@ -3336,6 +3365,31 @@ function renderSong() {
   const rows = $("songrows");
   if (rows.contains(document.activeElement)) return;
   rows.replaceChildren();
+  if (s.op >= 4) {                                  /* sections (1.2; HA HA HE HU: eight tracks, CUT): a slot per track */
+    const edit = (i, f) => { const next = s.rows.map((x) => ({ ...x, slots: x.slots.slice() })); f(next[i]); op(() => changeSong(5, next)); };
+    s.rows.forEach((r, i) => {
+      const line = el("div", { class: "bar", style: "margin:8px 0;flex-wrap:wrap;gap:4px" });
+      line.append(el("span", { text: String(i + 1), style: "min-width:20px" }));
+      r.slots.forEach((x, k) => {
+        const sel = el("select", { disabled: !!s.playing, "aria-label": `T${k + 1} ${i + 1}`, title: `T${k + 1}` });
+        for (let v = 0; v < 5; v++)
+          sel.append(el("option", { value: v, text: v < 4 ? `T${k + 1} ${String.fromCharCode(65 + v)}${dev.slotUsed[v] ? "" : "?"}` : `T${k + 1} ${t("songSilent")}` }));
+        sel.value = String(x);
+        sel.addEventListener("change", () => edit(i, (n) => { n.slots[k] = +sel.value; }));
+        line.append(sel);
+      });
+      const reps = el("input", { type: "number", min: 1, max: 16, value: r.repeat, disabled: !!s.playing, style: "width:56px", "aria-label": `${t("songReps")} ${i + 1}` });
+      reps.addEventListener("change", () => { const v = +reps.value; if (!Number.isInteger(v) || v < 1 || v > 16) { reps.value = r.repeat; return; } edit(i, (n) => { n.repeat = v; }); });
+      line.append(reps, el("span", { text: t("songReps") }));
+      if (dev.info.cutCaps) {
+        const cut = el("input", { type: "checkbox", checked: r.cut, disabled: !!s.playing, "aria-label": `${t("songCut")} ${i + 1}` });
+        cut.addEventListener("change", () => edit(i, (n) => { n.cut = cut.checked; }));
+        line.append(el("label", {}, cut, el("span", { text: " " + t("songCut") })));
+      }
+      rows.append(line);
+    });
+    return;
+  }
   s.rows.forEach((r, i) => {
     const line = el("div", { class: "bar", style: "margin:8px 0" });
     line.append(el("span", { text: String(i + 1) }));
@@ -3354,16 +3408,20 @@ async function changeSong(action, rows = []) {
   if (r.rc) throw new Error(r.rc >= 3 ? `${t("slot")} ${r.rc - 2}: ${t("empty")}` : t(r.rc === 2 ? "songBusy" : "songInvalid"));
   dev.song = r;
   renderSong();
-  if (action === 1) sayK("songSaved");
+  if (action === 1 || action === 5) sayK("songSaved");
 }
-$("songplay").addEventListener("click", () => op(() => changeSong(dev.song?.playing ? 3 : 2)));
-$("songadd").addEventListener("click", () => op(() => changeSong(1, [...dev.song.rows, { slot: dev.song.rows.at(-1)?.slot || 0, repeat: 1 }])));
-$("songremove").addEventListener("click", () => op(() => changeSong(1, dev.song.rows.slice(0, -1))));
+const songLanes = () => !!dev?.info?.lanes;          /* sections: ops 4..7 (a slot per track) */
+$("songplay").addEventListener("click", () => op(() => changeSong((dev.song?.playing ? 3 : 2) + (songLanes() ? 4 : 0))));
+$("songadd").addEventListener("click", () => op(() => songLanes()
+  ? changeSong(5, [...dev.song.rows, dev.song.rows.length ? { ...dev.song.rows.at(-1), slots: dev.song.rows.at(-1).slots.slice() }
+      : { slots: new Array(dev.info.lanes).fill(0), repeat: 1, cut: false }])
+  : changeSong(1, [...dev.song.rows, { slot: dev.song.rows.at(-1)?.slot || 0, repeat: 1 }])));
+$("songremove").addEventListener("click", () => op(() => changeSong(songLanes() ? 5 : 1, dev.song.rows.slice(0, -1))));
 setInterval(async () => {
   if (!dev?.info?.chainRows || busy || document.hidden || !dev.link.idle || tab !== "projects") return;
   const releaseBusy = beginBusy();
   const d = dev;
-  try { const r = parse[CMD.SONG](await rq(req.song())); if (d === dev) { d.song = r; renderSong(); } }
+  try { const r = parse[CMD.SONG](await rq(req.song(d.info.lanes ? 4 : 0))); if (d === dev) { d.song = r; renderSong(); } }
   catch (err) { report(err); } finally { releaseBusy(); }
 }, 1000);
 
