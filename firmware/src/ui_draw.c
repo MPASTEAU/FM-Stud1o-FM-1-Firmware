@@ -821,7 +821,15 @@ static void sound_name(const track_t *t, char *b)
         str_cpy(b, e->presets[t->preset % e->npresets].name, 16);
 }
 
+static void draw_foot_in(void);
+/* HA HA HE HU: the footer's steps and engine in the selected track's colour, the page's name in its family's */
 static void draw_foot(void)
+{
+    ux_tint(ux.trk[song.sel % NTRK]);
+    draw_foot_in();
+    ux_untint();
+}
+static void draw_foot_in(void)
 {
     char s[48], pn[16], ti[20], ln[24];
     const track_t *t = TSEL;
@@ -940,9 +948,9 @@ static void draw_foot(void)
         if (pi != ICON_NONE) {
             GFX_HOOK_ALIGN(0, 19 + AF_S_CAP_Y, 0, 19 + AF_S_CAP_Y + AF_S_CAP_H, AL_V,
                            "footer icons on the names' line");
-            cv_icon_in(tx, 19 + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, pi, T_MID, T_BG);
+            cv_icon_in(tx, 19 + AF_S_CAP_Y, 0, AF_S_CAP_H, 12, pi, ui.home ? T_MID : ux.fam[pg->fam % 12u], T_BG);
         }
-        cv_text_r(r, 19, &AF_S, ti, T_MID, T_BG);
+        cv_text_r(r, 19, &AF_S, ti, ui.home ? T_MID : ux.fam[pg->fam % 12u], T_BG);   /* (the page: its family's colour) */
     }
     cv_blit(0, Y_FOOT);
 }
