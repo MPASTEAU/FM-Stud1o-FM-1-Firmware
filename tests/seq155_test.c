@@ -311,7 +311,7 @@ static int fill_key(void)
 static int old_accepts(const project_store_t *p)   /* 1.5 / 1.5.1's proj_unpack step rule: a chance byte above 101 refuses */
 {
     uint32_t t, i, base;
-    for (t = 0; t < NTRK; t++)
+    for (t = 0; t < NTRK_V10; t++)
         for (i = 0; i < NSTEP; i++) {
             base = 68u + t * (P_COUNT + 2u + NSTEP * 9u) + P_COUNT + 2u + i * 9u;
             if ((p->raw[base + 8u] & 127u) > 101u)

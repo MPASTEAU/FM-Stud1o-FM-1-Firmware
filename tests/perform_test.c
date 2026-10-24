@@ -69,7 +69,8 @@ static void perf_reset(void)
     memset(&pf, 0, sizeof pf);
     pf.src = pf.next = PF_N;
     pf.lc = PF_TOP;
-    pf.mg[0] = pf.mg[1] = pf.mg[2] = pf.mg[3] = 32768;
+    for (uint32_t k = 0; k < NTRK; k++)
+        pf.mg[k] = 32768;
     perf_held = perf_act = 0;
     perf_latched = 0;
     perf_kill = 0;

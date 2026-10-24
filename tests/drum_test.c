@@ -633,7 +633,7 @@ static void kit_fresh(void)
 {
     host_tracks_init();
     memset(trk[0].v, 0, sizeof trk[0].v);
-    memset(eng_mem, 0, sizeof eng_mem);
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
     host_preset(&trk[0], ENGI_DRUM, 0);
 }
 
@@ -652,7 +652,7 @@ static void lane_budget(void)
     static const uint8_t TOM[4] = {41, 43, 45, 47};
     uint32_t i, p, owner, kills, bad = 0;
     host_tracks_init();
-    memset(eng_mem, 0, sizeof eng_mem);
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
     for (p = 0; p < NPART; p++)
         memset(trk[p].v, 0, sizeof trk[p].v);
     host_preset(&trk[0], ENGI_DRUM, 0);

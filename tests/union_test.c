@@ -4,7 +4,7 @@
  *   build/host/union_test [GOLDEN_FILE]      (run_tests.sh builds and runs it against tests/union_golden.txt)
  *
  * Every pair (and A -> B -> A) of the engines that keep state per part (GRAIN, PHYS, DRUM, FM6, SLICE), with
- * ANALOG, SAMPLE and WHEEL (state outside the region) among them, on part 1 while part 3 plays other engines
+ * ANALOG, SAMPLE and WHEEL (state outside the region) among them, on part 1 while part 2 plays other engines
  * alongside, at three presets: a chord and a low note held, released, still ringing at the next switch (the
  * fade on the old engine), and once more with the next notes inside the fade (they wait for the switch).
  * Each sequence runs in its own fork()ed child from boot state; its mix is one 64-bit FNV-1a hash. The file
@@ -75,7 +75,8 @@ static uint64_t useq(const uint32_t *e, uint32_t n, uint32_t pi, uint32_t wait_m
         uh = 0xcbf29ce484222325ull;
         for (k = 0; k < n; k++) {
             uplay(&trk[0], e[k], pi + k, 60, wait_ms);
-            uplay(&trk[2], UE[(k + 3u) % UNE], pi, 55, 10);   /* another part busy alongside */
+            uplay(&trk[1], UE[(k + 3u) % UNE], pi, 55, 10);   /* another part busy alongside (HA HA HE HU: part 2,
+                                                             * PHYS and GRAIN play on parts 1..2 only; bit for bit 1.4's) */
         }
         urun(1000);
         if (write(fd[1], &uh, 8) != 8)

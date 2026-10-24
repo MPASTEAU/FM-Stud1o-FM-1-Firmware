@@ -72,7 +72,7 @@ static uint32_t trk_midi_ch(uint32_t i)
     int32_t b = midi_base();
     if (b == -2)
         return mch_get(i) < 16u ? mch_get(i) : i % NTRK;
-    return (b > 0 ? (uint32_t)b : 0u) + i % NTRK;
+    return b > 0 ? (uint32_t)b + (i & 3u) : i % NTRK;   /* (HA HA HE HU: CH1-8 1..8; a block of four: 5..8 as 1..4) */
 }
 
 static int drum_track(const track_t *t) { return ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM; }
@@ -1202,7 +1202,8 @@ static int32_t midi_slot(uint32_t ch)      /* the track channel ch plays, -1 non
     int32_t b = midi_base(), omni = -1;
     uint32_t i;
     if (b != -2)
-        return b >= 0 && ch - (uint32_t)b < NPART ? (int32_t)(ch - (uint32_t)b) : -1;
+        return b >= 0 && ch - (uint32_t)b < (b ? 4u : NPART) ? (int32_t)(ch - (uint32_t)b) : -1;   /* (HA HA HE HU: CH1-8
+                                                * eight channels, the other blocks four: tracks 1..4) */
     for (i = 0; i < NPART; i++) {
         uint32_t c = mch_get(i);
         if (c == ch)

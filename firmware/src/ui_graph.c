@@ -962,23 +962,26 @@ static void graph_fm(const track_t *t, uint16_t c)
 }
 #endif
 /* Save-bank validity is expensive (CRC/import). Refresh it once per redraw or
- * twice per second, rather than parsing four projects on every UI frame. */
+ * when a slot changed (project_slots_key), rather than parsing four projects on every UI frame. */
 static char graph_pname[4][13];                       /* .. and the slots' names ("" none) */
 static uint16_t graph_plen[4][NTRK];                  /* .. each track's pattern length (project_info: 1/48 quarters) */
 static uint32_t graph_pden[4][NTRK];                  /* .. and its picture for SONG (project.c proj_density: 2 bits a cell) */
 static uint8_t graph_pcell[4][NTRK];                  /* .. in this many cells (min(LEN, 16)) */
 static uint32_t graph_pname_sig;
+static uint32_t project_slots_key(void);           /* (project.c) */
 static int graph_project_used(uint32_t slot)
 {
-    static uint32_t ms, frame;
+    static uint32_t key, frame;
     static uint8_t mask, ready;
-    if (!ready || fm1_ms - ms >= 500u || (ui.force && frame != ui.frame)) {
+    uint32_t k = project_slots_key();                  /* (HA HA HE HU: read again when a slot changed, not twice a second:
+                                                        * 1.8 ms each time on SONG) */
+    if (!ready || k != key || (ui.force && frame != ui.frame)) {
         uint32_t i; mask = 0;
         for (i = 0; i < 4u; i++)
             mask |= (uint8_t)((project_info(i, graph_pname[i], graph_plen[i], graph_pden[i], graph_pcell[i]) != 0) << i);
         graph_pname_sig = fnv(fnv(2166136261u, graph_pname, sizeof graph_pname), graph_plen, sizeof graph_plen);
         graph_pname_sig = fnv(fnv(graph_pname_sig, graph_pden, sizeof graph_pden), graph_pcell, sizeof graph_pcell);
-        ready = 1; ms = fm1_ms; frame = ui.frame;
+        ready = 1; key = k; frame = ui.frame;
     }
     return (mask >> (slot & 3u)) & 1u;
 }
@@ -1784,10 +1787,13 @@ static void draw_tracks(void)
 {
     uint32_t c, sk = strip_kind() == SK_TRK;
     if (!sk) {
-        if (ui.force) {
-            lcd_fill(0, Y_GRAPH, 240, H_GRAPH, T_BG);
-            for (c = 0; c < NTRK; c++)
+        if (ui.force) {                                /* the BG between the strips only, they cover the rest (#181) */
+            lcd_fill(0, Y_GRAPH, MX_X0, H_GRAPH, T_BG);
+            for (c = 0; c < NTRK; c++) {
+                uint32_t x = (uint32_t)(MX_X0 + (int32_t)c * MX_PITCH + MX_W);
+                lcd_fill(x, Y_GRAPH, c + 1u < NTRK ? MX_PITCH - MX_W : 240u - x, H_GRAPH, T_BG);
                 ts.meter[c] = 0;
+            }
         }
         for (c = 0; c < NTRK; c++)
             mixer_strip(c);
@@ -2091,10 +2097,15 @@ static void rack_row(uint32_t c)
 static void draw_home_tracks(void)
 {
     uint32_t c;
-    if (ui.force) {
-        lcd_fill(0, Y_GRAPH, 240, H_GRAPH, T_BG);
-        for (c = 0; c < NTRK; c++)
+    if (ui.force) {                                    /* the BG round the rows only, they cover the rest (#181) */
+        lcd_fill(0, Y_GRAPH, 3, H_GRAPH, T_BG);
+        lcd_fill(3 + TR_W, Y_GRAPH, 240 - 3 - TR_W, H_GRAPH, T_BG);
+        lcd_fill(3, Y_GRAPH, TR_W, 1, T_BG);
+        for (c = 0; c < NTRK; c++) {
+            uint32_t y = (uint32_t)(Y_GRAPH + 1 + (int32_t)c * RK_PITCH + RK_H);
+            lcd_fill(3, y, TR_W, c + 1u < NTRK ? RK_PITCH - RK_H : (uint32_t)(Y_GRAPH + H_GRAPH) - y, T_BG);
             ts.meter[c] = 0;
+        }
     }
     for (c = 0; c < NTRK; c++)
         rack_row(c);

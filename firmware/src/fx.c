@@ -1073,19 +1073,24 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
 #define C1_HAND 40u
 static uint32_t mix_split(void)
 {
-    uint32_t m, i, best = 0, all = 0, lo;
+    uint32_t m, i, best = 0, all = 0, lo, a = 0, g = 0;
     for (i = 0; i < NPART; i++)
         all += part_cost[i];
     lo = all;
-    for (m = 1; m < (1u << NPART) - 1u; m++) {
-        uint32_t a = 0, w;
-        for (i = 0; i < NPART; i++)
-            if (m >> i & 1u)
-                a += part_cost[i];
+    if (all <= C1_HAND)                                 /* (nothing to gain) */
+        return 0;
+    for (m = 1; m < (1u << NPART); m++) {               /* (HA HA HE HU) every split in Gray code order: one part in or
+                                                         * out a step, its cost added or taken off (8 parts: 255 steps,
+                                                         * not 255 x 8) */
+        uint32_t b = 1u << __builtin_ctz(m), w;
+        g ^= b;
+        a = g & b ? a + part_cost[__builtin_ctz(m)] : a - part_cost[__builtin_ctz(m)];
+        if (g == (1u << NPART) - 1u)
+            continue;                                   /* (all on the second core: never) */
         w = (a > all - a ? a : all - a) + C1_HAND;
         if (w < lo) {
             lo = w;
-            best = m;
+            best = g;
         }
     }
     return best;

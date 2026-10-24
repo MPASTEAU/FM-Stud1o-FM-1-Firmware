@@ -1022,9 +1022,12 @@ static void proj_fetch(uint32_t slot)
 }
 #endif
 
-#if !FELUCCA_FLASH
-#define OBJ_PROJX0 0u                            /* (no storage: no FUNX objects; proj_x_* do nothing) */
-#define OBJ_AUTOX 0u
+#if FELUCCA_FLASH
+#define PX_OBJ0 OBJ_PROJX0                       /* the FUNX objects (storage.c) */
+#define PX_AUTO OBJ_AUTOX
+#else
+#define PX_OBJ0 0u                               /* (no storage: no FUNX objects; proj_x_* do nothing) */
+#define PX_AUTO 0u
 #endif
 /* HA HA HE HU: q's tracks 5..8 from the FUNX in storage object obj, when it belongs to the FUN10 record tagged tag
  * (st_buf holds it: no other buffer); 0 = none there (q as it was) */
@@ -1110,7 +1113,7 @@ static int project_save_as(uint32_t slot, const char *name)
         proj_name_get(proj_name, (const uint8_t *)p->name);
         proj_cur = (uint8_t)(slot & 3u);
         pat_from_set((slot & 3u) + 1u);
-        if (proj_x_save(p, OBJ_PROJX0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]))) {   /* (tracks 5..8) */
+        if (proj_x_save(p, PX_OBJ0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]))) {   /* (tracks 5..8) */
             ui_message("SAVE ERROR 5-8");
             return 2;
         }
@@ -1130,6 +1133,15 @@ static void project_cur_name(char *b) { str_cpy(b, proj_name, PROJ_NAME_LEN + 1u
 
 /* slot's name -> b (PROJ_NAME_LEN + 1 bytes); 0 = an empty slot (b ""). Uses proj_scratch */
 static int project_name(uint32_t slot, char *b) { return project_info(slot, b, 0, 0, 0); }
+/* HA HA HE HU: what the four slots hold changes with this (their records' hashes; proj_wire_gen: a save, an X written):
+ * ui_graph.c graph_project_used reads them again only then */
+static uint32_t project_slots_key(void)
+{
+    uint32_t k = proj_wire_gen, i;
+    for (i = 0; i < 4u; i++)
+        k = k * 2654435761u ^ proj_tag(&proj_slot[i]);
+    return k;
+}
 /* .. and, len48 not 0, the length of each track's pattern as SONG plays it (song_chain.c chain_tick: the clock track's
  * LEN steps of its DIV, clamped as chain_prepare does) in 1/48 quarter notes (a 4/4 bar: 192; 0 = an empty slot):
  * len48[0..NTRK-1] */
@@ -1176,13 +1188,15 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
         static struct {
             uint32_t tag, den[NTRK - NTRK_V10];
             uint16_t len48[NTRK - NTRK_V10];
-            uint8_t ok, n[NTRK - NTRK_V10];
+            uint8_t ok, gen, n[NTRK - NTRK_V10];
         } xc[4];
         uint32_t s4 = slot & 3u, tag = proj_tag(&proj_slot[s4]);
-        if (!xc[s4].ok || xc[s4].tag != tag) {
+        if (!xc[s4].ok || xc[s4].tag != tag || xc[s4].gen != proj_wire_gen) {   /* (gen: an X saved again under the
+                                                                              * same A, its tracks 1..4 unchanged) */
             xc[s4].tag = tag;
+            xc[s4].gen = proj_wire_gen;
             xc[s4].ok = 1;
-            (void)proj_x_apply(&proj_scratch, OBJ_PROJX0 + s4, tag);
+            (void)proj_x_apply(&proj_scratch, PX_OBJ0 + s4, tag);
             for (k = NTRK_V10; k < NTRK; k++) {
                 xc[s4].len48[k - NTRK_V10] = (uint16_t)len48_of(proj_scratch.t[k].p[P_SLEN], proj_scratch.t[k].p[P_SDIV]);
                 xc[s4].den[k - NTRK_V10] = proj_density(&proj_scratch.t[k], &xc[s4].n[k - NTRK_V10]);
@@ -1227,7 +1241,7 @@ static int project_rename(uint32_t slot, const char *name)
     memset(p->name, 0, sizeof p->name);
     memcpy(p->name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
     {   /* (HA HA HE HU: its tracks 5..8 go with it, tied to the renamed record) */
-        uint32_t had = proj_x_apply(p, OBJ_PROJX0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));
+        uint32_t had = proj_x_apply(p, PX_OBJ0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));
         proj_wire_gen++;
         if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
 #if FELUCCA_FLASH
@@ -1237,7 +1251,7 @@ static int project_rename(uint32_t slot, const char *name)
         }
 #endif
         memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
-        if (had && proj_x_save(p, OBJ_PROJX0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]))) {
+        if (had && proj_x_save(p, PX_OBJ0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]))) {
             ui_message("SAVE ERROR 5-8");
             return 2;
         }
@@ -1272,8 +1286,7 @@ static int project_erase(uint32_t slot)
         ui_message("ERASE ERROR");
         return 2;
     }
-    if (flash_ok)
-        (void)st_save(OBJ_PROJX0 + slot, &proj_wire, 0);   /* (HA HA HE HU: its tracks 5..8; stale anyway once A goes) */
+    /* (HA HA HE HU: its FUNX left as it is, no second erase: its tag no longer matches anything) */
 #endif
     memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
     if (proj_cur == slot)
@@ -1378,7 +1391,7 @@ static void project_load(uint32_t slot)
     if (flash_ok && !proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) proj_fetch(slot);
 #endif
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
-    (void)proj_x_apply(&proj_scratch, OBJ_PROJX0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));   /* (tracks 5..8) */
+    (void)proj_x_apply(&proj_scratch, PX_OBJ0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));   /* (tracks 5..8) */
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
     if (!project_restore_runtime(&proj_scratch)) {
         proj_cur = (uint8_t)(slot & 3u);
@@ -1456,7 +1469,7 @@ static uint32_t chain_prepare(void)
         if ((used >> i) & 1u) {
             project_t *p = &proj_scratch;
             if (!proj_import(p, &proj_slot[i], sizeof(project_store_t))) return 3u + i;
-            (void)proj_x_apply(p, OBJ_PROJX0 + i, proj_tag(&proj_slot[i]));   /* (HA HA HE HU: tracks 5..8) */
+            (void)proj_x_apply(p, PX_OBJ0 + i, proj_tag(&proj_slot[i]));   /* (HA HA HE HU: tracks 5..8) */
             chain.source[i].motion = p->motion;
             /* A song keeps its current instruments. Engine-specific motion from
              * another instrument would change a kit/wave/algorithm unexpectedly. */
@@ -1615,7 +1628,7 @@ static void autosave_poll(void)
     project_capture(&proj_scratch);
     proj_wire_gen++;
     as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0 ||
-             proj_x_save(&proj_scratch, OBJ_AUTOX, proj_tag(&proj_wire));   /* (HA HA HE HU: tracks 5..8) */
+             proj_x_save(&proj_scratch, PX_AUTO, proj_tag(&proj_wire));   /* (HA HA HE HU: tracks 5..8) */
     if (!as.err) {
         as.saved = sig;
         as.writes++;
@@ -1635,7 +1648,7 @@ static int autosave_boot(int allowed)
         proj_wire_gen++;
         n = st_load(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire);
         if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
-            (void)proj_x_apply(&proj_scratch, OBJ_AUTOX, proj_tag(&proj_wire));   /* (HA HA HE HU: tracks 5..8) */
+            (void)proj_x_apply(&proj_scratch, PX_AUTO, proj_tag(&proj_wire));   /* (HA HA HE HU: tracks 5..8) */
             proj_bound(&proj_scratch);
             if (!project_restore_runtime(&proj_scratch)) {
                 ui_message("RESTORED");

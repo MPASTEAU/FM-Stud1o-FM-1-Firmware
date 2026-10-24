@@ -5,8 +5,18 @@
  * stops. Rows of one slot each, as every song before lanes (1.2) had: the same source compiles against the firmware of
  * before (src/ of 1.2 before lanes, chain_row_t {slot, repeat}), which gave SONG_PROBE_GOLDEN. Included after the UI
  * sources and ui_test.c's helpers (ui_power_on, project_save) */
+#ifndef NTRK_V10
+#define NTRK_V10 NTRK                              /* (the firmware of before: four tracks) */
+#endif
 #ifdef CHAIN_SILENT
-#define PROBE_ROW(s, r) chain_row_of(s, r)
+static chain_row_t probe_row(uint32_t s, uint32_t r)  /* (HA HA HE HU: tracks 5..8 silent, the song of before) */
+{
+    chain_row_t w = chain_row_of(s, r);
+    for (uint32_t k = NTRK_V10; k < NTRK; k++)
+        w.slot[k] = CHAIN_SILENT;
+    return w;
+}
+#define PROBE_ROW(s, r) probe_row(s, r)
 #else
 #define PROBE_ROW(s, r) ((chain_row_t){s, r})
 #endif
@@ -15,11 +25,11 @@
 static uint32_t song_probe_mix(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t song_probe(uint32_t *blocks)
 {
-    static const int16_t LEN[2][NTRK] = {{16, 12, 7, 5}, {8, 16, 10, 3}}, DIV[2][NTRK] = {{2, 1, 2, 3}, {1, 2, 0, 2}};
+    static const int16_t LEN[2][NTRK_V10] = {{16, 12, 7, 5}, {8, 16, 10, 3}}, DIV[2][NTRK_V10] = {{2, 1, 2, 3}, {1, 2, 0, 2}};
     uint32_t s, k, i, h = 2166136261u, n = 0;
     ui_power_on();
     for (s = 0; s < 2u; s++) {
-        for (k = 0; k < NTRK; k++) {
+        for (k = 0; k < NTRK_V10; k++) {
             track_t *t = &trk[k];
             track_defaults_steps(t);
             motion_clear(t);
@@ -48,7 +58,7 @@ static uint32_t song_probe(uint32_t *blocks)
         events_block(32);
         n++;
         h = song_probe_mix(h, (uint32_t)chain.running | (uint32_t)chain.row << 1 | (uint32_t)chain.remaining << 8);
-        for (k = 0; k < NTRK; k++) {
+        for (k = 0; k < NTRK_V10; k++) {
             const track_t *t = &trk[k];
             h = song_probe_mix(h, t->seq_idx | (uint32_t)t->seq_n << 8 | (uint32_t)t->seq_notes[0] << 16);
             h = song_probe_mix(h, (uint32_t)t->p[P_SLEN] | (uint32_t)t->p[P_SDIV] << 8 | (uint32_t)(uint16_t)t->p[P_REV] << 16);

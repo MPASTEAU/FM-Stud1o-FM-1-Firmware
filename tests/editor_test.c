@@ -456,28 +456,29 @@ static int song_protocol(void)
     chain.armed = 0; a[0] = 2;
     bad += check("SONG PLAY refuses extra argument bytes", !request(ED_SONG, a, 2) && !transport_req);
     {   /* 1.2 (`57 01 04`): sections with a slot per track, ops 4..7; the v6 ops see each section's clock lane */
-        static const uint8_t set[] = {5, 2, 0, 1, CHAIN_SILENT, 0, 3, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 1};
-        static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 0, 0, 5, 0, 1}, old4[] = {1, 1, CHAIN_SILENT, 1};
+        static const uint8_t set[] = {5, 2, 0, 1, CHAIN_SILENT, 0, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 3,   /* (HA HA HE HU: eight lanes) */
+                                       CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 1};
+        static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 0, 0, 5, 0, 0, 0, 0, 0, 1}, old4[] = {1, 1, CHAIN_SILENT, 1};
         static const uint8_t info[] = {0};
         uint32_t n, i, tag = 0;
         reset();
         n = request(ED_SONG, set, sizeof set);
         bad += check("SONG op 5 sets sections (T1 A, T2 B, T3 -, T4 A x3; all - x1), the reply in lanes",
-                     n == 5u + 6u + 2u * 5u + 1u && host_wire[5] == 5 && !host_wire[6] && host_wire[7] == 2 &&
-                     !memcmp(host_wire + 11, set + 2, 10) && chain_config.count == 2 &&
-                     !memcmp(&chain_config.row[0], &(chain_row_t){{0, 1, CHAIN_SILENT, 0}, 3}, sizeof(chain_row_t)) &&
+                     n == 5u + 6u + 2u * (NTRK + 1u) + 1u && host_wire[5] == 5 && !host_wire[6] && host_wire[7] == 2 &&
+                     !memcmp(host_wire + 11, set + 2, 2u * (NTRK + 1u)) && chain_config.count == 2 &&
+                     !memcmp(&chain_config.row[0], &(chain_row_t){{0, 1, CHAIN_SILENT, 0, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT}, 3}, sizeof(chain_row_t)) &&
                      chain_config.row[1].slot[0] == CHAIN_SILENT && chain_config.row[1].repeat == 1);
         n = request(ED_SONG, q4, 1);
-        bad += check("SONG op 4 queries them as set", n == 22u && host_wire[5] == 4 && !memcmp(host_wire + 11, set + 2, 10));
+        bad += check("SONG op 4 queries them as set", n == 12u + 2u * (NTRK + 1u) && host_wire[5] == 4 && !memcmp(host_wire + 11, set + 2, 2u * (NTRK + 1u)));
         n = request(ED_SONG, q0, 1);
         bad += check("SONG op 0 (v6 editors): a row per section, its clock lane's slot (T1 A; all - : A)",
                      n == 16u && host_wire[11] == 0 && host_wire[12] == 3 && host_wire[13] == 0 && host_wire[14] == 1);
         bad += check("SONG op 5: a slot past - (5) refused, the sections kept",
-                     request(ED_SONG, bad5, sizeof bad5) == 22u && host_wire[6] == 1 && chain_config.count == 2);
+                     request(ED_SONG, bad5, sizeof bad5) == 12u + 2u * (NTRK + 1u) && host_wire[6] == 1 && chain_config.count == 2);
         bad += check("SONG op 1 (v6): no - in a row of one slot", request(ED_SONG, old4, sizeof old4) == 16u &&
                      host_wire[6] == 1 && chain_config.count == 2);
         chain.armed = 1;
-        bad += check("SONG op 5 waits for a pending start (rc 2)", request(ED_SONG, set, sizeof set) == 22u && host_wire[6] == 2);
+        bad += check("SONG op 5 waits for a pending start (rc 2)", request(ED_SONG, set, sizeof set) == 12u + 2u * (NTRK + 1u) && host_wire[6] == 2);
         chain.armed = 0;
         n = request(ED_INFO, info, 0);
         for (i = 5; i + 2u < n; i++)
@@ -621,7 +622,7 @@ static int fm6_patches(void)
     a[1] = 5;
     request(ED_FM6_GET, a, 2);
     bad += check("an erased preset's patch is gone (GET rc 2)", host_wire[7] == 2u);
-    a[0] = ED_FM6_TRACK; a[1] = 4;
+    a[0] = ED_FM6_TRACK; a[1] = NTRK;                  /* (HA HA HE HU: past the eighth) */
     request(ED_FM6_PUT, a, sizeof a);
     i = host_wire[7];
     request(ED_FM6_PUT, a, 20);
@@ -905,7 +906,7 @@ static int menu_protocol(void)
         {"RESTORE LAST", "ON,OFF"}, {"SCALE LEDS", "OFF,ON"},                                        /* (1.2) */
         {"SCREEN OFF", "NEVER,5 MIN,15 MIN,30 MIN,60 MIN"},
         {"SCOPE", "OUT,MIX"}, {"STEP PREVIEW", "OFF,ON"}, {"CHORD ENTRY", "HOLD,ADD"},                  /* (1.2) */
-        {"MIDI IN", "CH1-4,SEL,CH5-8,CH9-12,CH13-16,TRACK"}, {"TUNE", 0},   /* (1.2: the project's ROUT and TUNE; TUNE a number) */
+        {"MIDI IN", "CH1-8,SEL,CH5-8,CH9-12,CH13-16,TRACK"}, {"TUNE", 0},   /* (1.2: the project's ROUT and TUNE; TUNE a number) */
         {"HOME", "SCOPE,TRACKS,LEVELS"},                                                       /* (1.3; 1.5: LEVELS) */
         {"HELP", "OFF,ON"},                                                                          /* (1.5) */
         {"SELECT", "BPM,PAGE,MODW,VEL"},                                                             /* (1.5.5; 1.5.6 MODW VEL) */
@@ -1133,18 +1134,18 @@ static int drum_kit_retired(void)
     bad += check("a user preset of DRUM KIT 3 (H+CYM) loads as 77", up_used(5) && got[P_E0] == 8);
     {   /* a project whose DRUM tracks hold KIT 0..3: loaded (and bounded, as from flash) as STD 66 10 77 */
         static project_t p;
-        for (r = 0; r < NTRK; r++) {
+        for (r = 0; r < NTRK_V10; r++) {
             set_engine_of(&trk[r], ENGI_DRUM); apply_preset_to(&trk[r], 0);
             trk[r].engine = trk[r].eng_req;
         }
         project_capture(&p);
-        for (r = 0; r < NTRK; r++) p.t[r].p[P_E0] = (int16_t)r;
+        for (r = 0; r < NTRK_V10; r++) p.t[r].p[P_E0] = (int16_t)r;
         p.sum = proj_sum(&p);
         ok = !project_restore_runtime(&p);
-        for (r = 0; r < NTRK; r++) ok &= trk[r].p[P_E0] == MAP[r];
-        for (r = 0; r < NTRK; r++) p.t[r].p[P_E0] = (int16_t)r;
+        for (r = 0; r < NTRK_V10; r++) ok &= trk[r].p[P_E0] == MAP[r];
+        for (r = 0; r < NTRK_V10; r++) p.t[r].p[P_E0] = (int16_t)r;
         proj_bound(&p);
-        for (r = 0; r < NTRK; r++) ok &= p.t[r].p[P_E0] == MAP[r];
+        for (r = 0; r < NTRK_V10; r++) ok &= p.t[r].p[P_E0] == MAP[r];
         bad += check("a project of DRUM KIT 1..3 loads as 66 10 77 (STD stays)", ok);
     }
     return bad;
@@ -1179,7 +1180,7 @@ static int learn_protocol(void)
         bad += check("LEARN_SET op 0: learns (DRUM's TONE on CC74); CC20 again replaces its parameter", ok);
     }
     {
-        const uint8_t bad1[] = {0, 64, 0, 1}, bad2[] = {0, 21, 4, 1}, bad3[] = {0, 21, 0, P_COUNT}, bad4[] = {0, 120, 0, 1};
+        const uint8_t bad1[] = {0, 64, 0, 1}, bad2[] = {0, 21, NTRK, 1}, bad3[] = {0, 21, 0, P_COUNT}, bad4[] = {0, 120, 0, 1};
         ok = request(ED_LEARN_SET, bad1, 4) && host_wire[5] == 1u;
         ok &= request(ED_LEARN_SET, bad2, 4) && host_wire[5] == 1u;
         ok &= request(ED_LEARN_SET, bad3, 4) && host_wire[5] == 1u;

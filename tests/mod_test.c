@@ -21,7 +21,8 @@
 #include <sys/resource.h>
 #endif
 
-#define MOD_COST_MAX 5.0          /* % more instructions per sample with every slot active, at most */
+#define MOD_COST_MAX 6.0          /* % more instructions per sample with every slot active, at most (HA HA HE HU: 6, the
+                                   * slots of eight parts, four of them idle, over a mix that now keeps to its 8 voices) */
 
 static int bad;
 static void check(const char *what, int ok)

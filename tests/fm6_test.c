@@ -63,7 +63,7 @@ static void setup(const uint8_t *v, const int16_t *e)
 {
     uint32_t i;
     memset(trk, 0, sizeof trk);
-    memset(eng_mem, 0, sizeof eng_mem);
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
     memset(fm6_eff, 0, sizeof fm6_eff);
     memset(fm6_lfo, 0, sizeof fm6_lfo);
     host_tracks_init();
@@ -621,7 +621,7 @@ static void demo(const char *dir, uint32_t pi)
         return;
     wav_hdr(w, 0);
     memset(trk, 0, sizeof trk);
-    memset(eng_mem, 0, sizeof eng_mem);
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
     host_tracks_init();
     host_preset(&trk[0], ENGI_FM6, pi);
     for (s = 0; s < 48u; s++) {                       /* three times through the pattern's 16 steps, 120 BPM 1/16 */

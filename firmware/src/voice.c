@@ -145,7 +145,7 @@ static uint32_t lowest_held(const track_t *t)           /* index of the lowest h
  * Returns its index, *pp its part; NVOICE = none */
 static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
 {
-    uint32_t p, i, best = NVOICE, cat = 4;
+    uint32_t p, i, best = NVOICE, cat = 5;
     for (p = 0; p < NPART; p++) {
         track_t *t = &trk[p];
         uint32_t mode = trk_vmode(t);
@@ -163,6 +163,9 @@ static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
                 c = 2;                                  /* extra UNISON, or a voice left by a mode / cap change */
             else if (!soft && mode == V_POLY && i != low)
                 c = 3;                                  /* held, not the bass */
+            else if (!soft && t == self)
+                c = 4;                                  /* (HA HA HE HU) its own protected voice, restarted in place: with
+                                                         * as many parts as voices each other part may hold just its one */
             else
                 continue;
             if (c < cat || (c == cat && v->age < (*pp)->v[best].age)) {
@@ -192,8 +195,8 @@ static int voice_room(track_t *t, int soft)
         return 1;
     k = voice_victim(t, soft, &vp);
     if (k == NVOICE)
-        return !soft;                                   /* hard: over the budget (cannot happen: each of the
-                                                         * NPART < NVOICE parts protects one voice at most) */
+        return !soft;                                   /* hard: over the budget (cannot happen: the part's own
+                                                         * protected voice is the last resort, voice_victim) */
     voice_kill(&vp->v[k]);
     return 1;
 }

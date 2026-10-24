@@ -247,10 +247,10 @@ int main(void)
     printf("    %u inputs, %u with INDEX + FLT ENV == 0\n", n_cmp, n_zero);
 
     /* 2. 0.9 projects with DIGITAL tracks (FUN3: P_E0 at 49, no OP ENV values or matrix yet) */
-    for (k = 0; k < FM4_NPRESETS; k += NTRK) {
+    for (k = 0; k < FM4_NPRESETS; k += NTRK_V10) {
         static project_v3_t v3;
         static project_t q;
-        int16_t full[NTRK][P_COUNT], ref[P_COUNT];
+        int16_t full[NTRK_V10][P_COUNT], ref[P_COUNT];
         uint8_t v[FP_SIZE + 1u], pk[FM6_PACKED];
         uint32_t t, pr, n;
         int ok;
@@ -259,8 +259,8 @@ int main(void)
         v3.size = sizeof v3;
         for (i = 0; i < G_COUNT; i++)
             v3.g[i] = GP[i].def;
-        v3.parts = NPART;
-        for (t = 0; t < NTRK; t++) {                   /* ORGAN PAD MARIMBA FUNK KEY, then E.PIANO BELL BASS BRASS */
+        v3.parts = NTRK_V10;
+        for (t = 0; t < NTRK_V10; t++) {                   /* ORGAN PAD MARIMBA FUNK KEY, then E.PIANO BELL BASS BRASS */
             n = (k + t + 4u) % FM4_NPRESETS;
             defaults(full[t]);
             fm4_preset_values(full[t], n);
@@ -273,7 +273,7 @@ int main(void)
         }
         v3.sum = proj_hash(&v3, sizeof v3 - 4u);
         ok = sizeof v3 == 2584u && proj_import(&q, &v3, (int)sizeof v3) && proj_ok(&q);
-        for (t = 0; t < NTRK && ok; t++) {
+        for (t = 0; t < NTRK_V10 && ok; t++) {
             memcpy(ref, full[t], sizeof ref);
             pr = fm4_convert_ref(ref, v);
             fm6_pack(v, pk);
