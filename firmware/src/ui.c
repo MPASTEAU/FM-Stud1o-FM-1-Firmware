@@ -392,7 +392,7 @@ static uint32_t large_kind(void)
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
     g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_SLOTS || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
-           g == GR_SLICES || g == GR_EVENTS ? LK_LABEL : LK_TALL;
+           g == GR_SLICES || g == GR_EVENTS || g == GR_DLANE || g == GR_DLANE2 ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
@@ -431,6 +431,8 @@ static int page_visible(uint32_t i)
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
     if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)
         return TSEL->eng_req % NENGINES == ENGI_FM6;
+    if (PAGES[i].graph == GR_DLANE || PAGES[i].graph == GR_DLANE2)   /* DESIGN, DESIGN 2: DRUM's lanes (ui_drumlane.c) */
+        return TSEL->eng_req % NENGINES == ENGI_DRUM;
 #if FELUCCA_SLICE
     if (PAGES[i].graph == GR_SLICES)
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_SLICE;
@@ -1377,6 +1379,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
             t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
     }
     fm6_track_loaded(t);                              /* FM6: the preset's patch (its SLOT) */
+    drum_track_loaded(t);                             /* DRUM: the kit's lanes (DESIGN back to its defaults) */
     load_end(t);
 }
 

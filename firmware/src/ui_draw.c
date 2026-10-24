@@ -507,6 +507,13 @@ static void span_fop(const card_span_t *sp, int32_t v, char *val)       /* FM6's
     uint32_t ic;
     (void)fop_card_at((uint32_t)sp->ctx, v, &l, val, &u, &r, &ic);
 }
+static void span_dln(const card_span_t *sp, int32_t v, char *val)       /* DRUM's lane pages: card ctx's value = v */
+{
+    const char *l, *u;
+    int32_t r;
+    uint32_t ic;
+    (void)dln_card_at((uint32_t)sp->ctx, v, &l, val, &u, &r, &ic);
+}
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
     card_span.fn = fn;
@@ -1174,6 +1181,23 @@ static void draw_columns(void)
         }
         return;
     }
+    if (dln_page(cur_page()->graph)) {                   /* DRUM: LANE, then three of its values (ui_drumlane.c) */
+        for (c = 0; c < 4u; c++) {
+            const char *lb, *u;
+            int32_t r;
+            uint32_t ic;
+            int on;
+            if (!dln_ok()) {                             /* (the engine changed before ui_draw left the page) */
+                draw_column(c, "", "", "", T_THEME, -1, ICON_NONE);
+                continue;
+            }
+            on = dln_card(c, &lb, val, &u, &r, &ic);
+            if (dln_field(c) != DN_LANE)
+                card_span_by(span_dln, 0, 0, DL_MAX[dln_field(c)], (int32_t)c);
+            draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, ic);
+        }
+        return;
+    }
     if (cur_page()->graph == GR_MOD) {                   /* SLOT, then that slot's SRC DST AMT */
         const track_t *t = TSEL;
         uint32_t id = P_M1SRC + 3u * mod_ui_slot;
@@ -1325,40 +1349,39 @@ static void draw_columns(void)
 }
 
 
-/* The power-on splash (main.c fm1_main, web/emu felucca_web.c; 1.1.5): a RAISE square centred on the screen, square
- * corners (in every style; LINE too: RAISE from the palette's SURF), in it in AF_M, the ink SPL_PAD in from the left:
- * at the top the name and the version, the first line's capitals' top SPL_PAD down; at the bottom the maker and
- * "with community", the last line's capitals' bottom (its baseline) SPL_PAD up from the square's bottom. Both
- * margins are measured to the capitals (the descender of "community" hangs into the bottom one, as off a baseline).
- * The square (176 x 176) is more than the canvas (CV_MAX, 240 x 124): it is filled straight on the screen and its
- * two text bands drawn on it as canvases, the top one from the square's top edge, the bottom one to its bottom edge.
- * In the saved palette (settings_init before it) */
-#define SPL_SQ 176                                  /* the square (even: centred exactly) */
-#define SPL_X0 ((240u - SPL_SQ) / 2u)               /* its top-left on the screen (x and y) */
-#define SPL_PAD 16                                  /* the text's inset: left (its ink), top and bottom (the capitals) */
-#define SPL_PITCH 20                                /* line to line */
-static const char *const SPLASH_LINES[] = {"Felucca", FELUCCA_VERSION, "H\xFCgelton Instruments", "with community"};
-/* a band of two lines, h tall, at y on the screen: the first line's top at ly; the two lines' capitals declared
- * against al0..al1 (mode: AL_V the band centred there, AL_B the last baseline on al1) */
-static void splash_band(uint32_t y, uint32_t h, int32_t ly, const char *const *l, uint32_t mode, int32_t al0,
-                        int32_t al1, const char *tag)
-{
-    cv_begin(SPL_SQ, h, T_RAISE);
-    GFX_HOOK_ALIGN(0, al0, 0, al1, mode | AL_N(2), tag);
-    cv_text_on(SPL_PAD, ly, &AF_M, l[0], T_TEXT, T_RAISE);
-    cv_text_on(SPL_PAD, ly + SPL_PITCH, &AF_M, l[1], T_TEXT, T_RAISE);
-    cv_blit(SPL_X0, y);
-}
+/* The power-on splash (main.c fm1_main, web/emu felucca_web.c; HA HA HE HU): on BG, the picture (build/gen/ui_splash.h,
+ * tools/gen_splash_image.py: SPLASH_W x SPLASH_H) centred near the top, under it centred the name (FW_NAME) and the
+ * version in AF_M, then "based on Felucca" in AF_S (MID): the firmware this one is built on, as its licence asks. The
+ * screen is more than the canvas (CV_MAX, 240 x 124): drawn as two canvases of SPL_STRIP rows, each with the part of
+ * the picture and the lines that fall in it. In the saved palette (settings_init before it) */
+#include "ui_splash.h"
+#define SPL_STRIP 120                               /* rows per canvas (two make the screen) */
+#define SPL_PY 16                                   /* the picture's top */
+#define SPL_NAME_Y (SPL_PY + 128 + 10)              /* the name's top (a picture of 128: the layout's) */
+#define SPL_VER_Y (SPL_NAME_Y + 22)
+#define SPL_BASED_Y (SPL_VER_Y + 26)
+static const char *const SPLASH_LINES[] = {FW_NAME, FELUCCA_VERSION, "based on Felucca"};
 static void draw_splash(void)
 {
-    int32_t h = SPL_PAD - AF_M_CAP_Y + SPL_PITCH + AF_M.h;     /* a band: its two lines, the descenders in */
-    int32_t lb = h - SPL_PAD - AF_M_CAP_H - AF_M_CAP_Y;         /* the bottom band's last line: its top */
-    lcd_fill(0, 0, 240, 240, T_BG);
-    lcd_fill(SPL_X0, SPL_X0, SPL_SQ, SPL_SQ, T_RAISE);
-    splash_band(SPL_X0, (uint32_t)h, SPL_PAD - AF_M_CAP_Y, SPLASH_LINES, AL_V, SPL_PAD,
-                SPL_PAD + SPL_PITCH + AF_M_CAP_H, "splash name + version SPL_PAD from the top");
-    splash_band(SPL_X0 + SPL_SQ - (uint32_t)h, (uint32_t)h, lb - SPL_PITCH, SPLASH_LINES + 2, AL_B, 0, h - SPL_PAD,
-                "splash maker's baseline SPL_PAD from the bottom");
+    uint32_t s, x, y, px0 = (240u - SPLASH_W) / 2u;
+    for (s = 0; s < 240u / SPL_STRIP; s++) {
+        int32_t y0 = (int32_t)(s * SPL_STRIP);
+        cv_begin(240, SPL_STRIP, T_BG);
+        for (y = 0; y < SPLASH_H; y++) {            /* the picture's rows in this strip */
+            int32_t r = SPL_PY + (int32_t)y - y0;
+            if (r < 0 || r >= SPL_STRIP)
+                continue;
+            for (x = 0; x < SPLASH_W; x++)
+                cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PX[y * SPLASH_W + x];
+        }
+        if (SPL_NAME_Y >= y0 && SPL_BASED_Y + AF_S.h <= y0 + SPL_STRIP) {
+            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(3), "splash lines centred");
+            cv_text_in(0, SPL_NAME_Y - y0, 240, &AF_M, SPLASH_LINES[0], T_TEXT, T_BG);
+            cv_text_in(0, SPL_VER_Y - y0, 240, &AF_M, SPLASH_LINES[1], T_THEME, T_BG);
+            cv_text_in(0, SPL_BASED_Y - y0, 240, &AF_S, SPLASH_LINES[2], T_MID, T_BG);
+        }
+        cv_blit(0, (uint32_t)y0);
+    }
     lcd_sync();
 }
 

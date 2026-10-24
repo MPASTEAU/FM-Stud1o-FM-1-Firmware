@@ -1642,33 +1642,19 @@ static void draw(int s)
     }
     if (s == S_SPLASH) {                          /* the power-on splash (main.c, before the UI): its lines, the version
                                                    * shown FELUCCA_VERSION (run_tests.sh: src/felucca.c's) */
-        static const char WANT[] = "Felucca|" FELUCCA_VERSION "|H\xFCgelton Instruments|with community";
+        static const char WANT[] = FW_NAME "|" FELUCCA_VERSION "|based on Felucca";
         splash_seen[0] = 0;
         in_splash = 1;
         draw_splash();
         in_splash = 0;
-        {   /* the square whole on the screen (176 x 176 at 32,32, more than the canvas): its edges and square corners
-             * RAISE, BG just outside; its text's ink 16 px in from the left and the top (the bottom: AL_B, the hook) */
-            const int32_t q0 = 32, q1 = 32 + 176 - 1;
-            uint16_t bg = host_screen[0], ra = host_screen[(uint32_t)(q0 + 1) * 240u + (uint32_t)q0 + 1];
-            int32_t i, x, y, ix = 999, iy = 999, bad = ra == bg;
-            for (i = q0 - 1; i <= q1 + 1; i++) {
-                int32_t in = i >= q0 && i <= q1;
-                bad |= host_screen[(uint32_t)(q0 - 1) * 240u + (uint32_t)i] != bg || host_screen[(uint32_t)(q1 + 1) * 240u + (uint32_t)i] != bg
-                    || host_screen[(uint32_t)i * 240u + (uint32_t)(q0 - 1)] != bg || host_screen[(uint32_t)i * 240u + (uint32_t)(q1 + 1)] != bg;
-                if (in)
-                    bad |= host_screen[(uint32_t)q0 * 240u + (uint32_t)i] != ra || host_screen[(uint32_t)q1 * 240u + (uint32_t)i] != ra
-                        || host_screen[(uint32_t)i * 240u + (uint32_t)q0] != ra || host_screen[(uint32_t)i * 240u + (uint32_t)q1] != ra;
-            }
-            for (y = q0; y <= q1; y++)
-                for (x = q0; x <= q1; x++)
-                    if (host_screen[(uint32_t)y * 240u + (uint32_t)x] != ra) {
-                        if (x - q0 < ix) ix = x - q0;
-                        if (y - q0 < iy) iy = y - q0;
-                    }
-            if (bad || ix != 16 || iy != 16) {
-                if (rep) fprintf(rep, "FIND %-26s the splash square not whole (edges %s) or its text not 16 px in (left %d, top %d)\n",
-                                 cur_name, bad ? "off" : "ok", (int)ix, (int)iy);
+        {   /* the picture whole on the screen (SPLASH_W x SPLASH_H, centred across, its top at SPL_PY): every pixel as
+             * ui_splash.h holds it */
+            uint32_t x, y, px0 = (240u - SPLASH_W) / 2u, bad = 0;
+            for (y = 0; y < SPLASH_H; y++)
+                for (x = 0; x < SPLASH_W; x++)
+                    bad += host_screen[(uint32_t)(SPL_PY + y) * 240u + px0 + x] != SPLASH_PX[y * SPLASH_W + x];
+            if (bad) {
+                if (rep) fprintf(rep, "FIND %-26s the splash picture off in %u pixels\n", cur_name, (unsigned)bad);
                 nfind++;
             }
         }

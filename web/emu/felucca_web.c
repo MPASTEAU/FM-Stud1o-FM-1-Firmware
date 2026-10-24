@@ -21,6 +21,7 @@
 #include <stdint.h>
 
 #define FELUCCA_WEB 1
+#define FELUCCA_DEMO 1                   /* as src/felucca.c: power-on with the dubstep demo */
 #ifndef FELUCCA_CDC
 #define FELUCCA_CDC 1                    /* as src/felucca.c: MENU > USB SERIAL is there (nothing behind it) */
 #endif
@@ -41,7 +42,29 @@ static uint8_t nor[0x100000];            /* the SPI NOR (erased: 0xFF) */
 /* ------------------------------------------------------------ the clock --- */
 #define FM1_TICKS_PER_US 24u             /* TIMER4: 24 MHz */
 static uint32_t web_ticks;
-static uint32_t fm1_ticks(void) { return web_ticks; }
+/* The device's CPU, estimated (dev kit): each block the audio ISR renders costs the host's instructions per sample of
+ * the idle mix (tests/cpu_baseline.txt mix/idle) plus each part's (fx.c part_cost: its sounding voices x ENG_VCOST, its
+ * DIST / INSERT / sends), at web_cpu_cal thousandths of a percent of real time per 100 instructions per sample (1700:
+ * the 1.7 % the host tests use, from the PHYS measurements on the device). Inside the ISR TIMER4 runs on by that cost,
+ * so the firmware's own meter (song.cpu_q8: MENU > INFO), its peak (felucca_dbg.max_us) and its overload shedding
+ * (audio.c shed_check, above 85 %) see the device's load; outside it the clock is the audio's, as before. One core
+ * (the device's default: MENU > SYSTEM > 2ND CORE OFF). An estimate: recalibrate against the device's console cpu_pct. */
+#define WEB_IDLE_IPS 286u
+static uint8_t web_in_isr;
+static uint32_t web_cost_ticks, web_cpu_cal = 1700u, web_peak_ticks, web_overruns;
+static uint32_t fm1_ticks(void) { return web_ticks + (web_in_isr ? web_cost_ticks : 0u); }
+static void web_cost_add(uint32_t n)
+{
+    uint32_t ips = WEB_IDLE_IPS, i;
+#if FELUCCA_CPU2
+    for (i = 0; i < NPART; i++)
+        ips += part_cost[i];
+#else
+    (void)i;
+#endif
+    web_cost_ticks += (uint32_t)((uint64_t)ips * n * web_cpu_cal * 24000000u / (44100ull * 10000000ull));
+}
+#define mix_block(o, n) (mix_block(o, n), web_cost_add(n))   /* (audio.c's audio_block: each block's cost) */
 
 /* ------------------------------------------------------ audio (ALNK0) --- */
 static uint32_t web_half;                /* the half the next render fills */
@@ -280,8 +303,9 @@ static void web_power_on(void)
     kb_boot_hold = 1;                     /* main.c (#137): the keys silent under the splash */
     audio_init();
     boot_leds();                          /* main.c: the power-on LED sweep, from the scan's start */
-    autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c) */
-    web_boot_ms = fm1_ms + 430u;         /* main.c: 30 + 400 ms before the first frame */
+    demo_song_boot(autosave_boot(boot_clean));   /* main.c: the last session's music (1.2, project.c), the demo song
+                                                  * into the empty PROJECT slots */
+    web_boot_ms = fm1_ms + 30u + FW_SPLASH_MS;   /* main.c: 30 ms + the splash before the first frame */
     web_booted = 1;
 }
 
@@ -315,7 +339,14 @@ static void web_ms(void)
         uint32_t k;
         const int32_t *o = &abuf[web_half * HALF_WORDS];
         web_samples_due -= 1000u * HALF_FRAMES;
+        web_cost_ticks = 0;
+        web_in_isr = 1;
         fm1_alnk0_irq();
+        web_in_isr = 0;
+        if (web_cost_ticks > web_peak_ticks)
+            web_peak_ticks = web_cost_ticks;
+        if (web_cost_ticks > HALF_FRAMES * 1000000u / FS * FM1_TICKS_PER_US)
+            web_overruns++;                               /* the device would miss this half: a dropout */
         for (k = 0; k < HALF_FRAMES; k++) {
             uint32_t i = (ring_w++ % RING) * 2u;
             ring[i] = (float)o[2u * k] / 8388608.0f;
@@ -399,6 +430,18 @@ EXPORT void web_enc(uint32_t role, int32_t n)
         web_enc_steps[panel.enc[role] % 7u] += n * panel.dir[role];
 }
 EXPORT void web_master(uint32_t v) { web_master_adc = v > 1023u ? 1023u : v; }
+/* the estimated CPU (web_cost_add): the firmware's meter (1/256, ~93 ms average), the busiest half since the last
+ * read (1/256 of a half), the halves the device would have missed, the voices the overload shedding took */
+EXPORT uint32_t web_cpu_q8(void) { return song.cpu_q8; }
+EXPORT uint32_t web_cpu_peak_q8(void)
+{
+    uint32_t q = web_peak_ticks * 256u / (HALF_FRAMES * 1000000u / FS * FM1_TICKS_PER_US);
+    web_peak_ticks = 0;
+    return q;
+}
+EXPORT uint32_t web_cpu_overruns(void) { return web_overruns; }
+EXPORT uint32_t web_cpu_sheds(void) { return shed_count; }
+EXPORT void web_cpu_set_cal(uint32_t milli_pct_per_100) { web_cpu_cal = milli_pct_per_100; }
 /* a channel message from Web MIDI, as a USB-MIDI packet arrives (usb.c midi_enqueue): 0 = the ring was full */
 EXPORT uint32_t web_midi(uint32_t status, uint32_t d1, uint32_t d2)
 {

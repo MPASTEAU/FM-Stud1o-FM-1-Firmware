@@ -83,7 +83,10 @@ static uint32_t upf_tag(const up_rec_t *r)       /* FNV-1a of the record without
     return h;
 }
 
-static int upf_fm6(uint32_t k) { return up_used(k) && up_rec(k)->engine == ENGI_FM6; }
+static int upf_fm6(uint32_t k)
+{
+    return up_used(k) && (up_rec(k)->engine == ENGI_FM6 || up_rec(k)->engine == ENGI_DRUM);   /* (DRUM: its DESIGN lanes) */
+}
 
 /* a 128-byte packed record's 7-bit bytes, 8 to 7 bytes (UPF_PK) and back (the voice bank too, fm6_vbank.c) */
 static void upf_pk_get(const uint8_t *d, uint8_t *pk)
@@ -200,8 +203,15 @@ static void upf_track_load(track_t *t, uint32_t k)
 {
     uint8_t pk[FM6_PACKED], v[FP_SIZE + 1u];
     uint32_t tr = (uint32_t)(t - trk);
-    if (tr >= NTRK || t->eng_req != ENGI_FM6)
+    if (tr >= NTRK || (t->eng_req != ENGI_FM6 && t->eng_req != ENGI_DRUM))
         return;
+    if (t->eng_req == ENGI_DRUM) {                    /* DRUM: the record's DESIGN lanes, else the kit's */
+        if (upf_get(k, pk))
+            memcpy(pk, FM6_INIT, FM6_PACKED);
+        fm6_unpack(pk, v);
+        fm6_set_patch(tr, v);
+        return;
+    }
     if (upf_get(k, pk)) {
         int32_t s = t->p[P_E7];
         memcpy(pk, s >= 0 && s < (int32_t)FM6_NFACTORY ? FM6_FACTORY[s] : FM6_INIT, FM6_PACKED);

@@ -229,6 +229,35 @@ static void fm6_track_loaded(const track_t *t)
     }
 }
 
+/* DRUM's designed lanes (eng_drum.c dl_*) in track tr's patch: lane l's field f = v. A patch without them first gets
+ * every lane's default and the mark (its FM6 voice gives way: a DRUM track does not play it). Main loop */
+static void dl_set(uint32_t tr, uint32_t l, uint32_t f, uint32_t v)
+{
+    uint8_t p[FP_SIZE + 1u];
+    uint32_t k, i;
+    tr %= NTRK;
+    memcpy(p, fm6_patch[tr], FP_SIZE + 1u);
+    if (!dl_on(tr)) {
+        for (k = 0; k < DV_NLANE; k++)
+            for (i = 0; i < DL_NF; i++)
+                p[dl_byte(k, i)] = DL_DEF[i];
+        memcpy(p + DL_NAME, DL_SIG, sizeof DL_SIG);
+    }
+    p[dl_byte(l, f)] = (uint8_t)(v > DL_MAX[f] ? DL_MAX[f] : v);
+    fm6_set_patch(tr, p);
+}
+
+/* a factory sound load into a DRUM track (a kit, an engine change): its lanes back to the kit's (the init voice) */
+static void drum_track_loaded(const track_t *t)
+{
+    uint32_t tr = (uint32_t)(t - trk);
+    if (tr < NTRK && t->eng_req == ENGI_DRUM && dl_on(tr)) {
+        uint8_t v[FP_SIZE + 1u];
+        fm6_unpack(FM6_INIT, v);
+        fm6_set_patch(tr, v);
+    }
+}
+
 /* power-on: every track the init voice (what a project stores for the tracks that never played FM6) */
 static void fm6_init(void)
 {

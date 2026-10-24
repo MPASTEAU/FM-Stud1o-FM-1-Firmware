@@ -7,6 +7,17 @@
  * Sections: sizes, parameters, voices and engines, tracks and the song, system. */
 #include <stdint.h>
 
+#ifndef FW_NAME
+#define FW_NAME "HA HA HE HU"    /* this fork's name: the splash, ABOUT, the crash screen (Felucca's credits stay) */
+#endif
+#ifndef FW_SPLASH_MS
+#define FW_SPLASH_MS 2500u       /* the power-on splash's time on the screen (main.c; Felucca's: 400) */
+#endif
+#ifndef FELUCCA_DEMO
+#define FELUCCA_DEMO 0           /* power-on with the dubstep demo (main.c felucca_demo): src/felucca.c and the browser
+                                  * build set 1; the host tests keep Felucca's power-on */
+#endif
+
 /* ------------------------------------------------------------ sizes --- */
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
 #define NPART 4                  /* synth parts: tracks 1..4 */

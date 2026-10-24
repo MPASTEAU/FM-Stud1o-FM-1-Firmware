@@ -92,6 +92,7 @@ if (typeof registerProcessor === "function") {
       else if (m.type === "enc") ex.web_enc(m.role, m.n | 0);
       else if (m.type === "master") ex.web_master(m.value | 0);
       else if (m.type === "midi") ex.web_midi(m.data[0] | 0, m.data[1] | 0, m.data[2] | 0);
+      else if (m.type === "cpucal" && ex.web_cpu_set_cal) ex.web_cpu_set_cal(m.value >>> 0);
       else if (m.type === "visible") this.period = m.on ? 1 / 30 : 1 / 4;
     }
 
@@ -107,6 +108,15 @@ if (typeof registerProcessor === "function") {
         this.sentLeds = key;
         msg.leds = leds;
         msg.anim = anim;
+      }
+      if (ex.web_cpu_q8) {                            // the device's CPU, estimated (felucca_web.c web_cost_add)
+        const cpu = [Math.round(ex.web_cpu_q8() * 100 / 256), Math.round(ex.web_cpu_peak_q8() * 100 / 256),
+                     ex.web_cpu_overruns(), ex.web_cpu_sheds()];
+        const ck = cpu.join(",");
+        if (ck !== this.sentCpu) {
+          this.sentCpu = ck;
+          msg.cpu = cpu;
+        }
       }
       if (this.frames >= 44100) {                     // the share of real time spent running the device
         msg.load = this.busy / (this.frames / 44.1);
@@ -124,7 +134,7 @@ if (typeof registerProcessor === "function") {
         this.sentWrites = writes;
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
-      if (msg.leds || msg.fb || msg.sectors || msg.load !== undefined) this.port.postMessage(msg, transfer);
+      if (msg.leds || msg.fb || msg.sectors || msg.cpu || msg.load !== undefined) this.port.postMessage(msg, transfer);
     }
 
     // A click's down and up can arrive within one render quantum, but the FM-1's contacts never close for less than

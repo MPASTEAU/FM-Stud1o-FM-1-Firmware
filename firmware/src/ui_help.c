@@ -34,6 +34,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"FILTER", "[K1]LP BP HP[K2]CUTOFF[EDIT]VOICE"},
     {"LANES", H_LANES},
     {"LANES 2", H_LANES},
+    {"DESIGN", "[K1]LANE[K2]VOICE[K3]TUNE"},
+    {"DESIGN 2", "[K1]LANE[K4]STACK A LANE"},
     {"SLICES", "[K1]SLICE[K2]MOVE[OCT+]SPLIT, JOIN"},
     {"OPERATOR", H_FMOP},
     {"OP ENV", H_FMOP},

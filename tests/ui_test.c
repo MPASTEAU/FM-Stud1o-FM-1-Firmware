@@ -3619,9 +3619,38 @@ static int test_edit_cycle(void)
     (void)CYC_D;
 #endif
     {   /* #97: a DRUM track's lane levels on EDIT > LANES (KICK SNARE CLAP HATCL) and LANES 2 (HATOP TOM RIM BELL) */
-        static const char *const CYC_K[] = {"EDIT 1", "EDIT 2", "LANES", "LANES 2", "VOICE", "VOICE 2", "VOICE 3", "EDIT 1"};
+        static const char *const CYC_K[] = {"EDIT 1", "EDIT 2", "LANES", "LANES 2", "DESIGN", "DESIGN 2", "VOICE", "VOICE 2",
+                                            "VOICE 3", "EDIT 1"};
         set_engine_of(TSEL, ENGI_DRUM);
-        bad += check("EDIT cycle (DRUM): EDIT 1 EDIT 2 LANES LANES 2 VOICE VOICE 2 VOICE 3 EDIT 1", engine_cycle(CYC_K, NELEM(CYC_K)));
+        bad += check("EDIT cycle (DRUM): EDIT 1 EDIT 2 LANES LANES 2 DESIGN DESIGN 2 VOICE VOICE 2 VOICE 3 EDIT 1",
+                     engine_cycle(CYC_K, NELEM(CYC_K)));
+        {   /* HA HA HE HU's drum designer (ui_drumlane.c, eng_drum.c dl_*): a lane's own VOICE TUNE DECAY / TONE SNAP STACK */
+            uint32_t tr = song.sel % NTRK;
+            bad += check("DESIGN: a kit's lanes at their defaults (no lanes in the patch)", !dl_on(tr) &&
+                         dl_get(tr, DV_CLAP, DL_VOICE) == 0u && dl_get(tr, DV_CLAP, DL_TUNE) == DL_DEF[DL_TUNE]);
+            go_title("DESIGN"); frame();
+            ui.lane = 0;
+            turn(EN_K1, 2);
+            turn(EN_K2, 5);
+            turn(EN_K3, 3);
+            frame();
+            bad += check("DESIGN: KNOB 1 the lane (CLAP), KNOB 2 its VOICE (HAT CL), KNOB 3 its TUNE (+3), the other lanes stay",
+                         ui.lane == DV_CLAP && dl_on(tr) && dl_get(tr, DV_CLAP, DL_VOICE) == 5u &&
+                         dl_role(5) == DVT_HATC && dl_get(tr, DV_CLAP, DL_TUNE) == DL_DEF[DL_TUNE] + 3u &&
+                         dl_get(tr, DV_KICK, DL_VOICE) == 0u && dl_get(tr, DV_SNARE, DL_TUNE) == DL_DEF[DL_TUNE]);
+            go_title("DESIGN 2"); frame();
+            turn(EN_K4, 1);
+            frame();
+            bad += check("DESIGN 2: KNOB 4 stacks the KICK on the CLAP lane: a clap strikes a kick with it",
+                         dl_get(tr, DV_CLAP, DL_STACK) == 1u && drum_stack_note(TSEL, 39) == 36u && drum_stack_note(TSEL, 36) == 0u);
+            {
+                char nm[12];
+                dl_voice_name(1u + DVT_COUNT + 2u * DV_NLANE + 1u, nm);   /* kit 66's snare */
+                bad += check("DESIGN: a model kit's piece named by its kit and lane (66 SD)", str_eq(nm, "66 SD"));
+            }
+            apply_preset_to(TSEL, 0);
+            bad += check("DESIGN: a factory kit load puts every lane back (no lanes in the patch)", !dl_on(tr));
+        }
         go_title("LANES 2"); frame();
         ok = TSEL->p[P_LN5] == 127;
         turn(EN_K2, -3);
@@ -4910,7 +4939,7 @@ static int test_bughunt_ui2(void)
 /* L is a sparse face (tools/gen_aa_font.py L_CHARS): every string drawn in it has all its glyphs */
 static int test_large_face(void)
 {
-    static const char *const FIXED[] = {"FELUCCA", "0123456789"};   /* main.c, ui_menu.c; ui_draw.c draw_uboot */
+    static const char *const FIXED[] = {FW_NAME, "0123456789"};   /* main.c, ui_menu.c; ui_draw.c draw_uboot */
     uint32_t i, missing = 0;
     const char *s;
     for (i = 0; i < NB + NE + 2u; i++)                              /* ui_input.c setup_show: the control names */

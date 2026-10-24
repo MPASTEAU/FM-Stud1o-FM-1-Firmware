@@ -421,6 +421,14 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         t->mono_note = 0;
         v->fine = 0;
         voice_start(t, v, note, vel, t->p[P_GLIDE] != 0 && !ENGINES[t->engine]->oneshot);
+        if (t->engine == ENGI_DRUM) {                   /* DESIGN's STACK: the lane strikes another with it */
+            uint32_t n2 = drum_stack_note(t, note);
+            if (n2) {
+                v = voice_alloc(t, n2);
+                v->fine = 0;
+                voice_start(t, v, n2, vel, 0);
+            }
+        }
         return;
     }
     {

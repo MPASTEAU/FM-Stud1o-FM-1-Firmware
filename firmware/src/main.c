@@ -81,7 +81,7 @@ static void fm1_fault(const fm1_crash_t *c)
     fm1_audio_stop();
     scr_wake_now();                                   /* (MENU > SCREEN OFF: the panel on first) */
     lcd_fill(0, 0, 240, 240, UI_CRASH_BG);            /* fixed, outside the palettes */
-    draw_text_line(0, 8, 240, &AF_M, "FELUCCA CRASH", UI_CRASH_INK, UI_CRASH_BG, 1);
+    draw_text_line(0, 8, 240, &AF_M, FW_NAME " CRASH", UI_CRASH_INK, UI_CRASH_BG, 1);
     hexs(b, c->vec);
     draw_text_line(10, 40, 220, &AF_M, b, UI_CRASH_INK, UI_CRASH_BG, 0);
     hexs(b, c->pc);
@@ -97,6 +97,279 @@ static void fm1_fault(const fm1_crash_t *c)
         ;
     fm1_reboot();
 }
+
+#if FELUCCA_DEMO
+/* HA HA HE HU's power-on demo (FELUCCA_DEMO), after a reference track (Aveon, "Nothing": 145 BPM, F, the sub on F1,
+ * growl stabs on the beats, bright: centroid ~4.5 kHz, the drop after an ~8 s noise build).
+ * The sounds (felucca_demo, power-on):
+ *   track 1  the riddim bass: ANALOG's SYNC pair (the synced saw is the metal), driven, into a resonant low-pass; LFO 2
+ *            on the 1/16, unipolar, restarted by each stab, sweeping the sync (SHP) and the filter: the wob; ENV DEST
+ *            SHP gives each stab its "yoi"; INSERT FOLD on top, MONO
+ *   track 2  its sub: ANALOG's sine an octave under the same notes (FM6's pad replaced), MONO
+ *   track 3  the intro pad, then the riser: ANALOG SOFT PAD (LOFI replaced) in F minor (Fm Db Eb C), a big reverb; in a
+ *            build its NOIS and CUT go up by automation: white noise
+ *   track 4  DRUM (the STD kit): kick, clap and snare together, closed and open hats, the crash (GM 49 on the BELL lane)
+ * The loop on the tracks at power-on (PLAY): bars 1-2 the intro, the build in bar 2, bars 3-4 the drop.
+ * The song (demo_song_boot: PROJECT slots A..D when all four are empty, and the SONG; GLO > SONG, PLAY): INTRO, BUILD,
+ * DROP and DROP 2, four bars each, as 48 bars: INTRO x2, BUILD, DROP x2, DROP 2 x2, INTRO, BUILD, DROP x2, DROP 2. */
+static const uint8_t DM_CHORD[4][3] = {{53, 56, 60}, {49, 53, 56}, {51, 55, 58}, {48, 52, 55}};   /* Fm Db Eb C */
+typedef struct { uint8_t step, len, note; } dm_note_t;
+static const dm_note_t DM_DROP1[] = {   /* two bars: the first hit held to the clap, then stabs on the beats */
+    {0, 8, 41}, {12, 2, 41}, {14, 1, 41},
+    {16, 2, 41}, {20, 2, 41}, {24, 2, 41}, {28, 1, 44}, {30, 1, 39},
+};
+static const dm_note_t DM_DROP1B[] = {  /* .. again without the held hit: stabs from the first beat */
+    {0, 2, 41}, {4, 2, 41}, {6, 1, 41}, {12, 2, 41}, {14, 1, 44},
+    {16, 2, 41}, {20, 2, 41}, {22, 1, 46}, {24, 2, 41}, {28, 1, 44}, {30, 1, 39},
+};
+static const dm_note_t DM_DROP2[] = {   /* DROP 2: the stabs on a 3-3-2 feel, the line moving */
+    {0, 2, 41}, {3, 1, 41}, {6, 2, 44}, {10, 2, 41}, {13, 1, 46}, {14, 1, 44},
+    {16, 2, 41}, {19, 1, 41}, {22, 2, 39}, {26, 2, 44}, {29, 1, 48}, {30, 1, 46},
+};
+static void demo_note(step_t *s, uint32_t note, uint32_t vel)
+{
+    s->note[s->n < 4u ? s->n : 3u] = (uint8_t)note;
+    s->n = (uint8_t)(s->n < 4u ? s->n + 1u : 4u);
+    s->time = ST_NOTE;
+    s->vel = (uint8_t)vel;
+}
+static void demo_hold(track_t *t, uint32_t step, uint32_t len)
+{
+    uint32_t k;
+    for (k = 1; k < len && step + k < NSTEP; k++)
+        t->step[step + k].time = ST_TIE;
+}
+static void demo_hit(track_t *d, uint32_t step, uint32_t lanes, uint32_t vel)
+{
+    step_t *s = &d->step[step % NSTEP];
+    s->hit |= (uint8_t)lanes;
+    s->time = ST_NOTE;
+    if (vel > s->vel)
+        s->vel = (uint8_t)vel;
+}
+/* a track's sound set to engine e's preset pr, as the power-on does (felucca_init) */
+static void demo_sound(track_t *t, uint32_t e, uint32_t pr)
+{
+    set_engine_of(t, e);
+    apply_preset_to(t, pr);
+    t->engine = t->eng_req;
+    eng_mem_claim(t);
+}
+/* every track's steps and automation cleared, LEN 64 */
+static void dm_clear(void)
+{
+    uint32_t i;
+    for (i = 0; i < NTRK; i++) {
+        track_defaults_steps(&trk[i]);
+        trk[i].p[P_SLEN] = 64;
+    }
+}
+/* the pad's chords from step at, one every len steps, n of them */
+static void dm_chords(uint32_t at, uint32_t len, uint32_t n)
+{
+    uint32_t i, k;
+    for (i = 0; i < n; i++) {
+        for (k = 0; k < 3u; k++)
+            demo_note(&trk[2].step[at + i * len], DM_CHORD[i % 4u][k], 90);
+        demo_hold(&trk[2], at + i * len, len);
+    }
+}
+/* the pad into a white-noise riser over steps at .. at + len - 1: its NOIS and CUT up, by automation */
+static void dm_riser(uint32_t at, uint32_t len)
+{
+    track_t *p = &trk[2];
+    uint32_t i;
+    (void)motion_set_event(p, 0, P_E3, 0);
+    (void)motion_set_event(p, 0, P_E4, 46);
+    for (i = 0; i < len; i += 2u) {
+        (void)motion_set_event(p, at + i, P_E4, (int16_t)(46 + (int32_t)i * 81 / (int32_t)(len - 2u)));
+        (void)motion_set_event(p, at + i, P_E3, (int16_t)(i * 127u / (len - 2u)));
+    }
+}
+/* the drums' intro: offbeat hats, soft (and a kick on each bar's 1 when kick) */
+static void dm_intro_drums(uint32_t at, uint32_t len, int kick)
+{
+    uint32_t i;
+    for (i = 2; i < len; i += 4u)
+        demo_hit(&trk[3], at + i, 1u << DV_HATC, 55);
+    for (i = 0; kick && i < len; i += 16u)
+        demo_hit(&trk[3], at + i, 1u << DV_KICK, 90);
+}
+/* the build's snare: quarters, then eighths, then sixteenths, louder and louder; the last sixteenth silent */
+static void dm_roll(uint32_t at, uint32_t len)
+{
+    uint32_t i, q = len / 2u, e = len * 3u / 4u;
+    for (i = 0; i + 1u < len; i++) {
+        uint32_t every = i < q ? 4u : i < e ? 2u : 1u;
+        if (i % every == 0u)
+            demo_hit(&trk[3], at + i, 1u << DV_SNARE, 45 + i * 80u / len);
+    }
+}
+/* the drop's bass on tracks 1 (as written) and 2 (an octave down): two bars of n notes from step at */
+static void dm_bass(uint32_t at, const dm_note_t *b, uint32_t n)
+{
+    uint32_t i, k;
+    for (k = 0; k < 2u; k++)
+        for (i = 0; i < n; i++) {
+            demo_note(&trk[k].step[at + b[i].step], (uint32_t)(b[i].note - (k ? 12 : 0)), 120);
+            demo_hold(&trk[k], at + b[i].step, b[i].len);
+        }
+}
+/* the drop's drums, two bars from step at: kick, the clap and snare on 3, hats from the first clap (crash: the drop's
+ * first bar, no hats under its held hit) or all through, 1/16 pickups, an open hat; busy: DROP 2's sixteenth hats */
+static void dm_drop_drums(uint32_t at, int crash, int busy)
+{
+    static const uint8_t KICK[] = {0, 16, 26}, KICK2[] = {0, 3, 16, 19, 26}, PICK[] = {14, 15, 30, 31};
+    track_t *d = &trk[3];
+    uint32_t i;
+    if (crash)
+        demo_note(&d->step[at], 49, 120);     /* brmm */
+    for (i = crash ? 8u : 0u; i < 32u; i += busy ? 1u : 2u)
+        demo_hit(d, at + i, 1u << DV_HATC, busy && (i & 1u) ? 50 : 80);
+    for (i = 0; !busy && i < NELEM(PICK); i++)
+        demo_hit(d, at + PICK[i], 1u << DV_HATC, 80);
+    for (i = 0; i < (busy ? NELEM(KICK2) : NELEM(KICK)); i++)
+        demo_hit(d, at + (busy ? KICK2[i] : KICK[i]), 1u << DV_KICK, 115);
+    for (i = 8; i < 32u; i += 16u) {
+        demo_hit(d, at + i, 1u << DV_CLAP | 1u << DV_SNARE, 115);
+        d->step[at + i].acc |= 1u << DV_CLAP | 1u << DV_SNARE;
+    }
+    d->step[at + 22].hit = (uint8_t)((d->step[at + 22].hit & ~(1u << DV_HATC)) | 1u << DV_HATO);
+}
+/* the loop at power-on: two bars of intro (the build in the second), two of the drop */
+static void dm_loop(void)
+{
+    dm_clear();
+    dm_chords(0, 8, 4);
+    dm_riser(16, 16);
+    dm_intro_drums(0, 16, 0);
+    dm_roll(16, 16);
+    dm_bass(32, DM_DROP1, NELEM(DM_DROP1));
+    dm_drop_drums(32, 1, 0);
+}
+static void felucca_demo(void)
+{
+    track_t *b = &trk[0], *u = &trk[1], *p = &trk[2], *d = &trk[3];
+    uint32_t i;
+    song.g[G_BPM] = 145;
+    /* track 1: the riddim bass (ANALOG: WAVE DTN MIX NOIS CUT RES DRV KTR) */
+    b->p[P_E0] = 5;                           /* WAVE SYNC: a saw synced to a saw */
+    b->p[P_E1] = 76;                          /* DTN (shown SYNC): the synced saw ~14 semitones up */
+    b->p[P_E2] = 104;                         /* MIX: mostly the synced one */
+    b->p[P_E3] = 0;
+    b->p[P_E4] = 62;                          /* CUT: bright, the LFO opens it more */
+    b->p[P_E5] = 40;                          /* RES */
+    b->p[P_E6] = 120;                         /* DRV */
+    b->p[P_E7] = 64;
+    b->p[P_DEC] = 50;
+    b->p[P_ED_FLT] = 0;
+    b->p[P_ED_SHP] = 40;                      /* each stab's attack sweeps the sync down: "yoi" */
+    b->p[P_LWAVE] = 1;                        /* TRI */
+    b->p[P_LSYNC] = 8;                        /* 1/16 (N_LSYNC) */
+    b->p[P_LTRIG] = 0;                        /* NOTE */
+    b->p[P_LPOL] = 1;                         /* UNI */
+    b->p[P_LD_SHP] = 63;                      /* the sync swept: the metal moves */
+    b->p[P_LD_FLT] = 40;
+    b->p[P_DIST] = 70;
+    b->p[P_ITYPE] = 3;                        /* INSERT FOLD (N_ITYPE) */
+    b->p[P_IA] = 76;                          /* DRIVE */
+    b->p[P_IB] = 110;                         /* TONE */
+    b->p[P_IC] = 100;                         /* LEVEL */
+    b->p[P_IMIX] = 90;
+    /* track 2: the sub, ANALOG's sine an octave down */
+    demo_sound(u, 0, 7);                      /* SUB BASS */
+    u->p[P_E0] = 3;                           /* SIN */
+    u->p[P_E4] = 127;                         /* CUT open */
+    u->p[P_E5] = 0;
+    u->p[P_E6] = 25;                          /* a little drive: the sub heard on small speakers */
+    u->p[P_DEC] = 60;
+    u->p[P_DIST] = 0;
+    for (i = 0; i < 2u; i++) {                /* both basses MONO, short release, dry */
+        trk[i].p[P_VOICE] = V_MONO;
+        trk[i].p[P_ATK] = 0;
+        trk[i].p[P_SUS] = 127;
+        trk[i].p[P_REL] = 12;
+        trk[i].p[P_CHOR] = trk[i].p[P_DLY] = trk[i].p[P_REV] = 0;
+    }
+    /* track 3: the intro pad, then the riser */
+    demo_sound(p, 0, 1);                      /* SOFT PAD */
+    p->p[P_E3] = 0;                           /* NOIS (automated) */
+    p->p[P_E4] = 46;                          /* CUT (automated) */
+    p->p[P_REV] = 80;
+    p->p[P_DLY] = 30;
+    d->p[P_REV] = 24;
+    dm_loop();
+    for (i = 0; i < NTRK; i++)
+        pat_sig[i] = steps_sig(&trk[i]);
+}
+
+/* the music on the tracks -> PROJECT slot `slot`, named `name`: as project_save_as, without its messages. Boot only */
+static void demo_save(uint32_t slot, const char *name)
+{
+    project_t *p = &proj_scratch;
+    project_capture(p);
+    memset(p->name, 0, sizeof p->name);
+    memcpy(p->name, name, str_len(name));
+    p->sum = proj_sum(p);
+    if (!proj_pack(&proj_wire, p))
+        return;
+#if FELUCCA_FLASH
+    if (flash_ok && st_save(OBJ_PROJECT0 + (slot & 3u), &proj_wire, sizeof proj_wire))
+        return;
+#endif
+    memcpy(&proj_slot[slot & 3u], &proj_wire, sizeof proj_wire);
+}
+
+/* boot, after the autosave: with every PROJECT slot empty, the song's four sections into A..D and the SONG set; the
+ * tracks then hold what they held: the session the autosave restored (restored), else the loop (felucca_demo's) */
+static project_t demo_keep __attribute__((section(".pool")));
+static void demo_song_boot(int restored)
+{
+    static const uint8_t ROWS[][2] = {{0, 2}, {1, 1}, {2, 2}, {3, 2}, {0, 1}, {1, 1}, {2, 2}, {3, 1}};   /* {slot, repeat} */
+    char nm[PROJ_NAME_LEN + 1u];
+    uint32_t i, k;
+    for (i = 0; i < 4u; i++)
+        if (project_name(i, nm))
+            return;                           /* (a slot in use: the user's music, nothing written) */
+    if (restored)
+        project_capture(&demo_keep);
+    chain_defaults(&chain_config);
+    chain_config.count = (uint8_t)NELEM(ROWS);
+    for (i = 0; i < NELEM(ROWS); i++) {
+        for (k = 0; k < NTRK; k++)
+            chain_config.row[i].slot[k] = ROWS[i][0];
+        chain_config.row[i].repeat = ROWS[i][1];
+    }
+    dm_clear();                               /* A: INTRO, the pad, then soft hats and a kick on each 1 */
+    dm_chords(0, 16, 4);
+    dm_intro_drums(32, 32, 1);
+    demo_save(0, "INTRO");
+    dm_clear();                               /* B: BUILD, the pad turned into noise, the kick on the beats, the roll */
+    dm_chords(0, 16, 4);
+    dm_riser(0, 64);
+    for (i = 0; i < 32u; i += 4u)
+        demo_hit(&trk[3], i, 1u << DV_KICK, 100);
+    dm_roll(32, 32);
+    demo_save(1, "BUILD");
+    dm_clear();                               /* C: DROP */
+    dm_bass(0, DM_DROP1, NELEM(DM_DROP1));
+    dm_bass(32, DM_DROP1B, NELEM(DM_DROP1B));
+    dm_drop_drums(0, 1, 0);
+    dm_drop_drums(32, 0, 0);
+    demo_save(2, "DROP");
+    dm_clear();                               /* D: DROP 2 */
+    dm_bass(0, DM_DROP2, NELEM(DM_DROP2));
+    dm_bass(32, DM_DROP2, NELEM(DM_DROP2));
+    dm_drop_drums(0, 1, 1);
+    dm_drop_drums(32, 0, 1);
+    demo_save(3, "DROP 2");
+    if (restored && !project_restore_runtime(&demo_keep))
+        return;
+    dm_loop();
+    for (i = 0; i < NTRK; i++)
+        pat_sig[i] = steps_sig(&trk[i]);
+}
+#endif
 
 /* power-on: the parts with their default sounds (TRK_DEF); the sequencers empty */
 static void felucca_init(void)
@@ -120,6 +393,9 @@ static void felucca_init(void)
         pat_sig[i] = steps_sig(t);            /* a default pattern, not the user's */
         pat_last[i] = TRK_DEF[i][2];
     }
+#if FELUCCA_DEMO
+    felucca_demo();
+#endif
     undo_depth--;
     song.sel = 0;
     song.master_q12 = 2048;                   /* (the pot's level replaces it before the audio starts: master_boot) */
@@ -210,9 +486,15 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
+#if FELUCCA_DEMO
+    demo_song_boot(autosave_boot(boot_clean));   /* (1.2) the last session's music, under the splash; the demo song
+                                                  * into the empty PROJECT slots (HA HA HE HU) */
+#else
     autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash */
-    for (ms = 0; ms < 400u; ms += 10u) {      /* the splash; the pot followed (MIDI IN plays under it) */
+#endif
+    for (ms = 0; ms < FW_SPLASH_MS; ms += 10u) {   /* the splash; the pot followed (MIDI IN plays under it) */
         fm1_delay_ms(10);
+        fm1_wdt_feed();                       /* (a longer splash than Felucca's: the watchdog's 8 s stay far) */
         master_poll();
     }
     kb_boot_hold = 0;

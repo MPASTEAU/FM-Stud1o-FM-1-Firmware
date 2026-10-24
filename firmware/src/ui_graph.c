@@ -13,6 +13,7 @@
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
+#include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2: DRUM's lanes (the list below) */
 
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
@@ -1238,6 +1239,8 @@ static uint32_t graph_signature(void)
     if ((pg->scope == SC_ENGINE || fop_page(pg->graph)) && t->eng_req % NENGINES == ENGI_FM6)   /* the patch (PAT's algorithm,
                                                      * levels, FB; the operator pages: the operator, the stage) */
         h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (fop_op + 1u) * 40503u + (fop_stg + 1u) * 7919u;
+    if (dln_page(pg->graph))                         /* DESIGN: the lanes' values, the lane picked */
+        h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (ui.lane + 1u) * 40503u + (uint32_t)t->eng_req * 389u;
     if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) h ^= sample_wave.pos * 13u + sample_wave.key;
     if (pg->graph == GR_ROLL) {
         uint32_t ph = song.playing ? t->seq_idx : 0xFFFFu;
@@ -1432,6 +1435,26 @@ static void graph_pats(void)
         char tag[4], nm[13];
         pat_label(k, tag, nm);
         list_row(LIST_Y(row), k == cur, tag, T_MID, nm, T_TEXT, 232);
+    }
+}
+/* DRUM's lane pages (ui_drumlane.c): the lanes around the one picked, each with its lane name, its VOICE (KIT: the kit's
+ * own piece, by name) and its STACK ("+ CP") */
+static void graph_dlanes(const track_t *t)
+{
+    uint32_t tr = (uint32_t)(t - trk) % NTRK, cur = ui.lane % NLANE;
+    int32_t row, first = clamp((int32_t)cur - 3, 0, NLANE - 7);
+    for (row = 0; row < 7; row++) {
+        uint32_t l = (uint32_t)(first + row), v = dl_get(tr, l, DL_VOICE), s = dl_get(tr, l, DL_STACK);
+        char nm[24];
+        if (v)
+            dl_voice_name(v, nm);
+        else
+            str_cpy(nm, drum_lane_name(t, l), sizeof nm);
+        if (s) {
+            str_cpy(nm + str_len(nm), " + ", 4);
+            str_cpy(nm + str_len(nm), drum_lane_abbr(t, s - 1u), 4);
+        }
+        list_row(LIST_Y(row), l == cur, drum_lane_abbr(t, l), T_MID, nm, v || s ? T_TEXT : T_MID, 232);
     }
 }
 /* the AUTOMATION rows' columns (M): the kind at 14 (LOCK AUTO STEP PLAY, to x 54), the step / PLAY's ON at EV_SX, the
@@ -2341,6 +2364,11 @@ static void draw_graph(void)
             break;
         case GR_FMENV:
             if (fop_ok()) graph_fm6env(t, c);
+            break;
+        case GR_DLANE:
+        case GR_DLANE2:
+            cv_oy = 0;
+            if (dln_ok()) graph_dlanes(t);
             break;
         default:
             if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_WHEEL) graph_wheel(t, c);

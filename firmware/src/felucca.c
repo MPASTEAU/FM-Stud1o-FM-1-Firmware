@@ -37,6 +37,10 @@
                                   * mix_block). 0 (FELUCCA_CPU2=0 build.py): none of it (no core 1 stack, waiting loop,
                                   * buffers or menu row). (The same default: core.h) */
 #endif
+#ifndef FELUCCA_DEMO
+#define FELUCCA_DEMO 1           /* HA HA HE HU: power-on with the dubstep demo (main.c felucca_demo); 0: Felucca's parts
+                                  * with empty sequencers. (The host tests' default: 0, core.h) */
+#endif
 #define FM1_CPU1_USED FELUCCA_CPU2   /* hal/fm1_sys.h: the second core is built in; every reset holds it first (its
                                       * waiting loop is in RAM the ROM and the SPL use at boot) */
 #ifndef FELUCCA_VERSION

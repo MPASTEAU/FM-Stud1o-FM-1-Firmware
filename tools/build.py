@@ -104,6 +104,7 @@ def generate():
             [tools / "gen_aa_icons.py", GEN / "ui_icons.h"],
             [tools / "gen_aa_keycaps.py", GEN / "ui_keycaps.h"],
             [tools / "gen_ui_palettes.py", GEN / "ui_palettes.h"],
+            [tools / "gen_splash_image.py", GEN / "ui_splash.h"],
             [tools / "gen_tables.py", GEN / "felucca_tables.h"],
             [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"],
             [tools / "gen_samples.py", GEN / "felucca_samples.h"]]

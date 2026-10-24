@@ -142,6 +142,74 @@ static const char *drum_lane_abbr(const track_t *t, uint32_t l)
     return (kit & 4u) && l == DV_BELL ? "CY" : N[l];
 }
 
+/* ------------------------------------------------- the lanes designed (HA HA HE HU) --- */
+/* EDIT > DESIGN / DESIGN 2 (ui_drumlane.c): each lane's own VOICE, TUNE, DECAY, TONE, SNAP and STACK, on top of the
+ * kit and the EDIT knobs. They live in the track's patch (eng_fm6.c fm6_patch, what an FM6 track plays; a DRUM track
+ * has no use for it), so projects, user presets (up_fm6.c), undo and the editor's backup carry them as they are:
+ * field n = lane x DL_NF + f at byte n / 11 x 21 + n % 11 of the 155-byte voice (an operator's rates, levels and
+ * breakpoints: bytes the FM6 formats keep whole up to 99), marked by the name DL_SIG. A patch without the mark: every
+ * lane at its default (the kit as it was). Loading a factory DRUM sound clears them (eng_fm6.c drum_track_loaded).
+ *   VOICE  0 KIT (the kit's own piece), 1..DVT_COUNT one of Felucca's own drums, then the model kits' pieces (kit by
+ *          kit, lane by lane: "80 BD" .. "PERC CB")
+ *   TUNE   semitones, DL_DEF 24 = 0 (-24..+24, held in the drum's range)
+ *   DECAY TONE SNAP  50 = as the kit and the EDIT knobs make it; each step 64 / 50 of the knob's (-64..+63)
+ *   STACK  0 OFF, 1..8: a hit on this lane strikes that lane too (voice.c trk_note_on; one level, never itself) */
+enum { DL_VOICE, DL_TUNE, DL_DECAY, DL_TONE, DL_SNAP, DL_STACK, DL_NF };
+#define DL_NVOICE (1u + DVT_COUNT + DV_NKIT * DV_NLANE)
+#define DL_NAME 145u                     /* the voice's name (fm6_core.c FP_NAME) */
+static const uint8_t DL_DEF[DL_NF] = {0, 24, 50, 50, 50, 0};
+static const uint8_t DL_MAX[DL_NF] = {DL_NVOICE - 1u, 48, 99, 99, 99, DV_NLANE};
+static const char DL_SIG[10] = {'D', 'R', 'U', 'M', ' ', 'L', 'A', 'N', 'E', 'S'};
+static uint8_t fm6_patch[NTRK][155u + 1u];   /* (eng_fm6.c: the tracks' patches, FP_SIZE + 1; defined there) */
+
+static uint32_t dl_byte(uint32_t l, uint32_t f)
+{
+    uint32_t n = (l % DV_NLANE) * DL_NF + f;
+    return n / 11u * 21u + n % 11u;
+}
+/* track tr's patch holds lanes */
+static int dl_on(uint32_t tr) { return !memcmp(fm6_patch[tr % NTRK] + DL_NAME, DL_SIG, sizeof DL_SIG); }
+/* lane l's field f on track tr */
+static uint32_t dl_get(uint32_t tr, uint32_t l, uint32_t f)
+{
+    return dl_on(tr) ? fm6_patch[tr % NTRK][dl_byte(l, f)] : DL_DEF[f];
+}
+/* DECAY TONE SNAP: the knob offset (-64..+63) of value v */
+static int32_t dl_off(uint32_t v) { return ((int32_t)v - 50) * 64 / 50; }
+/* VOICE v (1..): the drum it plays (DVT_*, or a model kit's piece: DV_KTYPE) */
+static uint32_t dl_role(uint32_t v)
+{
+    v -= 1u;
+    if (v < DVT_COUNT)
+        return v;
+    v -= DVT_COUNT;
+    return DV_KTYPE(v / DV_NLANE % DV_NKIT + 1u, v % DV_NLANE);
+}
+/* VOICE v's name (s holds 12): "KIT", "PUNCH", "80 BD" */
+static void dl_voice_name(uint32_t v, char *s)
+{
+    static const char *const OWN[DVT_COUNT] = {"PUNCH", "ROUND", "SNARE", "CLAP", "HAT CL", "HAT OP", "TOM", "CONGA",
+                                               "RIM", "CLAVE", "BELL", "CYM"};
+    static const char *const AB[DV_NLANE] = {"BD", "SD", "CP", "CH", "OH", "TM", "RS", "CB"};
+    uint32_t k;
+    if (!v) {
+        str_cpy(s, "KIT", 12);
+        return;
+    }
+    if (v - 1u < DVT_COUNT) {
+        str_cpy(s, OWN[v - 1u], 12);
+        return;
+    }
+    k = v - 1u - DVT_COUNT;
+    str_cpy(s, N_DRUM_KIT[DK_80 + k / DV_NLANE % DV_NKIT], 12);
+    k %= DV_NLANE;
+    s[str_len(s) + 1u] = 0;
+    s[str_len(s)] = ' ';
+    str_cpy(s + str_len(s), AB[k], 4);
+}
+/* the note a hit of `note` strikes with it (its lane's STACK), 0 = none */
+static uint32_t drum_stack_note(const track_t *t, uint32_t note);
+
 /* the lanes step s strikes: its hits, and its notes on their lanes (a NOTE step only) */
 static uint32_t step_lanes(const step_t *s)
 {
@@ -181,6 +249,12 @@ static void step_to_grid(step_t *s)
     }
 }
 
+static uint32_t drum_stack_note(const track_t *t, uint32_t note)
+{
+    uint32_t l = drum_lane(note), s = dl_get((uint32_t)(t - trk), l, DL_STACK);
+    return s && s - 1u != l ? DRUM_LANE_NOTE[(s - 1u) % NLANE] : 0u;
+}
+
 static drum_lane_t *drum_kit_of(const track_t *t)
 {
     return t >= &trk[0] && t < &trk[NPART] ? (drum_lane_t *)ENG_MEM(t - trk) : 0;
@@ -218,6 +292,8 @@ static void drum_note_on(track_t *t, voice_t *v)
         return;
     role = drum_gm(t->p, v->note, &st);
     lane = drum_lane(v->note);
+    if (dl_get((uint32_t)(t - trk), lane, DL_VOICE))     /* the lane's own VOICE (DESIGN) */
+        role = dl_role(dl_get((uint32_t)(t - trk), lane, DL_VOICE));
     L = &K[(uint32_t)v->s[0] & (DV_NLANE - 1u)];
     if (L->owner == i + 1u)                              /* this voice played another lane: it stops there */
         L->owner = 0;
@@ -278,12 +354,19 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (n > CTL)
         n = CTL;
     r = L->role;
-    dv_default(&k, r);                                   /* the knobs move every lane from its design (64) */
-    k.decay = (uint8_t)clamp(k.decay + p[P_E3] - 64, 0, 127);
-    k.tone = (uint8_t)clamp(k.tone + p[P_E2] - 64, 0, 127);
-    k.extra = (uint8_t)clamp(k.extra + p[P_E4] - 64, 0, 127);
+    dv_default(&k, r);                                   /* the knobs move every lane from its design (64), */
+    {                                                    /* then the lane's own DESIGN values (0 at their defaults) */
+        uint32_t tr = (uint32_t)(t - trk) % NTRK, l = (uint32_t)v->s[0] & (DV_NLANE - 1u), on = dl_on(tr);
+        int32_t dd = on ? dl_off(fm6_patch[tr][dl_byte(l, DL_DECAY)]) : 0;
+        int32_t dt = on ? dl_off(fm6_patch[tr][dl_byte(l, DL_TONE)]) : 0;
+        int32_t ds = on ? dl_off(fm6_patch[tr][dl_byte(l, DL_SNAP)]) : 0;
+        int32_t st = on ? ((int32_t)fm6_patch[tr][dl_byte(l, DL_TUNE)] - DL_DEF[DL_TUNE]) * 16 : 0;
+        k.decay = (uint8_t)clamp(k.decay + p[P_E3] - 64 + dd, 0, 127);
+        k.tone = (uint8_t)clamp(k.tone + p[P_E2] - 64 + dt, 0, 127);
+        k.extra = (uint8_t)clamp(k.extra + p[P_E4] - 64 + ds, 0, 127);
+        k.tune = (int16_t)(L->st * 16 + (p[P_E1] - 64) * 3 + st);   /* +-12 semitones, the lane's +-24 */
+    }
     k.accent = (uint8_t)clamp(acc >> 9, 0, 127);         /* (Q16 -> 0..127) */
-    k.tune = (int16_t)(L->st * 16 + (p[P_E1] - 64) * 3);   /* +-12 semitones */
     if (((const uint32_t *)&k)[0] != ((const uint32_t *)&L->key)[0] ||
         ((const uint32_t *)&k)[1] != ((const uint32_t *)&L->key)[1]) {
         dv_setup(&L->c, &k);                             /* (a parameter moved) */
