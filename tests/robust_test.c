@@ -33,17 +33,17 @@ static int sample_slots(void)
     bad += check("16 overlapping zones: the SLICE scan is at most the slot's size", usr_nz[0] == 16u &&
                  slc_usr[0].len && slc_usr[0].len <= 2u * dl);
 #endif
-    /* zone 0 good, zone 1 malformed: nothing of the slot is left (usr_zone[1][0] was copied before the check) */
-    h = (smp_user_hdr_t *)host_samples[1];
+    /* (HA HA HE HU: USR1, USR2 holds the projects) zone 0 good, zone 1 malformed: nothing of the slot is left (usr_zone[0][0] was copied before the check) */
+    h = (smp_user_hdr_t *)host_samples[0];
     h->magic = SMP_USER_MAGIC; h->version = 1; h->nz = 2; h->data_len = 4096;
     zone_set(&h->zone[0], 0, 4096);
     zone_set(&h->zone[1], 0, 4096); h->zone[1].idx = 99;
-    smp_user_scan(1);
+    smp_user_scan(0);
     bad += check("a slot with a malformed zone: unusable, no zone of it left behind",
-                 !usr_nz[1] && !usr_zone[1][0].n && !usr_zone[1][1].n);
+                 !usr_nz[0] && !usr_zone[0][0].n && !usr_zone[0][1].n);
     h->zone[1].idx = 0;
-    smp_user_scan(1);
-    bad += check("the same slot made valid scans again", usr_nz[1] == 2u && usr_zone[1][0].n == 4096u);
+    smp_user_scan(0);
+    bad += check("the same slot made valid scans again", usr_nz[0] == 2u && usr_zone[0][0].n == 4096u);
     return bad;
 }
 

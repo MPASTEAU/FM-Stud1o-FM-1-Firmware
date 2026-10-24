@@ -1015,6 +1015,21 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
+    if (pg->graph == GR_FILE && slot == 0u) {            /* (HA HA HE HU) FILE's KNOB 1: the project */
+        ui.fsel = (uint8_t)clamp((int32_t)ui.fsel + steps, 0, 3);
+        return;
+    }
+    if (pg->graph == GR_FILE && slot == 1u) {            /* (HA HA HE HU) FILE's KNOB 2: right NEW, on DELETE; left back */
+        if (steps > 0) {
+            ui.fl_del = ui.act == 2u;
+            ui.act = 2;
+        } else if (ui.act == 2u && ui.fl_del) {
+            ui.fl_del = 0;
+        } else if (ui.act == 2u) {
+            ui.act = 0;
+        }
+        return;
+    }
     if (pg->graph == GR_TOOLS && slot == 1u) {           /* TOOLS' KNOB 2 (1.5.5, #190): right INIT, on CLEAN INIT; */
         if (steps > 0) {                                  /* left back, then none */
             ui.tl_clean = ui.act == 2u;
@@ -1124,7 +1139,26 @@ static void act_do(void)
             name_open(NK_USER_SAVE, ui.uslot);
         return;
     }
-    if (cur_page()->graph == GR_SLOTS && c == 1u) {     /* PROJECT ERASE (1.5.5, #199): the dialog first */
+    if (cur_page()->graph == GR_FILE) {                 /* (HA HA HE HU) FILE: NEW / DELETE, OPEN, SAVE (the dialogs) */
+        uint32_t k = ui.fsel & 3u;
+        if (c != 3u)
+            ui.act = 0;
+        if (transport_busy() || chain_busy())
+            ui_message("STOP FIRST");
+        else if (c == 1u && !ui.fl_del)
+            confirm_open(CF_NEW_PROJ, 0);
+        else if (c == 1u)
+            arch_used(k) ? confirm_open(CF_DEL_ARCH, k) : ui_message("EMPTY PROJECT");
+        else if (c == 2u)
+            arch_used(k) ? confirm_open(CF_OPEN_ARCH, k) : ui_message("EMPTY PROJECT");
+        else if (arch_used(k) && k != project_arch_cur())
+            confirm_open(CF_OVR_ARCH, k);
+        else
+            name_open(NK_ARCH_SAVE, k);
+        ui.fl_del = 0;
+        return;
+    }
+    if (cur_page()->graph == GR_SLOTS && c == 1u) {     /* PATTERN ERASE (1.5.5, #199): the dialog first */
         ui.act = 0;
         if (transport_busy())
             ui_message("STOP TO ERASE");
@@ -1299,12 +1333,24 @@ static void presets_turn(int32_t s)
     }
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
-    } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_PATS || g == GR_SONG || g == GR_EVENTS) {
+    } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATS || g == GR_SONG || g == GR_EVENTS) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
     } else if (g != GR_TOOLS && g != GR_SLICES) {
         preset_step(s);
+    }
+}
+
+/* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
+ * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, PHRASES, SONG's sections, AUTOMATION's rows, STEP's
+ * cursor. On HOME the tempo, as ever; elsewhere nothing (the tempo: GLO + SELECT, HOME > CLOCK) */
+static void sel_list(int32_t s)
+{
+    uint32_t g = cur_page()->graph;
+    if (g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATS ||
+               g == GR_SONG || g == GR_EVENTS) {
+        presets_turn(s);
     }
 }
 
@@ -1636,6 +1682,18 @@ static void ui_input(void)
                 name_open(NK_USER_SAVE, ui.confirm_trk);
             } else if (kind == CF_ERASE_USER) {
                 up_ui(1u, ui.confirm_trk);
+            } else if (kind == CF_NEW_PROJ) {      /* (HA HA HE HU) a new, empty project: the power-on sounds */
+                (void)project_arch_new();
+            } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
+                track_add();
+            } else if (kind == CF_DEL_TRACK) {
+                track_remove_last();
+            } else if (kind == CF_OPEN_ARCH) {
+                (void)project_arch_open(ui.confirm_trk & 3u);
+            } else if (kind == CF_DEL_ARCH) {
+                (void)project_arch_delete(ui.confirm_trk & 3u);
+            } else if (kind == CF_OVR_ARCH) {
+                name_open(NK_ARCH_SAVE, ui.confirm_trk & 3u);
             } else if (kind == CF_ERASE_PROJ) {
                 (void)project_erase(ui.confirm_trk & 3u);
             } else if (kind == CF_LOAD_PAT) {
@@ -1769,17 +1827,22 @@ static void ui_input(void)
     kq |= lay;
     if (!lay && (s = panel_enc(EN_PRESET)) != 0)
         presets_turn(s);
-    if (!lay && (s = panel_enc(EN_ALGO)) != 0)     /* ALGORITHM: the selected track, on every page */
-        track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, NTRK - 1));
+    if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page; (HA HA HE HU) past the
+                                                      * project's last: ADD TRACK? (the dialog) */
+        if (s > 0 && song.sel + 1u >= trk_count() && trk_count() < NTRK && !ui.confirm && !name_on() && !ui.menu)
+            confirm_open(CF_ADD_TRACK, trk_count());
+        else
+            track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
+    }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
         if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
-        } else if (!glo && sel_mode() == SEL_PAGE) {   /* MENU > SELECT PAGE (1.5.5, #188): the pages, a detent
-                                                         * each (ui.c page_turn); the tempo is GLO + SELECT, CLOCK's
-                                                         * KNOB 1 and TAP. Not while a layer's button is down or
-                                                         * letting go, LFO is held (MOMENTARY) or steps are held */
+        } else if (!glo && sel_mode() == SEL_PAGE && !ui.home) {   /* MENU > SELECT LIST (HA HA HE HU; 1.5.5's PAGE, #188, turned the
+                                                         * pages): down the page's list (sel_list); the tempo is GLO +
+                                                         * SELECT, CLOCK's KNOB 1 and TAP. Not while a layer's button is
+                                                         * down or letting go, LFO is held (MOMENTARY) or steps are held */
             for (k = (uint32_t)(s > 0 ? s : -s); k && !lay && !kq && !mom_down() && !lock_held(); k--)
-                page_turn(s);
+                sel_list(s > 0 ? 1 : -1);
         } else if (glo || !(ui_prefs & PREF_BPM_LOCK)) {
             song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
             ui.bpm_t = 40;                              /* the header's BPM lights up; no message over the header */

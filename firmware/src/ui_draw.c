@@ -1435,8 +1435,22 @@ static void draw_columns_in(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* PROJECT: ERASE (1.5.5, #199) */
+        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* PATTERN: ERASE (1.5.5, #199) */
             draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
+            continue;
+        }
+        if (cur_page()->graph == GR_FILE) {             /* (HA HA HE HU) FILE: PROJECT, NEW (on: DELETE), OPEN, SAVE */
+            int used = graph_arch_used(ui.fsel);
+            if (c == 0u) {
+                val[0] = (char)('1' + (ui.fsel & 3u));
+                val[1] = 0;
+                draw_column(0, "SLOT", val, "/4", VAL(0u), (ui.fsel & 3u) * 1000 / 3, ICON_AUTO);
+            } else if (c == 1u) {
+                draw_act_column(1, ui.fl_del && act_col() == 2u ? "DELETE" : "NEW", c == 1u && ui.fl_del && !used ? T_DIM : T_THEME,
+                                ICON_AUTO);
+            } else {
+                draw_act_column(c, c == 2u ? "OPEN" : "SAVE", c == 2u && !used ? T_DIM : T_THEME, ICON_AUTO);
+            }
             continue;
         }
         if (!d || !d->label || d->label[0] == '-') {
@@ -1452,6 +1466,12 @@ static void draw_columns_in(void)
         card_span_of(d);
         if (vp == &TSEL->p[P_LRATE] && TSEL->p[P_LSYNC]) {   /* LFO 2 SYNC on: RATE does nothing, DIM (1.2) */
             draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), param_icon(d, *vp));
+            continue;
+        }
+        if (vp == &song.g[G_SLOT]) {                   /* (HA HA HE HU) FILE: the project's letter */
+            val[0] = (char)('A' + clamp(*vp, 1, 4) - 1);
+            val[1] = 0;
+            draw_column(c, "SLOT", val, "", VAL(c), RATIO(d, *vp), param_icon(d, *vp));
             continue;
         }
         draw_column(c, d->label, val, unit, VAL(c), d->fmt == F_ENUM && d->max < 2 ? -1 : RATIO(d, enum_rank(d, *vp)),
@@ -1585,13 +1605,38 @@ static void confirm_text(char *a, char *b)
         a[12] = (char)('1' + k % NTRK);
         break;
     case CF_OVR_PROJ:
-        str_cpy(a, "OVERWRITE PROJECT A?", 24);
+        str_cpy(a, "OVERWRITE PATTERN A?", 24);   /* (HA HA HE HU: the slots are the patterns) */
         a[18] = (char)('A' + (k & 3u));
         if (!project_name(k & 3u, b) || !b[0])          /* the project's name, else what SONG plays from it */
             str_cpy(b, "SONG PATTERN CHANGES", 24);
         break;
     case CF_DEL_ROW:
         str_cpy(a, "DELETE SECTION?", 24);
+        break;
+    case CF_ADD_TRACK:                               /* (HA HA HE HU) ALGORITHM past the last track */
+        str_cpy(a, "ADD TRACK 1?", 24);
+        a[10] = (char)('1' + k % NTRK);
+        str_cpy(b, track_def_name(k % NTRK), 24);
+        break;
+    case CF_DEL_TRACK:                               /* SAVE > TOOLS: the last track off */
+        str_cpy(a, "REMOVE TRACK 1?", 24);
+        a[13] = (char)('1' + k % NTRK);
+        str_cpy(b, "ITS SOUND AND STEPS GO", 24);
+        break;
+    case CF_NEW_PROJ:                                /* (HA HA HE HU) SAVE > FILE's NEW */
+        str_cpy(a, "NEW PROJECT?", 24);
+        str_cpy(b, "UNSAVED CHANGES LOST", 24);
+        break;
+    case CF_OPEN_ARCH:                               /* (HA HA HE HU) SAVE > FILE's OPEN, DELETE, SAVE over another */
+    case CF_DEL_ARCH:
+    case CF_OVR_ARCH:
+        str_cpy(a, ui.confirm == CF_OPEN_ARCH ? "OPEN PROJECT 1?" : ui.confirm == CF_DEL_ARCH ? "DELETE PROJECT 1?" :
+                   "OVERWRITE PROJECT 1?", 24);
+        a[str_len(a) - 2u] = (char)('1' + (k & 3u));
+        if (ui.confirm == CF_OPEN_ARCH)
+            str_cpy(b, "UNSAVED CHANGES LOST", 24);
+        else if (!arch_name(k & 3u, b) || !b[0])
+            str_cpy(b, "UNTITLED", 24);
         break;
     case CF_CLEAR_SONG:
         str_cpy(a, "CLEAR SONG ORDER?", 24);
@@ -1613,7 +1658,7 @@ static void confirm_text(char *a, char *b)
         up_name(k, b);                               /* the sound stored there */
         break;
     case CF_ERASE_PROJ:                              /* 1.5.5 (#199): the project's name under it */
-        str_cpy(a, "ERASE PROJECT A?", 24);
+        str_cpy(a, "ERASE PATTERN A?", 24);
         a[14] = (char)('A' + (k & 3u));
         (void)project_name(k & 3u, b);
         break;

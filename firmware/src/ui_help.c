@@ -54,7 +54,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
-    {"PROJECT", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (1.5.5, #199: ERASE) */
+    {"FILE", "[K2]NEW[K3]OPEN[K4]SAVE"},   /* (HA HA HE HU: the projects) */
+    {"PATTERN", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (was PROJECT; 1.5.5, #199: ERASE) */
     {"TOOLS", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},

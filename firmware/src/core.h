@@ -388,6 +388,8 @@ typedef struct {
                                   * zeroed default, is T1..T4 on channels 1..4), MCH_OMNI (any channel no track has), MCH_OFF
                                   * (none); mch_get / mch_set. The project's, in FUN10's spare bytes (project.c PROJ_MIDI_OFF);
                                   * MENU > MIDI > T1..T4 CHANNEL */
+    uint8_t ntrk;                /* HA HA HE HU: the project's tracks, 1..NTRK (0: all, as every project before); the others
+                                  * neither shown, nor played, nor stored (trk_count) */
 } song_t;
 #define ROUTE_SEL 1
 #define ROUTE_TRACK 5                /* G_ROUTE: TRACK, each track on its own channel (song.mch) */
@@ -397,6 +399,7 @@ typedef struct {
 
 static track_t trk[NTRK];        /* the instrument: four parts */
 static song_t song;
+static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ? song.ntrk : NTRK; }   /* (HA HA HE HU) */
 /* HA HA HE HU: a track's extras (project.c "FUNY", ui_lfodraw.c): LFO WAVE DRAW's 16 points (-64..63, voice.c lfo_wave),
  * stepped or joined by lines (smooth), and how its automation moves between two events (curve: 0 STEP, as always; 1 RAMP,
  * motion.c motion_ramp) */

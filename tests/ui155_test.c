@@ -130,7 +130,7 @@ static int select_page(void)
     ui_power_on();
     memcpy(before, favorites.factory[15], 32);
     ok = menu_get(MI_SELECT) == 0u && str_eq(MI_NAME[MI_SELECT], "SELECT") && MI_TAB[MI_SELECT] == MTAB_CONTROL &&
-         MI_SELECT < MI_VALUES && str_eq(menu_vname(MI_SELECT, 0), "BPM") && str_eq(menu_vname(MI_SELECT, 1), "PAGE") &&
+         MI_SELECT < MI_VALUES && str_eq(menu_vname(MI_SELECT, 0), "BPM") && str_eq(menu_vname(MI_SELECT, 1), "LIST") &&
          mtab_rows(MTAB_CONTROL) <= MTAB_ROWS;
     go_title("ENV"); frame();
     b0 = song.g[G_BPM];
@@ -153,45 +153,36 @@ static int select_page(void)
     }
     bad += check("  PAGE: a bit of its own (MENU's 1.2 flags, bit 4), kept with the settings; 0 (older settings) = BPM", ok);
 
-    b0 = song.g[G_BPM];
+    b0 = song.g[G_BPM];                                 /* (HA HA HE HU: LIST, 1.5.5's PAGE: the page's list, not the pages) */
     go_title("ENV"); frame();
+    turn(EN_SELECT, 2);
+    ok = title_is("ENV") && song.g[G_BPM] == b0;        /* (no list: nothing) */
+    go_title("PATTERN"); frame();
+    song.g[G_SLOT] = 1;
+    turn(EN_SELECT, 2);
+    ok &= title_is("PATTERN") && song.g[G_SLOT] == 3;
+    go_title("FILE"); frame();
+    ui.fsel = 0;
     turn(EN_SELECT, 1);
-    ok = title_is("ENV DEST");
-    turn(EN_SELECT, 1);
-    ok &= title_is("ENV");                              /* (round) */
-    turn(EN_SELECT, -1);
-    ok &= title_is("ENV DEST");
-    go_title("LFO"); frame();
-    turn(EN_SELECT, 3);
-    ok &= title_is("LFO DEST");
-    turn(EN_SELECT, -4);
-    ok &= title_is("MOD");                              /* (LFO LFO 2 LFO DRAW LFO DEST MOD, round) */
-    ok &= song.g[G_BPM] == b0;
-    bad += check("  PAGE: SELECT steps the family's pages, a detent each, round both ways; the tempo stays", ok);
+    ok &= title_is("FILE") && ui.fsel == 1u;
+    go_title("SONG"); frame();
+    chain_config.count = 3;
+    chain_config.row[0] = chain_config.row[1] = chain_config.row[2] = chain_row_of(0, 1);
+    ui.song_row = 0;
+    turn(EN_SELECT, 2);
+    ok &= title_is("SONG") && ui.song_row == 2u && song.g[G_BPM] == b0;
+    chain_defaults(&chain_config); ui.song_row = 0;
+    bad += check("  LIST: SELECT moves down the page's list (PATTERN, FILE, SONG ..); no list, nothing; the tempo stays", ok);
 
     go_home(); frame();
-    turn(EN_SELECT, 1);
-    ok = title_is("MIXER");
-    turn(EN_SELECT, 1);
-    ok &= title_is("CLOCK");
-    turn(EN_SELECT, 1);
-    ok &= ui.home;
-    turn(EN_SELECT, -1);
-    ok &= title_is("CLOCK");
+    b0 = song.g[G_BPM];
+    turn(EN_SELECT, 2);
+    ok = ui.home && song.g[G_BPM] == b0 + 2;
+    go_title("CLOCK"); frame();
     b0 = song.g[G_BPM];
     turn(EN_K1, 1);
     ok &= song.g[G_BPM] == b0 + 1;                      /* CLOCK's KNOB 1: the tempo */
-    bad += check("  PAGE: HOME -> MIXER -> CLOCK -> HOME (as HOME's taps), back too; CLOCK's KNOB 1 still the tempo", ok);
-
-    go_title("EDIT 1"); frame();
-    for (i = 0; i < 12u && ok; i++) {                   /* EDIT's pages: only the ones the engine shows */
-        turn(EN_SELECT, 1);
-        ok &= !ui.home && cur_page()->fam == FAM_EDIT && page_visible(ui.page);
-    }
-    go_title("SONG"); frame();
-    turn(EN_SELECT, 1);
-    ok &= title_is("SONG");                             /* (GLO: one page) */
-    bad += check("  PAGE: EDIT's round is the engine's pages; a family of one page stays", ok);
+    bad += check("  LIST: on HOME SELECT is the tempo; CLOCK's KNOB 1 too", ok);
 
     go_title("ENV"); frame();
     b0 = song.g[G_BPM];
@@ -204,13 +195,13 @@ static int select_page(void)
     turn(EN_SELECT, 1);
     ok &= title_is("ENV");
     btn_up(B_LFO); frame();
-    bad += check("  PAGE: GLO + SELECT is the tempo (no page); nothing with LFO held", ok);
+    bad += check("  LIST: GLO + SELECT is the tempo; nothing with LFO held", ok);
 
     go_title("CLOCK"); frame();
     ok = help_page() && str_eq(help_page(), "[K1]TEMPO[GLO]HOLD: TAP") && help_fits(help_page());
     menu_put(MI_SELECT, 0);
     ok &= str_eq(help_page(), "[SELECT]TEMPO[GLO]HOLD: TAP");
-    bad += check("  HELP: CLOCK's hint says KNOB 1 is the tempo with PAGE", ok);
+    bad += check("  HELP: CLOCK's hint says KNOB 1 is the tempo with LIST", ok);
     return bad;
 }
 
@@ -276,18 +267,18 @@ static int project_erase_ui(void)
     song.playing = 0;
     project_save_as(1, "DUB SKETCH");
     project_save_as(2, "KEEP ME");
+    go_page(GR_SLOTS); frame();                         /* (HA HA HE HU: on the pattern on the tracks, C) */
     song.g[G_SLOT] = 2;                                 /* B */
-    go_page(GR_SLOTS); frame();
     ok = act_cols() == 14u && str_eq(act_name(1), "ERASE") && str_eq(act_name(2), "LOAD") && str_eq(act_name(3), "SAVE");
     turn(EN_K2, 1);
     ok &= ui.act == 2u && act_ready();
     press(B_OCTUP);
     ok &= ui.confirm == CF_ERASE_PROJ && ui.confirm_trk == 1u;
     confirm_text(a, b);
-    ok &= str_eq(a, "ERASE PROJECT B?") && str_eq(b, "DUB SKETCH");
+    ok &= str_eq(a, "ERASE PATTERN B?") && str_eq(b, "DUB SKETCH");
     press(B_OCTDN);
     ok &= !ui.confirm && project_used(1);
-    bad += check("SAVE > PROJECT (#199): KNOB 2 ERASE, OCT+ asks \"ERASE PROJECT B?\" with its name, OCT- keeps it", ok);
+    bad += check("SAVE > PROJECT (#199): KNOB 2 ERASE, OCT+ asks \"ERASE PATTERN B?\" with its name, OCT- keeps it", ok);
 
     turn(EN_K2, 1);
     press(B_OCTUP);

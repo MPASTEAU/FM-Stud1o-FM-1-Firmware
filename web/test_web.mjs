@@ -193,7 +193,7 @@ async function editorMock() {
        items[22].kind === 1 && items[22].min === -50 && items[22].max === 50 && items[22].unit === "ct" && items[22].value === 0 &&
        items[23].kind === 0 && items[23].names.join() === "SCOPE,TRACKS,LEVELS" && items[23].value === 0 &&
        items[24].kind === 0 && items[24].names.join() === "OFF,ON" && items[24].value === 0 &&   // (1.5: HELP)
-       items[25].kind === 0 && items[25].names.join() === "BPM,PAGE,MODW,VEL" && items[25].value === 0 &&   // (1.5.5: SELECT; 1.5.6 MODW VEL)
+       items[25].kind === 0 && items[25].names.join() === "BPM,LIST,MODW,VEL" && items[25].value === 0 &&   // (1.5.5: SELECT; 1.5.6 MODW VEL)
        eq(items[0].names, prefs.palettes) && items[0].value === m.state.palette &&
        items[4].names.join() === "OFF,DIM LO,DIM HI,INV,INV LO,INV HI" && items[4].value === 2 && items[5].value === 1,
        "editor: MENU_DESC lists every setting, its value names and value");

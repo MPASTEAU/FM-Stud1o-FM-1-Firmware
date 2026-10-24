@@ -187,6 +187,24 @@ int main(void)
     bad += check("a project save after LIST reused the staging RAM: GET of the runtime is stale (5)",
                  get(0, 0, 64) == 5u);
     bad += check("a new LIST makes it readable again", list(0, &len, &crc) == 0 && get(0, 0, 64) == 0);
+    {   /* HA HA HE HU: SAVE > FILE's projects (project_arch.c): a whole piece of music each (the slots A..D, the tracks,
+         * the SONG); NEW clears it, OPEN brings it back; DELETE; an empty one does not open */
+        int ok;
+        char nm[16];
+        project_save_as(0, "PAT A");
+        trk[1].step[3].n = 1; trk[1].step[3].time = ST_NOTE; trk[1].step[3].note[0] = 67;
+        trk[6].p[P_LEVEL] = 77; trkx[3].draw[2] = 33;
+        chain_config.count = 1; chain_config.row[0] = chain_row_of(0, 2);
+        ok = project_arch_save(2, "MY SONG") == 0 && arch_used(2) && arch_name(2, nm) && str_eq(nm, "MY SONG") &&
+             project_arch_cur() == 2u && !arch_used(1);
+        ok &= project_arch_new() == 0 && !project_used(0) && trk[1].step[3].n == 0 && !chain_config.count && project_arch_cur() == 0xFFu;
+        ok &= project_arch_open(2) == 0 && project_used(0) && trk[1].step[3].n == 1 && trk[1].step[3].note[0] == 67 &&
+              trk[6].p[P_LEVEL] == 77 && trkx[3].draw[2] == 33 && chain_config.count == 1 && project_arch_cur() == 2u;
+        project_name(0, nm);
+        ok &= str_eq(nm, "PAT A");
+        ok &= project_arch_open(1) != 0 && project_arch_delete(2) == 0 && !arch_used(2) && project_arch_cur() == 0xFFu;
+        bad += check("FILE projects: SAVE (the slots, the tracks, the SONG, its extras) / NEW / OPEN back / DELETE; an empty one refused", ok);
+    }
     {   /* HA HA HE HU: the tracks' extras (LFO DRAW, CURVE) travel with a project in its FUNY */
         int ok;
         trkx[2].draw[5] = -40; trkx[2].smooth = 0; trkx[6].curve = 1;

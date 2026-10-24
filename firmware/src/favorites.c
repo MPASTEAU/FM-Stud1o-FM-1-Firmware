@@ -62,6 +62,12 @@ static void palette_apply(void)
         settings.palette = NPALETTES - 1u;
         favorites.factory[15][26] = 1u;             /* .. and HOME's TRACKS, the channel rack (ui.c ui_home_view HV_TRACKS) */
     }
+    if (favorites.factory[15][17] != 'P') {         /* .. and, once (byte 17: free), SELECT on the pages (MENU > SELECT PAGE,
+                                                     * ui.c sel_mode, bit 4 of byte 24): the tempo on GLO + SELECT and
+                                                     * HOME > CLOCK */
+        favorites.factory[15][17] = 'P';
+        favorites.factory[15][24] = (uint8_t)((favorites.factory[15][24] & ~0x30u) | 0x10u);
+    }
 #endif
     if (cpal_on()) {
         palette_custom_load(ui_cpal);

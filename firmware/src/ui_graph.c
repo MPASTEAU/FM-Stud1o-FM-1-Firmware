@@ -12,6 +12,8 @@
 #define GOY 11                                       /* graphs drawn on a 100 px scale sit at y 11..111 */
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
+static uint32_t graph_arch_sig(void);              /* (HA HA HE HU: SAVE > FILE's projects, below) */
+static int graph_arch_used(uint32_t k);
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
 #include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2, SYN TONE .. SYN METAL: DRUM's lanes
                                                      * (the list below) */
@@ -1251,10 +1253,12 @@ static uint32_t graph_signature(void)
         h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
+    if (pg->graph == GR_FILE)                        /* (HA HA HE HU) the projects (graph_arch_*), the one picked */
+        h ^= graph_arch_sig() * 31u + (ui.fsel + 1u) * 7919u + project_arch_cur() * 104729u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
-        h += graph_pname_sig;
+        h += graph_pname_sig + project_current() * 7919u;   /* (HA HA HE HU: the one OPEN) */
     }
     if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the rows, the one selected, + ADD's place, PLAY,
                                                       * QUANTIZE */
@@ -1612,18 +1616,57 @@ static void graph_events(void)
         }
     }
 }
-/* project slots: the name (none: USED) / EMPTY, the selected one filled */
+/* HA HA HE HU: SAVE > FILE's projects (project_arch.c), read again when one changed (proj_wire_gen: a save, an open, a
+ * delete): their names; the one open "(OPEN)", its number in the accent */
+static struct { uint8_t ok, gen, used; char name[4][13]; } garch;
+static void graph_arch_read(void)
+{
+    uint32_t k;
+    if (garch.ok && garch.gen == proj_wire_gen_ui())
+        return;
+    garch.ok = 1;
+    garch.gen = proj_wire_gen_ui();
+    garch.used = 0;
+    for (k = 0; k < 4u; k++)
+        garch.used |= (uint8_t)(arch_name(k, garch.name[k]) << k);
+}
+static int graph_arch_used(uint32_t k) { graph_arch_read(); return (garch.used >> (k & 3u)) & 1u; }
+static uint32_t graph_arch_sig(void)
+{
+    graph_arch_read();
+    return fnv(garch.used + 1u, garch.name, sizeof garch.name);
+}
+static void graph_file(void)
+{
+    uint32_t i, cur = project_arch_cur();
+    graph_arch_read();
+    for (i = 0; i < 4u; i++) {
+        int32_t y = 12 + (int32_t)i * 26;
+        char b[2] = {(char)('1' + i), 0}, nm[24];
+        int used = (garch.used >> i) & 1u;
+        str_cpy(nm, !used ? "EMPTY" : garch.name[i][0] ? garch.name[i] : "UNTITLED", 14);
+        if (used && i == cur)
+            str_cpy(nm + str_len(nm), "  (OPEN)", 9);
+        list_row(y, i == ui.fsel, b, i == cur && used ? T_ACCENT : T_MID, nm, used ? T_TEXT : T_DIM, 232);
+    }
+}
+/* project slots: the name (none: USED) / EMPTY, the selected one filled; (HA HA HE HU) the one the music is from: its
+ * letter in the accent, "OPEN" after its name */
 static void graph_slots(void)
 {
-    uint32_t i;
+    uint32_t i, cur = project_current();
     for (i = 0; i < 4u; i++) {
         int32_t y = 12 + (int32_t)i * 26;
         char b[4];
         int sel = (int32_t)i + 1 == song.g[G_SLOT], used = graph_project_used(i);
         const char *n = graph_project_name(i);
+        char nm[24];
         b[0] = (char)('A' + i);
         b[1] = 0;
-        list_row(y, sel, b, T_MID, !used ? "--" : n[0] ? n : "USED", used ? T_TEXT : T_DIM, 232);
+        str_cpy(nm, !used ? "EMPTY" : n[0] ? n : "UNTITLED", 14);
+        if (used && i == cur)
+            str_cpy(nm + str_len(nm), "  (OPEN)", 9);
+        list_row(y, sel, b, i == cur && used ? T_ACCENT : T_MID, nm, used ? T_TEXT : T_DIM, 232);
     }
 }
 /* MIXER page: four SURF columns, one under each card: the track number on its cushion (in the accent:
@@ -2576,6 +2619,10 @@ static void draw_graph_in(void)
         case GR_SLOTS:
             cv_oy = 0;
             graph_slots();
+            break;
+        case GR_FILE:
+            cv_oy = 0;
+            graph_file();
             break;
         case GR_USER:
             cv_oy = 0;

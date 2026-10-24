@@ -1012,6 +1012,7 @@ static union {                               /* serialized main-loop work; no re
 } proj_wire_u __attribute__((section(".pool")));
 #define proj_wire (proj_wire_u.s)
 static uint8_t proj_wire_gen;                /* +1 whenever proj_wire is rewritten (a backup's runtime copy lives there) */
+static uint32_t proj_wire_gen_ui(void) { return proj_wire_gen; }
 
 static void proj_steps(step_t *s)            /* a loaded sequence stays inside its fixed fields */
 {
@@ -1183,6 +1184,7 @@ static void project_cur_name(char *b) { str_cpy(b, proj_name, PROJ_NAME_LEN + 1u
 
 /* slot's name -> b (PROJ_NAME_LEN + 1 bytes); 0 = an empty slot (b ""). Uses proj_scratch */
 static int project_name(uint32_t slot, char *b) { return project_info(slot, b, 0, 0, 0); }
+static uint32_t project_current(void) { return proj_cur; }   /* (HA HA HE HU: SAVE > FILE marks it; PROJ_NO_SLOT none) */
 /* HA HA HE HU: what the four slots hold changes with this (their records' hashes; proj_wire_gen: a save, an X written):
  * ui_graph.c graph_project_used reads them again only then */
 static uint32_t project_slots_key(void)
@@ -1440,6 +1442,39 @@ static int project_restore_runtime(const project_t *input)
     ui.force = 1;
     ui_message("LOADED");
     memset(snd_said, 0, sizeof snd_said);               /* a missing sample is said again, after LOADED */
+    return 0;
+}
+
+/* HA HA HE HU: SAVE > FILE's NEW: an empty project, as at power-on: every track's power-on sound with no steps
+ * (PROJ_DEF_SOUND), no automation, no song, the globals' defaults (the tempo kept), no name, from no slot. 1: refused */
+static int project_new(void)
+{
+    project_t *p = &proj_scratch;
+    uint32_t i;
+    int16_t bpm = song.g[G_BPM];
+    memset(p, 0, sizeof *p);
+    p->magic = PROJ_MAGIC;
+    p->size = sizeof *p;
+    for (i = 0; i < G_COUNT; i++)
+        p->g[i] = GP[i].def;
+    p->g[G_BPM] = bpm;
+    p->parts = NPART;
+    p->phys = PROJ_PHYS;
+    chain_defaults(&p->chain);
+    proj_x_defaults(p);                                 /* tracks 5..8, the extras */
+    for (i = 0; i < NTRK_V10; i++) {                    /* .. and 1..4 the same way */
+        p->t[i] = p->t[NTRK_V10];
+        p->t[i].engine = (uint8_t)trk_def_engine(i);
+        for (uint32_t k = 0; k < P_COUNT; k++)
+            p->t[i].p[k] = param_desc_of(trk_def_engine(i), k)->def;
+        memcpy(p->fm6[i], FM6_INIT, FM6_PACKED);
+    }
+    chain_defaults(&p->chain);
+    p->sum = proj_sum(p);
+    if (project_restore_runtime(p))
+        return 1;
+    proj_name[0] = 0;
+    ui_message("NEW PROJECT");
     return 0;
 }
 static void project_load(uint32_t slot)
@@ -1721,6 +1756,18 @@ static int autosave_boot(int allowed)
     return rc;
 }
 
+#if FELUCCA_FLASH
+#include "project_arch.c"                         /* HA HA HE HU: PROJECTS, a whole piece of music each (SAVE > FILE) */
+#else
+static int arch_used(uint32_t k) { (void)k; return 0; }
+static int arch_name(uint32_t k, char *b) { (void)k; b[0] = 0; return 0; }
+static int project_arch_save(uint32_t k, const char *name) { (void)k; (void)name; ui_message("NO FLASH"); return 1; }
+static int project_arch_open(uint32_t k) { (void)k; ui_message("NO FLASH"); return 1; }
+static int project_arch_delete(uint32_t k) { (void)k; return 1; }
+static int project_arch_new(void) { uint32_t s; for (s = 0; s < 4u; s++) memset(&proj_slot[s], 0, sizeof proj_slot[s]);
+    chain_defaults(&chain_config); return project_new(); }
+static uint32_t project_arch_cur(void) { return 0xFFu; }
+#endif
 #if FELUCCA_FLASH
 _Static_assert(sizeof(project_store_t) <= ST_PAYLOAD_MAX, "project does not fit one flash sector");
 _Static_assert(sizeof(persist_t) <= ST_PAYLOAD_MAX, "settings do not fit one flash sector");

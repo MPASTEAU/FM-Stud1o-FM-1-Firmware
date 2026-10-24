@@ -24,7 +24,7 @@
  *                takes it whole, then the keys edit it as any other).
  *   LEDs         every key that types or edits is lit; the key whose letters are being cycled blinks.
  * Spaces at either end are dropped when it is written; an empty name: USER the automatic one, PROJECT none. */
-enum { NK_NONE, NK_USER_SAVE, NK_USER_RENAME, NK_PROJ_SAVE, NK_PROJ_RENAME };
+enum { NK_NONE, NK_USER_SAVE, NK_USER_RENAME, NK_PROJ_SAVE, NK_PROJ_RENAME, NK_ARCH_SAVE };   /* (HA HA HE HU: a project) */
 #define NM_LEN 12u
 #define NM_TAP_MS 800u                                 /* multi-tap: the next letter within this */
 #define NM_REP_MS 450u                                 /* a held arrow / DELETE repeats after this, */
@@ -98,8 +98,13 @@ static void name_open(uint32_t kind, uint32_t slot)
         else
             str_cpy(b, nm.ph, sizeof b);
         nm.cat = (uint8_t)(kind == NK_USER_RENAME ? up_cat(slot) : track_cat(TSEL));
+    } else if (kind == NK_ARCH_SAVE) {                 /* (HA HA HE HU) a project: its name, or the music's */
+        str_cpy(nm.ph, "PROJECT 1", sizeof nm.ph);
+        nm.ph[8] = (char)('1' + (slot & 3u));
+        if (!(slot == project_arch_cur() && arch_name(slot, b) && b[0]))
+            project_cur_name(b);
     } else {
-        str_cpy(nm.ph, "PROJECT A", sizeof nm.ph);
+        str_cpy(nm.ph, "PATTERN A", sizeof nm.ph);
         nm.ph[8] = (char)('A' + (slot & 3u));
         if (kind == NK_PROJ_RENAME)
             project_name(slot, b);
@@ -267,6 +272,9 @@ static void name_ok(void)
     case NK_PROJ_SAVE:
         project_save_as(nm.slot, b);
         break;
+    case NK_ARCH_SAVE:
+        (void)project_arch_save(nm.slot, b[0] ? b : nm.ph);   /* (no name: "PROJECT 1") */
+        break;
     default:
         project_rename(nm.slot, b);
         break;
@@ -332,7 +340,7 @@ static uint32_t name_leds(void)
 #define NM_CX(i) (12 + 18 * (int32_t)(i))              /* cell i: 18 x 22 at y 18 of the card */
 static void nm_title(char *b)
 {
-    str_cpy(b, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE " : "NAME ", 8);
+    str_cpy(b, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE || nm.kind == NK_ARCH_SAVE ? "SAVE " : "NAME ", 8);
     if (nm.kind <= NK_USER_RENAME)
         up_slot_label(b + 5, nm.slot);
     else
@@ -432,7 +440,7 @@ static void nm_draw_foot(void)
 {
     khint_t a[3], b[3];
     int ok = !transport_busy();
-    a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE ? "SAVE" : "RENAME"};
+    a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE || nm.kind == NK_ARCH_SAVE ? "SAVE" : "RENAME"};
     a[1] = (khint_t){KC_OCTDN, "CANCEL"};
     a[2] = (khint_t){KC_K3, nm.kind <= NK_USER_RENAME ? "CATEGORY" : "RANDOM"};   /* (1.2: the category, a random name) */
     b[0] = (khint_t){KC_K1, "MOVE"};

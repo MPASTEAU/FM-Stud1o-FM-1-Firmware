@@ -303,8 +303,7 @@ static void web_power_on(void)
     kb_boot_hold = 1;                     /* main.c (#137): the keys silent under the splash */
     audio_init();
     boot_leds();                          /* main.c: the power-on LED sweep, from the scan's start */
-    demo_song_boot(autosave_boot(boot_clean));   /* main.c: the last session's music (1.2, project.c), the demo song
-                                                  * into the empty PROJECT slots */
+    autosave_boot(boot_clean);            /* main.c: the last session's music (1.2, project.c); else the drone (felucca_demo) */
     web_boot_ms = fm1_ms + 30u + FW_SPLASH_MS;   /* main.c: 30 ms + the splash before the first frame */
     web_booted = 1;
 }

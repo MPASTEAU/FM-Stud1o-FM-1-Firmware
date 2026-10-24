@@ -889,8 +889,11 @@ static int test_save(void)
     uint32_t i;
     ui_power_on();
     trk[0].p[P_E0] = 5;
+    press(B_SAVE);                                /* (HA HA HE HU) SAVE: FILE, the projects; again PATTERN, again USER */
+    bad += check("SAVE opens FILE (the projects) with SAVE selected; again PATTERN (A..D)",
+                 !ui.home && cur_page()->graph == GR_FILE && ui.act == 4u && (press(B_SAVE), cur_page()->graph == GR_SLOTS));
     press(B_SAVE);
-    bad += check("SAVE opens USER with SAVE selected, without writing a slot",
+    bad += check("SAVE a third time: USER with SAVE selected, without writing a slot",
                  !ui.home && cur_page()->graph == GR_USER && ui.act == 4u && !up_used(0));
     press(B_OCTUP);
     bad += check("SAVE then OCT+ opens NAME (the automatic name), writes nothing yet",
@@ -908,11 +911,11 @@ static int test_save(void)
     press(B_SAVE);
     bad += check("1.2: SAVE again: PHRASES (the patterns, after the sounds)", cur_page()->graph == GR_PATS);
     press(B_SAVE);
-    bad += check("SAVE again still cycles to PROJECT", cur_page()->graph == GR_SLOTS);
+    bad += check("SAVE again: TOOLS, then FILE again (round)", cur_page()->graph == GR_TOOLS && (press(B_SAVE), cur_page()->graph == GR_FILE));
     go_home();
     press(B_SAVE);
-    bad += check("SAVE from HOME returns directly to USER, even after visiting PROJECT",
-                 cur_page()->graph == GR_USER && ui.act == 4u);
+    bad += check("SAVE from HOME returns directly to FILE", cur_page()->graph == GR_FILE && ui.act == 4u);
+    press(B_SAVE); press(B_SAVE);                 /* (USER) */
     press(B_OCTUP);
     bad += check("direct SAVE still asks before overwriting an occupied slot",
                  ui.confirm == CF_OVR_USER && up_value(up_rec(0), P_E0) == 5);
@@ -947,8 +950,8 @@ static int test_save(void)
     stop_transport();
     turn(EN_K4, 1);
     press(B_OCTUP);
-    bad += check("stopped, an empty slot: OCT+ opens NAME (no name yet: PROJECT A)", name_on() && nm.kind == NK_PROJ_SAVE &&
-                 nm.len == 0u && str_eq(nm.ph, "PROJECT A") && !project_used(0));
+    bad += check("stopped, an empty slot: OCT+ opens NAME (no name yet: PATTERN A)", name_on() && nm.kind == NK_PROJ_SAVE &&
+                 nm.len == 0u && str_eq(nm.ph, "PATTERN A") && !project_used(0));
     press(B_OCTUP);
     bad += check("..OCT+ saves it unnamed, SAVE dropped", !name_on() && project_used(0) && msg_is("SAVED (RAM)") &&
                  ui.act == 0u);
@@ -2659,6 +2662,8 @@ static int test_presets_knob(void)
                 n_cur++;
             } else if (g == GR_USER) {
                 sel_ok &= ui.uslot == uslot + 1u && same_snd && same_steps;
+            } else if (g == GR_FILE) {                 /* (HA HA HE HU: FILE, the project picked) */
+                sel_ok &= same_snd && same_steps && ui.page == i;
             } else if (g == GR_SLOTS) {
                 sel_ok &= song.g[G_SLOT] == slot + 1 && same_snd && same_steps;
             } else if (g == GR_PATS) {
@@ -2717,7 +2722,8 @@ static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const ste
 static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[6] = {"USER", "PRESETS", "PHRASES", "PROJECT", "TOOLS", "USER"};   /* (1.5, #173) */
+    static const char *const SAVE_CYC[7] = {"FILE", "PATTERN", "USER", "PRESETS", "PHRASES", "TOOLS", "FILE"};   /* (1.5, #173;
+                                                     * HA HA HE HU: FILE, the projects, then PATTERN, A..D) */
     int bad = 0, ok = 1;
     uint32_t i, n0;
     step_t ref[NSTEP], want;
@@ -2725,11 +2731,11 @@ static int test_page_cycles(void)
     uint16_t rw[EV_ROWS];
     /* the cycles: each button's taps, in order */
     ui_power_on();
-    for (i = 0; i < 6u; i++) {
+    for (i = 0; i < 7u; i++) {
         press(B_SAVE); frames(320);
         ok &= !ui.home && cur_page()->fam == FAM_SAVE && str_eq(cur_page()->title, SAVE_CYC[i]);
     }
-    bad += check("1.5 (#173): SAVE cycles USER > PRESETS > PHRASES > PROJECT > TOOLS > USER", ok);
+    bad += check("1.5 (#173): SAVE cycles FILE > PATTERN > USER > PRESETS > PHRASES > TOOLS > FILE", ok);
     ok = 1;
     for (i = 0; i < NPAGES; i++) {                       /* every page in a family its button reaches, and its LED */
         uint32_t f = PAGES[i].fam;
@@ -2742,7 +2748,8 @@ static int test_page_cycles(void)
                                     f == FAM_SAVE ? B_SAVE : FAM_BTN[f]);
     }
     for (i = 0; i < NPAGES; i++)
-        ok &= !str_eq(PAGES[i].title, "PATTERN") && !str_eq(PAGES[i].title, "CHANCE") && !str_eq(PAGES[i].title, "AUTO LIST");
+        ok &= (!str_eq(PAGES[i].title, "PATTERN") || PAGES[i].fam == FAM_SAVE) && !str_eq(PAGES[i].title, "CHANCE") &&
+              !str_eq(PAGES[i].title, "AUTO LIST");   /* (HA HA HE HU: PATTERN is SAVE's, the slots A..D) */
     bad += check("1.2: SEQ has STEP and AUTOMATION only; SONG is GLO's only page, PHRASES SAVE's, MIXER and CLOCK HOME's "
                  "(their LED HOME)", ok);
     {   /* 1.2: GLOBAL and SYSTEM are gone; their knobs: BPM SWG CLK on HOME > CLOCK, TUNE and ROUT on no page (the MENU's),
@@ -2773,7 +2780,7 @@ static int test_page_cycles(void)
     open_family(FAM_GLO); ok = str_eq(cur_page()->title, "SONG");
     open_family(FAM_SEQ); ok &= cur_page()->graph == GR_ROLL;
     open_family(FAM_ENV); ok &= str_eq(cur_page()->title, "ENV");
-    open_family(FAM_SAVE); ok &= str_eq(cur_page()->title, "USER");
+    open_family(FAM_SAVE); ok &= str_eq(cur_page()->title, "FILE");
     open_family(FAM_GLO); open_family(FAM_GLO);          /* SONG again (its only page) */
     ok &= str_eq(cur_page()->title, "SONG");
     go_home(); open_family(FAM_GLO); ok &= str_eq(cur_page()->title, "SONG");
@@ -9485,8 +9492,8 @@ static int test_help(void)
     ok = ui.help_t > 0u && str_eq(help_page(), "[K1-4]A D S R[ENV]ENV DEST");
     frames(2200);
     ok &= ui.help_t == 0u;
-    press(B_SAVE);
-    ok &= ui.help_t > 0u && cur_page()->graph == GR_USER && str_eq(help_page(), "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS");
+    press(B_SAVE);                                       /* (HA HA HE HU: FILE first) */
+    ok &= ui.help_t > 0u && cur_page()->graph == GR_FILE && str_eq(help_page(), "[K2]NEW[K3]OPEN[K4]SAVE");
     press(B_HOME);
     ok &= ui.home && ui.help_t > 0u && str_eq(help_page(), H_HOME);
     menu_put(MI_HOME, HV_LEVELS);
