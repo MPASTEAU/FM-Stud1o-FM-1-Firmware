@@ -1038,8 +1038,10 @@ static __attribute__((noinline)) void seq_ratchet(track_t *t, uint32_t period)
  * a NOTE step that plays something, x1 (a ratcheted step's parts divide the step: on its start); else 0 */
 static int32_t seq_nudge(const track_t *t, const step_t *s)
 {
-    if (t->p[P_SQNT] || s->time != ST_NOTE || (!s->n && !s->hit) || step_ratchet(s) != 1u)
+    if (t->p[P_SQNT] == 1 || s->time != ST_NOTE || (!s->n && !s->hit) || step_ratchet(s) != 1u)
         return 0;
+    if (t->p[P_SQNT] >= 2)                              /* (HA HA HE HU) 25 / 50 / 75 %: that much nearer the grid */
+        return step_nudge(s) * (5 - t->p[P_SQNT]) / 4;
     return step_nudge(s);
 }
 
@@ -1179,7 +1181,7 @@ static void seq_tick(track_t *t, uint32_t n)
         t->seq_pos = top ? (chain.running ? chain.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
         seq_enter(t, top, len);
-        if (t->p[P_SQNT] && !t->nd_fired)
+        if (t->p[P_SQNT] == 1 && !t->nd_fired)
             seq_play_on(t, period);                 /* QUANTIZE ON: every step on its start, as before 1.2 */
         else
             seq_nd_start(t, period, len);

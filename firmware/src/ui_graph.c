@@ -1272,7 +1272,7 @@ static const char *eng_abbr(const char *name)
                                        {"PHASE", "PHAS"}, {"LOFI", "LOFI"},
                                        {"SAMPLE", "SMPL"}, {"VOICE", "VOCL"}, {"TRIO", "TRIO"}, {"WHEEL", "WHEL"},
                                        {"GRAIN", "GRAN"}, {"PHYS", "PHYS"}, {"DRUM", "DRUM"},
-                                       {"NOISE", "NOIS"}, {"FM6", "FM6"}, {"SLICE", "SLCE"}};
+                                       {"NOISE", "NOIS"}, {"FM6", "FM6"}, {"SLICE", "SLCE"}, {"GROWL", "GRWL"}};
     uint32_t i;
     for (i = 0; i < sizeof A / sizeof A[0]; i++)
         if (str_eq(name, A[i][0]))
@@ -2136,7 +2136,7 @@ static void graph_song(void)
     song_lay_t L;
     const aafont_t *fl = &AF_M;                       /* the line: the selected cell's detail and the length, M */
     int32_t off, px, sp, hi = SG_X0 + SG_W, bx, x0, ly = SG_IY - (AF_M_CAP_Y + AF_M_CAP_H);
-    uint32_t i, j, k, c = song_cur(), lane = ui.song_trk % NTRK, total, bars;
+    uint32_t i, j, k, c = song_cur(), lane = ui.song_trk, total, bars;   /* (lane NTRK: SEC, no lane picked) */
     char b[24], a[12];
     song_layout(&L);
     off = song_follow(&L);
@@ -2151,20 +2151,25 @@ static void graph_song(void)
         if (x >= SG_X0 && x < hi)
             cv_rect(x, SG_Y, 1, SG_H, T_LINE);
     }
+    for (i = 0; i < L.n; i++) {                       /* (HA HA HE HU) a CUT section: an ACCENT bar at its start */
+        int32_t x = SG_X0 + L.x[i] - off - (i ? 2 : 0);
+        if ((chain_config.row[i].repeat & CHAIN_CUT) && x >= SG_X0 && x + 2 <= hi)
+            cv_rect(x, SG_Y, 2, SG_H, T_ACCENT);
+    }
     for (k = 0; k < NTRK; k++)                        /* the lanes: a block per run of one slot, "-" a faint line */
         for (i = 0; i < L.n; i = j) {
             uint32_t s = chain_config.row[i].slot[k];
             for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
                 ;
             if (s < 4u) {
-                sg_block(&L, off, k, i, j, s, k == lane ? c : CHAIN_ROWS, sp);
+                sg_block(&L, off, k, i, j, s, k == lane || lane >= NTRK ? c : CHAIN_ROWS, sp);
             } else {
                 int32_t sx = SG_X0 + L.x[i] - off, ex = SG_X0 + L.x[j] - off - SG_GAP;
                 sx = sx > SG_X0 ? sx : SG_X0;
                 ex = ex < hi ? ex : hi;
                 if (ex > sx)
                     cv_rect(sx, SG_LY(k) + SG_LH / 2, ex - sx, 1, T_LINE);
-                if (k == lane && c >= i && c < j)      /* the cursor on a silent cell: its outline */
+                if ((k == lane || lane >= NTRK) && c >= i && c < j)   /* the cursor on a silent cell: its outline */
                     sg_frame(SG_X0 + L.x[c] - off, L.x[c + 1u] - L.x[c] - SG_GAP, SG_LY(k), SG_LH, 1, SG_X0, hi, T_THEME);
             }
         }
@@ -2238,7 +2243,7 @@ static void graph_song(void)
         cv_text_on(x0, ly, fl, b, T_MID, T_SURF);
     }
     if (c < L.n) {
-        uint32_t s = chain_config.row[c].slot[lane];
+        uint32_t s = chain_config.row[c].slot[lane < NTRK ? lane : 0u];   /* (SEC: the first track's) */
         if (s >= 4u)
             cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
         else if (!graph_project_used(s))

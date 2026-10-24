@@ -625,6 +625,9 @@ static void mono_check(void)
     for (i = 0; i < 240u * 240u; i++) {
         uint16_t c = swap16(host_screen[i]);
         int32_t d = (int32_t)((c >> 5) & 63u) - (int32_t)(c >> 11) * 2;
+        if (strstr(cur_name, "splash") && i % 240u - (240u - SPLASH_W) / 2u < SPLASH_W &&
+            i / 240u - (uint32_t)SPL_PY < SPLASH_H)
+            continue;                                   /* (HA HA HE HU: the splash's picture keeps its colours) */
         if ((c >> 11) != (c & 31u) || (bw ? d < -2 || d > 2 : d != 0)) {
             if (!mono_bad) fprintf(rep, "%s %s: pixel %u,%u = %04x off %s\n", bw ? "MONO" : "GREY", cur_name, i % 240u, i / 240u, c,
                                    bw ? "neutral" : "gray");

@@ -40,7 +40,8 @@
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
 #ifndef FELUCCA_GROWL
-#define FELUCCA_GROWL FELUCCA_SLICE   /* HA HA HE HU's GROWL (14, eng_growl.c): after SLICE, so with it */
+#define FELUCCA_GROWL (FELUCCA_SLICE && !FELUCCA_FM4)   /* HA HA HE HU's GROWL (14, eng_growl.c): after SLICE, so with
+                                                          * it; not with DIGITAL (its favourites take that row) */
 #endif
 #if FELUCCA_GROWL && !FELUCCA_SLICE
 #error "FELUCCA_GROWL (engine 14) needs FELUCCA_SLICE (engine 13)"

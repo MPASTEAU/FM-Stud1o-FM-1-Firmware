@@ -982,17 +982,24 @@ static void draw_columns(void)
     }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
-        int used = row < chain_config.count;
+        int used = row < chain_config.count, sec = ui.song_trk >= NTRK;
         fmt_int(val, (int32_t)row + 1);
         draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_X_SONG);
-        val[0] = 'T';
-        val[1] = (char)('1' + k);
-        val[2] = 0;
-        draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
-        sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
-        if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
-        else str_cpy(val, "--", sizeof val);
-        draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
+        if (sec) {                                     /* (HA HA HE HU) SEC: the whole section, KNOB 3 its CUT */
+            draw_column(1, "TRACK", "ALL", "", VAL(1u), -1, ICON_X_SONG);
+            str_cpy(val, used ? (chain_config.row[row].repeat & CHAIN_CUT ? "ON" : "OFF") : "--", sizeof val);
+            draw_column(2, "CUT", val, "", used && (chain_config.row[row].repeat & CHAIN_CUT) ? VAL(2u) : T_DIM, -1,
+                        ICON_AUTO);
+        } else {
+            val[0] = 'T';
+            val[1] = (char)('1' + k);
+            val[2] = 0;
+            draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
+            sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
+            if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
+            else str_cpy(val, "--", sizeof val);
+            draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
+        }
         if (used) fmt_int(val, (int32_t)CHAIN_REP(chain_config.row[row]));
         else str_cpy(val, "--", sizeof val);
         draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
@@ -1016,10 +1023,10 @@ static void draw_columns(void)
         }
         if (k == EVK_QNT) {                            /* QUANTIZE (1.2): the steps with a NUDGE, QNTZ ON / OFF */
             draw_column(0, "ROW", "ALL", "", VAL(0u), -1, ICON_AUTO);
-            fmt_int(val, (int32_t)ev_nudged(t));
-            draw_column(1, "NUDGED", val, "", T_MID, -1, ICON_NONE);
-            draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
-            draw_column(3, "QNTZ", t->p[P_SQNT] ? "ON" : "OFF", "", VAL(3u), -1, ICON_QUANTIZE);
+            (void)ev_nudged;
+            draw_column(1, "GRID", ui.ev_grid ? "1/8" : "STEP", "", VAL(1u), -1, ICON_NONE);   /* (HA HA HE HU) */
+            draw_column(2, "APPLY", "GO", "", VAL(2u), -1, ICON_NONE);   /* (KNOB 3 right) */
+            draw_column(3, "QNTZ", N_QNT[clamp(t->p[P_SQNT], 0, 4)], "", VAL(3u), -1, ICON_QUANTIZE);
             return;
         }
         if (k == EVK_ADD) {

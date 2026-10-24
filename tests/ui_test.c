@@ -2450,7 +2450,14 @@ static int test_chain(void)
     turn(EN_K2, 2); turn(EN_K3, 9);
     bad += check("SONG K2 picks the lane (T3), K3 runs A..D then - (silent)", ui.song_trk == 2 &&
                  !memcmp(&chain_config.row[1], &(chain_row_t){{1, 0, CHAIN_SILENT, 0}, 3}, sizeof(chain_row_t)));
-    turn(EN_K2, 9); turn(EN_K3, -2);
+    turn(EN_K2, 9);                                  /* (HA HA HE HU) past T4: SEC, the whole section; K3 its CUT */
+    ok = ui.song_trk == NTRK;
+    turn(EN_K3, 1);
+    ok &= (chain_config.row[1].repeat & CHAIN_CUT) && CHAIN_REP(chain_config.row[1]) == 3u && chain_valid(&chain_config);
+    turn(EN_K3, -1);
+    ok &= !(chain_config.row[1].repeat & CHAIN_CUT) && chain_config.row[1].repeat == 3u;
+    bad += check("SONG K2 past T4: SEC (ALL), K3 sets and clears the section's CUT, its repeats kept", ok);
+    turn(EN_K2, -1); turn(EN_K3, -2);
     bad += check("SONG K2 stays in T1..T4, K3 back from - to C", ui.song_trk == 3 && chain_config.row[1].slot[3] == 0 &&
                  chain_config.row[1].slot[2] == CHAIN_SILENT);
     turn(EN_K3, 2);

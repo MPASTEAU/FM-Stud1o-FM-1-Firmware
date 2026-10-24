@@ -187,13 +187,14 @@ static struct {
     uint8_t uslot;               /* SAVE > USER: the selected user preset slot */
     uint8_t ppick;               /* SAVE > PHRASES: the pattern picked (pat_count list index) */
     uint8_t song_row;            /* SONG: the section selected, count selects + ADD */
-    uint8_t song_trk;            /* SONG: the lane (track) selected, 0..NTRK-1 */
+    uint8_t song_trk;            /* SONG: the lane (track) selected, 0..NTRK-1; NTRK: SEC, the whole section (its CUT) */
     uint16_t ev_row;             /* SEQ > AUTOMATION (ui_events.c ev_*): the row selected (0 PLAY / CLEAR, 1 QUANTIZE, the
                                   * last + ADD; 1.2: up to EV_ROWS, past 255) */
     uint8_t ev_step, ev_id;      /* .. + ADD: the step and the parameter (or EV_CHANCE, EV_RATCH, EV_NUDGE, EV_VEL) it
                                   * adds on */
     uint16_t ev_keep;            /* .. the CHANCE / RATCH / NUDGE row being edited (its EVC code, 0 none): listed at its default */
     uint8_t ev_vel;              /* .. 1.5: the VEL rows shown (+ ADD VEL's SHOW / HIDE; off when the page is entered) */
+    uint8_t ev_grid;             /* .. QUANTIZE's GRID for APPLY: 0 the step, 1 1/8 (HA HA HE HU) */
     uint8_t uboot;               /* main.c: seconds left before UPDATE MODE (OCT- + OCT+ held), 0 = none */
     uint32_t ly_t0;              /* the layer button's press time | 1, LY_* bits (ui_layer.c layer_gesture) */
     uint8_t ly;                  /* the layer whose button is down (LAYER_*), 0 = none */

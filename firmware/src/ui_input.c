@@ -559,7 +559,13 @@ static void song_keys(uint32_t notes)
             if (chain_config.count == 1u)
                 chain_config.row[0] = chain_row_of((uint32_t)s, 1);
         }
-        chain_config.row[ui.song_row].slot[ui.song_trk % NTRK] = (uint8_t)s;
+        if (ui.song_trk >= NTRK) {                    /* SEC: the key puts the slot on every track of the section */
+            uint32_t k;
+            for (k = 0; k < NTRK; k++)
+                chain_config.row[ui.song_row].slot[k] = (uint8_t)s;
+        } else {
+            chain_config.row[ui.song_row].slot[ui.song_trk] = (uint8_t)s;
+        }
         ui.force = 1;
     }
 }
@@ -956,7 +962,7 @@ static void edit_param(uint32_t slot, int32_t steps)
             return;
         }
         if (slot == 1u) {
-            ui.song_trk = (uint8_t)clamp((int32_t)ui.song_trk + steps, 0, NTRK - 1);
+            ui.song_trk = (uint8_t)clamp((int32_t)ui.song_trk + steps, 0, NTRK);   /* (NTRK: SEC, HA HA HE HU) */
             return;
         }
         if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
@@ -965,7 +971,9 @@ static void edit_param(uint32_t slot, int32_t steps)
             if (slot == 2u) return;
         }
         r = &chain_config.row[ui.song_row];
-        if (slot == 2u)
+        if (slot == 2u && ui.song_trk >= NTRK)            /* SEC: KNOB 3 the section's CUT (right ON, left OFF) */
+            r->repeat = (uint8_t)(steps > 0 ? r->repeat | CHAIN_CUT : r->repeat & ~CHAIN_CUT);
+        else if (slot == 2u)
             r->slot[ui.song_trk % NTRK] = (uint8_t)clamp((int32_t)r->slot[ui.song_trk % NTRK] + steps, 0, CHAIN_SILENT);
         else
             r->repeat = (uint8_t)((r->repeat & CHAIN_CUT) | (uint32_t)clamp((int32_t)CHAIN_REP(*r) + steps, 1, 16));
@@ -1684,8 +1692,8 @@ static void ui_input(void)
                 break;
             if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
-            else if (!ui.home && cur_page()->graph == GR_SONG)
-                chain_play_ui();
+            else if ((!ui.home && cur_page()->graph == GR_SONG) || (ui.home && chain_config.count))
+                chain_play_ui();                        /* (HA HA HE HU: HOME plays the SONG when there is one) */
             else
                 transport_req = 1;
             break;

@@ -132,7 +132,7 @@ static int ev_vel_plays(const step_t *s)
 /* a NUDGE that plays: the track's QUANTIZE OFF, a note step, not ratcheted (seq.c seq_tick) */
 static int ev_nudge_plays(const track_t *t, const step_t *s)
 {
-    return !t->p[P_SQNT] && s->time == ST_NOTE && (s->n || s->hit) && step_ratchet(s) == 1u;
+    return t->p[P_SQNT] != 1 && s->time == ST_NOTE && (s->n || s->hit) && step_ratchet(s) == 1u;
 }
 /* "+3" "-8" "0" (b holds 4) */
 static void ev_nudge_fmt(char *b, int32_t v)
@@ -148,6 +148,40 @@ static uint32_t ev_nudged(const track_t *t)
     for (s = 0; s < len; s++)
         n += step_nudge(&t->step[s]) != 0;
     return n;
+}
+
+/* (HA HA HE HU) QUANTIZE's APPLY: the timing as it plays written into the steps for good: each NUDGE scaled as QUANTIZE
+ * plays it (ON: all gone, 25 / 50 / 75 %: that much nearer), then QUANTIZE OFF (the steps play as written); GRID 1/8
+ * (ui.ev_grid) first moves what starts on an odd step to the step before when that one is empty (a TIE after it kept
+ * whole: the step left becomes a TIE). One undo (SAVE held). The automation stays where it was */
+static void ev_quantize(track_t *t)
+{
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), i, moved = 0, n = 0;
+    char b[24];
+    edit_undo_take(t, 0x3000u, UNDO_PAT);
+    for (i = 1; ui.ev_grid && i < len; i += 2u) {
+        step_t *s = &t->step[i], *p = &t->step[i - 1u];
+        if (s->time != ST_NOTE || (!s->n && !s->hit) || p->time == ST_TIE || (p->time == ST_NOTE && (p->n || p->hit)))
+            continue;
+        *p = *s;
+        step_clear(s);
+        if (i + 1u < len && t->step[i + 1u].time == ST_TIE)
+            s->time = ST_TIE;
+        moved++;
+    }
+    for (i = 0; i < len; i++) {
+        int32_t v = step_nudge(&t->step[i]);
+        if (!v)
+            continue;
+        step_set_nudge(&t->step[i], t->p[P_SQNT] == 1 ? 0 : t->p[P_SQNT] >= 2 ? v * (5 - t->p[P_SQNT]) / 4 : v);
+        n++;
+    }
+    t->p[P_SQNT] = 0;
+    motion_undo_done(t);
+    str_cpy(b, "QUANTIZED ", sizeof b);
+    fmt_int(b + str_len(b), (int32_t)(n + moved));
+    str_cpy(b + str_len(b), " STEPS", sizeof b - str_len(b));
+    ui_message(b);
 }
 
 /* id free on track t's step (no record of it there; CHANCE / RATCH: at the default); every one past the steps */
@@ -330,7 +364,7 @@ static void ev_step_knob(track_t *t, uint32_t slot, int32_t s, uint32_t c)
     } else if (slot == 3u) {                            /* the value: CHANCE 0..100 %, RATCH x1..x4, NUDGE -8..+7, */
         v = k == EVK_CHANCE ? ev_chance_turn(v, s, accel(EN_K1 + slot, s, 100)) : k == EVK_RATCH ? clamp(v + s, 1, 4)
             : k == EVK_VEL ? clamp(v + accel(EN_K1 + slot, s, 126), 1, 127) : clamp(v + s, -8, 7);   /* VEL 1..127 */
-        if (k == EVK_NUDGE && t->p[P_SQNT])
+        if (k == EVK_NUDGE && t->p[P_SQNT] == 1)
             ui_message("QUANTIZE IS ON");              /* (kept: it plays once QUANTIZE is OFF) */
         if (v == ev_sval(&t->step[a], k))
             return;
@@ -368,9 +402,18 @@ static void ev_knob(uint32_t slot, int32_t s)
             motion_set_enabled(t, s > 0);
         return;
     }
-    if (k == EVK_QNT) {                                 /* QUANTIZE: KNOB 4 right ON, left OFF */
-        if (slot == 3u)
-            t->p[P_SQNT] = s > 0;
+    if (k == EVK_QNT) {                                 /* QUANTIZE: KNOB 4 OFF 25 % 50 % 75 % ON; (HA HA HE HU) KNOB 2 the */
+        static const uint8_t QORD[5] = {0, 2, 3, 4, 1}; /* GRID, KNOB 3 right APPLY: the timing kept as it plays */
+        uint32_t o;
+        if (slot == 1u)
+            ui.ev_grid = s > 0;
+        if (slot == 2u && s > 0)
+            ev_quantize(t);
+        if (slot == 3u) {
+            for (o = 0; o < 5u && QORD[o] != (uint32_t)t->p[P_SQNT]; o++)
+                ;
+            t->p[P_SQNT] = (int16_t)QORD[clamp((int32_t)(o < 5u ? o : 0u) + s, 0, 4)];
+        }
         return;
     }
     if (k == EVK_ADD) {                                 /* + ADD: where it goes */
@@ -468,7 +511,7 @@ static void ev_oct(void)
             motion_undo_done(t);
             ev_follow(EVC(sk, ui.ev_step));
             ui_message(sk == EVK_CHANCE ? "CHANCE ADDED" : sk == EVK_RATCH ? "RATCH ADDED" :
-                       t->p[P_SQNT] ? "QUANTIZE IS ON" : "NUDGE ADDED");
+                       t->p[P_SQNT] == 1 ? "QUANTIZE IS ON" : "NUDGE ADDED");
             return;
         }
         if ((at = motion_find(t, ui.ev_step, ui.ev_id)) >= 0) {   /* one is there already: show it */

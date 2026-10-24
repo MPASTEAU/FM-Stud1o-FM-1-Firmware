@@ -1227,7 +1227,7 @@ static uint32_t chain_prepare(void)
             for (k = 0; k < NTRK; k++) {
                 memcpy(chain.source[i].step[k], p->t[k].step, sizeof p->t[k].step);
                 proj_steps(chain.source[i].step[k]);
-                chain.source[i].qnt[k] = p->t[k].p[P_SQNT] != 0;
+                chain.source[i].qnt[k] = (uint8_t)p->t[k].p[P_SQNT];   /* (OFF ON, a strength) */
                 for (j = 0; j < 4u; j++)
                     chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
                         TP[P_SLEN + j].min, TP[P_SLEN + j].max);

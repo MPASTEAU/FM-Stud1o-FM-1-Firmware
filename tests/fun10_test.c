@@ -385,13 +385,28 @@ static int nudge(void)
         go_auto_top(); frame();
         turn(EN_K1, 1);                                 /* PLAY -> QUANTIZE */
         ok = auto_cur() == EVC(EVK_QNT, 0) && t->p[P_SQNT] == 1;
-        turn(EN_K4, -1);
+        turn(EN_K4, -1);                                /* (HA HA HE HU) ON 75 % 50 % 25 % OFF */
+        ok &= t->p[P_SQNT] == 4;
+        turn(EN_K4, -3);
         ok &= t->p[P_SQNT] == 0;
-        turn(EN_K4, 1);
+        turn(EN_K4, 4);
         ok &= t->p[P_SQNT] == 1;
         press(B_OCTUP); press(B_EDIT);
         ok &= t->p[P_SQNT] == 1 && msg_is("NOTHING TO DELETE") && !act_ready() && str_eq(act_name(4), "--");
-        bad += check("AUTOMATION's QUANTIZE row (the second): KNOB 4 OFF / ON; OCT+ and EDIT nothing", ok);
+        bad += check("AUTOMATION's QUANTIZE row (the second): KNOB 4 OFF 25 % 50 % 75 % ON; OCT+ and EDIT nothing", ok);
+        {   /* (HA HA HE HU) the strength plays part of the NUDGE; APPLY writes it and QUANTIZE goes OFF */
+            int32_t v;
+            step_set_nudge(&t->step[3], 4);
+            t->p[P_SQNT] = 3;                           /* 50 % */
+            v = seq_nudge(t, &t->step[3]);
+            turn(EN_K3, 1);
+            ok = v == 2 && step_nudge(&t->step[3]) == 2 && t->p[P_SQNT] == 0 && msg_is("QUANTIZED 1 STEPS");
+            bad += check("QUANTIZE 50 %: half the NUDGE plays; APPLY (KNOB 3) writes it, QUANTIZE OFF", ok);
+            hold(B_SAVE);
+            bad += check("  .. SAVE held: the steps' timing back (QUANTIZE, a setting, stays)", step_nudge(&t->step[3]) == 4);
+            t->p[P_SQNT] = 1;
+            step_set_nudge(&t->step[3], 0);
+        }
         memcpy(ref, t->step, sizeof ref);
         go_auto_add(EV_NUDGE, 3); frame();
         n = ev_list(rw);

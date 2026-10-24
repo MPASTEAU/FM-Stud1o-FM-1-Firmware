@@ -18,6 +18,9 @@ static const char *const N_DTIME[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T",
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
 static const char *const N_ONOFF[] = {"OFF", "ON"};
+/* QUANTIZE (P_SQNT): OFF the steps' NUDGE as recorded, ON on the grid (as always: values 0 1); HA HA HE HU appends a
+ * strength: 25 % .. 75 % of the way to the grid (seq.c seq_nudge) */
+static const char *const N_QNT[] = {"OFF", "ON", "25%", "50%", "75%"};
 /* ANALOG's filter TYPE (1.5, #104; eng_analog.c): the SVF's low-pass (as always), band-pass, high-pass output */
 static const char *const N_FTYPE[] = {"LP", "BP", "HP"};
 /* ENV SYNC (1.5, #175; voice.c esync_coef): ATK DEC REL as note values of the tempo, shortest first. 0..127 split
@@ -157,7 +160,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LSYNC] = PE("SYNC", N_LSYNC, 0),
     [P_LTRIG] = PE("TRIG", N_LTRIG, 0),
     [P_LPOL] = PE("POL", N_LPOL, 0),
-    [P_SQNT] = PE("QNTZ", N_ONOFF, 1),            /* ON: every step on its start, as before 1.2 */
+    [P_SQNT] = PE("QNTZ", N_QNT, 1),              /* ON: every step on its start, as before 1.2; 2..4 a strength */
     [P_SPRD] = PD("SPRD", F_PCT, 0, 127, 0),      /* #148: 0 = every voice on PAN, as before (fx.c mix_spread) */
     /* the INSERT (1.5, fx.c track_insert): TYPE OFF = as before. A B C as the editor protocol names them; the device
      * shows the type's own labels (ins_desc) */
