@@ -13,7 +13,8 @@
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
-#include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2: DRUM's lanes (the list below) */
+#include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2, SYN TONE .. SYN METAL: DRUM's lanes
+                                                     * (the list below) */
 
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
@@ -2385,6 +2386,11 @@ static void draw_graph_in(void)
             break;
         case GR_DLANE:
         case GR_DLANE2:
+        case GR_DSYN:
+        case GR_DSYN2:
+        case GR_DSYN3:
+        case GR_DSYN4:
+        case GR_DSYN5:
             cv_oy = 0;
             if (dln_ok()) graph_dlanes(t);
             break;

@@ -59,7 +59,9 @@ typedef struct {
     uint8_t owner;               /* the voice playing the lane: index + 1, 0 = none */
     uint8_t role;                /* the drum struck (DVT_*) */
     int8_t st;                   /* its semitones from the designed pitch (the GM map) */
-    uint8_t pad;
+    uint8_t slot;                /* SYNTH: the layer set struck (SYN 1..5: 0..4) */
+    uint8_t syn[DS_NF];          /* .. its values the coefficients were set up with */
+    uint8_t pg;                  /* .. read at this patch generation (eng_fm6.c fm6_pgen) */
 } drum_lane_t;
 
 ENG_MEM_FITS("DRUM", sizeof(drum_lane_t) * DV_NLANE);
@@ -150,17 +152,47 @@ static const char *drum_lane_abbr(const track_t *t, uint32_t l)
  * breakpoints: bytes the FM6 formats keep whole up to 99), marked by the name DL_SIG. A patch without the mark: every
  * lane at its default (the kit as it was). Loading a factory DRUM sound clears them (eng_fm6.c drum_track_loaded).
  *   VOICE  0 KIT (the kit's own piece), 1..DVT_COUNT one of Felucca's own drums, then the model kits' pieces (kit by
- *          kit, lane by lane: "80 BD" .. "PERC CB")
+ *          kit, lane by lane: "80 BD" .. "PERC CB"), then (phase 2) SYN 1..5: the layered voice (drum_voice.c
+ *          DVT_SYNTH) playing that layer set (below; lanes may share one, each with its own TUNE DECAY TONE SNAP)
  *   TUNE   semitones, DL_DEF 24 = 0 (-24..+24, held in the drum's range)
  *   DECAY TONE SNAP  50 = as the kit and the EDIT knobs make it; each step 64 / 50 of the knob's (-64..+63)
- *   STACK  0 OFF, 1..8: a hit on this lane strikes that lane too (voice.c trk_note_on; one level, never itself) */
+ *   STACK  0 OFF, 1..8: a hit on this lane strikes that lane too (voice.c trk_note_on; one level, never itself)
+ * The layer sets (phase 2, EDIT > SYN TONE .. SYN METAL, ui_drumlane.c): DS_NSET = 5 sets of DS_NF = 17 values in the
+ * same voice, each value a whole byte inside the range the FM6 formats keep (fm6_max: what fm6_pack, fm6_unpack and
+ * fm6_sanitize leave as it is), so nothing is packed and a set needs no format either. The bytes free after the
+ * lanes' 48 (0..10 21..31 42..52 63..73 84..87) and the name (145..154, DL_SIG):
+ *   up to 99   op 4's 88..94, op 5's 105..115, every operator's OL (16 + 21 k) and FF (19 + 21 k), the pitch
+ *              envelope 126..133, the LFO's 137..140: 42 bytes
+ *   smaller    per operator FC 0..31, DET 0..14, RS KVS 0..7, LC RC AMS 0..3, MODE 0..1; ALG 0..31 (134), TRNSP 0..48
+ *              (144); FB LPMS 0..7, LFW 0..5, OKS LKS 0..1 (unused)
+ * Set k (0..4) takes operator k's ten smaller bytes and OL FF, six of the pool's 30, and one of five for SWEEP (its 15
+ * values: op 5's FC DET, ALG, TRNSP, 140): DS_AT. 8 of the 17 need more than 32 values (the levels, PITCH CUT BEND, the
+ * noise's and the metal's decays) and 40 of the 42 bytes go to them; so five sets, not eight (an open and a closed
+ * hat share one: their lanes' DECAY apart). Marked by 139 = 83 and 119 (op 5's AMS) = 2: a patch with lanes of before
+ * (its bytes there whatever the FM6 voice had) reads SYN 1..5 as DV_SYN_DEF until the first write (eng_fm6.c dl_set)
+ * puts them in. Projects, user presets, undo and the editor's backup carry the sets with the lanes, as they are. */
 enum { DL_VOICE, DL_TUNE, DL_DECAY, DL_TONE, DL_SNAP, DL_STACK, DL_NF };
-#define DL_NVOICE (1u + DVT_COUNT + DV_NKIT * DV_NLANE)
+#define DL_NVOICE (1u + DVT_COUNT + DV_NKIT * DV_NLANE)   /* (VOICE values before SYN 1..5) */
 #define DL_NAME 145u                     /* the voice's name (fm6_core.c FP_NAME) */
 static const uint8_t DL_DEF[DL_NF] = {0, 24, 50, 50, 50, 0};
-static const uint8_t DL_MAX[DL_NF] = {DL_NVOICE - 1u, 48, 99, 99, 99, DV_NLANE};
+static const uint8_t DL_MAX[DL_NF] = {DL_NVOICE + DS_NSET - 1u, 48, 99, 99, 99, DV_NLANE};
 static const char DL_SIG[10] = {'D', 'R', 'U', 'M', ' ', 'L', 'A', 'N', 'E', 'S'};
 static uint8_t fm6_patch[NTRK][155u + 1u];   /* (eng_fm6.c: the tracks' patches, FP_SIZE + 1; defined there) */
+static volatile uint8_t fm6_pgen[NTRK];      /* (eng_fm6.c: +1 after each write of fm6_patch[t]; defined there) */
+/* set k's value f: its byte in the 155-byte voice (fm6_core.c FP_*: op k at 21 k; OL 16, FF 19, FC 18, DET 20, RS 13,
+ * KVS 15, LC 11, RC 12, AMS 14, MODE 17) */
+static const uint8_t DS_AT[DS_NSET][DS_NF] = {
+    /* TLVL TPIT TBEND TSWP TDEC TDRV TWAV NLVL NFLT NCUT NRES NDEC NCLP NSPC MLVL MTON MDEC */
+    {16, 19, 88, 123, 18, 13, 17, 89, 14, 90, 11, 91, 15, 12, 92, 20, 93},
+    {37, 40, 94, 125, 39, 34, 38, 105, 35, 106, 32, 107, 36, 33, 108, 41, 109},
+    {58, 61, 110, 134, 60, 55, 59, 111, 56, 112, 53, 113, 57, 54, 114, 62, 115},
+    {79, 82, 121, 144, 81, 76, 80, 124, 77, 126, 74, 127, 78, 75, 128, 83, 129},
+    {100, 103, 130, 140, 102, 97, 101, 131, 98, 132, 95, 133, 99, 96, 137, 104, 138},
+};
+#define DS_MARK_AT 139u                  /* (FP_LPMD = 83, FP_OP x 5 + FP_AMS = 2: the sets are in) */
+#define DS_MARK2_AT 119u
+#define DS_MARK 83u
+#define DS_MARK2 2u
 
 static uint32_t dl_byte(uint32_t l, uint32_t f)
 {
@@ -176,9 +208,37 @@ static uint32_t dl_get(uint32_t tr, uint32_t l, uint32_t f)
 }
 /* DECAY TONE SNAP: the knob offset (-64..+63) of value v */
 static int32_t dl_off(uint32_t v) { return ((int32_t)v - 50) * 64 / 50; }
-/* VOICE v (1..): the drum it plays (DVT_*, or a model kit's piece: DV_KTYPE) */
+/* track tr's patch holds the layer sets (and lanes) */
+static int ds_on(uint32_t tr)
+{
+    const uint8_t *p = fm6_patch[tr % NTRK];
+    return dl_on(tr) && p[DS_MARK_AT] == DS_MARK && p[DS_MARK2_AT] == DS_MARK2;
+}
+/* set k's value f on track tr (each within DS_MAX) */
+static uint32_t ds_get(uint32_t tr, uint32_t k, uint32_t f)
+{
+    uint32_t v;
+    k %= DS_NSET;
+    f %= DS_NF;
+    v = ds_on(tr) ? fm6_patch[tr % NTRK][DS_AT[k][f]] : DV_SYN_DEF[k][f];
+    return v > DS_MAX[f] ? DS_MAX[f] : v;
+}
+/* .. all of set k into s (DS_NF) */
+static void ds_read(uint32_t tr, uint32_t k, uint8_t *s)
+{
+    uint32_t f;
+    for (f = 0; f < DS_NF; f++)
+        s[f] = (uint8_t)ds_get(tr, k, f);
+}
+/* VOICE v's layer set (SYN 1..5: 0..4), -1 for any other */
+static int32_t dl_syn(uint32_t v) { return v >= DL_NVOICE && v < DL_NVOICE + DS_NSET ? (int32_t)(v - DL_NVOICE) : -1; }
+/* lane l of track tr plays a layer set: which (0..4), else -1 */
+static int32_t dl_syn_of(uint32_t tr, uint32_t l) { return dl_syn(dl_get(tr, l, DL_VOICE)); }
+/* VOICE v (1..): the drum it plays (DVT_*, or a model kit's piece: DV_KTYPE; SYN 1..5: DVT_SYNTH) */
 static uint32_t dl_role(uint32_t v)
 {
+    if (dl_syn(v) >= 0)
+        return DVT_SYNTH;
     v -= 1u;
     if (v < DVT_COUNT)
         return v;
@@ -194,6 +254,11 @@ static void dl_voice_name(uint32_t v, char *s)
     uint32_t k;
     if (!v) {
         str_cpy(s, "KIT", 12);
+        return;
+    }
+    if (dl_syn(v) >= 0) {
+        str_cpy(s, "SYN 1", 12);
+        s[4] = (char)('1' + dl_syn(v));
         return;
     }
     if (v - 1u < DVT_COUNT) {
@@ -304,6 +369,10 @@ static void drum_note_on(track_t *t, voice_t *v)
         L->role = (uint8_t)role;
     }
     L->st = (int8_t)st;
+    if (role == DVT_SYNTH) {                             /* the layer set it strikes, read again at the next block */
+        L->slot = (uint8_t)dl_syn_of((uint32_t)(t - trk), lane);
+        L->pg = (uint8_t)(fm6_pgen[(uint32_t)(t - trk) % NTRK] + 1u);
+    }
     L->owner = (uint8_t)(i + 1u);                        /* (its last voice, if another, ends: drum_amp) */
     v->s[0] = (int32_t)lane;
     v->env_out = v->vel * 258;                           /* the hit starts at its level (no ramp from 0) */
@@ -367,14 +436,30 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         k.tune = (int16_t)(L->st * 16 + (p[P_E1] - 64) * 3 + st);   /* +-12 semitones, the lane's +-24 */
     }
     k.accent = (uint8_t)clamp(acc >> 9, 0, 127);         /* (Q16 -> 0..127) */
+    if (r == DVT_SYNTH) {                                /* SYNTH: its layer set, read when the patch was written */
+        uint32_t tr = (uint32_t)(t - trk) % NTRK;
+        if (L->pg != fm6_pgen[tr]) {
+            uint8_t sv[DS_NF];
+            L->pg = fm6_pgen[tr];
+            ds_read(tr, L->slot, sv);
+            if (memcmp(sv, L->syn, DS_NF)) {
+                memcpy(L->syn, sv, DS_NF);
+                L->key.type = 0xFF;                      /* (set up again) */
+            }
+        }
+    }
     if (((const uint32_t *)&k)[0] != ((const uint32_t *)&L->key)[0] ||
         ((const uint32_t *)&k)[1] != ((const uint32_t *)&L->key)[1]) {
-        dv_setup(&L->c, &k);                             /* (a parameter moved) */
+        if (r == DVT_SYNTH)                              /* (a parameter moved) */
+            dv_setup_synth(&L->c, &k, L->syn);
+        else
+            dv_setup(&L->c, &k);
         L->key = k;
-        if (dv_uses_metal(L->c.type))
+        if (dv_has_metal(&L->c))
             dv_metal_tune(&L->mb, &L->c);
     }
-    if (dv_uses_metal(L->c.type) && (L->v.live || L->v.trig))
+    if (dv_wants_metal(&L->c, &L->v))                    /* (the metal source only while the voice takes it: SYNTH
+                                                          * reads mb then only) */
         dv_metal_run(&L->mb, mb, n);
     dv_run(&L->c, &L->v, mb, y, n);
     if ((drum_mute[(uint32_t)(t - trk) % NPART] >> ((uint32_t)v->s[0] & (DV_NLANE - 1u))) & 1u)
@@ -405,7 +490,53 @@ static const preset_t DRUM_PRESETS[] = {
     {"DEEP KIT", {DK_DEEP, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 28), PAT(12)},
     {"TIGHT KIT", {DK_TIGHT, 64, 64, 56, 64, 100, 0, 16}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8), PAT(12)},
     {"PERC KIT", {DK_PERC, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24), PAT(12)},
+    /* HA HA HE HU (drum designer phase 2): the dubstep kits, their lanes designed (DRUM_DESIGN below), appended */
+    {"DUB KIT", {DK_STD, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 16, 30), PAT(12)},
+    {"RIDDIM KIT", {DK_STD, 64, 64, 64, 64, 110, 0, 18}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 14), PAT(12)},
 };
+
+/* A factory kit's lanes designed (HA HA HE HU): a preset of DRUM_PRESETS with one loads it into the track's patch
+ * (eng_fm6.c drum_track_loaded; any other factory kit: no lanes, as before). Per lane VOICE TUNE DECAY TONE SNAP STACK
+ * (DL_*), the five layer sets (DS_*). A user preset or a project made from it carries its own copy (the patch) */
+typedef struct {
+    uint8_t preset;                                      /* its index in DRUM_PRESETS */
+    uint8_t lane[DV_NLANE][DL_NF];
+    uint8_t set[DS_NSET][DS_NF];
+} dl_design_t;
+#define DL_S(k) (DL_NVOICE + (k))                        /* VOICE SYN k + 1 */
+static const dl_design_t DRUM_DESIGN[] = {
+    {4, /* DUB KIT: a deep swept kick with a click, a 185 Hz snare whose noise claps 3 times, a wide clap, hats of the
+         * metal over high noise (the closed one short, the open one long: one set, DECAY apart), a crash on BELL;
+         * TOM and RIM the kit's */
+     {{DL_S(0), 24, 50, 50, 50, 0}, {DL_S(1), 24, 50, 50, 50, 0}, {DL_S(2), 24, 50, 50, 50, 0},
+      {DL_S(3), 24, 18, 50, 50, 0}, {DL_S(3), 24, 90, 50, 50, 0}, {0, 24, 50, 50, 50, 0}, {0, 24, 50, 50, 50, 0},
+      {DL_S(4), 24, 50, 50, 50, 0}},
+     /* TLVL TPIT TBEND TSWP TDEC TDRV TWAV NLVL NFLT NCUT NRES NDEC NCLP NSPC MLVL MTON MDEC */
+     {{95, 17, 40, 8, 25, 2, 0, 32, 2, 75, 0, 18, 0, 0, 0, 7, 30},      /* kick 44 Hz from +40 st, a 3.5 ms click */
+      {85, 42, 10, 6, 16, 2, 0, 95, 1, 72, 0, 62, 2, 0, 0, 7, 30},      /* snare 185 Hz, band noise at 3.5 kHz x3 */
+      {0, 42, 0, 5, 10, 0, 0, 85, 1, 60, 1, 65, 3, 1, 0, 7, 30},        /* clap: 1.4 kHz, 4 strikes 8 ms apart */
+      {0, 60, 0, 0, 5, 0, 0, 55, 2, 92, 0, 45, 0, 0, 92, 11, 55},       /* hats: the metal at 9 kHz, noise above */
+      {0, 60, 0, 0, 5, 0, 0, 40, 2, 78, 0, 88, 0, 0, 62, 5, 97}}},      /* crash: 4.7 kHz, 0.8 s */
+    {5, /* RIDDIM KIT: a short hard kick (more drive, a band click), a 196 Hz snare with a metal sizzle and 4 claps, a
+         * tight resonant clap, brighter hats, a long crash */
+     {{DL_S(0), 24, 50, 50, 50, 0}, {DL_S(1), 24, 50, 50, 50, 0}, {DL_S(2), 24, 50, 50, 50, 0},
+      {DL_S(3), 24, 15, 50, 50, 0}, {DL_S(3), 24, 95, 50, 50, 0}, {0, 24, 50, 50, 50, 0}, {0, 24, 50, 50, 50, 0},
+      {DL_S(4), 24, 50, 50, 50, 0}},
+     {{99, 20, 44, 7, 21, 5, 0, 45, 1, 70, 1, 22, 0, 0, 0, 7, 30},      /* kick 52 Hz, drive x6, a 3 kHz click */
+      {62, 43, 12, 5, 15, 3, 0, 78, 2, 70, 0, 60, 3, 0, 22, 8, 40},     /* snare 196 Hz, noise above 3 kHz x4, metal */
+      {0, 42, 0, 5, 10, 0, 0, 88, 1, 64, 2, 58, 4, 0, 0, 7, 30},        /* clap: 1.8 kHz Q 2.5, 5 strikes */
+      {0, 60, 0, 0, 5, 0, 0, 62, 2, 95, 1, 40, 0, 0, 85, 12, 48},       /* hats: 9.8 kHz */
+      {0, 60, 0, 0, 5, 0, 0, 42, 2, 82, 0, 92, 0, 0, 65, 7, 99}}},      /* crash: 6 kHz, 0.95 s */
+};
+/* the lanes designed of factory preset pi, 0 = none */
+static const dl_design_t *drum_design(uint32_t pi)
+{
+    uint32_t i;
+    for (i = 0; i < NELEM(DRUM_DESIGN); i++)
+        if (DRUM_DESIGN[i].preset == pi)
+            return &DRUM_DESIGN[i];
+    return 0;
+}
 
 static const engine_t ENG_DRUM = {
     .name = "DRUM",

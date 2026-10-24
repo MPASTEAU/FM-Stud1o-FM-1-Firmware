@@ -1216,7 +1216,7 @@ static void draw_columns_in(void)
             }
             on = dln_card(c, &lb, val, &u, &r, &ic);
             if (dln_field(c) != DN_LANE)
-                card_span_by(span_dln, 0, 0, DL_MAX[dln_field(c)], (int32_t)c);
+                card_span_by(span_dln, 0, 0, (int32_t)dln_max(dln_field(c)), (int32_t)c);
             draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, ic);
         }
         return;
@@ -1659,8 +1659,13 @@ static void ui_draw_page(uint32_t counting)
         return;
     }
     if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
-                                                         * FELUCCA_FM4: any track): EDIT 1 */
-        ui.page = (uint8_t)page_first(FAM_EDIT);
+                                                         * FELUCCA_FM4: any track): EDIT 1; a SYN page of a lane that
+                                                         * plays no layer set any more (an undo, the grid's lane): DESIGN */
+        uint32_t i = 0;
+        if (dln_syn_page(PAGES[ui.page].graph) && TSEL->eng_req % NENGINES == ENGI_DRUM)
+            for (i = 0; i < NPAGES && PAGES[i].graph != GR_DLANE; i++)
+                ;
+        ui.page = (uint8_t)(i && i < NPAGES ? i : page_first(FAM_EDIT));
         page_entered();
     }
     cursor_fix();

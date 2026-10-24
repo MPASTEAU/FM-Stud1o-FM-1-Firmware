@@ -31,7 +31,12 @@
  * 10. the model kits (KIT 80 10 66 55 77): every lane of each at its design against its targets (t-30, centroid
  *    as 1., the level of its lane on STD), DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners under
  *    full scale; a retrigger the same; every GM note on its lane's piece, the lanes through the engine; the cost of
- *    a kit's 8 lanes at once. */
+ *    a kit's 8 lanes at once.
+ * 11. SYNTH (HA HA HE HU, the layered voice): SYN 1..5's sets, the dubstep kits' and the heaviest set sound (above -21
+ *    dBFS), stay under full scale with no DC, end, retrigger the same, the corners under full scale; TUNE DECAY TONE
+ *    move it; the sets' storage (bytes of their own inside fm6_max, through fm6_pack / fm6_unpack, a patch of before);
+ *    DUB KIT and RIDDIM KIT load their designs, every SYNTH lane sounds and frees its voice, the choke; the cost of
+ *    every set at most the heaviest drum's (with its metal source), nothing once rung out (NOCOST=1 skips the costs). */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -52,6 +57,7 @@ typedef struct {
     int32_t peak;
 } buf_t;
 
+static const uint8_t *SYNSET;                    /* render()'s layer set for DVT_SYNTH (0: drum_voice.c's SYN 1) */
 /* one hit of p (the voice's output, Q15 -> +-1), n samples; at: a second trigger (0: none) */
 static void render(const dv_param_t *p, uint32_t n, uint32_t at, buf_t *b)
 {
@@ -60,7 +66,10 @@ static void render(const dv_param_t *p, uint32_t n, uint32_t at, buf_t *b)
     static dv_metal_t mb;
     uint32_t i, k;
     int32_t y[CTL], m[CTL];
-    dv_setup(&c, p);
+    if (p->type == DVT_SYNTH && SYNSET)
+        dv_setup_synth(&c, p, SYNSET);
+    else
+        dv_setup(&c, p);
     dv_init(&v, c.type);
     memset(&mb, 0, sizeof mb);
     dv_metal_tune(&mb, &c);
@@ -1127,6 +1136,314 @@ static void kit_costs(void)
     printf("drum_test: cost, the 8 lanes at once per kit, host instructions per sample (device estimate):%s\n", line);
 }
 
+/* ------------------------------------------------ the layered voice (SYNTH) --- */
+/* the sets checked: SYN 1..5 as drum_voice.c starts them, the dubstep kits' (eng_drum.c DRUM_DESIGN), and the heaviest
+ * a set can be (every layer at full and long, the noise high-passed at Q 5 and struck 8 times, the drive at x8) */
+#define NSYN (DS_NSET * (1u + NELEM(DRUM_DESIGN)) + 1u)
+static const uint8_t SYN_HEAVY[DS_NF] = {99, 30, 48, 14, 31, 7, 1, 99, 2, 99, 3, 99, 7, 3, 99, 14, 99};
+static const uint8_t *syn_set(uint32_t i, char *name)
+{
+    static const char *const SN[DS_NSET] = {"KICK", "SNARE", "CLAP", "HATS", "CRASH"};
+    if (i < DS_NSET) {
+        snprintf(name, 24, "SYN %u (%s)", i + 1u, SN[i]);
+        return DV_SYN_DEF[i];
+    }
+    if (i + 1u < NSYN) {
+        i -= DS_NSET;
+        snprintf(name, 24, "%s %s", DRUM_PRESETS[DRUM_DESIGN[i / DS_NSET].preset].name, SN[i % DS_NSET]);
+        return DRUM_DESIGN[i / DS_NSET].set[i % DS_NSET];
+    }
+    snprintf(name, 24, "HEAVIEST");
+    return SYN_HEAVY;
+}
+
+/* instructions per sample of SYNTH with set s while it sounds (struck every 0.25 s), the metal source when the voice
+ * takes it (as drum_render: dv_wants_metal) */
+static double synth_cost(const uint8_t *s)
+{
+    static dv_coef_t c;
+    static dv_voice_t v;
+    static dv_metal_t mb;
+    static int32_t y[CTL], m[CTL];
+    dv_param_t p;
+    uint32_t i, live = 0, nb = FS * 4u / CTL;
+    uint64_t i0;
+    dv_default(&p, DVT_SYNTH);
+    dv_setup_synth(&c, &p, s);
+    dv_init(&v, c.type);
+    dv_metal_tune(&mb, &c);
+    i0 = instr_now();
+    for (i = 0; i < nb; i++) {
+        uint32_t w;
+        if (i % (FS / 4u / CTL) == 0)
+            dv_trigger(&v);
+        live += v.live || v.trig;
+        w = dv_wants_metal(&c, &v);
+        if (w)
+            dv_metal_run(&mb, m, CTL);
+        dv_run(&c, &v, w ? m : 0, y, CTL);
+        __asm__ volatile("" : : "r"(y) : "memory");
+    }
+    return live ? (double)(instr_now() - i0) / (live * CTL) : 0;
+}
+
+/* instructions per sample of n blocks of a voice that has rung out (dv_run on a voice not live) */
+static double rung_out_cost(dv_coef_t *c, dv_voice_t *v)
+{
+    static int32_t y[CTL], m[CTL];
+    uint32_t i, nb = 4000u;
+    uint64_t i0 = instr_now();
+    for (i = 0; i < nb; i++) {
+        dv_run(c, v, dv_wants_metal(c, v) ? m : 0, y, CTL);
+        __asm__ volatile("" : : "r"(y) : "memory");
+    }
+    return (double)(instr_now() - i0) / (nb * CTL);
+}
+
+/* the storage (eng_drum.c DS_AT): every set's byte its own, none of the lanes', the name's or the marks', each range
+ * inside what the FM6 formats keep; a patch of every set at random (and at the maxima) through fm6_pack / fm6_unpack
+ * (a project's, a user preset's way) reads back the same, and the lanes too */
+static int synth_storage(void)
+{
+    uint8_t used[FP_SIZE] = {0}, pk[FM6_PACKED], v[FP_SIZE + 1u];
+    uint32_t k, f, l, r, bad = 0, tr = 0;
+    for (l = 0; l < DV_NLANE; l++)
+        for (f = 0; f < DL_NF; f++)
+            used[dl_byte(l, f)]++;
+    for (k = DL_NAME; k < FP_SIZE; k++)
+        used[k]++;
+    used[DS_MARK_AT]++, used[DS_MARK2_AT]++;
+    bad += DS_MARK > fm6_max(DS_MARK_AT) || DS_MARK2 > fm6_max(DS_MARK2_AT);
+    for (k = 0; k < DS_NSET; k++)
+        for (f = 0; f < DS_NF; f++) {
+            uint32_t b = DS_AT[k][f];
+            if (b >= FP_SIZE || used[b]++ || DS_MAX[f] > fm6_max(b)) {
+                printf("drum_test: SYNTH storage FAIL: set %u value %u at byte %u (max %u, the byte's %u)\n", k + 1u, f, b,
+                       DS_MAX[f], b < FP_SIZE ? fm6_max(b) : 0u);
+                bad++;
+            }
+        }
+    host_tracks_init();
+    host_preset(&trk[0], ENGI_DRUM, 0);
+    bad += dl_on(tr) || ds_on(tr) || ds_get(tr, 2, DS_NCLP) != DV_SYN_DEF[2][DS_NCLP];   /* (none yet: the defaults) */
+    for (r = 0; r < 41u; r++) {
+        uint32_t seed = 0x1234567u + r * 2654435761u;
+        for (k = 0; k < DS_NSET; k++)
+            for (f = 0; f < DS_NF; f++) {
+                seed = seed * 1103515245u + 12345u;
+                ds_set(tr, k, f, r == 40u ? DS_MAX[f] : (seed >> 16) % (DS_MAX[f] + 1u));
+            }
+        for (l = 0; l < DV_NLANE; l++)
+            dl_set(tr, l, DL_TUNE, (l * 7u + r) % 49u);
+        fm6_pack(fm6_patch[tr], pk);
+        fm6_unpack(pk, v);
+        if (memcmp(v, fm6_patch[tr], FP_SIZE)) {
+            bad++;
+            printf("drum_test: SYNTH storage FAIL: a patch with the sets changes through fm6_pack / fm6_unpack\n");
+        }
+        seed = 0x1234567u + r * 2654435761u;
+        fm6_set_patch(tr, v);
+        for (k = 0; k < DS_NSET; k++)
+            for (f = 0; f < DS_NF; f++) {
+                seed = seed * 1103515245u + 12345u;
+                bad += ds_get(tr, k, f) != (r == 40u ? DS_MAX[f] : (seed >> 16) % (DS_MAX[f] + 1u));
+            }
+        for (l = 0; l < DV_NLANE; l++)
+            bad += dl_get(tr, l, DL_TUNE) != (l * 7u + r) % 49u;
+        bad += !ds_on(tr);
+    }
+    {   /* a patch with lanes of before (the mark, not the sets'): SYN 1..5 at their defaults until the first write */
+        memcpy(v, fm6_patch[tr], FP_SIZE + 1u);
+        v[DS_MARK_AT] = 0;
+        fm6_set_patch(tr, v);
+        bad += !dl_on(tr) || ds_on(tr) || ds_get(tr, 0, DS_TPIT) != DV_SYN_DEF[0][DS_TPIT];
+        dl_set(tr, DV_KICK, DL_DECAY, 60);
+        bad += !ds_on(tr) || ds_get(tr, 4, DS_MDEC) != DV_SYN_DEF[4][DS_MDEC] || dl_get(tr, DV_KICK, DL_DECAY) != 60u;
+    }
+    printf("drum_test: SYNTH storage: %u sets x %u values in bytes of their own (none of the lanes', inside fm6_max), 41 "
+           "patches through fm6_pack / fm6_unpack the same, a patch of before reads the defaults: %s\n", (uint32_t)DS_NSET,
+           (uint32_t)DS_NF, bad ? "FAIL" : "ok");
+    return bad != 0;
+}
+
+/* the dubstep kits: their lanes designed in the patch at the preset load, every designed lane sounds through the engine
+ * (and its voice frees itself when rung out), the closed hat chokes the open one, a plain kit's load clears them */
+static int synth_kits(void)
+{
+    uint32_t i, bad = 0;
+    for (i = 0; i < NELEM(DRUM_DESIGN); i++) {
+        const dl_design_t *D = &DRUM_DESIGN[i];
+        uint32_t l, k, f, tr = 0, nb, quiet = 0;
+        int32_t pk[DV_NLANE];
+        kit_fresh();
+        host_preset(&trk[0], ENGI_DRUM, D->preset);
+        bad += !dl_on(tr) || !ds_on(tr);
+        for (l = 0; l < DV_NLANE; l++)
+            for (f = 0; f < DL_NF; f++)
+                bad += dl_get(tr, l, f) != D->lane[l][f];
+        for (k = 0; k < DS_NSET; k++)
+            for (f = 0; f < DS_NF; f++)
+                bad += ds_get(tr, k, f) != D->set[k][f];
+        for (l = 0; l < DV_NLANE; l++) {
+            kit_fresh();
+            host_preset(&trk[0], ENGI_DRUM, D->preset);
+            trk_note_on(&trk[0], DRUM_LANE_NOTE[l], 110);
+            pk[l] = blocks_peak(20);
+            if (dl_syn_of(tr, l) >= 0) {
+                bad += drum_kit_of(&trk[0])[l].role != DVT_SYNTH || drum_kit_of(&trk[0])[l].c.type != DVT_SYNTH;
+                quiet += pk[l] < 1000;
+                for (nb = 0; nb < FS * 12u / CTL && voices_on(&trk[0]); nb++)
+                    blocks_peak(1);
+                bad += voices_on(&trk[0]) != 0u;     /* (rung out: the voice ends, the lane costs nothing) */
+            }
+        }
+        bad += quiet;
+        kit_fresh();
+        host_preset(&trk[0], ENGI_DRUM, D->preset);
+        trk_note_on(&trk[0], 46, 100);
+        blocks_peak(60);
+        trk_note_on(&trk[0], 42, 100);
+        blocks_peak(20);
+        bad += !drum_kit_of(&trk[0])[DV_HATO].v.choke || drum_kit_of(&trk[0])[DV_HATO].v.live;
+        printf("drum_test: %s: lanes designed at the load; peaks (first 20 blocks):", DRUM_PRESETS[D->preset].name);
+        for (l = 0; l < DV_NLANE; l++)
+            printf(" %s %d", LANEN[l], pk[l]);
+        printf("\n");
+        host_preset(&trk[0], ENGI_DRUM, 0);
+        bad += dl_on(tr);
+    }
+    printf("drum_test: the dubstep kits (DUB KIT, RIDDIM KIT): their designs loaded with the preset, each SYNTH lane sounds "
+           "and frees its voice, the choke, DRUM KIT clears them: %s\n", bad ? "FAIL" : "ok");
+    return bad != 0;
+}
+
+static void synth(void)
+{
+    static const uint8_t C[2] = {0, 127};
+    static const int16_t TU[2] = {-400, 400};
+    uint32_t i, bad = 0, cases = 0, knee = 0;
+    int32_t worst = 0;
+    double worst_dc = 0;
+    char name[24];
+    printf("drum_test: SYNTH         peak   t-30 s centr Hz level dB   DC %%  stop s\n");
+    for (i = 0; i < NSYN; i++) {
+        const uint8_t *s = syn_set(i, name);
+        dv_param_t p;
+        uint32_t a, b, c, d, k, diff = 0, at = CTL * 689u;
+        double dc;
+        dv_default(&p, DVT_SYNTH);
+        SYNSET = s;
+        render(&p, NMAX, 0, &B);
+        dc = dc_share(&B);
+        printf("drum_test:   %-18s %6d %6.3f %8.0f %8.1f %6.2f %6.2f\n", name, B.peak, t30(&B), centroid100(&B),
+               rms_db(&B, 0, FS / 5u), dc * 100, B.stop / (double)FS);
+        if (B.peak < 3000 || B.over || dc > 0.01 || !B.stop) {     /* sounds, under full scale, no DC, ends */
+            printf("drum_test: SYNTH FAIL %s: peak %d, %u at full scale, DC %.2f %%, stop %u\n", name, B.peak, B.over,
+                   dc * 100, B.stop);
+            bad++;
+        }
+        render(&p, at * 2u, 0, &B);                     /* a retrigger renders the same */
+        render(&p, at * 2u, at, &B2);
+        for (k = 0; k < at; k++)
+            diff += B.y[k] != B2.y[at + k];
+        bad += diff != 0;
+        for (a = 0; a < 2u; a++)                         /* the corners: DECAY TONE SNAP TUNE, LEVEL 127, full accent */
+            for (b = 0; b < 2u; b++)
+                for (c = 0; c < 2u; c++)
+                    for (d = 0; d < 2u; d++) {
+                        dv_default(&p, DVT_SYNTH);
+                        p.decay = C[a], p.tone = C[b], p.extra = C[c], p.tune = TU[d], p.level = 127, p.accent = 127;
+                        render(&p, NMAX, 0, &B);
+                        dc = dc_share(&B);
+                        cases++;
+                        worst = B.peak > worst ? B.peak : worst;
+                        worst_dc = dc > worst_dc ? dc : worst_dc;
+                        knee += B.knee > 0;
+                        if (B.over || dc > 0.01) {      /* (DECAY 127 may ring past the 12 s rendered) */
+                            if (bad++ < 20u)
+                                printf("drum_test: SYNTH SAFETY FAIL %s DECAY %u TONE %u SNAP %u TUNE %d: peak %d, %u at full "
+                                       "scale, DC %.2f %%\n", name, C[a], C[b], C[c], TU[d], B.peak, B.over, dc * 100);
+                        }
+                    }
+    }
+    {   /* the controls: TUNE up -> the kick's pitch up, DECAY up -> longer, TONE up -> the hats brighter */
+        dv_param_t p;
+        double lo, hi;
+        dv_default(&p, DVT_SYNTH);
+        SYNSET = DV_SYN_DEF[0];
+        p.tune = -64;
+        render(&p, FS, 0, &B);
+        lo = pitch(&B, FS / 5u, FS / 2u, 30, 400);
+        p.tune = 64;
+        render(&p, FS, 0, &B);
+        hi = pitch(&B, FS / 5u, FS / 2u, 30, 400);
+        bad += !(hi > lo * 1.4 && hi < lo * 1.8);       /* (+8 semitones: x1.59) */
+        printf("drum_test: SYNTH controls: TUNE -4 / +4 st: %.1f / %.1f Hz;", lo, hi);
+        SYNSET = DV_SYN_DEF[3];
+        dv_default(&p, DVT_SYNTH);
+        p.decay = 20;
+        render(&p, FS * 2u, 0, &B);
+        lo = t30(&B);
+        p.decay = 110;
+        render(&p, FS * 2u, 0, &B);
+        hi = t30(&B);
+        bad += !(hi > lo * 2);
+        printf(" DECAY 20 / 110: t-30 %.3f / %.3f s;", lo, hi);
+        dv_default(&p, DVT_SYNTH);
+        p.tone = 20;
+        render(&p, FS, 0, &B);
+        lo = centroid100(&B);
+        p.tone = 110;
+        render(&p, FS, 0, &B);
+        hi = centroid100(&B);
+        bad += !(hi > lo * 1.1);
+        printf(" TONE 20 / 110: centroid %.0f / %.0f Hz\n", lo, hi);
+    }
+    SYNSET = 0;
+    printf("drum_test: SYNTH: %u sets sound (peak above -21 dBFS), under full scale, no DC, end, retrigger the same; %u "
+           "corners (DECAY TONE SNAP TUNE +-25 st, LEVEL 127, full accent): largest peak %d (%u in the knee), DC at most "
+           "%.2f %%; the controls: %s\n", (uint32_t)NSYN, cases, worst, knee, worst_dc * 100, bad ? "FAIL" : "ok");
+    fails += bad != 0;
+    fails += synth_storage();
+    fails += synth_kits();
+    if (instr_now() && !getenv("NOCOST")) {   /* the cost: at most the heaviest of the drums (with the metal source when
+                                                * it takes one) */
+        double top = 0, metal = voice_cost(DVT_COUNT, 1), c, own;
+        uint32_t t, cb = 0;
+        static dv_coef_t cc;
+        static dv_voice_t vv;
+        dv_param_t p;
+        for (t = 0; t < DVT_COUNT; t++) {
+            own = voice_cost(t, 0) + (dv_uses_metal(t) ? metal : 0);
+            top = own > top ? own : top;
+        }
+        printf("drum_test: SYNTH cost, host instructions per sample while it sounds (the heaviest drum %.0f):", top);
+        for (i = 0; i < NSYN; i++) {
+            const uint8_t *s = syn_set(i, name);
+            c = synth_cost(s);
+            printf(" %s %.0f;", name, c);
+            if (c > top * 1.02) {                       /* (2 %: the counter's spread run to run) */
+                cb++;
+                printf(" (OVER)");
+            }
+        }
+        dv_default(&p, DVT_SYNTH);
+        dv_setup_synth(&cc, &p, SYN_HEAVY);
+        dv_init(&vv, cc.type);
+        dv_trigger(&vv);
+        {
+            static int32_t y[CTL], m[CTL];
+            for (i = 0; i < FS * 30u / CTL && (vv.live || vv.trig); i++)
+                dv_run(&cc, &vv, m, y, CTL);
+        }
+        c = rung_out_cost(&cc, &vv);
+        printf(" rung out (%.1f s): %.1f\n", i * CTL / (double)FS, c);
+        cb += vv.live || c > 3.0;
+        printf("drum_test: SYNTH cost at most the heaviest drum, nothing computed once rung out: %s\n", cb ? "FAIL" : "ok");
+        fails += cb != 0;
+    }
+}
+
 /* ------------------------------------------------------------ demos --- */
 static FILE *wav_open(const char *dir, const char *name, uint32_t frames)
 {
@@ -1388,6 +1705,7 @@ int main(int argc, char **argv)
     lane_budget();
     lane_levels();
     engine();
+    synth();
     if (argc > 1)
         demos(argv[1]);
     printf("drum_test: %s\n", fails ? "FAILED" : "all checks ok");
