@@ -939,31 +939,36 @@ static void draw_lane(const track_t *t)
         cv_free_hint(8, 2, "[FX] TO RECORD AN AUTOMATION", T_DIM, T_BG, 224);   /* (Dah: where it is made) */
         return;
     }
-    d = track_desc(t, id);
-    cv_text_fit(4, 2, &AF_S, d->label, T_THEME, T_BG, 28);
-    {                                                   /* a curve: STEP held flat then up / down, RAMP straight on */
-        int32_t px = -1, py = 0, ramp = trkx[trk_index(t) % NTRK].curve != 0u;
-        for (i = 0; i < 16u && base + i < len; i++) {
-            int pt;
-            int32_t v = lane_value(t, base + i, id, &pt), x = 35 + (int32_t)i * 12 + 6;
-            int32_t y = d->max > d->min ? 14 - (v - d->min) * 12 / (d->max - d->min) : 14;
-            y = clamp(y, 2, 14);
-            if (px >= 0) {
-                if (ramp && pt)
-                    cv_line(px, py, x, y, T_THEME);
-                else {
-                    cv_line(px, py, x, py, T_THEME);
-                    if (y != py)
-                        cv_line(x, py, x, y, T_THEME);
+    cv_text_fit(4, 4, &AF_S, "FX", T_THEME, T_BG, 28);
+    {   /* (Dah) FX's four lanes, tiny: DST CHO DLY REV, 4 px each, the one SELECT edits in the colour, the others MID */
+        uint32_t r;
+        int32_t ramp = trkx[trk_index(t) % NTRK].curve != 0u;
+        for (r = 0; r < 4u; r++) {
+            uint32_t pid = P_DIST + r;
+            int32_t px = -1, py = 0, y0 = 1 + (int32_t)r * 4;
+            uint16_t col = pid == id ? T_THEME : T_MID;
+            d = track_desc(t, pid);
+            for (i = 0; i < 16u && base + i < len; i++) {
+                int pt;
+                int32_t v = lane_value(t, base + i, pid, &pt), x = 35 + (int32_t)i * 12 + 6;
+                int32_t y = d->max > d->min ? y0 + 3 - (v - d->min) * 3 / (d->max - d->min) : y0 + 3;
+                if (px >= 0) {
+                    if (ramp && pt)
+                        cv_line(px, py, x, y, col);
+                    else {
+                        cv_line(px, py, x, py, col);
+                        if (y != py)
+                            cv_line(x, py, x, y, col);
+                    }
                 }
+                if (pt)
+                    cv_rect(x - 1, y, 2, 1, T_ACCENT);  /* a point */
+                px = x;
+                py = y;
             }
-            if (pt)
-                cv_rect(x - 1, y - 1, 3, 3, T_ACCENT);   /* a point: a lock or an event */
-            if (song.seq_mode && base + i == ui.cursor)
-                cv_rect(x - 4, 16, 9, 1, T_TEXT);       /* the step SELECT edits */
-            px = x;
-            py = y;
         }
+        if (song.seq_mode && ui.cursor >= base && ui.cursor < base + 16u)
+            cv_rect(35 + (int32_t)(ui.cursor - base) * 12 + 2, 17, 9, 1, T_TEXT);   /* the step SELECT edits */
     }
 }
 static void draw_foot_in(void)
@@ -994,8 +999,9 @@ static void draw_foot_in(void)
             uint32_t i, id = lane_id(t);
             int pt;
             sig += id * 50331653u;
-            for (i = 0; id != 0xFFu && i < 16u; i++)
-                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i, id, &pt) + 128) * 2u + (uint32_t)pt;
+            for (i = 0; id != 0xFFu && i < 64u; i++)     /* (FX's four lanes) */
+                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i % 16u, P_DIST + i / 16u, &pt) + 128) * 2u +
+                      (uint32_t)pt;
         }
     }
     if (act_cols()) {                                  /* the hint, and whether OCT+ would act */

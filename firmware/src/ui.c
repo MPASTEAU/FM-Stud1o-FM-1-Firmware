@@ -640,10 +640,12 @@ static uint32_t grid_write(void) { return grid_on() && ((song.rec >> song.sel) &
 static uint32_t lane_id(const track_t *t)
 {
     uint32_t i, k = trk_index(t);
-    if (ui.auto_id && ui.auto_trk == k && motion_param(ui.auto_id - 1u))
+    if (ui.auto_id && ui.auto_trk == k && ui.auto_id - 1u >= P_DIST && ui.auto_id - 1u <= P_DIST + 3u)   /* (Dah: the
+                                                         * FX sends' only: FX's four lanes) */
         return ui.auto_id - 1u;
     for (i = 0; i < motion.count; i++)
-        if ((motion.event[i].place >> 6) == k)
+        if ((motion.event[i].place >> 6) == k && MOTION_ID(&motion.event[i]) >= P_DIST &&
+            MOTION_ID(&motion.event[i]) <= P_DIST + 3u)
             return MOTION_ID(&motion.event[i]);
     return 0xFFu;
 }
