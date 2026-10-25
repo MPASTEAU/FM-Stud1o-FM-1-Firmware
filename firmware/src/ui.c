@@ -460,6 +460,8 @@ static int page_visible(uint32_t i)
         if (id == P_ITYPE || id == P_IMIX) return fx_unit_on(TSEL, 1);
         if (id == P_SLCR) return fx_unit_on(TSEL, 2);
         if (id == P_EQLO || id == P_EQ2F) return fx_unit_on(TSEL, 3);
+        if (id == P_DKSRC) return fx_unit_on(TSEL, 4);
+        if (id == P_CHOR) return fx_unit_on(TSEL, 5) || fx_unit_on(TSEL, 6) || fx_unit_on(TSEL, 7);
     }
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
@@ -647,23 +649,28 @@ static uint32_t grid_write(void) { return grid_on() && (((song.rec >> song.sel) 
 /* (Dah) STEP's automation lane (the footer's first row on the piano roll, ui_draw.c): the parameter it shows and SELECT
  * edits at the cursor: the last one turned on the track's pages or locked from STEP, else its first automated one;
  * 0xFF none */
-static int fx_knob_of(const track_t *t, uint32_t id)    /* (Dah) one of FX's four knobs drives id */
+/* (Dah) the lanes STEP shows: the parameters the track's automation moves (any of them: ENV, ARP, the EQ, ..), the one
+ * turned last first, up to 4; their number */
+static uint32_t lane_ids(const track_t *t, uint8_t *ids)
 {
-    uint32_t c;
-    for (c = 0; c < 4u; c++)
-        if (fx_knob_id(t, c) == id)
-            return 1;
-    return 0;
+    uint32_t i, j, n = 0, k = trk_index(t);
+    if (ui.auto_id && ui.auto_trk == k && motion_param(ui.auto_id - 1u))
+        ids[n++] = (uint8_t)(ui.auto_id - 1u);
+    for (i = 0; i < motion.count && n < 4u; i++) {
+        uint32_t id = MOTION_ID(&motion.event[i]);
+        if ((motion.event[i].place >> 6) != k || (motion.event[i].param & MOTION_LOCK) || id >= P_COUNT)
+            continue;
+        for (j = 0; j < n && ids[j] != id; j++)
+            ;
+        if (j == n)
+            ids[n++] = (uint8_t)id;
+    }
+    return n;
 }
-static uint32_t lane_id(const track_t *t)
+static uint32_t lane_id(const track_t *t)               /* the one SELECT edits: the first; 0xFF none */
 {
-    uint32_t i, k = trk_index(t);
-    if (ui.auto_id && ui.auto_trk == k && fx_knob_of(t, ui.auto_id - 1u))   /* (Dah: FX's knobs' only: its lanes) */
-        return ui.auto_id - 1u;
-    for (i = 0; i < motion.count; i++)
-        if ((motion.event[i].place >> 6) == k && fx_knob_of(t, MOTION_ID(&motion.event[i])))
-            return MOTION_ID(&motion.event[i]);
-    return 0xFFu;
+    uint8_t ids[4];
+    return lane_ids(t, ids) ? ids[0] : 0xFFu;
 }
 /* the value parameter id has at step si on track t as the lane draws it: its lock there, else the automation's last
  * event at or before si (from the loop's end before the first), else the track's own value; *pt: a point there */

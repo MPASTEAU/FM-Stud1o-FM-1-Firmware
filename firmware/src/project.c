@@ -875,10 +875,11 @@ static int proj_unpack_y(project_t *q, const uint8_t *b, int n, uint32_t tag)
     memcpy(&magic, b, 4); memcpy(&size, b + 4, 4); memcpy(&tg, b + 8, 4); memcpy(&sum, b + PROJY_SIZE - 4u, 4);
     w = b[12];
     if (magic != PROJY_MAGIC || size != PROJY_SIZE || tg != tag || sum != proj_hash(b, PROJY_SIZE - 4u) ||
-        w < sizeof(trkx_t) || 16u + NTRK * w + 4u > PROJY_SIZE)
+        w < TRKX_V2 || 16u + NTRK * w + 4u > PROJY_SIZE)
         return 0;
     for (k = 0; k < NTRK; k++) {
-        memcpy(&q->x[k], b + 16u + k * w, sizeof(trkx_t));
+        memset(&q->x[k], 0, sizeof q->x[k]);            /* (Dah: an older one's: tap and home 0, as before) */
+        memcpy(&q->x[k], b + 16u + k * w, w < sizeof(trkx_t) ? w : sizeof(trkx_t));
         for (i = 0; i < LDRAW_N; i++)
             q->x[k].draw[i] = (int8_t)clamp(q->x[k].draw[i], -64, 63);
         q->x[k].smooth = q->x[k].smooth != 0;

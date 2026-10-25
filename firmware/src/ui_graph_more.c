@@ -243,26 +243,21 @@ static void graph_clock(uint16_t c)
         cv_rrect(x, bot - h, 5, h, 2, (uint32_t)i == ph ? T_TEXT : i % 4 == 0 ? c : ux_mix(c, T_SURF, 40), T_SURF);
     }
 }
-/* DUCK, live: the tracks it watches (this one, or its GROUP: the members' numbers at the top), their level over the last
+/* SIDECHAIN, live: the track it watches (its number at the top), their level over the last
  * ~3 s scrolling left: before the dip faint, after it in the colour, the dip itself a line from the top (ACCENT), each
  * kick a mark under it. Nothing sounding yet: the dip's shape over four kicks, faint (DEPTH, REL) */
 #define DV_N PANEL_W
 static struct { uint16_t pre[DV_N], post[DV_N], att[DV_N]; uint8_t hit[DV_N]; uint32_t w, live; } dv;
-static uint32_t duck_watch(const track_t *t)            /* this track, or its group's members */
+static uint32_t duck_watch(const track_t *t)            /* this track */
 {
-    uint32_t k = trk_index(t) % NTRK, m = 1u << k, i;
-    if (trkx[k].group & 1u)
-        for (i = 0; i < trk_count(); i++)
-            if (trkx[i].group & 1u)
-                m |= 1u << i;
-    return m;
+    return 1u << (trk_index(t) % NTRK);
 }
 static void graph_duck(const track_t *t, uint16_t c)
 {
     int32_t top = 18, bot = graph_ht - 8, x, i;
     uint32_t m = duck_watch(t), k;
     if (!t->p[P_DKSRC]) {
-        panel_note("DUCK OFF", "[K1] A TRACK DUCKS IT", 0);
+        panel_note("SIDECHAIN OFF", "[K1] THE TRACK THAT PUMPS IT", 0);
         dv_watch = 0;
         return;
     }
@@ -288,8 +283,6 @@ static void graph_duck(const track_t *t, uint16_t c)
             cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[k]);
             x += 15;
         }
-    if (trkx[trk_index(t) % NTRK].group & 1u)
-        cv_text_on(x + 2, 2 + CAP_IN(S, 12), &AF_S, "GROUP", T_MID, T_SURF);
     if (!dv.live) {                                     /* nothing sounding: the shape, faint */
         int32_t py = top, env = 0, hold = 0, beat = PANEL_W / 4;
         int32_t rel = 23790 / (20 + (t->p[P_DKREL] + 64) * 3), depth = t->p[P_DKAMT];

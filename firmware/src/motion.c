@@ -43,7 +43,7 @@ static int motion_param(uint32_t id)
     return id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
         (id >= P_DIST && id <= P_REV) || id == P_GLIDE || id == P_PAN ||
         id == P_DETUNE || (id >= P_FM1_ATK && id <= P_FM4_LEVEL) || (id >= P_LN0 && id <= P_LN7) ||
-        id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || (id >= P_EQLO && id <= P_EQ2G) || id == P_DKAMT || (id >= P_ARATE && id <= P_AGATE) || id >= P_E0);   /* (Dah: the
+        id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || (id >= P_EQLO && id <= P_EQ3F) || id == P_DKAMT || (id >= P_ARATE && id <= P_AGATE) || id >= P_E0);   /* (Dah: the
                                         * EQ, DUCK's depth, the ARP's RATE OCT GATE too) */   /* (not the chord keys, nor 1.2's LFO SYNC TRIG
                                         * POL and QUANTIZE, nor 1.5's filter TYPE and ENV SYNC: settings; the DRUM lane
                                         * levels, SPREAD (#148: continuous, as PAN), 1.5's INSERT (TYPE too: a lock

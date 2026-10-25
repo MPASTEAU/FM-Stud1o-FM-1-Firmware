@@ -95,7 +95,8 @@ enum {                          /* per-track parameters */
     P_DKSRC, P_DKAMT,                          /* HA HA HE HU: DUCK, the sidechain: its source track, depth (fx.c); its release
                                                 * is P_DKREL (P_ED_FX's byte) */
     P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G,   /* Dah: the EQ (fx_eq.c): LOW CUT, HIGH CUT, two bells */
-    P_FXK1, P_FXK2, P_FXK3, P_FXK4,            /* Dah: what FX's four knobs drive (params.c FXK_ID; as before DST CHO DLY REV) */
+    P_EQ3G, P_EQ3F,                            /* Dah: the EQ's third band (GAIN first: a store's 0 there, the band off) */
+    P_XRSV0, P_XRSV1,                          /* Dah: free (were FX's knobs) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
@@ -410,8 +411,11 @@ static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ?
 #define LDRAW_N 16u
 typedef struct {
     int8_t draw[LDRAW_N];
-    uint8_t smooth, curve, group, rsv;   /* (Dah: group bit 0, the DUCK group: its members share one sidechain) */
+    uint8_t smooth, curve, rsv0, rsv;   /* (Dah: rsv0 unused (was DUCK's group); rsv MATCH's COLOR and NOTES, chord.c) */
+    uint8_t tap[3], rsv1;        /* (Dah) where CHORUS DELAY REVERB take the sound: 0 after the chain, k before its k-th */
+    uint8_t home[4];             /* (Dah) HOME's knobs: a parameter id + 1 each (0: the engine's, as before; ui.c) */
 } trkx_t;
+#define TRKX_V2 20u                      /* (Dah) the extras' size before tap and home */
 static trkx_t trkx[NTRK];
 /* HA HA HE HU: the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and
  * mutes on F3..B3 and the black keys 1..4): the selected track's, 1..4 or 5..8 */

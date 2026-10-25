@@ -715,7 +715,7 @@ async function editorLibrarian() {
   ok(file.format === "felucca-library" && file.version === 1 && file.pCount === 124 && file.paramLabels.length === 124 && file.paramLabels[8] === "DKREL" && file.paramLabels[81] === "CHRD" && file.paramLabels[82] === "VOIC" &&
     file.paramLabels[83] === "KICK" && file.paramLabels[90] === "BELL" && file.paramLabels.slice(91, 96).join() === "SYNC,TRIG,POL,QNTZ,SPRD" &&
     file.paramLabels.slice(96, 103).join() === "INSRT,INS A,INS B,INS C,MIX,TYPE,ESYNC" &&
-    file.paramLabels.slice(103, 106).join() === "ORDER,DUCK,DEPTH#2" && file.paramLabels[64] === "REL#2" &&
+    file.paramLabels.slice(103, 106).join() === "ORDER,SRC,DEPTH#2" && file.paramLabels[64] === "REL#2" &&
     file.engines.length === 15,
     "library file: versioned, with P_COUNT, labels and engines");
   const back = E.readLibraryFile(file, ctx);

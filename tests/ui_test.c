@@ -3211,10 +3211,12 @@ static int test_layer(void)
     btn_down(B_FX); frame();
     ok = ui.home;
     frames(64); btn_up(B_FX); frame();
-    bad += check("FX tap: nothing on press, the FX page when let go", ok && !ui.home && cur_page()->fam == FAM_FX);
+    bad += check("FX tap: nothing on press, CHAIN when let go (Dah: FX's first page)", ok && !ui.home &&
+                 str_eq(cur_page()->title, "CHAIN"));
     frames(320);                                       /* (not a double tap: #83) */
     press(B_FX);
-    bad += check("  a second tap: the next page of the family (CHAIN)", str_eq(cur_page()->title, "CHAIN"));
+    bad += check("  a second tap: the next page of the family (an effect's in the chain, or CHAIN again)",
+                 cur_page()->fam == FAM_FX && !ui.home);
     ui_power_on();
     btn_down(B_FX);
     for (flash = 0, i = 0; i < 22u; i++) { frame(); flash |= ui.layer; }      /* 0.35 s */

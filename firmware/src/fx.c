@@ -838,13 +838,44 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * perf_mute_sd) and passes DIST by (the spread of a distorted chord is its voices' clean difference). The sends
  * take b, mono, as before. SPRD 0, MONO or LEGATO: mix_part's own loop, bit for bit as before. The cost: a block's
  * clear and sum of spread_buf, the side and a wider mix loop, per part; per voice none (it picks its buffer) */
-static const uint8_t FX_ORDER[24] = {0xE4, 0xD8, 0xE1, 0xC9, 0xD2, 0xC6, 0x93, 0x63, 0x87, 0x27, 0x4B, 0x1B, 0x9C, 0x6C,
-                                     0xB4, 0x78, 0x8D, 0x2D, 0xB1, 0x39, 0x4E, 0x1E, 0x72, 0x36};   /* (Dah: D I S E,
-                                         * params.c N_FXORD's order; fx_chain, mix_spread) */
-static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t->p[P_FXORD] < 24u ? (uint32_t)t->p[P_FXORD] : 0u]; }
+/* (Dah) ORDER: DIST (0), INSERT (1), SLICER (2), EQ (3), SIDECHAIN (4), three bits each, the first in the low bits; the
+ * 24 of D I S E (SIDECHAIN last: after the chain, as before) first, then the rest (params.c N_FXORD's order) */
+static const uint16_t FX_ORDER[120] = {
+    0x4688, 0x4650, 0x4681, 0x4611, 0x4642, 0x460A, 0x4443, 0x4283, 0x440B, 0x408B, 0x4213, 0x4053, 0x4458, 0x4298,
+    0x44C8, 0x42D0, 0x4419, 0x4099, 0x44C1, 0x40D1, 0x421A, 0x405A, 0x42C2, 0x40CA, 0x22C4, 0x14C4, 0x2644, 0x3444,
+    0x1684, 0x3284, 0x221C, 0x141C, 0x205C, 0x045C, 0x109C, 0x029C, 0x260C, 0x340C, 0x20CC, 0x04CC, 0x308C, 0x068C,
+    0x1614, 0x3214, 0x10D4, 0x02D4, 0x3054, 0x0654, 0x22E0, 0x14E0, 0x2660, 0x3460, 0x16A0, 0x32A0, 0x2318, 0x1518,
+    0x2858, 0x1898, 0x2708, 0x3508, 0x28C8, 0x3888, 0x1710, 0x3310, 0x18D0, 0x3850, 0x2223, 0x1423, 0x2063, 0x0463,
+    0x10A3, 0x02A3, 0x2303, 0x1503, 0x2843, 0x1883, 0x210B, 0x050B, 0x280B, 0x088B, 0x1113, 0x0313, 0x1813, 0x0853,
+    0x2621, 0x3421, 0x20E1, 0x04E1, 0x30A1, 0x06A1, 0x2701, 0x3501, 0x28C1, 0x3881, 0x2119, 0x0519, 0x2819, 0x0899,
+    0x3111, 0x0711, 0x3811, 0x08D1, 0x1622, 0x3222, 0x10E2, 0x02E2, 0x3062, 0x0662, 0x1702, 0x3302, 0x18C2, 0x3842,
+    0x111A, 0x031A, 0x181A, 0x085A, 0x310A, 0x070A, 0x380A, 0x08CA};
+static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t->p[P_FXORD] < 120u ? (uint32_t)t->p[P_FXORD] : 0u]; }
 #include "fx_eq.c"                                      /* (Dah) the EQ, the chain's fourth unit */
 static int32_t duck_att[NPART];
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n);
+static void duck_part(track_t *t, int32_t *b, uint32_t n);
+/* (Dah) CHORUS DELAY REVERB placed in the chain (trkx tap: k, before its k-th place in ORDER; 0 after it, as always):
+ * the send of the sound as it is there, added to its bus at once (the level and the clamp as at the end) */
+static uint32_t send_taps(const track_t *t)             /* the sends placed earlier: a bit each (CHO DLY REV) */
+{
+    const trkx_t *x = &trkx[(uint32_t)(t - trk) % NTRK];
+    return (x->tap[0] && t->p[P_CHOR]) | (x->tap[1] && t->p[P_DLY]) << 1 | (x->tap[2] && t->p[P_REV]) << 2;
+}
+static __attribute__((noinline)) void send_tap(const track_t *t, const int32_t *b, uint32_t n, uint32_t k SM_DECL)
+{
+    const trkx_t *x = &trkx[(uint32_t)(t - trk) % NTRK];
+    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], g[3] = {t->p[P_CHOR] * 258, t->p[P_DLY] * 258, t->p[P_REV] * 258};
+    uint32_t j, i;
+    for (j = 0; j < 3u; j++) {
+        int32_t *bus = j == 0u ? SM(c) : j == 1u ? SM(d) : SM(v), xm;
+        if (x->tap[j] != k || !g[j])
+            continue;
+        xm = 0x7FFFFFFF / (g[j] | 1);
+        for (i = 0; i < n; i++)
+            bus[i] += mulq15(clamp(((b[i] >> 2) * lvl) >> 10, -xm, xm), g[j]);
+    }
+}
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
     int32_t *d = SPREAD_BUF(t);
@@ -860,21 +891,28 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     for (i = 0; i < n; i++)
         d[i] = (d[i] << 1) - b[i];                      /* left - right */
     {                                                   /* (Dah: in ORDER, as fx_chain; the SLICER on both) */
-        uint32_t o = fx_order(t), k;
-        for (k = 0; k < 4u; k++, o >>= 2)
-            if ((o & 3u) == 0u)
+        uint32_t o = fx_order(t), k, tp = send_taps(t);
+        for (k = 0; k < 5u; k++, o >>= 3) {
+            if (tp)
+                send_tap(t, b, n, k + 1u SM_ARG(sm));   /* (Dah: a send placed before this one) */
+            if ((o & 7u) == 0u)
                 track_dist(t, b, n);
-            else if ((o & 3u) == 1u) {
+            else if ((o & 7u) == 1u) {
                 if (t->p[P_ITYPE] | t->ins_run)
                     track_insert(t, b, n);              /* (the mono sum, as DIST) */
-            } else if ((o & 3u) == 2u)
+            } else if ((o & 7u) == 2u)
                 slicer_track_sd(t, b, d, n);
-            else if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
-                track_eq(t, b, n);                      /* (the mono sum: the side passes it by) */
+            else if ((o & 7u) == 3u) {
+                if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
+                    track_eq(t, b, n);                  /* (the mono sum: the side passes it by) */
+            } else if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+                duck_part_sd(t, b, d, n);               /* (Dah: the SIDECHAIN, where ORDER puts it; the side too) */
+        }
+        if (tp & 1u) c = 0;                             /* (taken already) */
+        if (tp & 2u) dl = 0;
+        if (tp & 4u) r = 0;
     }
     eq_tap(t, b, n);
-    if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
-        duck_part_sd(t, b, d, n);                       /* (Dah: after the chain, as without SPREAD) */
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
     for (i = 0; i < n; i++) {
@@ -914,11 +952,13 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
 /* HA HA HE HU: ORDER (P_FXORD, params.c N_FXORD), the track's DIST (0), INSERT (1) and SLICER (2) in a row, two bits each,
  * first in the low bits. 0, D I S, is the chain as it always was */
 
-static void fx_chain(track_t *t, int32_t *b, uint32_t n)
+static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
-    uint32_t o = fx_order(t), k;
-    for (k = 0; k < 4u; k++, o >>= 2)
-        switch (o & 3u) {
+    uint32_t o = fx_order(t), k, tp = send_taps(t);
+    for (k = 0; k < 5u; k++, o >>= 3) {
+        if (tp)
+            send_tap(t, b, n, k + 1u SM_ARG(sm));       /* (Dah: a send placed before this one) */
+        switch (o & 7u) {
         case 0:
             track_dist(t, b, n);
             break;
@@ -929,11 +969,16 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n)
         case 2:
             slicer_track(t, b, n);                      /* slicer.c: before the level, pan and sends */
             break;
-        default:
+        case 3:
             if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
                 track_eq(t, b, n);                      /* (Dah) the EQ: flat, nothing */
             break;
+        default:
+            if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+                duck_part(t, b, n);                     /* (Dah) the SIDECHAIN, where ORDER puts it */
+            break;
         }
+    }
     eq_tap(t, b, n);
 }
 
@@ -1024,9 +1069,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     if (T_SPREAD(t)) {
         mix_spread(t, b, n SM_ARG(sm));                 /* (its chain in ORDER, the DUCK after it) */
     } else {
-        fx_chain(t, b, n);                              /* DIST INSERT SLICER, in ORDER (HA HA HE HU) */
-        if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
-            duck_part(t, b, n);
+        fx_chain(t, b, n SM_ARG(sm));                   /* DIST INSERT SLICER EQ SIDECHAIN, in ORDER (HA HA HE HU) */
         if ((pf.mute >> (t - trk)) & 1u)
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
     }
@@ -1035,7 +1078,14 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], pan = t->p[P_PAN];
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
-        int32_t xmax = c > d ? c : d;
+        int32_t xmax;
+        uint32_t tp = send_taps(t);
+        if (tp) {                                       /* (Dah: the sends placed in the chain: taken there) */
+            c = tp & 1u ? 0 : c;
+            d = tp & 2u ? 0 : d;
+            r = tp & 4u ? 0 : r;
+        }
+        xmax = c > d ? c : d;
         xmax = (c | d | r) ? 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1) : 0;   /* sends: loud chords at a high LEVEL */
         if (!(c | d | r))                               /* (Dah) no send: the dry sums only, no clamp, no tests */
             for (i = 0; i < n; i++) {

@@ -604,12 +604,12 @@ static void span_dln(const card_span_t *sp, int32_t v, char *val)       /* DRUM'
 static void span_fxu(const card_span_t *sp, int32_t v, char *val)       /* (Dah) CHAIN's UNIT: the units' names */
 {
     (void)sp;
-    str_cpy(val, FXU_N[v & 3], 16);
+    str_cpy(val, FXU_N[(uint32_t)v % FXU_N_ALL], 16);
 }
 static void span_fxmv(const card_span_t *sp, int32_t v, char *val)      /* (Dah) CHAIN's MOVE: the place, of 4 */
 {
     (void)sp;
-    val[0] = (char)('1' + (v & 3)); val[1] = '/'; val[2] = '4'; val[3] = 0;
+    val[0] = (char)('1' + v % 9); val[1] = '/'; val[2] = '8'; val[3] = 0;
 }
 static void span_mcol(const card_span_t *sp, int32_t v, char *val)      /* (Dah) MATCH's COLOR */
 {
@@ -621,6 +621,15 @@ static void span_mnot(const card_span_t *sp, int32_t v, char *val)      /* (Dah)
 {
     (void)sp;
     val[0] = (char)('0' + v); val[1] = 0;
+}
+static void span_fxrow(const card_span_t *sp, int32_t v, char *val)     /* (Dah) CHAIN's EFFECT: a row, or ADD */
+{
+    (void)sp;
+    if (v >= 8) {
+        str_cpy(val, "ADD", 4);
+        return;
+    }
+    val[0] = (char)('1' + v); val[1] = '/'; val[2] = '8'; val[3] = 0;
 }
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
@@ -957,22 +966,24 @@ static void draw_lane(const track_t *t)
     uint32_t i, id = lane_id(t), len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
     const param_desc_t *d;
     if (id == 0xFFu) {
-        cv_free_hint(8, 2, "[FX] TO RECORD AN AUTOMATION", T_DIM, T_BG, 224);   /* (Dah: where it is made) */
+        cv_free_hint(8, 2, "[REC] AND A KNOB: AUTOMATION", T_DIM, T_BG, 224);   /* (Dah: how it is made) */
         return;
     }
-    cv_text_fit(4, 4, &AF_S, "FX", T_THEME, T_BG, 28);
-    {   /* (Dah) FX's four lanes, tiny: DST CHO DLY REV, 4 px each, the one SELECT edits in the colour, the others MID */
-        uint32_t r;
-        int32_t ramp = trkx[trk_index(t) % NTRK].curve != 0u;
-        for (r = 0; r < 4u; r++) {
-            uint32_t pid = fx_knob_id(t, r);
-            int32_t px = -1, py = 0, y0 = 1 + (int32_t)r * 4;
+    {   /* (Dah) the track's automated parameters, a lane each (4 at most), tiny: the one SELECT edits (its name at the
+         * left) in the colour, the others MID */
+        uint8_t ids[4];
+        uint32_t r, nl = lane_ids(t, ids);
+        int32_t ramp = trkx[trk_index(t) % NTRK].curve != 0u, lh = 16 / (int32_t)nl;
+        cv_text_fit(4, 4, &AF_S, track_desc(t, id)->label, T_THEME, T_BG, 28);
+        for (r = 0; r < nl; r++) {
+            uint32_t pid = ids[r];
+            int32_t px = -1, py = 0, y0 = 1 + (int32_t)r * lh, a = lh - 1;
             uint16_t col = pid == id ? T_THEME : T_MID;
             d = track_desc(t, pid);
             for (i = 0; i < 16u && base + i < len; i++) {
                 int pt;
                 int32_t v = lane_value(t, base + i, pid, &pt), x = 35 + (int32_t)i * 12 + 6;
-                int32_t y = d->max > d->min ? y0 + 3 - (v - d->min) * 3 / (d->max - d->min) : y0 + 3;
+                int32_t y = d->max > d->min ? y0 + a - (v - d->min) * a / (d->max - d->min) : y0 + a;
                 if (px >= 0) {
                     if (ramp && pt)
                         cv_line(px, py, x, y, col);
@@ -1020,9 +1031,11 @@ static void draw_foot_in(void)
             uint32_t i, id = lane_id(t);
             int pt;
             sig += id * 50331653u;
-            for (i = 0; id != 0xFFu && i < 64u; i++)     /* (FX's four lanes) */
-                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i % 16u, fx_knob_id(t, i / 16u), &pt) + 128) * 2u +
-                      (uint32_t)pt;
+            uint8_t ids[4];
+            uint32_t nl = lane_ids(t, ids);
+            for (i = 0; i < nl * 16u; i++)              /* (the lanes shown) */
+                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i % 16u, ids[i / 16u], &pt) + 128) * 2u +
+                      (uint32_t)pt + ids[i / 16u] * 7u;
         }
     }
     if (act_cols()) {                                  /* the hint, and whether OCT+ would act */
@@ -1557,26 +1570,21 @@ static void draw_columns_in(void)
             continue;
         }
         if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, TYPE, MOVE */
-            uint8_t u[4];
+            uint8_t u[FXU_N_ALL];
             uint32_t n = fx_list(TSEL, u);
-            char pl[6] = {(char)('1' + (ch_cur & 3u)), '/', (char)('0' + n), 0};
+            char pl[6] = {(char)('1' + ch_cur % 9u), '/', (char)('0' + n), 0};
             int on = ch_cur < n;
             if (c == 0u) {
-                card_span_by(span_fxmv, 0, 0, 3, 1);
+                card_span_by(span_fxrow, 0, 0, 8, 1);
                 draw_column(0, "EFFECT", on ? pl : "ADD", "", VAL(0u), -1, ICON_AUTO);
             } else if (c == 1u && on) {
-                card_span_by(span_fxu, 0, 0, 3, 0);
-                draw_column(1, "TYPE", FXU_N[u[ch_cur & 3u]], "", VAL(1u), -1, ICON_AUTO);
+                card_span_by(span_fxu, 0, 0, FXU_N_ALL - 1, 0);
+                draw_column(1, "TYPE", FXU_N[u[ch_cur % FXU_N_ALL]], "", VAL(1u), -1, ICON_AUTO);
             } else if (c == 2u && on) {
-                card_span_by(span_fxmv, 0, 0, 3, 1);
+                card_span_by(span_fxmv, 0, 0, FXU_N_ALL - 1, 1);
                 draw_column(2, "MOVE", pl, "", VAL(2u), n > 1u ? (int32_t)ch_cur * 1000 / (int32_t)(n - 1u) : -1, ICON_AUTO);
             } else
                 draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
-            continue;
-        }
-        if (c == 3u && cur_page()->id[0] == P_DKSRC && cur_page()->scope == SC_TRACK) {   /* (Dah) DUCK's GROUP */
-            uint32_t on = trkx[song.sel % NTRK].group & 1u;
-            draw_column(3, "GROUP", on ? "ON" : "OFF", "", on ? T_ACCENT : VAL(3u), -1, ICON_AUTO);
             continue;
         }
         if (!d || !d->label || d->label[0] == '-') {
@@ -1588,6 +1596,15 @@ static void draw_columns_in(void)
             continue;
         }
         param_format(d, *vp, val, &unit);
+        if (((vp == &TSEL->p[P_EQ1F] || vp == &TSEL->p[P_EQ1G]) && !TSEL->p[P_EQ1G]) ||
+            ((vp == &TSEL->p[P_EQ2F] || vp == &TSEL->p[P_EQ2G]) && !TSEL->p[P_EQ2G]) ||
+            ((vp == &TSEL->p[P_EQ3F] || vp == &TSEL->p[P_EQ3G]) && !TSEL->p[P_EQ3G])) {
+            if (!(ui.hot_t && ui.hot_col == c)) {       /* (Dah) an EQ band at 0 dB: OFF, FREQ and GAIN; its value while
+                                                         * its knob turns, OFF again a moment after */
+                str_cpy(val, "OFF", 4);
+                unit = "";
+            }
+        }
         card_mot_of(vp);                                /* (a global: never) */
         card_span_of(d);
         if (vp == &TSEL->p[P_LRATE] && TSEL->p[P_LSYNC]) {   /* LFO 2 SYNC on: RATE does nothing, DIM (1.2) */
@@ -1920,7 +1937,8 @@ static void ui_draw_page(uint32_t counting)
         ui.force = 0;
         return;
     }
-    if (!ui.home && !page_visible(ui.page)) {          /* an OP page of a track that is not DIGITAL (without
+    if (!ui.home && !page_visible(ui.page) && PAGES[ui.page].fam != FAM_FX) {   /* (Dah: an effect's page stays while
+                                                         * shown, its effect out of the chain or not) an OP page of a track that is not DIGITAL (without
                                                          * FELUCCA_FM4: any track): EDIT 1; a SYN page of a lane that
                                                          * plays no layer set any more (an undo, the grid's lane): DESIGN */
         uint32_t i = 0;

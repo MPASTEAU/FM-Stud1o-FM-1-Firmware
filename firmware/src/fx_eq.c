@@ -20,10 +20,10 @@ static const uint16_t EQ_DB_Q12[17] = {4096, 4596, 5157, 5786, 6492, 7284, 8173,
 #define EQ_KH_BUT 46341u                                /* k / 2, Q16: Butterworth's k = 1.414 */
 #define EQ_KH_BELL 32768u                               /* .. a bell's, Q 1 */
 typedef struct {
-    int32_t s1[4], s2[4];                               /* each filter's two states */
-    uint16_t g[4], dq[4];                               /* the block's g and 1 / (1 + g (g + k)), Q16 */
-    int32_t am1[2];                                     /* the bells' A - 1, Q12 */
-    uint8_t on;                                         /* the filters running (a bit each: LOW HIGH BAND 1 BAND 2) */
+    int32_t s1[5], s2[5];                               /* each filter's two states */
+    uint16_t g[5], dq[5];                               /* the block's g and 1 / (1 + g (g + k)), Q16 */
+    int32_t am1[3];                                     /* the bells' A - 1, Q12 */
+    uint8_t on;                                         /* the filters running (a bit each: LOW HIGH BAND 1 2 3) */
 } eq_t;
 static eq_t eq[NTRK] __attribute__((section(".pool")));
 
@@ -44,7 +44,8 @@ static void eq_coef(eq_t *s, uint32_t f, int32_t idx, uint32_t kh)
 /* which units of the EQ do something (eq_t on's bits) */
 static uint32_t eq_units(const track_t *t)
 {
-    return (t->p[P_EQLO] > 0) | (t->p[P_EQHI] < EQ_TOP) << 1 | (t->p[P_EQ1G] != 0) << 2 | (t->p[P_EQ2G] != 0) << 3;
+    return (t->p[P_EQLO] > 0) | (t->p[P_EQHI] < EQ_TOP) << 1 | (t->p[P_EQ1G] != 0) << 2 | (t->p[P_EQ2G] != 0) << 3 |
+           (t->p[P_EQ3G] != 0) << 4;
 }
 /* one SVF step: x in, its high, band and low outputs */
 static inline void eq_svf(eq_t *s, uint32_t f, int32_t x, uint32_t kh, int32_t *hp, int32_t *bp, int32_t *lp)
@@ -66,7 +67,7 @@ static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t 
             memset(s, 0, sizeof *s);                    /* (flat again: from rest next time) */
         return;
     }
-    for (f = 0; f < 4u; f++)
+    for (f = 0; f < 5u; f++)
         if (((on & ~s->on) >> f) & 1u)
             s->s1[f] = s->s2[f] = 0;                    /* a unit starting: from rest */
     s->on = (uint8_t)on;
@@ -74,11 +75,12 @@ static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t 
     if (on & 2u) eq_coef(s, 1, t->p[P_EQHI], EQ_KH_BUT);
     if (on & 4u) { eq_coef(s, 2, t->p[P_EQ1F], EQ_KH_BELL); s->am1[0] = eq_gain_q12(t->p[P_EQ1G]) - 4096; }
     if (on & 8u) { eq_coef(s, 3, t->p[P_EQ2F], EQ_KH_BELL); s->am1[1] = eq_gain_q12(t->p[P_EQ2G]) - 4096; }
+    if (on & 16u) { eq_coef(s, 4, t->p[P_EQ3F], EQ_KH_BELL); s->am1[2] = eq_gain_q12(t->p[P_EQ3G]) - 4096; }
     for (i = 0; i < n; i++) {
         int32_t x = clamp(b[i], -3000000, 3000000), h, bp, l;
         if (on & 1u) { eq_svf(s, 0, x, EQ_KH_BUT, &h, &bp, &l); x = h; }
         if (on & 2u) { eq_svf(s, 1, x, EQ_KH_BUT, &h, &bp, &l); x = l; }
-        for (f = 0; f < 2u; f++)
+        for (f = 0; f < 3u; f++)
             if ((on >> (2u + f)) & 1u) {
                 int32_t a = s->am1[f], kb;
                 eq_svf(s, 2u + f, x, EQ_KH_BELL, &h, &bp, &l);

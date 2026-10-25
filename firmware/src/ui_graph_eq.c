@@ -51,6 +51,7 @@ static int32_t eq_curve_db(const track_t *t, int32_t fi)   /* the whole EQ at fr
     if (on & 2u) db += eq_unit_db(1, t->p[P_EQHI], fi, 0);
     if (on & 4u) db += eq_unit_db(2, t->p[P_EQ1F], fi, t->p[P_EQ1G]);
     if (on & 8u) db += eq_unit_db(3, t->p[P_EQ2F], fi, t->p[P_EQ2G]);
+    if (on & 16u) db += eq_unit_db(4, t->p[P_EQ3F], fi, t->p[P_EQ3G]);
     return db;
 }
 
@@ -156,11 +157,11 @@ static void graph_eq(const track_t *t, uint16_t c)
         py = y;
     }
     {                                                   /* the units' frequencies, under the curve */
-        static const uint8_t ID[4] = {P_EQLO, P_EQHI, P_EQ1F, P_EQ2F};
+        static const uint8_t ID[5] = {P_EQLO, P_EQHI, P_EQ1F, P_EQ2F, P_EQ3F};
         uint32_t on = eq_units(t), u;
-        for (u = 0; u < 4u; u++) {
+        for (u = 0; u < 5u; u++) {
             int32_t fx = PANEL_X0 + clamp(t->p[ID[u]], 0, 127) * (PANEL_W - 1) / 127;
-            int h = hot == ID[u] || (u >= 2u && hot == (uint32_t)ID[u] + 1u);
+            int h = hot == ID[u] || (u >= 2u && hot == (u == 4u ? (uint32_t)P_EQ3G : (uint32_t)ID[u] + 1u));
             cv_rect(fx - 1, bot + 3, 3, 5, h ? T_ACCENT : (on >> u) & 1u ? c : T_RAISE);
         }
     }

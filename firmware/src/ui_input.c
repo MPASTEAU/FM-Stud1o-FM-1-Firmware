@@ -616,7 +616,7 @@ static int rec_tap(void)                                /* 1: the arming changed
     }
     if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
                                                          * CHAIN: the effect picked out of the chain */
-        uint8_t u[4];
+        uint8_t u[FXU_N_ALL];
         if (ch_cur < fx_list(TSEL, u)) {
             fx_chain_remove(TSEL);
             ui_message("EFFECT REMOVED");
@@ -1160,8 +1160,8 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
     if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 its effect, 3 moves it */
-        uint8_t u[4];
-        uint32_t n = fx_list(TSEL, u), rows = n < 4u ? n + 1u : 4u;
+        uint8_t u[FXU_N_ALL];
+        uint32_t n = fx_list(TSEL, u), rows = n < FXU_N_ALL ? n + 1u : FXU_N_ALL;
         if (slot == 0u)
             ch_cur = (uint8_t)clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, (int32_t)rows - 1);
         else if (slot == 1u)
@@ -1171,33 +1171,18 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
-    if (pg->id[0] == P_DKSRC && pg->scope == SC_TRACK && slot == 3u) {   /* (Dah) DUCK's GROUP: in it, the group's settings */
-        uint32_t k = song.sel % NTRK, i;
-        if (steps > 0 && !(trkx[k].group & 1u)) {
-            for (i = 0; i < trk_count(); i++)
-                if (i != k && (trkx[i].group & 1u)) {   /* (the group's: a member's) */
-                    TSEL->p[P_DKSRC] = trk[i].p[P_DKSRC];
-                    TSEL->p[P_DKAMT] = trk[i].p[P_DKAMT];
-                    TSEL->p[P_DKREL] = trk[i].p[P_DKREL];
-                    break;
-                }
-            trkx[k].group |= 1u;
-        } else if (steps < 0)
-            trkx[k].group &= (uint8_t)~1u;
-        ui.force = 1;
-        return;
-    }
     d = page_desc(pg, slot, &vp);
     if (!d || !vp || d->max == d->min)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
-    *vp = (int16_t)v;
-    if (pg->id[0] == P_DKSRC && pg->scope == SC_TRACK && (trkx[song.sel % NTRK].group & 1u)) {   /* (Dah) the group: all */
-        uint32_t i;
-        for (i = 0; i < trk_count(); i++)
-            if (trkx[i].group & 1u)
-                trk[i].p[(uint32_t)(vp - TSEL->p)] = *vp;
+    if (pg->fam == FAM_FX && pg->scope == SC_TRACK && pg->graph != GR_FX && v <= 0 &&
+        (vp == &TSEL->p[P_SLCR] || vp == &TSEL->p[P_ITYPE] || vp == &TSEL->p[P_DIST] || vp == &TSEL->p[P_DKSRC] ||
+         vp == &TSEL->p[P_IMIX])) {                     /* (Dah) an effect's own page: it stays in the chain (CHAIN's
+                                                         * REC takes it out), its type or amount at its least */
+        v = 1;
+        ui_message("REMOVE IT IN CHAIN");
     }
+    *vp = (int16_t)v;
     if (pg->scope != SC_GLOBAL) {
         if (motion_param((uint32_t)(vp - TSEL->p))) {   /* (Dah: STEP's automation lane shows the last one turned) */
             ui.auto_id = (uint8_t)((uint32_t)(vp - TSEL->p) + 1u);
@@ -1479,27 +1464,14 @@ static void presets_turn(int32_t s)
     }
 }
 
-/* (Dah) FX: knob c drives the next (s > 0) or the one before of FXK_ID */
-static void fxk_assign(uint32_t c, int32_t s)
-{
-    int32_t n = (int32_t)(sizeof FXK_ID), v = TSEL->p[P_FXK1 + (c & 3u)];
-    char m[24] = "KNOB ";
-    v = ((v + (s > 0 ? 1 : -1)) % n + n) % n;
-    TSEL->p[P_FXK1 + (c & 3u)] = (int16_t)v;
-    m[5] = (char)('1' + (c & 3u));
-    m[6] = ':'; m[7] = ' ';
-    str_cpy(m + 8, N_FXK[v], 16);
-    ui_message(m);
-    ui.force = 1;
-}
 /* (Dah) CHAIN: OCT+ opens the page of the effect picked; on + ADD, adds one */
 static void chain_open(void)
 {
-    static const uint8_t ID[4] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO};
-    uint8_t l[4];
+    static const uint8_t ID[FXU_N_ALL] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO, P_DKSRC, P_CHOR, P_CHOR, P_CHOR};
+    uint8_t l[FXU_N_ALL];
     uint32_t n = fx_list(TSEL, l), u, i;
     if (ch_cur >= n) {
-        if (n >= 4u)
+        if (n >= FXU_N_ALL)
             return;
         fx_chain_add(TSEL);
         ui_message("EFFECT ADDED");
@@ -2037,9 +2009,6 @@ static void ui_input(void)
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
         if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
-        } else if (!glo && !ui.home && ui.hot_t && cur_page()->graph == GR_FX && sel_mode() < SEL_MODW) {
-            fxk_assign(ui.hot_col, s);                   /* (Dah) FX: a knob turned, then SELECT: what it drives */
-            ui.hot_t = 40;
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE && !ui.home && sel_is_list()) {   /* MENU > SELECT LIST (HA HA HE HU;

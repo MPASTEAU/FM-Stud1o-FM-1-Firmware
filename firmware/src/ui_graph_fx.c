@@ -7,37 +7,75 @@
  *   SENDS: CHO DLY REV, each one's share and the sound going there, a level each.
  * Included by ui_graph_more.c */
 static uint8_t ch_cur;                                  /* CHAIN: the row picked (an effect, or + ADD after them) */
-static const char *const FXU_N[4] = {"DIST", "INSERT", "SLICER", "EQ"};
-static const char *const FXU_S[4] = {"DST", "INS", "SLC", "EQ"};   /* (FX's strip, narrow: four and DUCK) */
-static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (2u * (i & 3u))) & 3u; }
-static int fx_unit_on(const track_t *t, uint32_t u)       /* in the chain: doing something */
+/* the effects: 0..4 in series in ORDER (DIST INSERT SLICER EQ SIDECHAIN), 5..7 the sends to GLO's buses (CHORUS DELAY
+ * REVERB, after them: fixed). In the chain: doing something (a send above 0); none by default */
+#define FXU_SER 5u
+#define FXU_N_ALL 8u
+static const char *const FXU_N[FXU_N_ALL] = {"DIST", "INSERT", "SLICER", "EQ", "SIDECHAIN", "CHORUS", "DELAY", "REVERB"};
+static const char *const FXU_S[FXU_N_ALL] = {"DST", "INS", "SLC", "EQ", "SC", "CHO", "DLY", "REV"};   /* (FX's strip) */
+static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (3u * (i % FXU_SER))) & 7u; }
+static int fx_unit_on(const track_t *t, uint32_t u)
 {
-    return u == 0u ? t->p[P_DIST] != 0 : u == 1u ? t->p[P_ITYPE] != 0 && t->p[P_IMIX] != 0 : u == 2u ? t->p[P_SLCR] != 0
-                                                                                                    : eq_units(t) != 0u;
+    switch (u) {
+    case 0: return t->p[P_DIST] != 0;
+    case 1: return t->p[P_ITYPE] != 0 && t->p[P_IMIX] != 0;
+    case 2: return t->p[P_SLCR] != 0;
+    case 3: return eq_units(t) != 0u;
+    case 4: return t->p[P_DKSRC] != 0;
+    case 5: return t->p[P_CHOR] != 0;
+    case 6: return t->p[P_DLY] != 0;
+    default: return t->p[P_REV] != 0;
+    }
 }
-/* the effects in the chain, in ORDER: their units (0 DIST 1 INSERT 2 SLICER 3 EQ) into u, the number */
+/* the effects in the chain as its list shows them: those in series in ORDER, each send where it takes the sound
+ * (trkx tap: before the series one at place tap - 1; 0 after them all); into u, the number */
 static uint32_t fx_list(const track_t *t, uint8_t *u)
 {
-    uint32_t i, n = 0;
-    for (i = 0; i < 4u; i++)
+    const trkx_t *x = &trkx[trk_index(t) % NTRK];
+    uint32_t i, j, n = 0, ns = 0;
+    for (i = 0; i < FXU_SER; i++) {
+        for (j = 0; j < 3u; j++)
+            if (x->tap[j] == i + 1u && fx_unit_on(t, FXU_SER + j))
+                u[n++] = (uint8_t)(FXU_SER + j);
         if (fx_unit_on(t, fx_unit_at(t, i)))
-            u[n++] = (uint8_t)fx_unit_at(t, i);
+            u[n++] = (uint8_t)fx_unit_at(t, i), ns++;
+    }
+    for (j = 0; j < 3u; j++) {                          /* the sends after them all (or placed past the last) */
+        uint32_t in = 0, k;
+        for (k = 0; k < n; k++)
+            in |= u[k] == FXU_SER + j;
+        if (!in && fx_unit_on(t, FXU_SER + j))
+            u[n++] = (uint8_t)(FXU_SER + j);
+    }
+    (void)ns;
     return n;
 }
-/* the chain made u[0..n) (the units out of it after them, as they were): ORDER */
+/* the chain made the list u[0..n): ORDER from its series ones (those out of the chain after them, as they were), each
+ * send placed before the series one after it in the list (none after it: after them all) */
 static void fx_set_list(track_t *t, const uint8_t *u, uint32_t n)
 {
+    trkx_t *x = &trkx[trk_index(t) % NTRK];
     uint32_t o = 0, m = 0, i, j, k;
     for (i = 0; i < n; i++)
-        o |= (uint32_t)u[i] << (2u * m++);
-    for (i = 0; i < 4u; i++) {
-        uint32_t x = fx_unit_at(t, i), in = 0;
+        if (u[i] < FXU_SER)
+            o |= (uint32_t)u[i] << (3u * m++);
+    for (i = 0; i < n; i++)
+        if (u[i] >= FXU_SER) {
+            uint32_t before = 0, after = 0;
+            for (j = 0; j < i; j++)
+                before += u[j] < FXU_SER;
+            for (j = i + 1u; j < n; j++)
+                after |= u[j] < FXU_SER;
+            x->tap[u[i] - FXU_SER] = (uint8_t)(after ? before + 1u : 0u);
+        }
+    for (i = 0; i < FXU_SER; i++) {
+        uint32_t y = fx_unit_at(t, i), in = 0;
         for (j = 0; j < n; j++)
-            in |= u[j] == x;
+            in |= u[j] == y;
         if (!in)
-            o |= x << (2u * m++);
+            o |= y << (3u * m++);
     }
-    for (k = 0; k < 24u; k++)
+    for (k = 0; k < 120u; k++)
         if (FX_ORDER[k] == o)
             t->p[P_FXORD] = (int16_t)k;
 }
@@ -55,32 +93,61 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
     case 2:
         t->p[P_SLCR] = (int16_t)(on ? 1 : 0);
         break;
-    default:
+    case 3:
         t->p[P_EQLO] = (int16_t)(on ? 24 : 0);          /* (on: a low cut at ~100 Hz) */
         if (!on) {
             t->p[P_EQHI] = EQ_TOP;
-            t->p[P_EQ1G] = t->p[P_EQ2G] = 0;
+            t->p[P_EQ1G] = t->p[P_EQ2G] = t->p[P_EQ3G] = 0;
         }
+        break;
+    case 4:                                             /* (on: the first other track, at full depth) */
+        t->p[P_DKSRC] = (int16_t)(on ? (trk_index(t) ? 1 : 2) : 0);
+        if (on && !t->p[P_DKAMT])
+            t->p[P_DKAMT] = 100;
+        break;
+    case 5:
+        t->p[P_CHOR] = (int16_t)(on ? 40 : 0);
+        break;
+    case 6:
+        t->p[P_DLY] = (int16_t)(on ? 40 : 0);
+        break;
+    default:
+        t->p[P_REV] = (int16_t)(on ? 50 : 0);
         break;
     }
 }
-/* CHAIN's actions on the row picked: ADD (a free effect at the end), REMOVE, TYPE (another free one in its place), MOVE */
+/* CHAIN's actions on the row picked: ADD (a free effect at the end of its kind), REMOVE, TYPE (another free one in its
+ * place), MOVE (in series only: the sends are after them) */
 static void fx_chain_add(track_t *t)
 {
-    uint8_t u[4];
-    uint32_t n = fx_list(t, u), x;
-    for (x = 0; x < 4u && fx_unit_on(t, x); x++)
+    uint8_t u[FXU_N_ALL];
+    uint32_t n = fx_list(t, u), x, i;
+    for (x = 0; x < FXU_N_ALL && fx_unit_on(t, x); x++)
         ;
-    if (n >= 4u || x >= 4u)
+    if (x >= FXU_N_ALL)
         return;
     fx_unit_set(t, x, 1);
-    u[n++] = (uint8_t)x;
+    if (x < FXU_SER) {                                  /* (in series: after the last one, the sends after it stay
+                                                         * after it) */
+        uint32_t at = 0;
+        for (i = 0; i < n; i++)
+            if (u[i] < FXU_SER)
+                at = i + 1u;
+        for (i = n; i > at; i--)
+            u[i] = u[i - 1u];
+        u[at] = (uint8_t)x;
+        n++;
+    } else
+        u[n++] = (uint8_t)x;
     fx_set_list(t, u, n);
-    ch_cur = (uint8_t)(n - 1u);
+    n = fx_list(t, u);
+    for (i = 0; i < n; i++)
+        if (u[i] == x)
+            ch_cur = (uint8_t)i;
 }
 static void fx_chain_remove(track_t *t)
 {
-    uint8_t u[4];
+    uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(t, u), i;
     if (ch_cur >= n)
         return;
@@ -93,25 +160,29 @@ static void fx_chain_remove(track_t *t)
 }
 static void fx_chain_type(track_t *t, int32_t dir)
 {
-    uint8_t u[4];
-    uint32_t n = fx_list(t, u), x, k;
+    uint8_t u[FXU_N_ALL];
+    uint32_t n = fx_list(t, u), x, k, i, old;
     if (ch_cur >= n)
         return;
-    for (x = u[ch_cur], k = 0; k < 4u; k++) {           /* the next free one that way */
-        x = (x + (dir > 0 ? 1u : 3u)) & 3u;
+    for (old = x = u[ch_cur], k = 0; k < FXU_N_ALL; k++) {   /* the next free one that way */
+        x = (x + (dir > 0 ? 1u : FXU_N_ALL - 1u)) % FXU_N_ALL;
         if (!fx_unit_on(t, x))
             break;
     }
-    if (k == 4u || x == u[ch_cur])
+    if (k == FXU_N_ALL || x == old)
         return;
-    fx_unit_set(t, u[ch_cur], 0);
+    fx_unit_set(t, old, 0);
     fx_unit_set(t, x, 1);
     u[ch_cur] = (uint8_t)x;
     fx_set_list(t, u, n);
+    n = fx_list(t, u);
+    for (i = 0; i < n; i++)
+        if (u[i] == x)
+            ch_cur = (uint8_t)i;
 }
 static void fx_chain_move(track_t *t, int32_t dir)
 {
-    uint8_t u[4], a;
+    uint8_t u[FXU_N_ALL], a;
     uint32_t n = fx_list(t, u);
     int32_t j = (int32_t)ch_cur + (dir > 0 ? 1 : -1);
     if (ch_cur >= n || j < 0 || j >= (int32_t)n)
@@ -127,10 +198,18 @@ static void fx_unit_info(const track_t *t, uint32_t u, char *b)
     case 0: fmt_int(b, t->p[P_DIST] * 100 / 127); str_cpy(b + str_len(b), " %", 3); break;
     case 1: str_cpy(b, N_ITYPE[clamp(t->p[P_ITYPE], 0, IT_N - 1)], 12); break;
     case 2: str_cpy(b, N_SLCR[clamp(t->p[P_SLCR], 0, 2)], 12); break;
-    default: {
+    case 3: {
         uint32_t m = eq_units(t), c = 0;
         for (; m; m &= m - 1u) c++;
         fmt_int(b, (int32_t)c); str_cpy(b + str_len(b), c > 1u ? " PARTS" : " PART", 7);
+        break;
+    }
+    case 4: str_cpy(b, "FROM ", 6); str_cpy(b + 5, N_DKSRC[clamp(t->p[P_DKSRC], 0, 8)], 4); break;
+    default: {
+        static const uint8_t ID[3] = {P_CHOR, P_DLY, P_REV};
+        str_cpy(b, "SEND ", 6);
+        fmt_int(b + 5, t->p[ID[u - 5u]] * 100 / 127);
+        str_cpy(b + str_len(b), " %", 3);
         break;
     }
     }
@@ -157,41 +236,38 @@ static void fx_wave(int32_t x0, int32_t w, int32_t cy, int32_t a, uint16_t col) 
         py = y;
     }
 }
-/* the chain as boxes across at y, h tall (FX's top): its effects in ORDER, then DUCK (when on) or OUT */
+/* the chain as boxes across at y, h tall (FX's top): its effects in its order (a send lighter: it taps the sound
+ * there), then -> OUT */
 static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, uint16_t c)
 {
-    uint8_t u[4];
+    uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(t, u), i;
-    int32_t bw = n ? (PANEL_W - 40 - (t->p[P_DKSRC] ? 48 : 0) - (int32_t)n * 8) / (int32_t)n : 0, x = PANEL_X0;
+    int32_t bw = n ? (PANEL_W - 36 - (int32_t)n * 6) / (int32_t)n : 0, x = PANEL_X0;
     (void)cur;
     if (bw > 52)
         bw = 52;
-    for (i = 0; i < n; i++, x += bw + 8) {
-        cv_rrect(x, y, bw, h, 3, c, T_SURF);
-        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, bw, &AF_S, bw < 44 ? FXU_S[u[i]] : FXU_N[u[i]], T_INK, c);
-        cv_rect(x + bw + 1, y + h / 2, 6, 1, T_MID);   /* the arrow on */
+    for (i = 0; i < n; i++, x += bw + 6) {
+        uint16_t f = u[i] < FXU_SER ? c : ux_mix(c, T_SURF, 55);
+        cv_rrect(x, y, bw, h, 3, f, T_SURF);
+        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, bw, &AF_S, bw < 50 ? FXU_S[u[i]] : FXU_N[u[i]], T_INK, f);
+        cv_rect(x + bw + 1, y + h / 2, 4, 1, T_MID);   /* the arrow on */
     }
-    if (!n)
-        cv_text_on(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "NO EFFECT", T_MID, T_SURF), x += 70;
-    if (t->p[P_DKSRC]) {                                /* DUCK (an effect too, after the chain), then */
-        cv_rrect(x, y, 40, h, 3, c, T_SURF);
-        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, 40, &AF_S, "DUCK", T_INK, c);
-        cv_rect(x + 41, y + h / 2, 6, 1, T_MID);
-        x += 48;
-    } else if (n)
-        x -= 8;                                         /* (the last arrow drawn: on) */
+    if (n)
+        x -= 6;
     cv_rect(x, y + h / 2, 10, 1, T_MID);                /* -> OUT: an arrow and the word, no box */
     cv_line_t(x + 7, y + h / 2 - 3, x + 10, y + h / 2, T_MID, 1);
     cv_line_t(x + 7, y + h / 2 + 3, x + 10, y + h / 2, T_MID, 1);
     cv_text_on(x + 13, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "OUT", T_MID, T_SURF);
+    if (!n)
+        cv_text_on(x + 40, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "NO EFFECT", T_DIM, T_SURF);
 }
 /* CHAIN: the list, an effect a row (its number, name, what it does), the sound flowing down a line at the left; the
  * row picked outlined; + ADD after them (four at most); the sound out at the right */
 static void graph_chain(const track_t *t, uint16_t c)
 {
-    uint8_t u[4];
-    uint32_t n = fx_list(t, u), i, rows = n < 4u ? n + 1u : 4u;
-    int32_t rh = 22, y0 = 4, x0 = PANEL_X0 + 14, bw = 150;
+    uint8_t u[FXU_N_ALL];
+    uint32_t n = fx_list(t, u), i, rows = n < FXU_N_ALL ? n + 1u : FXU_N_ALL;
+    int32_t rh = (graph_ht - 16) / (int32_t)(rows > 5u ? rows : 5u), y0 = 2, x0 = PANEL_X0 + 14, bw = 150;
     if (ch_cur >= rows)
         ch_cur = (uint8_t)(rows - 1u);
     cv_rect(PANEL_X0 + 5, y0 + 4, 2, (int32_t)rows * rh - 8, T_RAISE);   /* the sound's way down */
@@ -200,8 +276,9 @@ static void graph_chain(const track_t *t, uint16_t c)
         int sel = i == ch_cur;
         if (i < n) {
             char d[2] = {(char)('1' + i), 0}, inf[16];
-            cv_rrect(PANEL_X0, y + 5, 12, 12, 6, sel ? T_ACCENT : c, T_SURF);
-            cv_text_in(PANEL_X0, y + 5 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : c);
+            int32_t dy = y + (rh - 12) / 2 - 1;
+            cv_rrect(PANEL_X0, dy, 12, 12, 6, sel ? T_ACCENT : c, T_SURF);
+            cv_text_in(PANEL_X0, dy + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : c);
             if (sel)
                 cv_rrect(x0 - 2, y, bw + 4, rh - 2, 5, T_ACCENT, T_SURF);
             cv_rrect(x0, y + 2, bw, rh - 6, 4, sel ? c : T_RAISE, sel ? T_ACCENT : T_SURF);
@@ -221,7 +298,7 @@ static void graph_chain(const track_t *t, uint16_t c)
         cv_text_in(wx, y0 + 2, ww, &AF_S, "OUT", T_MID, T_SURF);
         fx_wave(wx, ww, y0 + 50, 30, ux_mix(c, T_SURF, 70));
     }
-    cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : n < 4u ? "[OCT+] ADD AN EFFECT" : "",
+    cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : n < FXU_N_ALL ? "[OCT+] ADD AN EFFECT" : "",
                T_MID, T_SURF);
 }
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */

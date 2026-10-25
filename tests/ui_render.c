@@ -1131,10 +1131,10 @@ static void setup(int s)
     case S_LFO: go_title("LFO"); break;
     case S_MOD: TSEL->p[P_M1SRC] = 1; TSEL->p[P_M1DST] = 2; TSEL->p[P_M1AMT] = 40; TSEL->p[P_M2SRC] = 6;
         TSEL->p[P_M2DST] = 14; TSEL->p[P_M2AMT] = -64; mod_ui_slot = 1; go_title("MOD"); break;
-    case S_FX: go_title("FX"); break;
+    case S_FX: go_title("CHAIN"); break;
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
     case S_DLY: go_title("DLY"); break;
-    case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_EQLO] = 30; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; go_title("CHAIN"); break;
+    case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_EQLO] = 30; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; TSEL->p[P_REV] = 60; TSEL->p[P_DLY] = 30; trkx[song.sel].tap[2] = 2; go_title("CHAIN"); break;
     case S_FX_DIST: TSEL->p[P_DIST] = 70; go_title("DIST"); break;
     case S_FX_EQ: {                                     /* (a saw at 110 Hz in the ring: the spectrum) */
         uint32_t i;
@@ -1143,7 +1143,7 @@ static void setup(int s)
         eq_wn++;
     }
         TSEL->p[P_EQLO] = 30; TSEL->p[P_EQHI] = 100; TSEL->p[P_EQ1G] = 40; go_title("EQ"); break;
-    case S_FX_EQ2: TSEL->p[P_EQ2F] = 70; TSEL->p[P_EQ2G] = -50; go_title("EQ 2"); ui.hot_col = 1; ui.hot_t = 30; break;
+    case S_FX_EQ2: TSEL->p[P_EQ2F] = 70; TSEL->p[P_EQ2G] = -50; TSEL->p[P_EQ3F] = 104; TSEL->p[P_EQ3G] = 30; go_title("EQ 2"); ui.hot_col = 1; ui.hot_t = 30; break;
     case S_FX_SENDS: TSEL->p[P_CHOR] = 30; TSEL->p[P_DLY] = 90; TSEL->p[P_REV] = 60; go_title("SENDS"); break;
     case S_SCL: TSEL->p[P_SCALE] = 2; go_title("SCL"); break;
     case S_CHORD:                                    /* A minor DIA7, the last chord on B: Bm7b5 */

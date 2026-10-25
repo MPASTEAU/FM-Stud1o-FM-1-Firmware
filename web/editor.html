@@ -1688,8 +1688,6 @@ function makeMockDevice(opt = {}) {
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
   const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"];   /* (append-only: S&H SLEW, #132) */
   const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"];   /* (DEPTH: #132; VEL TIME: 1.5.6, #213) */
-  const FXK_N = ["DIST", "CHO", "DLY", "REV", "INS A", "INS B", "INS C", "INS MX", "SL DPT", "SL RATE", "LO CUT", "HI CUT",
-                 "FREQ1", "GAIN1", "FREQ2", "GAIN2", "DUCK", "DK REL", "LEVEL", "PAN", "WIDTH"];   /* (Dah) params.c N_FXK */
   const TP = [
     D("LVL", F.DB, 0, 127, 104),
     D("ATK", F.TIME, 0, 127, 10), D("DEC", F.TIME, 0, 127, 70), D("SUS", F.PCT, 0, 127, 90), D("REL", F.TIME, 0, 127, 60),
@@ -1838,12 +1836,22 @@ function makeMockDevice(opt = {}) {
     E("INSRT", ["OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"], 0),   /* 1.5: the INSERT (96..100) */
     D("INS A", F.PCT, 0, 127, 64), D("INS B", F.PCT, 0, 127, 96), D("INS C", F.PCT, 0, 127, 96), D("MIX", F.PCT, 0, 127, 127),
     E("TYPE", ["LP", "BP", "HP"], 0), E("ESYNC", ["OFF", "ON"], 0),   /* 1.5: ANALOG's filter TYPE (101, #104), ENV SYNC (102, #175) */
-    E("ORDER", ["DISE", "DSIE", "IDSE", "ISDE", "SDIE", "SIDE", "EDIS", "EDSI", "EIDS", "EISD", "ESDI", "ESID", "DEIS", "DESI",
-                "DIES", "DSEI", "IEDS", "IESD", "IDES", "ISED", "SEDI", "SEID", "SDEI", "SIED"], 0),   /* HA HA HE HU: FX ORDER (103; Dah: EQ), DUCK source, */
-    E("DUCK", ["OFF", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"], 0), D("DEPTH", F.PCT, 0, 127, 100),   /* depth (104, 105) */
+    E("ORDER", ["DISEC", "DSIEC", "IDSEC", "ISDEC", "SDIEC", "SIDEC", "EDISC", "EDSIC", "EIDSC", "EISDC", "ESDIC", "ESIDC",
+                "DEISC", "DESIC", "DIESC", "DSEIC", "IEDSC", "IESDC", "IDESC", "ISEDC", "SEDIC", "SEIDC",
+                "SDEIC", "SIEDC", "CDEIS", "CDESI", "CDIES", "CDISE", "CDSEI", "CDSIE", "CEDIS", "CEDSI",
+                "CEIDS", "CEISD", "CESDI", "CESID", "CIDES", "CIDSE", "CIEDS", "CIESD", "CISDE", "CISED",
+                "CSDEI", "CSDIE", "CSEDI", "CSEID", "CSIDE", "CSIED", "DCEIS", "DCESI", "DCIES", "DCISE",
+                "DCSEI", "DCSIE", "DECIS", "DECSI", "DEICS", "DESCI", "DICES", "DICSE", "DIECS", "DISCE",
+                "DSCEI", "DSCIE", "DSECI", "DSICE", "ECDIS", "ECDSI", "ECIDS", "ECISD", "ECSDI", "ECSID",
+                "EDCIS", "EDCSI", "EDICS", "EDSCI", "EICDS", "EICSD", "EIDCS", "EISCD", "ESCDI", "ESCID",
+                "ESDCI", "ESICD", "ICDES", "ICDSE", "ICEDS", "ICESD", "ICSDE", "ICSED", "IDCES", "IDCSE",
+                "IDECS", "IDSCE", "IECDS", "IECSD", "IEDCS", "IESCD", "ISCDE", "ISCED", "ISDCE", "ISECD",
+                "SCDEI", "SCDIE", "SCEDI", "SCEID", "SCIDE", "SCIED", "SDCEI", "SDCIE", "SDECI", "SDICE",
+                "SECDI", "SECID", "SEDCI", "SEICD", "SICDE", "SICED", "SIDCE", "SIECD"], 0),   /* HA HA HE HU: FX ORDER (103; Dah: EQ, SIDECHAIN), its source, */
+    E("SRC", ["OFF", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"], 0), D("DEPTH", F.PCT, 0, 127, 100),   /* depth (104, 105) */
     D("LOCUT", F.CUTOFF, 0, 118, 0), D("HICUT", F.CUTOFF, 0, 118, 118), D("FREQ1", F.CUTOFF, 0, 118, 40),   /* Dah: the EQ (106..111), */
     D("GAIN1", F.BIPCT, -64, 63, 0), D("FREQ2", F.CUTOFF, 0, 118, 90), D("GAIN2", F.BIPCT, -64, 63, 0),
-    ...[0, 1, 2, 3].map(k => E("KNOB" + (k + 1), FXK_N, k)));   /* FX's knobs (112..115) */
+    D("GAIN3", F.BIPCT, -64, 63, 0), D("FREQ3", F.CUTOFF, 0, 118, 110), D("-", F.INT, 0, 127, 0), D("-", F.INT, 0, 127, 0));   /* the EQ's band 3 (112, 113), free (114, 115) */
   const P_COUNT = 124, G_COUNT = 27, NSTEP = 64, P_E0 = 116, G_ENGSEL = 20, P_SLCR = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const enumOrig = (d, v) => d.fmt === F.ENUM && d.names ? aliasOf(d.names, v - d.min) + d.min : v;   /* params.c enum_orig */

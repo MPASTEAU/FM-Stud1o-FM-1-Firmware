@@ -15,7 +15,8 @@
 #define PFS_IDS 32u
 #define PFS_PAY 64u                                /* the payload's offset in the first sector */
 #define PFS_MAGIC 0x4A525048u                      /* "HPRJ" */
-#define PFS_VER 2u                                 /* (2: P_COUNT after it; 1: 114 parameters) */
+#define PFS_VER 3u                                 /* (3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
+                                                    * parameters; before 3 the extras were TRKX_V2 bytes) */
 #define PFS_CUR DAH_CUR                           /* the project open, its id (0 none): kept with the settings (favorites.c) */
 _Static_assert(PFS_BASE + PFS_NSECT * ST_SECTOR <= 0xDC000u, "the projects in USR2 and USR3");
 typedef struct {
@@ -44,7 +45,7 @@ static uint32_t pfs_fnv(uint32_t h, const void *p, uint32_t n)
 }
 static int pfs_head(uint32_t s, pfs_hdr_t *h)
 {
-    return !st_read(pfs_off(s), h, sizeof *h) && h->magic == PFS_MAGIC && (h->ver == PFS_VER || h->ver == 1u) && h->id && h->id <= PFS_IDS &&
+    return !st_read(pfs_off(s), h, sizeof *h) && h->magic == PFS_MAGIC && (h->ver >= 1u && h->ver <= PFS_VER) && h->id && h->id <= PFS_IDS &&
            h->nsect && s + h->nsect <= PFS_NSECT && h->len && h->len + PFS_PAY <= h->nsect * ST_SECTOR &&
            h->hsum == pfs_fnv(2166136261u, h, sizeof *h - 4u);
 }
@@ -164,6 +165,7 @@ static void pfs_stream(void)
     uint32_t k, i, nt = trk_count(), at = 0;
     pw_b(PFS_VER);
     pw_b(P_COUNT);
+    pw_b(sizeof(trkx_t));
     pw_put(song.g, sizeof song.g);
     pw_b(song.sel < nt ? song.sel : 0u);
     pw_put(&chain_config, sizeof chain_config);
@@ -271,6 +273,14 @@ static int pr_get(void *p, uint32_t n)
     return 1;
 }
 static uint32_t pr_b(void) { uint8_t b = 0; if (!pr_get(&b, 1)) pw.err = 1; return b; }
+static int pfs_get_x(trkx_t *x, uint32_t w)             /* (Dah) a track's extras of w bytes (more or fewer than ours) */
+{
+    uint8_t b[64];
+    memset(x, 0, sizeof *x);
+    if (!pr_get(b, w)) return 0;
+    memcpy(x, b, w < sizeof *x ? w : sizeof *x);
+    return 1;
+}
 /* project id onto the tracks. 0 done, 2 damaged (the music as it was) */
 static void pr_seek(uint32_t pos)                      /* (Dah) the payload read again from pos */
 {
@@ -282,7 +292,7 @@ static int pfs_read_in(uint32_t id)
 {
     pfs_hdr_t h;
     project_t *q = &proj_scratch;
-    uint32_t k, i, nt, n, np;
+    uint32_t k, i, nt, n, np, xw;
     uint8_t cur[NTRK];
     uint32_t cur_at[NTRK], cur_n[NTRK];              /* (Dah: each track's pattern, where in the payload: read again
                                                       * after the sounds, straight onto the track, not through the heap,
@@ -312,7 +322,9 @@ static int pfs_read_in(uint32_t id)
             q->t[k].p[i] = param_desc_of(trk_def_engine(k), i)->def;
     {
         uint32_t v = pr_b();
-        np = v == 1u ? PROJ_NP_W : v == PFS_VER ? pr_b() : 0u;
+        np = v == 1u ? PROJ_NP_W : v <= PFS_VER ? pr_b() : 0u;
+        xw = v >= 3u ? pr_b() : TRKX_V2;                /* (the extras' size it wrote) */
+        if (xw < TRKX_V2 || xw > 64u) return 2;
         if (np < 8u || np > P_COUNT || !pr_get(q->g, sizeof q->g)) return 2;
     }
     q->sel = (uint8_t)pr_b();
@@ -326,7 +338,7 @@ static int pfs_read_in(uint32_t id)
             def[i] = param_desc_of(q->t[k].engine % NENGINES, i)->def;
         params_by_count(q->t[k].p, v, np, def);         /* (an older count: the new ones their defaults) */
         q->t[k].preset = (uint8_t)pr_b();
-        if (q->t[k].engine >= NENGINES || !pr_get(q->fm6[k], FM6_PACKED) || !pr_get(&q->x[k], sizeof q->x[k])) return 2;
+        if (q->t[k].engine >= NENGINES || !pr_get(q->fm6[k], FM6_PACKED) || !pfs_get_x(&q->x[k], xw)) return 2;
         q->mch[k] = (uint8_t)pr_b();
         cur[k] = (uint8_t)pr_b();
         n = pr_b();
