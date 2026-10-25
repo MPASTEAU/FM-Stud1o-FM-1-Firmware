@@ -287,12 +287,15 @@ static void felucca_demo(void)
             trk[i].p[P_EQ1G] = EQ[i][3];
         }
     }
-    {                                         /* the sidechain, soft: pad, arp, sub and choir breathe with the kick */
-        static const int8_t DK[5][3] = {{0, 90, 30}, {1, 76, 24}, {2, 50, 14}, {4, 110, 10}, {7, 60, 26}};   /* track, DEPTH, REL */
+    {                                         /* the sidechain, hard, last in each chain (the sends before it: their
+                                               * tails ring on, the track itself pumps): drone, pad, arp, sub, choir */
+        static const int8_t DK[5][3] = {{0, 127, 0}, {1, 127, -4}, {2, 110, -16}, {4, 127, -24}, {7, 120, 0}};   /* track, DEPTH, REL */
         for (i = 0; i < 5u; i++) {
             trk[DK[i][0]].p[P_DKSRC] = 6;
             trk[DK[i][0]].p[P_DKAMT] = (int16_t)DK[i][1];
             trk[DK[i][0]].p[P_DKREL] = (int16_t)DK[i][2];
+            trk[DK[i][0]].p[P_FXORD] = 0;     /* (D I S E, SIDECHAIN last) */
+            trkx[DK[i][0]].tap[0] = trkx[DK[i][0]].tap[1] = trkx[DK[i][0]].tap[2] = 5;   /* (the sends before it) */
         }
     }
     trk[2].p[P_DIST] = 18;                    /* (the arp a little warm) */
