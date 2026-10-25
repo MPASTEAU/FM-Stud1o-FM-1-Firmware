@@ -156,7 +156,8 @@ static int select_page(void)
     b0 = song.g[G_BPM];                                 /* (HA HA HE HU: LIST, 1.5.5's PAGE: the page's list, not the pages) */
     go_title("ENV"); frame();
     turn(EN_SELECT, 2);
-    ok = title_is("ENV") && song.g[G_BPM] == b0;        /* (no list: nothing) */
+    ok = title_is("ENV") && song.g[G_BPM] > b0;         /* (Dah: no list: the tempo) */
+    song.g[G_BPM] = (int16_t)b0;
     song.sel = 0;                                       /* (track 1: patterns 1 2 3, it plays 3) */
     pattern_new(0, 0); pattern_new(0, 0);
     go_title("PATTERN"); frame();
@@ -174,7 +175,7 @@ static int select_page(void)
     turn(EN_SELECT, 2);
     ok &= title_is("SONG") && ui.song_row == 2u && song.g[G_BPM] == b0;
     chain_defaults(&chain_config); ui.song_row = 0;
-    bad += check("  LIST: SELECT moves down the page's list (PATTERN, FILE, SONG ..); no list, nothing; the tempo stays", ok);
+    bad += check("  LIST: SELECT moves down the page's list (PATTERN, FILE, SONG ..); no list (ENV): the tempo", ok);
 
     go_home(); frame();
     b0 = song.g[G_BPM];

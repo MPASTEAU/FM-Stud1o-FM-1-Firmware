@@ -1421,14 +1421,17 @@ static void presets_turn(int32_t s)
 
 /* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
  * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, PHRASES, SONG's sections, AUTOMATION's rows, STEP's
- * cursor. On HOME the tempo, as ever; elsewhere nothing (the tempo: GLO + SELECT, HOME > CLOCK) */
-static void sel_list(int32_t s)
+ * cursor. On HOME and on a page with no list (ENV, LFO, ARP, SCL ..) the tempo (Dah) */
+static int sel_is_list(void)                           /* (Dah) the page shown has a list SELECT moves down */
 {
     uint32_t g = cur_page()->graph;
-    if (g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS ||
-               g == GR_SONG || g == GR_EVENTS) {
+    return g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN ||
+           g == GR_PATS || g == GR_SONG || g == GR_EVENTS;
+}
+static void sel_list(int32_t s)
+{
+    if (sel_is_list())
         presets_turn(s);
-    }
 }
 
 /* HOME / REC / SAVE: tap on release, hold 0.7 s fires once. t0 = press time | 1,
@@ -1935,10 +1938,11 @@ static void ui_input(void)
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
-        } else if (!glo && sel_mode() == SEL_PAGE && !ui.home) {   /* MENU > SELECT LIST (HA HA HE HU; 1.5.5's PAGE, #188, turned the
-                                                         * pages): down the page's list (sel_list); the tempo is GLO +
-                                                         * SELECT, CLOCK's KNOB 1 and TAP. Not while a layer's button is
-                                                         * down or letting go, LFO is held (MOMENTARY) or steps are held */
+        } else if (!glo && sel_mode() == SEL_PAGE && !ui.home && sel_is_list()) {   /* MENU > SELECT LIST (HA HA HE HU;
+                                                         * 1.5.5's PAGE, #188, turned the pages): down the page's list
+                                                         * (sel_list); Dah: a page with no list (ENV, LFO, ARP, SCL ..):
+                                                         * the tempo, as on HOME. Not while a layer's button is down or
+                                                         * letting go, LFO is held (MOMENTARY) or steps are held */
             for (k = (uint32_t)(s > 0 ? s : -s); k && !lay && !kq && !mom_down() && !lock_held(); k--)
                 sel_list(s > 0 ? 1 : -1);
         } else if (glo || !(ui_prefs & PREF_BPM_LOCK)) {
