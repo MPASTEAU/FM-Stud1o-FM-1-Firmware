@@ -274,7 +274,7 @@ static void ds_set(uint32_t tr, uint32_t k, uint32_t f, uint32_t v)
 }
 
 /* a factory sound load into a DRUM track (a kit, an engine change): its lanes back to the kit's (the init voice), or
- * the preset's lanes designed (eng_drum.c DRUM_DESIGN: the dubstep kits) on the init voice */
+ * the preset's lanes designed (eng_drum.c DRUM_DESIGN: the layered kits) on the init voice */
 static void drum_track_loaded(const track_t *t)
 {
     uint32_t tr = (uint32_t)(t - trk), k, i;

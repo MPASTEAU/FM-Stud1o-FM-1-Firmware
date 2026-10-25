@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* GROWL: one wave, phase-modulated by a sine, into a resonant low-pass, for riddim and dubstep basses. HA HA HE HU's.
+/* GROWL: one wave, phase-modulated by a sine, into a resonant low-pass, for growling FM basses. HA HA HE HU's.
  *
  *   WAVE   the carrier: SAW SQR TRI SIN (SAW and SQR naive: the modulation moves their edges, the aliasing is part of
  *          the growl)
@@ -84,11 +84,11 @@ static void growl_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
 
 /* {WAVE, RATIO, FM, FB, CUT, RES, DRV, SUB} */
 static const preset_t GROWL_PRESETS[] = {
-    {"RIDDIM", {0, 1, 70, 40, 72, 40, 90, 60}, {0, 60, 127, 12}, 0, 1, FX(50, 0, 0, 0), PAT(8)},
-    {"YOI", {1, 3, 50, 20, 52, 70, 100, 40}, {0, 50, 110, 12}, 30, 1, FX(40, 0, 0, 0), PAT(8)},
+    {"FM GROWL", {0, 1, 70, 40, 72, 40, 90, 60}, {0, 60, 127, 12}, 0, 1, FX(50, 0, 0, 0), PAT(8)},
+    {"VOWEL", {1, 3, 50, 20, 52, 70, 100, 40}, {0, 50, 110, 12}, 30, 1, FX(40, 0, 0, 0), PAT(8)},
     {"METAL", {3, 7, 100, 80, 100, 20, 70, 50}, {0, 70, 120, 15}, 0, 1, FX(30, 0, 10, 10), PAT(8)},
-    {"WOB SUB", {3, 0, 30, 0, 90, 0, 30, 100}, {0, 60, 127, 12}, 0, 1, FX(0, 0, 0, 0), PAT(8)},
-    {"TEAROUT", {0, 2, 110, 100, 64, 50, 127, 50}, {0, 60, 127, 10}, 20, 1, FX(70, 0, 0, 0), PAT(8)},
+    {"SUB WAVE", {3, 0, 30, 0, 90, 0, 30, 100}, {0, 60, 127, 12}, 0, 1, FX(0, 0, 0, 0), PAT(8)},
+    {"GRIT", {0, 2, 110, 100, 64, 50, 127, 50}, {0, 60, 127, 10}, 20, 1, FX(70, 0, 0, 0), PAT(8)},
 };
 
 static const engine_t ENG_GROWL = {

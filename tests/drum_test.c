@@ -32,10 +32,10 @@
  *    as 1., the level of its lane on STD), DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners under
  *    full scale; a retrigger the same; every GM note on its lane's piece, the lanes through the engine; the cost of
  *    a kit's 8 lanes at once.
- * 11. SYNTH (HA HA HE HU, the layered voice): SYN 1..5's sets, the dubstep kits' and the heaviest set sound (above -21
+ * 11. SYNTH (HA HA HE HU, the layered voice): SYN 1..5's sets, the layered kits' and the heaviest set sound (above -21
  *    dBFS), stay under full scale with no DC, end, retrigger the same, the corners under full scale; TUNE DECAY TONE
  *    move it; the sets' storage (bytes of their own inside fm6_max, through fm6_pack / fm6_unpack, a patch of before);
- *    DUB KIT and RIDDIM KIT load their designs, every SYNTH lane sounds and frees its voice, the choke; the cost of
+ *    LAYER KIT and HARD KIT load their designs, every SYNTH lane sounds and frees its voice, the choke; the cost of
  *    every set at most the heaviest drum's (with its metal source), nothing once rung out (NOCOST=1 skips the costs). */
 #define main hostsim_main
 #include "hostsim.c"
@@ -1137,7 +1137,7 @@ static void kit_costs(void)
 }
 
 /* ------------------------------------------------ the layered voice (SYNTH) --- */
-/* the sets checked: SYN 1..5 as drum_voice.c starts them, the dubstep kits' (eng_drum.c DRUM_DESIGN), and the heaviest
+/* the sets checked: SYN 1..5 as drum_voice.c starts them, the layered kits' (eng_drum.c DRUM_DESIGN), and the heaviest
  * a set can be (every layer at full and long, the noise high-passed at Q 5 and struck 8 times, the drive at x8) */
 #define NSYN (DS_NSET * (1u + NELEM(DRUM_DESIGN)) + 1u)
 static const uint8_t SYN_HEAVY[DS_NF] = {99, 30, 48, 14, 31, 7, 1, 99, 2, 99, 3, 99, 7, 3, 99, 14, 99};
@@ -1266,7 +1266,7 @@ static int synth_storage(void)
     return bad != 0;
 }
 
-/* the dubstep kits: their lanes designed in the patch at the preset load, every designed lane sounds through the engine
+/* the layered kits: their lanes designed in the patch at the preset load, every designed lane sounds through the engine
  * (and its voice frees itself when rung out), the closed hat chokes the open one, a plain kit's load clears them */
 static int synth_kits(void)
 {
@@ -1312,7 +1312,7 @@ static int synth_kits(void)
         host_preset(&trk[0], ENGI_DRUM, 0);
         bad += dl_on(tr);
     }
-    printf("drum_test: the dubstep kits (DUB KIT, RIDDIM KIT): their designs loaded with the preset, each SYNTH lane sounds "
+    printf("drum_test: the layered kits (LAYER KIT, HARD KIT): their designs loaded with the preset, each SYNTH lane sounds "
            "and frees its voice, the choke, DRUM KIT clears them: %s\n", bad ? "FAIL" : "ok");
     return bad != 0;
 }

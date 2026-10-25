@@ -500,9 +500,9 @@ static const preset_t DRUM_PRESETS[] = {
     {"DEEP KIT", {DK_DEEP, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 28), PAT(12)},
     {"TIGHT KIT", {DK_TIGHT, 64, 64, 56, 64, 100, 0, 16}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8), PAT(12)},
     {"PERC KIT", {DK_PERC, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24), PAT(12)},
-    /* HA HA HE HU (drum designer phase 2): the dubstep kits, their lanes designed (DRUM_DESIGN below), appended */
-    {"DUB KIT", {DK_STD, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 16, 30), PAT(12)},
-    {"RIDDIM KIT", {DK_STD, 64, 64, 64, 64, 110, 0, 18}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 14), PAT(12)},
+    /* HA HA HE HU (drum designer phase 2): the layered kits, their lanes designed (DRUM_DESIGN below), appended */
+    {"LAYER KIT", {DK_STD, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 16, 30), PAT(12)},
+    {"HARD KIT", {DK_STD, 64, 64, 64, 64, 110, 0, 18}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 14), PAT(12)},
 };
 
 /* A factory kit's lanes designed (HA HA HE HU): a preset of DRUM_PRESETS with one loads it into the track's patch
@@ -515,7 +515,7 @@ typedef struct {
 } dl_design_t;
 #define DL_S(k) (DL_NVOICE + (k))                        /* VOICE SYN k + 1 */
 static const dl_design_t DRUM_DESIGN[] = {
-    {4, /* DUB KIT: a deep swept kick with a click, a 185 Hz snare whose noise claps 3 times, a wide clap, hats of the
+    {4, /* LAYER KIT: a deep swept kick with a click, a 185 Hz snare whose noise claps 3 times, a wide clap, hats of the
          * metal over high noise (the closed one short, the open one long: one set, DECAY apart), a crash on BELL;
          * TOM and RIM the kit's */
      {{DL_S(0), 24, 50, 50, 50, 0}, {DL_S(1), 24, 50, 50, 50, 0}, {DL_S(2), 24, 50, 50, 50, 0},
@@ -527,7 +527,7 @@ static const dl_design_t DRUM_DESIGN[] = {
       {0, 42, 0, 5, 10, 0, 0, 85, 1, 60, 1, 65, 3, 1, 0, 7, 30},        /* clap: 1.4 kHz, 4 strikes 8 ms apart */
       {0, 60, 0, 0, 5, 0, 0, 55, 2, 92, 0, 45, 0, 0, 92, 11, 55},       /* hats: the metal at 9 kHz, noise above */
       {0, 60, 0, 0, 5, 0, 0, 40, 2, 78, 0, 88, 0, 0, 62, 5, 97}}},      /* crash: 4.7 kHz, 0.8 s */
-    {5, /* RIDDIM KIT: a short hard kick (more drive, a band click), a 196 Hz snare with a metal sizzle and 4 claps, a
+    {5, /* HARD KIT: a short hard kick (more drive, a band click), a 196 Hz snare with a metal sizzle and 4 claps, a
          * tight resonant clap, brighter hats, a long crash */
      {{DL_S(0), 24, 50, 50, 50, 0}, {DL_S(1), 24, 50, 50, 50, 0}, {DL_S(2), 24, 50, 50, 50, 0},
       {DL_S(3), 24, 15, 50, 50, 0}, {DL_S(3), 24, 95, 50, 50, 0}, {0, 24, 50, 50, 50, 0}, {0, 24, 50, 50, 50, 0},

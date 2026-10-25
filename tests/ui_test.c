@@ -3770,8 +3770,8 @@ static int test_edit_cycle(void)
                              "DESIGN", ok && str_eq(cur_page()->title, "DESIGN"));
                 ui.lane = DV_CLAP;
                 apply_preset_to(TSEL, 4);
-                bad += check("DUB KIT: a factory kit with its lanes designed loads them (SYN 1..5 on 6 lanes, the sets)",
-                             str_eq(ENG_DRUM.presets[4].name, "DUB KIT") && dl_on(tr) && ds_on(tr) &&
+                bad += check("LAYER KIT: a factory kit with its lanes designed loads them (SYN 1..5 on 6 lanes, the sets)",
+                             str_eq(ENG_DRUM.presets[4].name, "LAYER KIT") && dl_on(tr) && ds_on(tr) &&
                              dl_syn_of(tr, DV_KICK) == 0 && dl_syn_of(tr, DV_HATO) == 3 && dl_syn_of(tr, DV_TOM) < 0 &&
                              ds_get(tr, 1, DS_TPIT) == DRUM_DESIGN[0].set[1][DS_TPIT] && preset_cat(ENGI_DRUM, 5) == CAT_DRUM);
             }
