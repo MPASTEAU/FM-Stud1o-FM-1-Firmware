@@ -93,14 +93,18 @@ static struct {                          /* HALL's state (in the pool: no .bss) 
  * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
  * make-up gain (straight into tanh over the full band, it would sound like a
  * broken digital fuzz). State per part (track_t dist_*). */
+static int32_t eq_gain_q12(int32_t g);                  /* fx_eq.c */
 static void track_dist(track_t *t, int32_t *b, uint32_t n)
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
-    k = 32000 - d * 95;                                  /* tone: transparent at low drive .. ~3 kHz, Q15 */
+    k = clamp(32000 - d * 95 + t->p[P_DCOL] * 240, 1500, 32700);   /* tone: transparent at low drive .. ~3 kHz, Q15;
+                                                         * (Dah) COLOR darker / brighter around it */
     mk = 30000 - d * 120;                                /* make-up */
+    if (t->p[P_DOUT])
+        mk = (mk * eq_gain_q12(t->p[P_DOUT])) >> 12;     /* (Dah) OUT: +-15 dB */
     b0 = softclip(bias);
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x = b[i], y;

@@ -248,6 +248,7 @@ static void graph_clock(uint16_t c)
  * kick a mark under it. Nothing sounding yet: the dip's shape over four kicks, faint (DEPTH, REL) */
 #define DV_N PANEL_W
 static struct { uint16_t pre[DV_N], post[DV_N], att[DV_N]; uint8_t hit[DV_N]; uint32_t w, live; } dv;
+static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
 static uint32_t duck_watch(const track_t *t)            /* this track */
 {
     return 1u << (trk_index(t) % NTRK);
@@ -276,13 +277,17 @@ static void graph_duck(const track_t *t, uint16_t c)
         dv_hit = 0;
         dv.w++;
     }
-    for (k = 0, x = PANEL_X0; k < NTRK; k++)            /* the tracks watched */
-        if ((m >> k) & 1u) {
-            char d[2] = {(char)('1' + k), 0};
-            cv_rrect(x, 2, 12, 12, 3, ux.trk[k], T_SURF);
-            cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[k]);
-            x += 15;
-        }
+    (void)m;
+    {                                                   /* (Dah) where it comes from: the track, its sound's name */
+        uint32_t s = (uint32_t)clamp(t->p[P_DKSRC], 1, NTRK) - 1u;
+        char d[2] = {(char)('1' + s), 0}, nm[16];
+        x = PANEL_X0;
+        x += cv_text_on(x, 2 + CAP_IN(S, 12), &AF_S, "FROM", T_MID, T_SURF) + 6;
+        cv_rrect(x, 2, 12, 12, 3, ux.trk[s], T_SURF);
+        cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[s]);
+        sound_name(&trk[s], nm);
+        cv_text_on(x + 16, 2 + CAP_IN(S, 12), &AF_S, nm, T_TEXT, T_SURF);
+    }
     if (!dv.live) {                                     /* nothing sounding: the shape, faint */
         int32_t py = top, env = 0, hold = 0, beat = PANEL_W / 4;
         int32_t rel = 23790 / (20 + (t->p[P_DKREL] + 64) * 3), depth = t->p[P_DKAMT];

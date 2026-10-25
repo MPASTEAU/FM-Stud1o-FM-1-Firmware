@@ -1617,8 +1617,10 @@ static void draw_columns_in(void)
             draw_column(c, "SLOT", val, "", VAL(c), RATIO(d, *vp), param_icon(d, *vp));
             continue;
         }
-        draw_column(c, d->label, val, unit, VAL(c), d->fmt == F_ENUM && d->max < 2 ? -1 : RATIO(d, enum_rank(d, *vp)),
-                    param_icon(d, *vp));
+        draw_column(c, d->label, val, unit,
+                    vp == &TSEL->p[P_DKSRC] && *vp > 0 ? ux.trk[(*vp - 1) % NTRK] : VAL(c),   /* (Dah: SIDECHAIN's source:
+                                                         * its track's colour) */
+                    d->fmt == F_ENUM && d->max < 2 ? -1 : RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
     }
 }
 

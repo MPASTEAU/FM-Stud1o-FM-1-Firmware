@@ -789,7 +789,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_PRESET
        S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL,
        S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_EUCLID, S_SEQ_EUCLID_DRUM, S_SEQ_EUCLID_64,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_TOOLS_CLEAN, S_CONFIRM_CLEAN,
-       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_SENDS, S_COUNT };
+       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_SENDS, S_FX_SC, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "presets", "presets_nofav", "user",
     "phrases", "project", "tools", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -820,7 +820,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_euclid", "layer_seq_euclid_drum",
     "layer_seq_euclid_64",
     "menu_select", "project_erase", "confirm_erase_project", "tools_clean", "confirm_clean",
-    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq2", "fx_sends"};
+    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq2", "fx_sends", "fx_sc"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1135,7 +1135,8 @@ static void setup(int s)
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
     case S_DLY: go_title("DLY"); break;
     case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_EQLO] = 30; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; TSEL->p[P_REV] = 60; TSEL->p[P_DLY] = 30; trkx[song.sel].tap[2] = 2; go_title("CHAIN"); break;
-    case S_FX_DIST: TSEL->p[P_DIST] = 70; go_title("DIST"); break;
+    case S_FX_DIST: TSEL->p[P_DIST] = 70; TSEL->p[P_DOUT] = -20; TSEL->p[P_DCOL] = 30; go_title("DIST"); break;
+    case S_FX_SC: TSEL->p[P_DKSRC] = 2; TSEL->p[P_DKAMT] = 110; TSEL->p[P_DIST] = 30; go_title("SIDECHAIN"); break;
     case S_FX_EQ: {                                     /* (a saw at 110 Hz in the ring: the spectrum) */
         uint32_t i;
         for (i = 0; i < EQ_RN; i++)

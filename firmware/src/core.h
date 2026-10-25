@@ -96,7 +96,7 @@ enum {                          /* per-track parameters */
                                                 * is P_DKREL (P_ED_FX's byte) */
     P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G,   /* Dah: the EQ (fx_eq.c): LOW CUT, HIGH CUT, two bells */
     P_EQ3G, P_EQ3F,                            /* Dah: the EQ's third band (GAIN first: a store's 0 there, the band off) */
-    P_XRSV0, P_XRSV1,                          /* Dah: free (were FX's knobs) */
+    P_DOUT, P_DCOL,                            /* Dah: DIST's OUT (-64..63: +-15 dB, 0 as before) and COLOR (0 as before) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };

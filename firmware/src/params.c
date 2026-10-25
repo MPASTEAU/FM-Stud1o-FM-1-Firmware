@@ -137,7 +137,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_SDIV] = PE("DIV", N_DIV, 2),
     [P_SSWING] = PD("SWG", F_PCT, 0, 100, 0),
     [P_SGATE] = PD("GATE", F_PCT, 1, 127, 64),
-    [P_DIST] = PD("DST", F_PCT, 0, 127, 0),
+    [P_DIST] = PD("IN", F_PCT, 0, 127, 0),          /* (Dah: DIST's input gain, the drive) */
     [P_CHOR] = PD("CHO", F_PCT, 0, 127, 0),
     [P_DLY] = PD("DLY", F_PCT, 0, 127, 0),
     [P_REV] = PD("REV", F_PCT, 0, 127, 0),
@@ -201,8 +201,8 @@ static const param_desc_t TP[P_COUNT] = {
     [P_EQ2G] = PD("GAIN2", F_BIPCT, -64, 63, 0),
     [P_EQ3G] = PD("GAIN3", F_BIPCT, -64, 63, 0),
     [P_EQ3F] = PD("FREQ3", F_CUTOFF, 0, 118, 110),
-    [P_XRSV0] = PD("-", F_INT, 0, 127, 0),          /* (free) */
-    [P_XRSV1] = PD("-", F_INT, 0, 127, 0),
+    [P_DOUT] = PD("OUT", F_BIPCT, -64, 63, 0),      /* (Dah) DIST's output gain (param_format: dB) */
+    [P_DCOL] = PD("COLOR", F_BIPCT, -64, 63, 0),    /* .. its tone: darker / brighter */
 };
 
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
@@ -367,7 +367,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
         str_cpy(val, "OFF", 6);
         return;
     }
-    if (d == &TP[P_EQ1G] || d == &TP[P_EQ2G] || d == &TP[P_EQ3G]) {         /* (Dah) the bells' GAIN: dB, a tenth */
+    if (d == &TP[P_EQ1G] || d == &TP[P_EQ2G] || d == &TP[P_EQ3G] || d == &TP[P_DOUT]) {         /* (Dah) the bells' GAIN: dB, a tenth */
         int32_t t = v * 150 / 64;
         fmt_fix(val + (t > 0), t, 1);
         if (t > 0)
@@ -508,7 +508,7 @@ static const page_t PAGES[] = {
      * adds one; REC takes it out); then a page each, its own picture live (ui_graph_fx.c). (FX's overview page and its
      * assignable knobs, P_FXK1..4, are gone: the parameters stay, their default the STEP lanes' DST CHO DLY REV) */
     {"CHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_FXORD, 0xFF, 0xFF, 0xFF}},
-    {"DIST", FAM_FX, SC_TRACK, GR_NONE, {P_DIST, 0xFF, 0xFF, 0xFF}},
+    {"DIST", FAM_FX, SC_TRACK, GR_NONE, {P_DIST, P_DOUT, P_DCOL, 0xFF}},   /* (Dah) IN OUT COLOR */
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},

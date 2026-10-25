@@ -22,7 +22,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"LFO DEST", "[K1-4]LFO AMOUNTS[LFO]MOD"},
     {"MOD", "[K1]SLOT[K2]SOURCE[K3]DEST"},
     {"CHAIN", "[K1]UNIT[K2]MOVE IT[OCT+]ITS PAGE"},
-    {"DIST", "[K1]DRIVE[FX]INSERT"},
+    {"DIST", "[K1]IN[K2]OUT[K3]COLOR"},
     {"INSERT", "[K1]TYPE[FX]DRY / WET"},
     {"INSERT 2", "[K1]DRY / WET[FX]SLICER"},
     {"SLICER", "[K1]ON[K2]PATTERN[FX]EQ"},

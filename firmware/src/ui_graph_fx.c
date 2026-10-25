@@ -204,7 +204,14 @@ static void fx_unit_info(const track_t *t, uint32_t u, char *b)
         fmt_int(b, (int32_t)c); str_cpy(b + str_len(b), c > 1u ? " PARTS" : " PART", 7);
         break;
     }
-    case 4: str_cpy(b, "FROM ", 6); str_cpy(b + 5, N_DKSRC[clamp(t->p[P_DKSRC], 0, 8)], 4); break;
+    case 4: {                                           /* FROM and the source's sound */
+        char nm[16];
+        sound_name(&trk[clamp(t->p[P_DKSRC], 1, NTRK) - 1], nm);
+        str_cpy(b, N_DKSRC[clamp(t->p[P_DKSRC], 0, 8)], 4);
+        str_cpy(b + str_len(b), " ", 2);
+        str_cpy(b + str_len(b), nm, 10);
+        break;
+    }
     default: {
         static const uint8_t ID[3] = {P_CHOR, P_DLY, P_REV};
         str_cpy(b, "SEND ", 6);
@@ -304,6 +311,8 @@ static void graph_chain(const track_t *t, uint16_t c)
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */
 {
     int32_t d = t->p[P_DIST], g = 4096 + d * d * 2, mk = 30000 - d * 120, bias = 2400;
+    if (t->p[P_DOUT])
+        mk = (mk * eq_gain_q12(t->p[P_DOUT])) >> 12;     /* (OUT) */
     if (!d)
         return x;
     return mulq15(softclip((((x >> 2) * g) >> 10) + bias) - softclip(bias), mk);
