@@ -1865,6 +1865,28 @@ static void track_strip(uint32_t c, uint32_t sel, uint32_t st, uint32_t mute, ui
         cv_rrect(5, TSS_MY, m < 3 ? 3 : m, 3, 1, T_MID, T_RAISE);
     cv_blit((uint32_t)CARD_X(c % 4u), LG_Y_GRAPH);
 }
+/* (Dah) a level meter's colour at fill f of n (its height): green, then orange towards the top, red at the end (near
+ * 0 dB), every palette alike (a meter reads as one) */
+#define MTR_GREEN 0x366Au
+#define MTR_ORANGE 0xFCA0u
+#define MTR_RED 0xF145u
+static uint16_t meter_col(int32_t f, int32_t n)
+{
+    int32_t p = n > 0 ? f * 100 / n : 0;
+    if (p < 60)
+        return MTR_GREEN;
+    if (p < 85)
+        return ux_mix(MTR_GREEN, MTR_ORANGE, (p - 60) * 4);
+    return ux_mix(MTR_ORANGE, MTR_RED, (p - 85) * 100 / 15);
+}
+/* an upright meter at x, w wide, from y (top) h tall, filled f from its foot; muted: DIM */
+static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int mute, uint16_t bg)
+{
+    int32_t i;
+    cv_rrect(x, y, w, h, 2, T_LINE, bg);
+    for (i = 0; i < f && i < h; i++)
+        cv_rect(x, y + h - 1 - i, w, 1, mute ? T_DIM : meter_col(i, h));
+}
 /* HA HA HE HU: the MIXER as eight strips side by side (MX_PITCH apart), every track at once: the cushion in the track's
  * colour (a muted one DIM; REC/ARM a dot), the name's first letters, a fader (the LEVEL, a thumb on it) beside the
  * output meter, the dB, the PAN a dot on a line, the REV send a bar. The selected strip RAISE, ringed in its colour;
@@ -1914,9 +1936,7 @@ static void mixer_strip(uint32_t c)
         cv_rrect(7, MX_FY + MX_FH - f, 5, f, 2, tc, T_LINE);
     cv_rrect(5, MX_FY + MX_FH - f - 1 < MX_FY ? MX_FY : MX_FY + MX_FH - f - 1, 9, 3, 1, hot == 1u ? T_TEXT : T_MID, bg);
     mh = ts.meter[c] * MX_FH / (TS_MH - 2);            /* the output's meter */
-    cv_rrect(17, MX_FY, 4, MX_FH, 2, T_LINE, bg);
-    if (mh > 0)
-        cv_rrect(17, MX_FY + MX_FH - mh, 4, mh, mh >= 4 ? 2 : 0, mute ? T_DIM : T_MID, T_LINE);
+    meter_up(17, MX_FY, 4, MX_FH, mh, mute, bg);           /* (Dah: green to orange to red) */
     if (lvl) {
         int32_t db = LEVEL_DB_X10[lvl];
         fmt_int(v, (db + (db < 0 ? -5 : 5)) / 10);
@@ -2165,17 +2185,19 @@ static void home_track_row(uint32_t c)
  * selected row RAISE. Each row redrawn only when it changed (ts.col), its meter alone otherwise */
 #define RK_PITCH (foot_free() ? 17 : 15)                  /* (Dah: taller rows when the footer's first row is the panel's) */
 #define RK_H (RK_PITCH - 1)
-#define RK_SX 94                                       /* the steps: x 94 .. 205, 7 apart (Dah: room for the name) */
-#define RK_SP 7
-#define RK_MX 212                                      /* the meter: x 212 .. 229 */
-#define RK_MW 18
-static void rack_meter(uint32_t c, uint16_t bg)
+#define RK_SX 94                                       /* the steps: x 94 .. 221, 8 apart (Dah: room for the name, the meter
+                                                        * upright at the right end) */
+#define RK_SP 8
+#define RK_MX 226                                      /* the meter: upright, x 226 .. 229, the row's height */
+#define RK_MW 4
+/* the output meter, upright: rising from the row's foot (x0: its left in the canvas) */
+static void rack_meter_at(int32_t x0, uint32_t c, int32_t m, uint16_t bg)
 {
-    int32_t w = ts.meter[c] * RK_MW / (TS_MH - 2);
-    cv_rrect(RK_MX, 5, RK_MW, 4, 2, T_LINE, bg);
-    if (w > 0)
-        cv_rrect(RK_MX, 5, w < RK_MW ? w : RK_MW, 4, 2, ux.trk[c % NTRK], bg);
+    int32_t hh = RK_H - 4;
+    (void)c;
+    meter_up(x0, 2, RK_MW, hh, m * hh / (TS_MH - 2), 0, bg);
 }
+static void rack_meter(uint32_t c, uint16_t bg) { rack_meter_at(RK_MX, c, ts.meter[c], bg); }
 static void rack_row(uint32_t c)
 {
     track_t *t = &trk[c];
@@ -2202,12 +2224,7 @@ static void rack_row(uint32_t c)
             ts.meter[c] = (uint8_t)m;
             cv_begin(RK_MW, RK_H, bg);
             cv_oy = 0;
-            {
-                int32_t w = m * RK_MW / (TS_MH - 2);
-                cv_rrect(0, RK_H / 2 - 2, RK_MW, 4, 2, T_LINE, bg);
-                if (w > 0)
-                    cv_rrect(0, RK_H / 2 - 2, w < RK_MW ? w : RK_MW, 4, 2, ux.trk[c % NTRK], bg);
-            }
+            rack_meter_at(0, c, m, bg);
             cv_blit(3 + RK_MX, (uint32_t)y);
         }
         return;

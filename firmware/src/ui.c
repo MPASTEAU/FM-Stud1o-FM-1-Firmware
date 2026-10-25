@@ -675,7 +675,7 @@ static int detail_on(void);
 static int foot_free(void)
 {
     const page_t *pg = cur_page();
-    if (ui.menu || ui.confirm || ui.layer || name_on() || ui.ml.on || large_kind() == LK_TALL)
+    if (ui.menu || ui.confirm || name_on() || ui.ml.on || large_kind() == LK_TALL)   /* (a layer: not, the panel would jump) */
         return 0;
     if (ui.home)
         return 1;

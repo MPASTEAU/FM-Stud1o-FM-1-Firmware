@@ -9755,7 +9755,7 @@ static int test_home_tracks(void)
     t->p[P_MUTE] = 1;
     trk[3].peak = 20000;
     frame();
-    ok = rk_px(0, 2, 7) == T_DIM && rk_at(3, 2, 7) == T_DIM && rk_at(RK_MX + 1, 3, 7) == T_THEME &&
+    ok = rk_px(0, 2, 7) == T_DIM && rk_at(3, 2, 7) == T_DIM && rk_at(RK_MX + 1, 3, RK_H - 4) == MTR_GREEN &&   /* (Dah: upright, green at its foot) */
          rk_at(RK_MX + 1, 2, 7) == T_LINE;   /* (Dah: the meter centred on the taller row) */
     t->p[P_MUTE] = 0;
     frame();
