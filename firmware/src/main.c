@@ -201,9 +201,15 @@ static void felucca_demo(void)
     demo_hit(t, 56, 1u << 1, 54);             /* .. bar 4's */
     t = &trk[5];                              /* the choir, far behind */
     demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH */
-    t->p[P_ATK] = 100; t->p[P_REL] = 104; t->p[P_LEVEL] = 66; t->p[P_REV] = 120; t->p[P_DLY] = 10;
+    t->p[P_E0 + 1] = 40;                      /* VOWL2: from AAH towards OOH, */
+    t->p[P_E0 + 2] = 96;                      /* TALK: slowly, as a voice moves */
+    t->p[P_E0 + 4] = 72;                      /* BUZZ up: a voiced throat */
+    t->p[P_E0 + 5] = 12;                      /* BRTH down */
+    t->p[P_E0 + 6] = 100;                     /* Q: the formants sharper, more vocal */
+    t->p[P_E0 + 7] = 24;                      /* RAND: the voices apart */
+    t->p[P_ATK] = 70; t->p[P_REL] = 100; t->p[P_LEVEL] = 90; t->p[P_REV] = 72; t->p[P_DLY] = 10;
     for (i = 0; i < 4u; i++)
-        dm_chord(t, i * 16u, 16, CHOIR[i], 3, 52);
+        dm_chord(t, i * 16u, 16, CHOIR[i], 3, 72);
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
