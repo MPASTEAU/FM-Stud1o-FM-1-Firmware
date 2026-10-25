@@ -1888,14 +1888,17 @@ static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int 
         cv_rect(x, y + h - 1 - i, w, 1, mute ? T_DIM : meter_col(i, h));
 }
 /* HA HA HE HU: the MIXER as eight strips side by side (MX_PITCH apart), every track at once: the cushion in the track's
- * colour (a muted one DIM; REC/ARM a dot), the name's first letters, a fader (the LEVEL, a thumb on it) beside the
- * output meter, the dB, the PAN a dot on a line, the REV send a bar. The selected strip RAISE, ringed in its colour;
- * the value just turned TEXT. Each strip redrawn only when it changed (ts.col) */
-#define MX_PITCH 29
-#define MX_W 28
+ * colour (a muted one DIM; REC/ARM a dot), then (Dah) the panel's height for a fader (the LEVEL, a thumb on it) beside
+ * the output meter (green to red), under them the PAN a dot on a line and the REV send a bar. No name, no dB: the
+ * footer names the track, the cards above give the selected one's values. The selected strip RAISE, ringed in its
+ * colour; the value just turned TEXT. Each strip redrawn only when it changed (ts.col) */
+#define MX_PITCH ((int32_t)(232u / (trk_count() > 4u ? trk_count() : 4u)))   /* (Dah: the project's tracks share the width:
+                                                        * 8 x 29 .. 4 x 58) */
+#define MX_W (MX_PITCH - 1)
+#define MX_FX (MX_W / 2 - 9)                           /* the fader's left; the meter at MX_FX + 11 */
 #define MX_X0 4
-#define MX_FY 34                                       /* the fader: 34 .. 85 */
-#define MX_FH 52
+#define MX_FY 22                                       /* the fader: from 22 to 24 above the panel's foot */
+#define MX_FH ((int32_t)graph_h() - MX_FY - 24)
 static void mixer_strip(uint32_t c)
 {
     track_t *t = &trk[c];
@@ -1923,35 +1926,29 @@ static void mixer_strip(uint32_t c)
     } else {
         cv_rrect(0, 0, MX_W, (int32_t)graph_h(), 4, bg, T_BG);
     }
-    cv_rrect(7, 4, 14, 13, 3, lit ? T_TEXT : tc, bg);  /* the cushion */
-    GFX_HOOK_ALIGN(7, 4, 21, 17, AL_HV, "mixer strip digit centred");
-    cv_text_in(7, 4 + CAP_IN(S, 13), 14, &AF_S, d, T_INK, lit ? T_TEXT : tc);
+    cv_rrect(MX_W / 2 - 7, 4, 14, 13, 3, lit ? T_TEXT : tc, bg);  /* the cushion */
+    GFX_HOOK_ALIGN(MX_W / 2 - 7, 4, MX_W / 2 + 7, 17, AL_HV, "mixer strip digit centred");
+    cv_text_in(MX_W / 2 - 7, 4 + CAP_IN(S, 13), 14, &AF_S, d, T_INK, lit ? T_TEXT : tc);
     if (arm)                                           /* REC (recording) / ARM: a dot */
         cv_rrect(MX_W - 6, 3, 4, 4, 2, song.playing ? T_REC : T_ACCENT, bg);
-    GFX_HOOK_ALIGN(0, 0, MX_W, 0, AL_H, "mixer strip name centred");
-    cv_text_in(0, 20, MX_W, &AF_S, b, sel ? T_TEXT : mute ? T_DIM : T_MID, bg);
+    (void)v;
     f = (int32_t)lvl * MX_FH / 127;                    /* LEVEL: the fader */
-    cv_rrect(7, MX_FY, 5, MX_FH, 2, T_LINE, bg);
+    cv_rrect(MX_FX + 2, MX_FY, 7, MX_FH, 3, T_LINE, bg);
     if (f > 2)
-        cv_rrect(7, MX_FY + MX_FH - f, 5, f, 2, tc, T_LINE);
-    cv_rrect(5, MX_FY + MX_FH - f - 1 < MX_FY ? MX_FY : MX_FY + MX_FH - f - 1, 9, 3, 1, hot == 1u ? T_TEXT : T_MID, bg);
+        cv_rrect(MX_FX + 2, MX_FY + MX_FH - f, 7, f, 3, tc, T_LINE);
+    cv_rrect(MX_FX, MX_FY + MX_FH - f - 1 < MX_FY ? MX_FY : MX_FY + MX_FH - f - 1, 11, 3, 1, hot == 1u ? T_TEXT : T_MID, bg);
     mh = ts.meter[c] * MX_FH / (TS_MH - 2);            /* the output's meter */
-    meter_up(17, MX_FY, 4, MX_FH, mh, mute, bg);           /* (Dah: green to orange to red) */
-    if (lvl) {
-        int32_t db = LEVEL_DB_X10[lvl];
-        fmt_int(v, (db + (db < 0 ? -5 : 5)) / 10);
-    } else {
-        str_cpy(v, "OFF", sizeof v);
+    meter_up(MX_FX + 13, MX_FY, 7, MX_FH, mh, mute, bg);   /* (Dah: green to orange to red) */
+    {
+        int32_t py = (int32_t)graph_h() - 17, ry = (int32_t)graph_h() - 8;
+        cv_rect(4, py + 2, MX_W - 8, 1, T_LINE);       /* PAN: a dot on a line, the centre marked */
+        cv_rect(MX_W / 2, py, 1, 5, T_LINE);
+        x = 4 + (pan + 64) * (MX_W - 8 - 4) / 127;
+        cv_rrect(x, py, 4, 5, 2, hot == 2u ? T_TEXT : tc, bg);
+        cv_rrect(4, ry, MX_W - 8, 3, 1, T_LINE, bg);   /* REV: the send */
+        if (rv)
+            cv_rrect(4, ry, 1 + rv * (MX_W - 9) / 127, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
     }
-    GFX_HOOK_ALIGN(0, 0, MX_W, 0, AL_H, "mixer strip dB centred");
-    cv_text_in(0, 90, MX_W, &AF_S, v, hot == 1u ? T_TEXT : lvl ? tc : T_DIM, bg);
-    cv_rect(4, 106, MX_W - 8, 1, T_LINE);              /* PAN: a dot on a line, the centre marked */
-    cv_rect(MX_W / 2, 104, 1, 5, T_LINE);
-    x = 4 + (pan + 64) * (MX_W - 8 - 4) / 127;
-    cv_rrect(x, 104, 4, 5, 2, hot == 2u ? T_TEXT : tc, bg);
-    cv_rrect(4, 114, MX_W - 8, 3, 1, T_LINE, bg);      /* REV: the send */
-    if (rv)
-        cv_rrect(4, 114, 1 + rv * (MX_W - 9) / 127, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
     cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH);
 }
 static void draw_tracks(void)
@@ -1960,17 +1957,16 @@ static void draw_tracks(void)
     if (!sk) {
         if (ui.force) {                                /* the BG between the strips only, they cover the rest (#181) */
             lcd_fill(0, Y_GRAPH, MX_X0, (int32_t)graph_h(), T_BG);
-            for (c = 0; c < NTRK; c++) {
-                uint32_t x = (uint32_t)(MX_X0 + (int32_t)c * MX_PITCH + MX_W);
-                lcd_fill(x, Y_GRAPH, c + 1u < NTRK ? MX_PITCH - MX_W : 240u - x, (int32_t)graph_h(), T_BG);
+            for (c = 0; c < NTRK; c++)
                 ts.meter[c] = 0;
+            for (c = 0; c < trk_count(); c++) {        /* (Dah: the strips share the width; after the last, to the edge) */
+                uint32_t x = (uint32_t)(MX_X0 + (int32_t)c * MX_PITCH + MX_W);
+                if (x < 240u)
+                    lcd_fill(x, Y_GRAPH, c + 1u < trk_count() ? (uint32_t)(MX_PITCH - MX_W) : 240u - x, (int32_t)graph_h(), T_BG);
             }
         }
         for (c = 0; c < trk_count(); c++)
             mixer_strip(c);
-        if (ui.force)                                  /* (HA HA HE HU) past the project's tracks: nothing */
-            for (c = trk_count(); c < NTRK; c++)
-                lcd_fill((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH, MX_W, (int32_t)graph_h(), T_BG);
         return;
     }
     if (ui.force) {                                  /* the BG beside the columns only, they cover the rest (#181: */

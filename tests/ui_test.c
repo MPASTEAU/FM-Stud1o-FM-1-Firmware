@@ -5019,11 +5019,13 @@ static int test_bughunt_ui2(void)
             go_page(GR_TRK); frame(); frame();
             turn(EN_K1 + k, 1);                                       /* (K4 right: MUTE on) */
             ui.force = 1; frame();
-            a[k][0] = color_in(T_TEXT, X + 4, Y + MX_FY - 1, X + 15, Y + MX_FY + MX_FH) +
-                      color_in(T_TEXT, X, Y + 88, X + MX_W, Y + 102);   /* LEVEL: the thumb, the dB */
-            a[k][1] = color_in(T_TEXT, X + 2, Y + 103, X + MX_W - 2, Y + 110);   /* PAN */
-            a[k][2] = color_in(T_TEXT, X + 2, Y + 113, X + MX_W - 2, Y + 118);   /* REV */
-            a[k][3] = color_in(T_DIM, X + 9, Y + 6, X + 19, Y + 15);           /* MUTE: the cushion DIM */
+            {   /* (Dah: no dB; PAN and REV at the panel's foot) */
+                int32_t H = (int32_t)graph_h();
+                a[k][0] = color_in(T_TEXT, X + MX_FX, Y + MX_FY - 1, X + MX_FX + 11, Y + MX_FY + MX_FH);   /* LEVEL: the thumb */
+                a[k][1] = color_in(T_TEXT, X + 2, Y + H - 18, X + MX_W - 2, Y + H - 11);   /* PAN */
+                a[k][2] = color_in(T_TEXT, X + 2, Y + H - 9, X + MX_W - 2, Y + H - 4);     /* REV */
+                a[k][3] = color_in(T_DIM, X + MX_W / 2 - 5, Y + 6, X + MX_W / 2 + 5, Y + 15);   /* MUTE: the cushion DIM */
+            }
         }
         for (k = 0; k < 4u; k++) {
             uint32_t j;
