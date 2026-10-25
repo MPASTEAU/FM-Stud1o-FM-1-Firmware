@@ -988,6 +988,29 @@ static int seq_miss(const track_t *t, const step_t *s, uint32_t idx)
 #define SEQ_REP (1u << 16)
 #define SEQ_ROLLED (1u << 17)   /* seq_tick rolled the chance already (before the step's parameter locks): it passed */
 #define SEQ_MISS (1u << 18)     /* .. it failed: nothing plays */
+/* (Dah) the step after idx is a note step of the notes t holds now (all of them, no more): the step after the loop's
+ * end is its first, or at a SONG's section's end the next section's first (its pattern ready: chain_poll). A held
+ * note tied up to it then goes on (no release, no new attack: a drone, a pad over the loop or the next section) */
+static __attribute__((noinline)) int seq_same_next(const track_t *t, uint32_t idx, uint32_t len)
+{
+    const step_t *nx = &seq_steps(t)[(idx + 1u) % len];
+    uint32_t k = (uint32_t)(t - trk) % NTRK, i, j;
+    if (idx + 1u >= len && chain.running && chain.remaining <= 1u) {   /* (the section's end: its next's step 1) */
+        uint32_t b = chain.cur ^ 1u, r = chain.row + 1u < chain.config.count ? chain.row + 1u : 0u;
+        if (!chain.src_ok[b] || chain.src_row[b] != r || chain.config.row[r].slot[k] == CHAIN_SILENT)
+            return 0;
+        nx = &chain.source[b].step[k][0];
+    }
+    if (nx->time != ST_NOTE || nx->hit || nx->n != t->seq_n || step_ratchet(nx) > 1u || step_chance(nx) < 100u)
+        return 0;
+    for (i = 0; i < nx->n; i++) {
+        for (j = 0; j < t->seq_n && t->seq_notes[j] != nx->note[i]; j++)
+            ;
+        if (j == t->seq_n)
+            return 0;
+    }
+    return 1;
+}
 static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint32_t idx, uint32_t period, uint32_t skip)
 {
     uint32_t i, j, gate = period * (uint32_t)t->p[P_SGATE] / 128u;
@@ -1014,7 +1037,8 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     if (s->time == ST_TIE) {
         if (t->seq_n) {
             t->seq_off = gate + period / 2u;
-            t->seq_hold = (s->flags & SF_SLIDE) != 0 || next_tie;   /* chains hold at any GATE / swing */
+            t->seq_hold = (s->flags & SF_SLIDE) != 0 || next_tie ||   /* chains hold at any GATE / swing; (Dah) */
+                          seq_same_next(t, idx, len);   /* into the same notes (the loop's, the next section's): on */
         }
         return;
     }
@@ -1053,6 +1077,11 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
                                                      * into: its voices glide over, not started again */
     if (!slide_in)
         seq_release(t);
+    else                                            /* (Dah) held over: the notes sounding already go on, no attack */
+        for (i = 0; i < m; i++)
+            for (j = 0; j < t->seq_n; j++)
+                if (nn[i] == t->seq_notes[j] && trk_vmode(t) == V_POLY && !t->p[P_AMODE])
+                    sl |= 1u << i;
     for (i = 0; i < m; i++)
         if (!(((sk | sl) >> i) & 1u))
             seq_note_on(t, nn[i], vv[i]);

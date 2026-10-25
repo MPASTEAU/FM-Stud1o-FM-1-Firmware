@@ -30,20 +30,15 @@ static void pt_move(int32_t steps)                      /* KNOB 1: up and down t
 }
 static uint32_t pt_steps(uint32_t num)                  /* its steps that strike (notes, hits; not the ties) */
 {
-    uint32_t i, c = 0, n;
-    int32_t at;
-    const uint8_t *b;
-    if (num == ps_num(song.sel)) {
-        for (i = 0; i < NSTEP; i++)
-            c += TSEL->step[i].time == ST_NOTE && (TSEL->step[i].n || TSEL->step[i].hit);
-        return c;
-    }
-    at = ps_find(song.sel % NTRK, num);
-    if (at < 0)
-        return 0;
-    b = ps_heap + at + 4 + 11;
-    for (n = ps_heap[at + 4 + 10], i = 0; i < n; i++, b += 10)
-        c += ((b[5] >> 3) & 3u) == ST_NOTE && ((b[5] & 7u) || b[7]);
+    static step_t st[NSTEP];
+    uint32_t i, c = 0, n, pos = 10u;
+    const step_t *s = st;
+    if (num == ps_num(song.sel))
+        s = TSEL->step;
+    else if (!ps_exists(song.sel % NTRK, num) || !(n = ps_fetch(song.sel % NTRK, num)) || !ps_steps_get(ps_buf, n, &pos, st))
+        return 0;                                       /* (Dah: the heap's, read as the decoder reads them) */
+    for (i = 0; i < NSTEP; i++)
+        c += s[i].time == ST_NOTE && (s[i].n || s[i].hit);
     return c;
 }
 static uint32_t pt_mem_pct(void) { return (ps_used * 100u + PS_HEAP - 1u) / PS_HEAP; }

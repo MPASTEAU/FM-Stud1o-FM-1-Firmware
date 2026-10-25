@@ -6,7 +6,11 @@
  *   LEN DIV SWING GATE QUANTIZE (2 bytes each), the steps that are not empty (their count, then index + FUN10's 9
  *   bytes each: notes with the NUDGE, n time flags, velocity with RATCH, hits, accents, chance with RATCH), the
  *   automation (its count, then step, id with the lock bit, value: 3 bytes each)
- * so an empty pattern costs 17 bytes and a note a step 10. pattern_go puts the track's pattern in the heap and the one
+ * so an empty pattern costs 17 bytes and a note a step 10. (Dah) Since then the steps compact (PS_V2 after the timing):
+ * a run of plain TIEs 2 bytes (its first step | 0xC0, its length: a note held over the whole pattern, 6 bytes in all),
+ * a note step its index | 0x80, n time flags (bit 7: the rare fields follow), its n notes, its velocity [, hits,
+ * accents, chance]; a step with a NUDGE its index and FUN10's 9 bytes; 0xFF after the last. The older form (a count)
+ * still reads. pattern_go puts the track's pattern in the heap and the one
  * asked on the track (main loop; the audio ISR sees the change at once, under the guard). The project's file
  * (projfs.c) keeps the heap and each track's number; the SONG's sections name a number per track. */
 #define PS_NUM 32u                                      /* patterns a track, 1..PS_NUM */
@@ -90,11 +94,113 @@ static int ps_step_unpack(step_t *s, const uint8_t *b)
     step_set_nudge(s, (int32_t)(nd ^ 8u) - 8);
     return 1;
 }
+#define PS_V2 0xFEu                                     /* (Dah) the compact steps follow (else: their count) */
 static int ps_step_empty(const step_t *s)
 {
     return s->time == ST_REST && !s->n && !s->hit && !s->vel && !s->flags && !s->probability;
 }
 static const uint8_t PS_TIMING[5] = {P_SLEN, P_SDIV, P_SSWING, P_SGATE, P_SQNT};
+/* (Dah) the steps st[NSTEP], compact, into b: the bytes */
+static uint32_t ps_steps_put(const step_t *st, uint8_t *b)
+{
+    uint32_t i = 0, pos = 0, j;
+    uint8_t r[9];
+    while (i < NSTEP) {
+        const step_t *s = &st[i];
+        if (ps_step_empty(s)) {
+            i++;
+            continue;
+        }
+        ps_step_pack(s, r);
+        if (r[4] == (ST_TIE << 3) && !(r[0] | r[1] | r[2] | r[3] | r[5] | r[6] | r[7] | r[8])) {   /* a plain TIE: a run */
+            uint8_t q[9];
+            for (j = i + 1u; j < NSTEP; j++) {
+                ps_step_pack(&st[j], q);
+                if (memcmp(q, r, 9))
+                    break;
+            }
+            b[pos++] = (uint8_t)(0xC0u | i);
+            b[pos++] = (uint8_t)(j - i);
+            i = j;
+            continue;
+        }
+        if (!((r[0] | r[1] | r[2] | r[3]) & 0x80u)) {    /* no NUDGE: compact */
+            uint32_t x = (r[6] | r[7] | r[8]) != 0u, n = r[4] & 7u;
+            b[pos++] = (uint8_t)(0x80u | i);
+            b[pos++] = (uint8_t)(r[4] | x << 7);
+            for (j = 0; j < n; j++)
+                b[pos++] = r[j];
+            b[pos++] = r[5];
+            if (x) {
+                b[pos++] = r[6]; b[pos++] = r[7]; b[pos++] = r[8];
+            }
+        } else {
+            b[pos++] = (uint8_t)i;
+            memcpy(b + pos, r, 9);
+            pos += 9u;
+        }
+        i++;
+    }
+    b[pos++] = 0xFFu;
+    return pos;
+}
+/* .. back (either form at b + *pos: PS_V2's, or the count's), into st (all reset first); 0 = not steps */
+static int ps_steps_get(const uint8_t *b, uint32_t n, uint32_t *pos, step_t *st)
+{
+    uint32_t i, c, p = *pos;
+    for (i = 0; i < NSTEP; i++) {
+        memset(&st[i], 0, sizeof st[i]);
+        st[i].time = ST_REST;
+    }
+    if (p >= n)
+        return 0;
+    if (b[p] != PS_V2) {                                /* the older form: a count, then index + 9 bytes each */
+        for (c = b[p++]; c--;) {
+            if (p + 10u > n || b[p] >= NSTEP || !ps_step_unpack(&st[b[p]], b + p + 1u))
+                return 0;
+            p += 10u;
+        }
+        *pos = p;
+        return 1;
+    }
+    for (p++; p < n && b[p] != 0xFFu;) {
+        uint32_t l = b[p++], at = l & 63u, j;
+        uint8_t r[9];
+        if ((l & 0xC0u) == 0xC0u) {                     /* a run of TIEs */
+            if (p >= n || at + b[p] > NSTEP || !b[p])
+                return 0;
+            for (j = 0; j < b[p]; j++)
+                st[at + j].time = ST_TIE;
+            p++;
+        } else if (l & 0x80u) {                         /* a compact step */
+            uint32_t x, ns;
+            if (p >= n)
+                return 0;
+            memset(r, 0, sizeof r);
+            r[4] = b[p] & 0x7Fu;
+            x = b[p++] >> 7;
+            ns = r[4] & 7u;
+            if (ns > 4u || p + ns + 1u + (x ? 3u : 0u) > n)
+                return 0;
+            for (j = 0; j < ns; j++)
+                r[j] = b[p++];
+            r[5] = b[p++];
+            if (x) {
+                r[6] = b[p++]; r[7] = b[p++]; r[8] = b[p++];
+            }
+            if (!ps_step_unpack(&st[at], r))
+                return 0;
+        } else {                                        /* a whole one */
+            if (l >= NSTEP || p + 9u > n || !ps_step_unpack(&st[at], b + p))
+                return 0;
+            p += 9u;
+        }
+    }
+    if (p >= n)
+        return 0;
+    *pos = p + 1u;
+    return 1;
+}
 /* track t's pattern (on the track, its records in the motion store) into b: its length */
 static uint32_t ps_encode(const track_t *t, uint8_t *b)
 {
@@ -107,15 +213,8 @@ static uint32_t ps_encode(const track_t *t, uint8_t *b)
         b[pos++] = (uint8_t)v;
         b[pos++] = (uint8_t)((uint16_t)v >> 8);
     }
-    at = pos++;
-    for (i = 0; i < NSTEP; i++)
-        if (!ps_step_empty(&t->step[i])) {
-            b[pos++] = (uint8_t)i;
-            ps_step_pack(&t->step[i], b + pos);
-            pos += 9u;
-            n++;
-        }
-    b[at] = (uint8_t)n;
+    b[pos++] = PS_V2;
+    pos += ps_steps_put(t->step, b + pos);
     at = pos++;
     n = 0;
     for (i = 0; i < motion.count; i++) {
@@ -142,16 +241,7 @@ static int ps_decode(track_t *t, const uint8_t *b, uint32_t n)
         return 0;
     for (i = 0; i < 5u; i++)
         tv[i] = (int16_t)((uint16_t)b[2u * i] | (uint16_t)b[2u * i + 1u] << 8);
-    for (i = 0; i < NSTEP; i++) {
-        memset(&st[i], 0, sizeof st[i]);
-        st[i].time = ST_REST;
-    }
-    for (c = b[pos++]; c--;) {
-        if (pos + 10u > n || b[pos] >= NSTEP || !ps_step_unpack(&st[b[pos]], b + pos + 1u))
-            return 0;
-        pos += 10u;
-    }
-    if (pos >= n)
+    if (!ps_steps_get(b, n, &pos, st) || pos >= n)
         return 0;
     memset(&m, 0, sizeof m);
     for (c = b[pos++]; c--;) {
@@ -329,15 +419,13 @@ static int ps_decode_to(uint32_t k, const uint8_t *b, uint32_t n, step_t *st, in
     }
     if (n < 12u)
         return 0;
+    (void)c;
     for (i = 0; i < 4u; i++)
         timing[i] = (int16_t)clamp((int16_t)((uint16_t)b[2u * i] | (uint16_t)b[2u * i + 1u] << 8), TP[P_SLEN + i].min,
                                    TP[P_SLEN + i].max);
     *qnt = (uint8_t)clamp((int16_t)((uint16_t)b[8] | (uint16_t)b[9] << 8), TP[P_SQNT].min, TP[P_SQNT].max);
-    for (c = b[pos++]; c--;) {
-        if (pos + 10u > n || b[pos] >= NSTEP || !ps_step_unpack(&st[b[pos]], b + pos + 1u))
-            return 0;
-        pos += 10u;
-    }
+    if (!ps_steps_get(b, n, &pos, st))
+        return 0;
     for (c = pos < n ? b[pos++] : 0u; c--;) {
         motion_event_t *e;
         if (pos + 3u > n)
