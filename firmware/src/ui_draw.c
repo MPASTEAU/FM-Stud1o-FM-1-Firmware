@@ -1515,7 +1515,7 @@ static void draw_splash(void)
             if (r < 0 || r >= SPL_STRIP)
                 continue;
             for (x = 0; x < SPLASH_W; x++)
-                cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PX[y * SPLASH_W + x];
+                cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PAL[(SPLASH_IX[(y * SPLASH_W + x) >> 1] >> ((x & 1u) * 4u)) & 15u];
         }
         if (SPL_NAME_Y >= y0 && SPL_BASED_Y + AF_S.h <= y0 + SPL_STRIP) {
             GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(3), "splash lines centred");

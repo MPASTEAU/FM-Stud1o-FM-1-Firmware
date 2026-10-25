@@ -355,9 +355,9 @@ static void menu_row(uint32_t k, uint32_t row)
  * of the audio (its SYSTEM card; the shown value follows every INFO_CPU_MS, not every frame). The rows as the menu's (no
  * tabs: from INFO_Y), the selected look on none; OCT- back to the tabs, HOME closes */
 #define INFO_Y 32
-#define INFO_N 3u
+#define INFO_N 4u
 #define INFO_CPU_MS 500u
-static struct { uint8_t cpu; uint32_t t; } info;
+static struct { uint8_t cpu, peak; uint32_t t; } info;
 static uint32_t info_usb(void)                         /* 0 OFF, 1 WAIT, 2 BUS, 3 ENUM, 4 MIDI */
 {
     return !usb.up ? 0u : usb.config ? 4u : usb.setups ? 3u : usb.sof_seen ? 2u : 1u;
@@ -367,17 +367,18 @@ static uint32_t info_sig(void)
     if (fm1_ms - info.t >= INFO_CPU_MS) {
         info.t = fm1_ms;
         info.cpu = (uint8_t)(song.cpu_q8 * 100u / 256u);
+        info.peak = (uint8_t)(song.cpu_peak_q8 * 100u / 256u > 255u ? 255u : song.cpu_peak_q8 * 100u / 256u);
+        song.cpu_peak_q8 = 0;                           /* (Dah: the highest half of the last INFO_CPU_MS) */
     }
-    return info.cpu * 7u + info_usb() * 131u + 1u;
+    return info.cpu * 7u + info.peak * 1031u + info_usb() * 131u + 1u;
 }
 static void info_rows(void)                            /* (in screen rows: cv_oy set by the caller) */
 {
-    static const char *const LBL[INFO_N] = {"FIRMWARE", "USB", "CPU"};
+    static const char *const LBL[INFO_N] = {"FIRMWARE", "USB", "CPU", "CPU PEAK"};
     static const char *const USB_N[5] = {"OFF", "WAIT", "BUS", "ENUM", "MIDI"};
     int32_t h = menu_large() ? 28 : 24;
     uint32_t k;
     char cpu[8];
-    fmt_int(cpu, info.cpu);
     if (!ux.style)                                     /* FLAT: the rows' panel */
         cv_rrect(4, INFO_Y, 232, (int32_t)INFO_N * (h + 2) - 2 + 2 * MP_PAD, 8, T_SURF, T_BG);
     for (k = 0; k < INFO_N; k++) {
@@ -387,7 +388,8 @@ static void info_rows(void)                            /* (in screen rows: cv_oy
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "info row name centred up/down");
         cv_text_on(MR_LX, vy, &AF_M, LBL[k], T_TEXT, T_SURF);
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "info row value centred up/down");
-        if (k == 2u) {                                 /* CPU: the value and its unit, as HOLD's */
+        if (k >= 2u) {                                 /* CPU, its PEAK: the value and its unit, as HOLD's */
+            fmt_int(cpu, k == 2u ? info.cpu : info.peak);
             GFX_HOOK_ALIGN(0, 0, 0, vy + AF_M.asc, AL_B, "info row unit on its value's baseline");
             cv_text_r(cv_text_r(MR_VR, vy + AF_M.asc - AF_S.asc, &AF_S, "%", T_MID, T_SURF) - 3, vy, &AF_M, cpu, T_THEME, T_SURF);
         } else {

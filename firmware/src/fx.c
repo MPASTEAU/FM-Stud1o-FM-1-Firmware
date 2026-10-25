@@ -981,7 +981,16 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax = c > d ? c : d;
-        xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
+        xmax = (c | d | r) ? 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1) : 0;   /* sends: loud chords at a high LEVEL */
+        if (!(c | d | r))                               /* (Dah) no send: the dry sums only, no clamp, no tests */
+            for (i = 0; i < n; i++) {
+                int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;
+                if (a > pk)
+                    pk = a;
+                SM(l)[i] += (x * gl) >> 12;
+                SM(r)[i] += (x * gr) >> 12;
+            }
+        else
         for (i = 0; i < n; i++) {
             int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;   /* pre-shift: 8 loud voices */
             int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */

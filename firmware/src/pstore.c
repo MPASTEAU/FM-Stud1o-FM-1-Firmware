@@ -8,7 +8,7 @@
  *   automation (its count, then step, id with the lock bit, value: 3 bytes each)
  * so an empty pattern costs 17 bytes and a note a step 10. pattern_go puts the track's pattern in the heap and the one
  * asked on the track (main loop; the audio ISR sees the change at once, under the guard). The project's file
- * (project_arch.c) keeps the heap and each track's number; the SONG's sections name a number per track. */
+ * (projfs.c) keeps the heap and each track's number; the SONG's sections name a number per track. */
 #define PS_NUM 32u                                      /* patterns a track, 1..PS_NUM */
 #define PS_HEAP 8192u
 #define PS_PAT_MAX (10u + 1u + NSTEP * 10u + 1u + MOTION_MAX * 3u + 1u)   /* a pattern at most */

@@ -704,7 +704,8 @@ static int32_t ds_band(uint32_t v) { return 1600 + (int32_t)v * 32; }
 
 /* the layered voice: p the lane's (TUNE DECAY TONE SNAP LEVEL accent; 64: as the set makes it), s its layer set (DS_NF
  * values, each within DS_MAX: the caller's) */
-static void dv_setup_synth(dv_coef_t *c, const dv_param_t *p, const uint8_t *s)
+static __attribute__((noinline, cold)) void dv_setup_synth(dv_coef_t *c, const dv_param_t *p, const uint8_t *s)   /* (Dah: off the
+                                                         * render path, a knob moved) */
 {
     uint32_t d = p->decay, i, r = s[DS_NRES] & 3u, tn;
     int32_t acc = p->accent, dt = ((int32_t)p->tone - 64) * 3, p16, g;
@@ -747,7 +748,7 @@ static void dv_setup_synth(dv_coef_t *c, const dv_param_t *p, const uint8_t *s)
     c->kx[2] = dv_kb(1500);                              /* choked (an open hat's lane by the closed one's) */
 }
 
-static void dv_setup(dv_coef_t *c, const dv_param_t *p)
+static __attribute__((noinline, cold)) void dv_setup(dv_coef_t *c, const dv_param_t *p)
 {
     if (p->type == DVT_SYNTH)                            /* (a set of its own: dv_setup_synth; here SYN 1's) */
         dv_setup_synth(c, p, DV_SYN_DEF[0]);
@@ -757,7 +758,7 @@ static void dv_setup(dv_coef_t *c, const dv_param_t *p)
         dv_setup_own(c, p);
 }
 
-static void dv_metal_tune(dv_metal_t *b, const dv_coef_t *c)
+static __attribute__((noinline, cold)) void dv_metal_tune(dv_metal_t *b, const dv_coef_t *c)
 {
     uint32_t i, inc = DV_P16(c->metal);
     const uint16_t *r = DV_METAL_R[c->mrow];

@@ -1671,7 +1671,7 @@ static void draw(int s)
             uint32_t x, y, px0 = (240u - SPLASH_W) / 2u, bad = 0;
             for (y = 0; y < SPLASH_H; y++)
                 for (x = 0; x < SPLASH_W; x++)
-                    bad += host_screen[(uint32_t)(SPL_PY + y) * 240u + px0 + x] != SPLASH_PX[y * SPLASH_W + x];
+                    bad += host_screen[(uint32_t)(SPL_PY + y) * 240u + px0 + x] != SPLASH_PAL[(SPLASH_IX[(y * SPLASH_W + x) >> 1] >> ((x & 1u) * 4u)) & 15u];
             if (bad) {
                 if (rep) fprintf(rep, "FIND %-26s the splash picture off in %u pixels\n", cur_name, (unsigned)bad);
                 nfind++;

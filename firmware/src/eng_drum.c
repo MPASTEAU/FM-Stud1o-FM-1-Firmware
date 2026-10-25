@@ -402,6 +402,13 @@ static int32_t drum_amp(track_t *t, voice_t *v, int32_t adsr)
     return 32767;
 }
 
+static struct { int16_t drv; int32_t g, mk; } drum_drv[NTRK];   /* (Dah) DRV's gain and make-up, set when it moves */
+static __attribute__((noinline, cold)) void drum_drv_set(uint32_t tr, int32_t drv)
+{
+    drum_drv[tr].drv = (int16_t)drv;
+    drum_drv[tr].g = 4096 + drv * 3 * 4096 / 127;
+    drum_drv[tr].mk = (int32_t)((19661u << 15) / (uint32_t)softclip((19661 * drum_drv[tr].g) >> 12));
+}
 static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     const int16_t *p = t->p;
@@ -465,8 +472,11 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if ((drum_mute[(uint32_t)(t - trk) % NPART] >> ((uint32_t)v->s[0] & (DV_NLANE - 1u))) & 1u)
         return;                                          /* (a muted lane rings on unheard) */
     if (drv > 0) {                                       /* DRV: x1..x4 into the soft clip, the level kept (Q12) */
-        g = 4096 + drv * 3 * 4096 / 127;
-        mk = (int32_t)((19661u << 15) / (uint32_t)softclip((19661 * g) >> 12));
+        uint32_t tr = (uint32_t)(t - trk) % NTRK;
+        if (drum_drv[tr].drv != drv || !drum_drv[tr].g)
+            drum_drv_set(tr, drv);
+        g = drum_drv[tr].g;
+        mk = drum_drv[tr].mk;
     }
     for (i = 0; i < n; i++) {                            /* x1.25 and the knee below, in 32 bits */
         int32_t s = y[i];

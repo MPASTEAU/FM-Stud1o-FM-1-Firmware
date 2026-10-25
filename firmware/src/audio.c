@@ -125,7 +125,10 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         if (us > audio_max_us)
             audio_max_us = us;
         {
-            uint32_t load = song.cpu_q8 * (CPU_AVG - 1u) + (us * 256u) / (HALF_FRAMES * 1000000u / FS) + audio_cpu_rem;
+            uint32_t now_q8 = (us * 256u) / (HALF_FRAMES * 1000000u / FS);
+            uint32_t load = song.cpu_q8 * (CPU_AVG - 1u) + now_q8 + audio_cpu_rem;
+            if (now_q8 > song.cpu_peak_q8)
+                song.cpu_peak_q8 = now_q8;              /* (Dah: MENU > INFO's PEAK) */
             song.cpu_q8 = load / CPU_AVG;
             audio_cpu_rem = load % CPU_AVG;
         }
