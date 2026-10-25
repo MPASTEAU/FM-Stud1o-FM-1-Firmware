@@ -15,7 +15,7 @@
 #define PFS_IDS 32u
 #define PFS_PAY 64u                                /* the payload's offset in the first sector */
 #define PFS_MAGIC 0x4A525048u                      /* "HPRJ" */
-#define PFS_VER 4u                                 /* (4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
+#define PFS_VER 5u                                 /* (5: the MASTER's COMP IN OUT too; 4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
                                                     * parameters; before 3 the extras were TRKX_V2 bytes) */
 #define PFS_CUR DAH_CUR                           /* the project open, its id (0 none): kept with the settings (favorites.c) */
 _Static_assert(PFS_BASE + PFS_NSECT * ST_SECTOR <= 0xDC000u, "the projects in USR2 and USR3");
@@ -331,7 +331,7 @@ static int pfs_read_in(uint32_t id)
     }
     q->sel = (uint8_t)pr_b();
     if (!pr_get(&q->chain, sizeof q->chain) || !chain_valid(&q->chain)) return 2;
-    if (ver >= 4u && !pr_get(mst, MST_N)) return 2;
+    if (ver >= 4u && !pr_get(mst, ver >= 5u ? MST_N : MST_N4)) return 2;
     for (k = 0; k < nt; k++) {
         int16_t v[P_COUNT], def[P_COUNT];
         for (i = 0; i < np; i++)
@@ -363,7 +363,7 @@ static int pfs_read_in(uint32_t id)
     q->sum = proj_sum(q);
     proj_bound(q);
     if (project_restore_runtime(q)) return 2;
-    for (i = 0; ver >= 4u && i < MST_N; i++)            /* (the MASTER's chain: restore_runtime emptied it) */
+    for (i = 0; ver >= 4u && i < (ver >= 5u ? MST_N : MST_N4); i++)            /* (the MASTER's chain: restore_runtime emptied it) */
         mtrk.p[MST_ID[i]] = (int16_t)clamp((int32_t)mst[i] - 64, TP[MST_ID[i]].min, TP[MST_ID[i]].max);
     song.ntrk = (uint8_t)nt;
     for (k = 0; k < NTRK; k++) {                        /* each track's pattern, read again, its number back */

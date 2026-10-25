@@ -1608,8 +1608,12 @@ static void draw_columns_in(void)
             } else if (c == 1u) {
                 fmt_int(val, 20 + cr * 360 / 127);
                 draw_column(1, "RELEASE", val, "ms", VAL(1u), cr * 1000 / 127, ICON_AUTO);
-            } else                                      /* (the reduction: the panel's, live) */
-                draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
+            } else {                                    /* IN, OUT: +-15 dB */
+                int32_t gv = fx_cget(fx_tsel(), c - 2u);
+                param_format(&TP[P_DOUT], gv, val, &unit);
+                card_span_of(&TP[P_DOUT]);
+                draw_column(c, c == 2u ? "IN" : "OUT", val, unit, VAL(c), (gv + 64) * 1000 / 127, ICON_AUTO);
+            }
             continue;
         }
         if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, TYPE, MOVE */

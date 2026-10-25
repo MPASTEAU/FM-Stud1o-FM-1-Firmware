@@ -1294,6 +1294,8 @@ static void edit_param(uint32_t slot, int32_t steps)
             fx_cset(ft, clamp((int32_t)fx_camt(ft) + accel(EN_K1, steps, 126), 1, 127), -1);   /* (1: it stays in) */
         else if (slot == 1u)
             fx_cset(ft, -1, clamp((int32_t)fx_crel(ft) + accel(EN_K2, steps, 127), 0, 127));
+        else                                            /* IN, OUT */
+            fx_cput(ft, slot - 2u, fx_cget(ft, slot - 2u) + accel(EN_K1 + slot, steps, 127));
         ui.force = 1;
         return;
     }

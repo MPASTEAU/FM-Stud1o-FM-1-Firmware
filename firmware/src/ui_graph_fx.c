@@ -34,6 +34,27 @@ static void fx_cset(const track_t *t, int32_t amt, int32_t rel)   /* the COMPRES
         if (rel >= 0) trkx[trk_index(t) % NTRK].rsv1 = (uint8_t)rel;
     }
 }
+static int16_t *fx_cio(const track_t *t, uint32_t out, int8_t **x8)   /* (Dah) the COMPRESSOR's IN (0) / OUT (1) */
+{
+    *x8 = 0;
+    if (fx_mst(t))
+        return &mtrk.p[out ? P_IB : P_IA];
+    *x8 = out ? &trkx[trk_index(t) % NTRK].cout : &trkx[trk_index(t) % NTRK].cin;
+    return 0;
+}
+static int32_t fx_cget(const track_t *t, uint32_t out)
+{
+    int8_t *x8;
+    int16_t *p = fx_cio(t, out, &x8);
+    return p ? *p : *x8;
+}
+static void fx_cput(const track_t *t, uint32_t out, int32_t v)
+{
+    int8_t *x8;
+    int16_t *p = fx_cio(t, out, &x8);
+    v = clamp(v, -64, 63);
+    if (p) *p = (int16_t)v; else *x8 = (int8_t)v;
+}
 static uint32_t fx_max(const track_t *t) { return fx_mst(t) ? 3u : FXU_N_ALL; }   /* (the effects it takes) */
 static uint32_t fx_crel(const track_t *t) { return fx_mst(t) ? (uint32_t)song.g[G_MREL] : trkx[trk_index(t) % NTRK].rsv1; }
 static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (3u * (i % FXU_SER))) & 7u; }

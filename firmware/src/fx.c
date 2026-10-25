@@ -871,9 +871,10 @@ static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t-
  * right each (a voice's scale: a quarter) */
 static track_t mtrk __attribute__((section(".pool")));
 static int32_t mdist[2][3];
-#define MST_N 12u
+#define MST_N 14u
+#define MST_N4 12u                                      /* (projfs.c format 4's: before the COMPRESSOR's IN OUT) */
 static const uint8_t MST_ID[MST_N] = {P_FXORD, P_DIST, P_DOUT, P_DCOL, P_EQLO, P_EQHI, P_EQ1F, P_EQ1G,
-                                      P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G};
+                                      P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G, P_IA, P_IB};   /* (P_IA P_IB: its COMP's IN OUT) */
 static uint8_t mst_ok;                                  /* (mtrk set: its defaults at least) */
 static void mst_defaults(void)
 {
@@ -886,6 +887,7 @@ static void mst_defaults(void)
     mtrk.p[P_EQLO] = 0;
     mtrk.p[P_EQHI] = EQ_TOP;
     mtrk.p[P_EQ1G] = mtrk.p[P_EQ2G] = mtrk.p[P_EQ3G] = 0;
+    mtrk.p[P_IA] = mtrk.p[P_IB] = 0;
     memset(mdist, 0, sizeof mdist);
 }
 static int mst_on(void)
@@ -1347,7 +1349,8 @@ static void mix_block(int32_t *out, uint32_t n)
         }
         mst_chain(mix_l, mix_r, n);
         if (song.g[G_MCOMP] > 0)
-            comp_master(mix_l, mix_r, n, (uint32_t)song.g[G_MCOMP], (uint32_t)clamp(song.g[G_MREL], 0, 127));
+            comp_master(mix_l, mix_r, n, (uint32_t)song.g[G_MCOMP], (uint32_t)clamp(song.g[G_MREL], 0, 127),
+                        mtrk.p[P_IA], mtrk.p[P_IB]);   /* (IN, OUT: mtrk's P_IA P_IB) */
         else
             cmp_master.gr = 0;
     } else
