@@ -215,10 +215,10 @@ static __attribute__((noinline)) void phase_render_f(track_t *t, voice_t *v, int
  * fold's output has none of the wave's DC, so the switch would step (up to half full scale on PLS / RING). That block
  * is rendered both ways and crossfaded, unfolded -> folded or back (going off: at the last FOLD's gain); going on, the
  * blocker starts afresh as on a note-on (its state from the last FOLD long gone). Once per switch: not the loop's cost */
-static int32_t pd_xa[CTL], pd_xb[CTL];
 static __attribute__((noinline)) void phase_xfade(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m,
                                                   uint32_t on)
 {
+    int32_t pd_xa[CTL], pd_xb[CTL];                    /* (Dah: on the stack: either core renders a part) */
     uint32_t ph0 = v->ph[0], ph1 = v->ph[1], ph2 = v->ph[2], i;
     int32_t tg0 = v->s[0], tg1 = v->s[1], k;
     if (n > CTL)

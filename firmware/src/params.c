@@ -64,7 +64,7 @@ static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"}
 static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"};
 /* HA HA HE HU: ORDER, DIST (D) INSERT (I) SLICER (S) in a row (fx.c FX_ORDER); DUCK's source (fx.c duck_part) */
 static const char *const N_FXORD[] = {"D I S", "D S I", "I D S", "I S D", "S D I", "S I D"};
-static const char *const N_DKSRC[] = {"OFF", "T1", "T2", "T3", "T4"};
+static const char *const N_DKSRC[] = {"OFF", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"};   /* (Dah: eight) */
 /* CRUSH: BITS 1..16 and RATE (the held sample's rate, fx.c INS_HOLD) over the range in 16 even parts (0-terminated) */
 static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
                                       "16", 0};

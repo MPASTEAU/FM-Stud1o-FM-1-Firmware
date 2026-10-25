@@ -57,7 +57,7 @@ static int ml_drop(uint32_t cc, uint32_t k, uint32_t id)
 static uint32_t ml_learn(uint32_t cc, uint32_t k, uint32_t id)
 {
     uint32_t i;
-    if (!ml_free_cc(cc) || k >= NTRK || id >= P_COUNT)
+    if (!ml_free_cc(cc) || k >= 4u || id >= P_COUNT)  /* (Dah: an entry keeps the track in 2 bits: tracks 1..4 only) */
         return 2;
     (void)ml_drop(cc, k, id);
     for (i = 0; i < ML_N; i++)
@@ -134,7 +134,7 @@ static void ml_poll(void)
     cc--;
     r = ml_learn(cc, ui.ml.trk, ui.ml.id);
     if (r != 1u) {
-        ui_message(r ? "CC NOT LEARNABLE" : "LEARN FULL");
+        ui_message(!r ? "LEARN FULL" : ui.ml.trk >= 4u ? "LEARN: T1-T4 ONLY" : "CC NOT LEARNABLE");
         return;
     }
     a[0] = 'C';

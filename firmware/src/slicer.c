@@ -76,6 +76,26 @@ static void slicer_start(void)   /* seq_start: the next block starts step 0 of e
 
 static uint32_t sl_pattern(const track_t *t) { return SL_PAT[(uint32_t)(t->p[P_SLPAT] - 1) % SL_NPAT]; }
 
+/* (Dah) each block before the parts render (seq.c events_block, one core): a STUT track of the project takes a free
+ * buffer, the others give theirs back */
+static void slicer_claim(void)
+{
+    uint32_t k, b, used = 0;
+    for (k = 0; k < NTRK; k++) {
+        if (sl[k].buf && (trk[k].p[P_SLCR] != SL_STUT || k >= trk_count()))
+            sl[k].buf = 0;
+        used |= sl[k].buf ? 1u << (sl[k].buf - 1u) : 0u;
+    }
+    for (k = 0; k < trk_count(); k++)
+        if (trk[k].p[P_SLCR] == SL_STUT && !sl[k].buf)
+            for (b = 0; b < SL_NBUF; b++)
+                if (!(used >> b & 1u)) {
+                    sl[k].buf = (uint8_t)(b + 1u);
+                    sl[k].rec = 0;                  /* (nothing of another track's to repeat) */
+                    used |= 1u << b;
+                    break;
+                }
+}
 /* the step clock enters the next step */
 static void sl_enter(const track_t *t, sl_t *s)
 {
@@ -88,18 +108,7 @@ static void sl_enter(const track_t *t, sl_t *s)
     s->rp = 0;
     s->loop = 0;
     s->rec_on = 0;
-    if (mode != SL_STUT)
-        s->buf = 0;                                 /* (HA HA HE HU: its buffer free for another track) */
-    else if (!s->buf) {
-        uint32_t k, used = 0;
-        for (k = 0; k < NTRK; k++)
-            used |= sl[k].buf ? 1u << (sl[k].buf - 1u) : 0u;
-        for (k = 0; k < SL_NBUF && !s->buf; k++)
-            if (!(used >> k & 1u)) {
-                s->buf = (uint8_t)(k + 1u);
-                s->rec = 0;                         /* (nothing of another track's to repeat) */
-            }
-    }
+    /* (the buffer: taken and given back before the parts render, slicer_claim; Dah: not here, on either core) */
     if (mode != SL_STUT || sl_lent || !s->buf) {
         s->rec = 0;                                 /* nothing old to repeat when STUT comes on */
     } else if (s->bit) {

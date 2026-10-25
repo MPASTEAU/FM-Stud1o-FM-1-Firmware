@@ -1199,7 +1199,14 @@ static void seq_tick(track_t *t, uint32_t n)
 static uint8_t midi_route;                 /* the G_ROUTE events_block last saw (a change to a block: midi_route_block;
                                             * MIDI_ROUTE_AGAIN: TRACK's channels changed, the same again) */
 #define MIDI_ROUTE_AGAIN 0xFFu
-static int32_t midi_slot(uint32_t ch)      /* the track channel ch plays, -1 none (and with SEL) */
+static int32_t midi_slot_any(uint32_t ch);
+static int32_t midi_slot(uint32_t ch)      /* the track channel ch plays, -1 none (and with SEL; Dah: none past the
+                                            * project's tracks) */
+{
+    int32_t k = midi_slot_any(ch);
+    return k >= (int32_t)trk_count() ? -1 : k;
+}
+static int32_t midi_slot_any(uint32_t ch)
 {
     int32_t b = midi_base(), omni = -1;
     uint32_t i;
@@ -1302,6 +1309,13 @@ static void events_block(uint32_t n)
 {
     uint32_t i, pr, seq_n = n;
     uint32_t clock_mode = (uint32_t)song.g[G_CLOCK];
+    for (i = trk_count() * NVOICE; i < NTRK * NVOICE; i++) {   /* (Dah) the tracks past the project's: no voice left (not
+                                                         * rendered, they would never end and hold the budget) */
+        voice_t *v = &trk[i / NVOICE].v[i % NVOICE];
+        if (v->active)
+            v->active = v->gate = 0, v->stage = 0;
+    }
+    slicer_claim();
     if (midi_clock.mode != clock_mode) {
         seq_stop();
         memset(&midi_clock, 0, sizeof midi_clock);

@@ -438,7 +438,7 @@ static volatile uint8_t duck_hit;
 static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t any = 0, i, mode = trk_vmode(t);
-    if (t->p[P_MUTE])
+    if (t->p[P_MUTE] || (uint32_t)(t - trk) >= trk_count())   /* (Dah: a track past the project's: silent) */
         return;
     if (t->xf_on || t->eng_req != t->engine) {          /* engine switch under way: after the fade */
         for (i = 0; i < t->xp_n && t->xp_note[i] != note; i++)
@@ -468,7 +468,8 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         voice_start(t, v, note, vel, t->p[P_GLIDE] != 0 && !ENGINES[t->engine]->oneshot);
         if (t->engine == ENGI_DRUM) {                   /* DESIGN's STACK: the lane strikes another with it */
             uint32_t n2 = drum_stack_note(t, note);
-            if (n2) {
+            if (n2 && voices_busy() < NVOICE) {         /* (Dah: the budget full: no stack, it would take the hit
+                                                         * just started) */
                 v = voice_alloc(t, n2);
                 v->fine = 0;
                 voice_start(t, v, n2, vel, 0);
@@ -565,8 +566,13 @@ static void engine_block(track_t *t)
             v->stage = 0;
             v->env = v->env_out = 0;
         }
-        if (!eng_fits((uint32_t)(t - trk), t->eng_req))   /* (HA HA HE HU: never a large engine on a light part) */
+        if (!eng_fits((uint32_t)(t - trk), t->eng_req)) {   /* (HA HA HE HU: never a large engine on a light part) */
+            uint32_t j;
             t->eng_req = 0;
+            for (j = P_E0; j < P_E0 + 8u; j++)          /* (Dah: ANALOG's own values, not the refused engine's) */
+                t->p[j] = param_desc_of(0, j)->def;
+            t->preset = 0;
+        }
         t->engine = eng_idx(t->eng_req);
         eng_mem_claim(t);                               /* its state region, before the waiting notes */
         t->xf_on = 0;
