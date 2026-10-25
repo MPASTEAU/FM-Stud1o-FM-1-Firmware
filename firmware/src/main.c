@@ -166,7 +166,7 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
 static const uint8_t DM_A[4][4] = {{57, 60, 64, 71}, {57, 60, 65, 71}, {55, 60, 65, 71}, {55, 59, 64, 71}};   /* Am9 Fmaj7#11/A Gsus G6 */
 static const uint8_t DM_B[4][4] = {{57, 62, 65, 72}, {57, 62, 64, 71}, {56, 60, 64, 71}, {57, 60, 64, 71}};   /* Dm7/A Asus E/G# Am9 */
 /* the drone's cutoff at each section's start (and the song's end); the cloud's POS and DENS likewise */
-static const uint8_t DR_CUT[15] = {14, 24, 40, 52, 64, 76, 84, 90, 72, 58, 88, 96, 70, 34, 14};
+static const uint8_t DR_CUT[15] = {14, 22, 34, 44, 54, 64, 70, 74, 60, 50, 72, 78, 60, 30, 14};   /* (dark: 74 at most) */
 static const uint8_t CL_POS[15] = {0, 10, 24, 40, 56, 70, 82, 96, 108, 118, 127, 100, 70, 40, 0};
 static const uint8_t CL_DEN[15] = {20, 30, 44, 56, 70, 76, 84, 96, 110, 120, 127, 104, 80, 50, 20};
 /* track k's variant v (1..) onto its steps (empty) */
@@ -181,14 +181,14 @@ static void demo_var(uint32_t k, uint32_t v)
         dm_chord(t, 0, 64, D, 2, 100);
         demo_auto(t, P_E4, 0, 56, DR_CUT[v - 1u], DR_CUT[v]);              /* its filter: one curve over the song */
         (void)motion_set_event(t, 63, P_E4, DR_CUT[v]);
-        demo_auto(t, P_IB, 0, 56, 40 + v * 5u, 50 + v * 5u);                /* the phaser deeper and deeper */
+        demo_auto(t, P_IB, 0, 56, 30 + v * 4u, 34 + v * 4u);                /* the phaser deeper and deeper */
         trkx[0].curve = 1;
         return;
     }
     case 1:                                                                 /* T2 the grain cloud: scanning */
         for (b = 0; b < 4u; b++) {
             static const uint8_t D[2] = {0, 0};
-            uint8_t c[2] = {DM_A[b][2], DM_A[b][3]};
+            uint8_t c[2] = {(uint8_t)(DM_A[b][2] - 12u), (uint8_t)(DM_A[b][3] - 12u)};   /* (low: no shrill top) */
             (void)D;
             dm_bar(t, b, c, 2, 80);
             t->step[b * 16u + 15u].flags |= SF_SLIDE;
@@ -210,8 +210,8 @@ static void demo_var(uint32_t k, uint32_t v)
             t->step[s0 + 15u].flags |= SF_SLIDE;
             break;
         case 3: {                                                           /* T4 the vowel lead: long, sliding */
-            static const uint8_t L[2][4][2] = {{{64, 16}, {62, 16}, {60, 16}, {59, 16}},
-                                               {{69, 16}, {67, 8}, {64, 24}, {0, 0}}};
+            static const uint8_t L[2][4][2] = {{{52, 16}, {50, 16}, {48, 16}, {47, 16}},
+                                               {{57, 16}, {55, 8}, {52, 24}, {0, 0}}};   /* (low, a voice) */
             if (!L[v - 1u][b][1])
                 break;
             demo_note(&t->step[s0], L[v - 1u][b][0], 96);
@@ -236,7 +236,7 @@ static void demo_var(uint32_t k, uint32_t v)
                 demo_hit(t, s0 + 4u, 1u << 2, 92);                          /* the clap on 2 and 4 */
                 demo_hit(t, s0 + 12u, 1u << 2, 96);
                 for (i = 2; i < 16u; i += 4u)
-                    demo_hit(t, s0 + i, 1u << 3, 44);                       /* a hat off the beat */
+                    demo_hit(t, s0 + i, 1u << 3, 28);                       /* a hat off the beat, soft */
                 if (v == 2u && b == 3u)
                     for (i = 8; i < 16u; i++)
                         demo_hit(t, s0 + i, 1u << 5, 112 - (i - 8u) * 5u);  /* a tom fill down */
@@ -256,22 +256,19 @@ static void demo_var(uint32_t k, uint32_t v)
             break;
         }
     }
-    if (k == 3u) {                                                          /* the vowel: FM and cutoff opening */
-        demo_auto(t, P_E2, 0, 56, 10, 96);
-        demo_auto(t, P_E4, 0, 56, 40, 100);
+    if (k == 3u) {                                                          /* the voice: its high cut opening a little */
+        demo_auto(t, P_EQHI, 0, 56, 70, 92);
         trkx[3].curve = 1;
     } else if (k == 7u) {                                                   /* the noise: wind, metal, a rise */
         if (v == 1u) {
             demo_auto(t, P_E2, 0, 56, 30, 60);
             (void)motion_set_event(t, 0, P_LEVEL, 40);
         } else if (v == 2u) {
-            (void)motion_set_event(t, 0, P_E0, 3);                          /* METAL */
-            demo_auto(t, P_E2, 0, 56, 40, 100);
-            demo_auto(t, P_E7, 0, 56, 0, 70);                               /* crushed, more and more */
-            (void)motion_set_event(t, 0, P_LEVEL, 56);
+            demo_auto(t, P_E2, 0, 56, 30, 70);                              /* the wind, darker, drifting */
+            (void)motion_set_event(t, 0, P_LEVEL, 48);
         } else {
-            demo_auto(t, P_E2, 0, 56, 30, 127);                             /* the rise */
-            demo_auto(t, P_EQHI, 0, 56, 40, 118);
+            demo_auto(t, P_E2, 0, 56, 30, 96);                              /* the rise (no hiss at its top) */
+            demo_auto(t, P_EQHI, 0, 56, 40, 96);
             demo_auto(t, P_LEVEL, 0, 56, 20, 110);
             (void)motion_set_event(t, 63, P_LEVEL, 0);
         }
@@ -320,22 +317,23 @@ static void felucca_demo(void)
     t->p[P_ATK] = 110; t->p[P_REL] = 110; t->p[P_SUS] = 127;
     t->p[P_SPRD] = 127; t->p[P_DETUNE] = 90;
     t->p[P_LRATE] = 18; t->p[P_LD_FLT] = 18;   /* (a slow breath on the filter) */
-    t->p[P_ITYPE] = 6; t->p[P_IA] = 8; t->p[P_IB] = 60; t->p[P_IC] = 90; t->p[P_IMIX] = 100;   /* PHASR, slow, deep */
+    t->p[P_ITYPE] = 6; t->p[P_IA] = 8; t->p[P_IB] = 50; t->p[P_IC] = 60; t->p[P_IMIX] = 80;   /* PHASR, slow */
     t->p[P_LEVEL] = 96; t->p[P_REV] = 70; t->p[P_CHOR] = 40;
     t = &trk[1];
     demo_sound(t, 8, 0);                      /* GRAIN CLOUD PAD: the cloud */
-    t->p[P_E0 + 1] = 100; t->p[P_E0 + 4] = 110; t->p[P_E0 + 5] = 50;
+    t->p[P_E0 + 1] = 100; t->p[P_E0 + 4] = 110; t->p[P_E0 + 5] = 50; t->p[P_E0 + 6] = 70;   /* (TONE: dark) */
     t->p[P_ATK] = 100; t->p[P_REL] = 110; t->p[P_LEVEL] = 82; t->p[P_REV] = 100; t->p[P_DLY] = 30;
     t = &trk[2];
     demo_sound(t, 0, 3);                      /* ANALOG PWM STR: the pad, flanged */
     t->p[P_ATK] = 80; t->p[P_REL] = 100; t->p[P_SPRD] = 100;
     t->p[P_LRATE] = 30; t->p[P_LD_SHP] = 40;   /* (the pulse width breathing) */
-    t->p[P_ITYPE] = 7; t->p[P_IA] = 6; t->p[P_IB] = 90; t->p[P_IC] = 70; t->p[P_IMIX] = 70;   /* FLANG, slow */
+    t->p[P_ITYPE] = 7; t->p[P_IA] = 6; t->p[P_IB] = 70; t->p[P_IC] = 40; t->p[P_IMIX] = 45;   /* FLANG, slow, soft */
     t->p[P_LEVEL] = 82; t->p[P_REV] = 80; t->p[P_CHOR] = 50;
     t = &trk[3];
-    demo_sound(t, ENGI_GROWL, 2);             /* GROWL VOWEL: the lead, talking */
+    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH: a voice, low, sliding */
+    t->p[P_E0 + 4] = 72; t->p[P_E0 + 6] = 100;
     t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 90;
-    t->p[P_ATK] = 60; t->p[P_REL] = 90; t->p[P_LEVEL] = 70; t->p[P_REV] = 100; t->p[P_DLY] = 60;
+    t->p[P_ATK] = 80; t->p[P_REL] = 100; t->p[P_LEVEL] = 76; t->p[P_REV] = 100; t->p[P_DLY] = 40;
     t = &trk[4];
     demo_sound(t, 0, 7);                      /* ANALOG SUB BASS: held */
     t->p[P_VOICE] = V_MONO; t->p[P_ATK] = 20; t->p[P_SUS] = 127;
@@ -350,18 +348,17 @@ static void felucca_demo(void)
     t = &trk[7];
     demo_sound(t, 11, 0);                     /* NOISE: wind, metal, a rise */
     t->p[P_E0 + 6] = 80;                      /* (DRFT) */
-    t->p[P_ITYPE] = 3; t->p[P_IA] = 30; t->p[P_IMIX] = 50;   /* FOLD: its grit */
-    t->p[P_ATK] = 90; t->p[P_LEVEL] = 50; t->p[P_REV] = 90; t->p[P_DLY] = 40;
+    t->p[P_ATK] = 90; t->p[P_LEVEL] = 44; t->p[P_REV] = 90; t->p[P_DLY] = 20;
     {                                         /* the bands (EQ: LOW CUT, HIGH CUT, a bell): each one clear */
         static const int8_t EQ[8][4] = {
-            {14, 118, 40, -10},               /* drone: from 60 Hz, its 230 Hz down */
-            {56, 118, 100, 8},                /* cloud: 500 Hz up, air */
-            {47, 106, 60, -12},               /* pad: 300 Hz .. 6 kHz */
-            {52, 112, 84, 6},                 /* vowel */
+            {14, 96, 40, -10},                /* drone: 60 Hz .. 4.6 kHz, its 230 Hz down */
+            {40, 92, 60, -6},                 /* cloud: 230 Hz .. 3.8 kHz */
+            {47, 96, 60, -12},                /* pad: 300 Hz .. 4.6 kHz */
+            {44, 88, 70, 4},                  /* voice: .. 3 kHz */
             {0, 34, 18, 8},                   /* sub: under 130 Hz */
             {0, 96, 22, 6},                   /* kick */
-            {40, 118, 104, 8},                /* kit */
-            {60, 118, 110, 6},                /* noise */
+            {40, 100, 60, 4},                 /* kit: no sizzle (5.4 kHz at most) */
+            {50, 88, 70, 0},                  /* noise: no hiss */
         };
         for (i = 0; i < NTRK; i++) {
             trk[i].p[P_EQLO] = EQ[i][0];
