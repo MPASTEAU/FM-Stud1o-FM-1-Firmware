@@ -97,9 +97,10 @@ static int32_t eq_gain_q12(int32_t g);                  /* fx_eq.c */
 /* (Dah) what SIDECHAIN's, COMP's and DIST's pages show live (ui_graph_more.c fxv_take), taken until the page reads it:
  * the watched track's level before and after the effect (its loudest), the effect's dip or reduction (Q15), a hit;
  * dv_watch the tracks watched (a bit each), dv_unit the effect (DV_DUCK DV_COMP DV_DIST) */
-enum { DV_DUCK, DV_COMP, DV_DIST };
+enum { DV_DUCK, DV_COMP, DV_DIST, DV_SLCR, DV_INS, DV_CHO, DV_DLY, DV_REV };
 static volatile int32_t dv_pre, dv_post, dv_att;
 static volatile uint8_t dv_hit, dv_watch, dv_unit;
+#define DV_ON(t, u) (dv_unit == (u) && ((dv_watch >> ((uint32_t)((t) - trk) % NTRK)) & 1u))
 static void dv_level(const int32_t *b, uint32_t n, int post)   /* (the block's loudest, into dv_pre / dv_post) */
 {
     uint32_t i;
@@ -598,6 +599,7 @@ static __attribute__((noinline)) void rev_switch(const int32_t *rev_in, int32_t 
 }
 
 /* process the three buses for one block; sends in, wet stereo-equal out */
+static void fx_rev_run(const int32_t *rev_in, int32_t *wet, uint32_t n, int32_t rt);
 static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet,
                      uint32_t n)
 {
@@ -613,6 +615,8 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         fx.dly_lp = 0;
     }
     uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
+    int32_t wc = dv_watch && dv_unit == DV_CHO, wd = dv_watch && dv_unit == DV_DLY, pk = 0;   /* (Dah: CHORUS's,
+                                                         * DELAY's page: its return) */
     if (pf.ew1 && fb < THR_FB)
         fb += mulq16(THR_FB - fb, (uint32_t)pf.ew1 << 1);   /* ECHO THROW (perform.c): more feedback while held, 0.7
                                                              * at most (the loop's gain below 1: it never runs away) */
@@ -628,6 +632,8 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             int32_t c1 = cho_buf[(fx.cho_w - ri - 1u) & (CHO_LEN - 1u)];
             y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
         }
+        if (wc)
+            pk = y < 0 ? (-y > pk ? -y : pk) : (y > pk ? y : pk);
         fx.cho_w++;
         /* delay with a low-passed feedback */
         x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
@@ -635,12 +641,35 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
             (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
         fx.dly_w++;
-        y += mulq15(x << 1, dmix);
+        x = mulq15(x << 1, dmix);
+        if (wd)
+            pk = x < 0 ? (-x > pk ? -x : pk) : (x > pk ? x : pk);
+        y += x;
         wet[i] = y;
     }
+    if ((wc | wd) && pk > dv_post)
+        dv_post = pk;
     rt = song.g[G_RTYPE];
     rt = rt == 1 || rt == 2 ? rt : 0;
     hl.side = 0;
+    if (dv_watch && dv_unit == DV_REV && n <= CTL) {    /* (Dah: REVERB's page: its return alone) */
+        static int32_t pre[CTL];
+        for (i = 0; i < n; i++)
+            pre[i] = wet[i];
+        fx_rev_run(rev_in, wet, n, rt);
+        for (i = 0, pk = 0; i < n; i++) {
+            int32_t v = wet[i] - pre[i];
+            v = v < 0 ? -v : v;
+            pk = v > pk ? v : pk;
+        }
+        if (pk > dv_post)
+            dv_post = pk;
+        return;
+    }
+    fx_rev_run(rev_in, wet, n, rt);
+}
+static void fx_rev_run(const int32_t *rev_in, int32_t *wet, uint32_t n, int32_t rt)
+{
     if (rt != fx.rtype)
         rev_switch(rev_in, wet, n, rt);
     else if (rt == 2)
@@ -993,10 +1022,17 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
             if ((o & 7u) == 0u)
                 track_dist(t, b, n);
             else if ((o & 7u) == 1u) {
-                if (t->p[P_ITYPE] | t->ins_run)
+                if (t->p[P_ITYPE] | t->ins_run) {
+                    if (DV_ON(t, DV_INS)) dv_level(b, n, 0);
                     track_insert(t, b, n);              /* (the mono sum, as DIST) */
+                    if (DV_ON(t, DV_INS)) dv_level(b, n, 1);
+                }
             } else if ((o & 7u) == 2u)
+            {
+                if (DV_ON(t, DV_SLCR)) dv_level(b, n, 0);
                 slicer_track_sd(t, b, d, n);
+                if (DV_ON(t, DV_SLCR)) dv_level(b, n, 1);
+            }
             else if ((o & 7u) == 3u) {
                 if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
                     track_eq(t, b, n);                  /* (the mono sum: the side passes it by) */
@@ -1011,6 +1047,8 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
         if (tp & 4u) r = 0;
     }
     eq_tap(t, b, n);
+    if (dv_unit >= DV_CHO && DV_ON(t, dv_unit))
+        dv_level(b, n, 0);                              /* (Dah: a send's page: the track going there) */
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
     for (i = 0; i < n; i++) {
@@ -1061,11 +1099,16 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
             track_dist(t, b, n);
             break;
         case 1:
-            if (t->p[P_ITYPE] | t->ins_run)
+            if (t->p[P_ITYPE] | t->ins_run) {
+                if (DV_ON(t, DV_INS)) dv_level(b, n, 0);
                 track_insert(t, b, n);                  /* the INSERT (1.5): off, nothing */
+                if (DV_ON(t, DV_INS)) dv_level(b, n, 1);
+            }
             break;
         case 2:
+            if (DV_ON(t, DV_SLCR)) dv_level(b, n, 0);
             slicer_track(t, b, n);                      /* slicer.c: before the level, pan and sends */
+            if (DV_ON(t, DV_SLCR)) dv_level(b, n, 1);
             break;
         case 3:
             if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
@@ -1080,6 +1123,8 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
     if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
         duck_part(t, b, n);
     eq_tap(t, b, n);
+    if (dv_unit >= DV_CHO && DV_ON(t, dv_unit))
+        dv_level(b, n, 0);                              /* (Dah: a send's page: the track going there) */
 }
 
 /* HA HA HE HU: DUCK, the sidechain. A track whose DUCK names a source track (T1..T4) dips when that track starts a note

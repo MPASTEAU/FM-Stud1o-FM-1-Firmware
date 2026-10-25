@@ -183,14 +183,14 @@ static void graph_arp(const track_t *t, uint16_t c)
 }
 /* the delay's TIME in quarters x 24 (N_DTIME's order) */
 static const uint16_t GM_DT24[13] = {24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36};
-static void graph_dly(uint16_t c)
+static void graph_dly(uint16_t c, int32_t pw)   /* (Dah: pw wide from the left) */
 {
     int32_t dt = GM_DT24[(uint32_t)song.g[G_DTIME] % 13u], win = dt * 6 > 96 ? dt * 6 : 96;   /* the window: a bar, or six repeats */
     int32_t fb = clamp(song.g[G_DFDBK], 0, 120), a = song.g[G_DMIX] * 1000 / 127, k, bot = graph_ht - 6, top = 6;
-    cv_rect(PANEL_X0, bot, PANEL_W, 1, T_RAISE);
+    cv_rect(PANEL_X0, bot, pw, 1, T_RAISE);
     cv_rect(PANEL_X0, top, 3, bot - top, T_TEXT);    /* the dry hit */
     for (k = 1; k * dt < win && k < 64; k++) {
-        int32_t x = PANEL_X0 + k * dt * PANEL_W / win, h = a * (bot - top) / 1000;
+        int32_t x = PANEL_X0 + k * dt * pw / win, h = a * (bot - top) / 1000;
         cv_rect(x, bot - h, 3, h, ux_mix(c, T_RAISE, clamp((k - 1) * song.g[G_DCOLOR] / 16, 0, 90)));   /* COLR: darker on */
         a = a * fb / 100;
         if (a > 1000)
@@ -199,12 +199,12 @@ static void graph_dly(uint16_t c)
             break;
     }
 }
-static void graph_reverb(uint16_t c)
+static void graph_reverb(uint16_t c, int32_t pw)   /* (Dah: pw wide from the left) */
 {
     int32_t type = clamp(song.g[G_RTYPE], 0, 2), size = song.g[G_RSIZE], damp = song.g[G_RDAMP];
-    int32_t bot = graph_ht - 6, top = 10, len = PANEL_W * (24 + size) / 151, x, i;
+    int32_t bot = graph_ht - 6, top = 10, len = pw * (24 + size) / 151, x, i;
     static const uint8_t ER[3][6] = {{6, 10, 15, 19, 26, 31}, {4, 7, 9, 12, 14, 17}, {12, 22, 38, 50, 64, 80}};
-    cv_rect(PANEL_X0, bot, PANEL_W, 1, T_RAISE);
+    cv_rect(PANEL_X0, bot, pw, 1, T_RAISE);
     cv_rect(PANEL_X0, top, 3, bot - top, T_TEXT);    /* the sound */
     for (x = 0; x < len; x++) {                       /* the tail: (1 - x / len)^2, darker with DAMP along it */
         int32_t r = len - x, h = (bot - top) * 7 / 10 * r / len * r / len;
@@ -217,12 +217,12 @@ static void graph_reverb(uint16_t c)
         cv_rect(ex, bot - eh, 2, eh, c);
     }
 }
-static void graph_chorus(uint16_t c)
+static void graph_chorus(uint16_t c, int32_t pw)   /* (Dah: pw wide from the left) */
 {
     int32_t x, py0 = 0, py1 = 0, cy = graph_ht / 2, a = song.g[G_CDEPTH] * (graph_ht * 38 / 100) / 127;
-    uint32_t inc = (0xFFFFFFFFu / PANEL_W) * (uint32_t)(1 + song.g[G_CRATE] / 16);
-    cv_rect(PANEL_X0, cy, PANEL_W, 1, T_RAISE);
-    for (x = 0; x < PANEL_W; x++) {                   /* its two voices: a quarter of a cycle apart */
+    uint32_t inc = (0xFFFFFFFFu / (uint32_t)pw) * (uint32_t)(1 + song.g[G_CRATE] / 16);
+    cv_rect(PANEL_X0, cy, pw, 1, T_RAISE);
+    for (x = 0; x < pw; x++) {                   /* its two voices: a quarter of a cycle apart */
         int32_t y0 = cy - (sine_i((uint32_t)x * inc) * a >> 15), y1 = cy - (sine_i((uint32_t)x * inc + 0x40000000u) * a >> 15);
         if (x) {
             cv_line_t(PANEL_X0 + x - 1, py0, PANEL_X0 + x, y0, c, 2);
@@ -293,33 +293,55 @@ static int fxv_take(const track_t *t, uint32_t u)
 }
 /* .. drawn from top to bot: before the effect faint, after it in the colour, its dip (line) from the top in ACCENT,
  * the hits marked under it */
-#define FXV_LW ((int32_t)PANEL_W / 2 - 6)              /* COMP's, DIST's: the curve's width at the left .. */
+#define FXV_LW ((int32_t)PANEL_W / 2 - 6)              /* the effects' pages: the shape's width at the left .. */
 #define FXV_RX (PANEL_X0 + (int32_t)PANEL_W / 2 + 4)   /* .. the sound's at the right */
 #define FXV_RW ((int32_t)PANEL_W - (int32_t)PANEL_W / 2 - 4)
-static void fxv_draw(int32_t x0, int32_t wd, int32_t top, int32_t bot, uint16_t c, int line)   /* (the newest wd) */
+#define FXV_LINE 1u                                     /* fxv_draw: the effect's dip (dv att) a line from the top */
+#define FXV_AREA 2u                                     /* .. that dip as an area from the top */
+#define FXV_CUT 4u                                      /* .. what it took away (before less after) as an area */
+#define FXV_OWN 8u                                      /* .. before and after each on its own scale (a send's return) */
+static void fxv_draw(int32_t x0, int32_t wd, int32_t top, int32_t bot, uint16_t c, uint32_t mode)   /* (the newest wd) */
 {
-    int32_t x, full = 4000;
-    for (x = 0; x < wd; x++) {                          /* (the scale: the loudest shown, before or after) */
+    int32_t x, fp = 4000, fq = 4000, h = bot - top;
+    uint16_t ar = ux_mix(T_ACCENT, T_SURF, 78);
+    for (x = 0; x < wd; x++) {                          /* (the scale: the loudest shown) */
         uint32_t w = (dv.w + (uint32_t)(DV_N - wd + x)) % DV_N;
-        full = dv.pre[w] > full ? dv.pre[w] : dv.post[w] > full ? dv.post[w] : full;
+        fp = dv.pre[w] > fp ? dv.pre[w] : fp;
+        fq = dv.post[w] > fq ? dv.post[w] : fq;
     }
-    full += full / 8;
+    if (!(mode & FXV_OWN))
+        fp = fq = fp > fq ? fp : fq;
+    fp += fp / 8;
+    fq += fq / 8;
     for (x = 0; x < wd; x++) {                          /* oldest at the left */
         uint32_t w = (dv.w + (uint32_t)(DV_N - wd + x)) % DV_N;
-        int32_t hp = clamp((int32_t)dv.pre[w] * (bot - top) / full, 0, bot - top);
-        int32_t hq = clamp((int32_t)dv.post[w] * (bot - top) / full, 0, bot - top);
-        int32_t ha = (int32_t)dv.att[w] * (bot - top) / 32767;
+        int32_t hp = clamp((int32_t)dv.pre[w] * h / fp, 0, h);
+        int32_t hq = clamp((int32_t)dv.post[w] * h / fq, 0, h);
+        int32_t ha = (int32_t)dv.att[w] * h / 32767;
+        if ((mode & FXV_CUT) && hp > hq)                /* (what it took away: from the top, as deep) */
+            ha = (hp - hq);
+        if ((mode & (FXV_AREA | FXV_CUT)) && ha > 0)
+            cv_rect(x0 + x, top, 1, ha, ar);            /* the effect's work, from the top */
         if (hp)
             cv_rect(x0 + x, bot - hp, 1, hp, ux_mix(c, T_SURF, 70));   /* before */
         if (hq)
             cv_rect(x0 + x, bot - hq, 1, hq, c);                       /* after */
         if (hp)
             cv_rect(x0 + x, bot - hp, 1, 1, ux_mix(T_TEXT, T_SURF, 70));   /* (before's edge, over it too) */
-        if (line)
-            cv_rect(x0 + x, top + ha, 1, 2, T_ACCENT);                 /* the dip, from the top */
+        if ((mode & (FXV_LINE | FXV_AREA | FXV_CUT)) && ha > 0)
+            cv_rect(x0 + x, top + ha, 1, 2, T_ACCENT);                 /* its edge */
         if (dv.hit[w])
             cv_rect(x0 + x, bot + 2, 2, 4, T_TEXT);                    /* a kick */
     }
+}
+/* the right half of an effect's page: its two labels (before, after), the sound going by */
+static void fxv_split(const track_t *t, uint32_t u, uint16_t c, const char *pre, const char *post, uint32_t mode)
+{
+    int32_t x;
+    (void)fxv_take(t, u);
+    x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, pre, T_MID, T_SURF);
+    cv_text_on(x + 6, 2 + CAP_IN(S, 12), &AF_S, post, c, T_SURF);
+    fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, mode);
 }
 static void graph_duck(const track_t *t, uint16_t c)
 {
@@ -369,7 +391,7 @@ static void graph_duck(const track_t *t, uint16_t c)
         }
         return;
     }
-    fxv_draw(PANEL_X0, (int32_t)PANEL_W, top, bot, c, 1);
+    fxv_draw(PANEL_X0, (int32_t)PANEL_W, top, bot, c, FXV_LINE);
 }
 #include "ui_graph_fx.c"                           /* (Dah) the FX family's: CHAIN DIST EQ SENDS */
 /* the page's own panel when it has one here (1), else 0 (the scope) */
@@ -383,9 +405,17 @@ static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
     else if (pg->scope == SC_TRACK && (id == P_VOICE || id == P_ALLOC || id == P_SPRD)) graph_voice(t, c);
     else if (pg->scope == SC_TRACK && (id == P_AMODE || id == P_ASWING)) graph_arp(t, c);
     else if (pg->scope == SC_TRACK && id == P_DKSRC) graph_duck(t, c);
-    else if (pg->scope == SC_GLOBAL && (id == (PS_TRK | P_DLY) || id == G_DMIX)) graph_dly(c);   /* (Dah: FX's) */
-    else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_REV)) graph_reverb(c);
-    else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_CHOR)) graph_chorus(c);
+    else if (pg->scope == SC_GLOBAL && (id == (PS_TRK | P_DLY) || id == G_DMIX)) {   /* (Dah: FX's: the shape at the
+                                                         * left, the track and the bus's return at the right) */
+        graph_dly(c, FXV_LW);
+        fxv_split(t, DV_DLY, c, "DRY", "ECHO", FXV_OWN);
+    } else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_REV)) {
+        graph_reverb(c, FXV_LW);
+        fxv_split(t, DV_REV, c, "DRY", "TAIL", FXV_OWN);
+    } else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_CHOR)) {
+        graph_chorus(c, FXV_LW);
+        fxv_split(t, DV_CHO, c, "DRY", "WET", FXV_OWN);
+    }
     else if (pg->scope == SC_GLOBAL && id == G_BPM) graph_clock(c);
     else return 0;
     return 1;

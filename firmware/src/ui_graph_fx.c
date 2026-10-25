@@ -334,12 +334,16 @@ static void graph_chain(const track_t *t, uint16_t c)
 {
     uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(t, u), i, rows = n < fx_max(t) ? n + 1u : n;
-    int32_t rh = (graph_ht - 16) / (int32_t)(rows > 5u ? rows : 5u), y0 = 2, x0 = PANEL_X0 + 14, bw = 150;
+    uint32_t vis = rows < 5u ? rows : 5u, first;        /* (Dah: five rows at most, the one picked among them) */
+    int32_t rh = (graph_ht - 16) / 5, y0 = 2, x0 = PANEL_X0 + 14, bw = 150;
     if (ch_cur >= rows)
         ch_cur = (uint8_t)(rows - 1u);
-    cv_rect(PANEL_X0 + 5, y0 + 4, 2, (int32_t)rows * rh - 8, T_RAISE);   /* the sound's way down */
-    for (i = 0; i < rows; i++) {
-        int32_t y = y0 + (int32_t)i * rh;
+    first = ch_cur + 3u > vis ? ch_cur + 3u - vis : 0u;   /* (the picked one with a row after it, when there is one) */
+    if (first + vis > rows)
+        first = rows - vis;
+    cv_rect(PANEL_X0 + 5, y0 + 4, 2, (int32_t)vis * rh - 8, T_RAISE);   /* the sound's way down */
+    for (i = first; i < first + vis; i++) {
+        int32_t y = y0 + (int32_t)(i - first) * rh;
         int sel = i == ch_cur;
         if (i < n) {
             char d[2] = {(char)('1' + i), 0}, inf[16];
@@ -464,7 +468,7 @@ static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
             fmt_fix(b, -gr, 1);
             x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, b, T_TEXT, T_SURF);
             cv_text_on(x + 3, 2 + CAP_IN(S, 12), &AF_S, "dB", T_MID, T_SURF);
-            fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, 1);
+            fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, FXV_AREA);
         }
         return 1;
     }
@@ -477,7 +481,7 @@ static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
             graph_dist(t, c, FXV_LW);
             x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, "IN", T_MID, T_SURF);
             cv_text_on(x + 6, 2 + CAP_IN(S, 12), &AF_S, "OUT", c, T_SURF);
-            fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, 0);
+            fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, 0u);
         }
     }
     else if (id == P_EQLO || id == P_EQ2F) graph_eq(t, c);

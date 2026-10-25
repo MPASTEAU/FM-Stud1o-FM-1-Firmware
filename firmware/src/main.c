@@ -252,7 +252,7 @@ static void demo_var(uint32_t k, uint32_t v)
         }
     }
 }
-static void felucca_demo(void)
+static void demo_song(void)                   /* (Dah: the trip-hop song, kept; felucca_demo plays the FX test for now) */
 {
     /* the song: each section's variant per track (0: silent there) */
     static const uint8_t SEC[16][8] = {
@@ -364,6 +364,95 @@ static void felucca_demo(void)
     }
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
+}
+/* (Dah) the FX test, the power-on sound for now: four tracks, one pattern of four bars looping (86 BPM, E minor), every
+ * effect on them: the kit (DIST, EQ, COMP; the reverb), the bass (DIST, INSERT SOFT, EQ, COMP, SIDECHAIN), the pad
+ * (INSERT PHASER, SLICER, EQ, SIDECHAIN; CHORUS, REVERB), the lead (INSERT FLANGER, DIST, EQ, COMP; DELAY, REVERB);
+ * the MASTER's EQ and COMP */
+static void felucca_demo(void)
+{
+    uint32_t i, b;
+    track_t *t;
+    song.g[G_BPM] = 86;
+    song.g[G_RTYPE] = 2; song.g[G_RSIZE] = 100; song.g[G_RDAMP] = 60;
+    song.g[G_DFDBK] = 60; song.g[G_DTIME] = 10; song.g[G_DCOLOR] = 50;
+    song.g[G_CRATE] = 16; song.g[G_CDEPTH] = 90;
+    song.g[G_MCOMP] = 50; song.g[G_MREL] = 60;
+    mtrk.p[P_EQLO] = 10;                       /* (the MASTER: its EQ, a low cut and a bell) */
+    mtrk.p[P_EQ1F] = 70; mtrk.p[P_EQ1G] = 8;
+    song.ntrk = 4;
+    for (i = 0; i < NTRK; i++) {
+        track_defaults_steps(&trk[i]);
+        trk[i].p[P_SLEN] = 64;
+        trk[i].p[P_SDIV] = 2;
+    }
+    t = &trk[0];
+    demo_sound(t, ENGI_DRUM, 5);              /* HARD KIT */
+    for (b = 0; b < 4u; b++) {
+        uint32_t s0 = b * 16u;
+        demo_hit(t, s0, 1u << 0, 120);
+        demo_hit(t, s0 + 10u, 1u << 0, 104);
+        demo_hit(t, s0 + 4u, 1u << 1 | 1u << 2, 118);
+        demo_hit(t, s0 + 12u, 1u << 1 | 1u << 2, 122);
+        for (i = 0; i < 16u; i += 2u)
+            demo_hit(t, s0 + i, 1u << 3, i % 4u ? 52 : 74);
+        if (b & 1u)
+            demo_hit(t, s0 + 14u, 1u << 4, 66);
+    }
+    t->p[P_DIST] = 20; t->p[P_EQLO] = 4; t->p[P_EQ1F] = 22; t->p[P_EQ1G] = 10; t->p[P_REV] = 20;
+    trkx[0].rsv0 = 70; trkx[0].rsv1 = 50;
+    t = &trk[1];
+    demo_sound(t, 6, 0);                      /* TRIO FAT BASS */
+    t->p[P_VOICE] = V_MONO;
+    for (b = 0; b < 4u; b++) {
+        static const uint8_t R[4] = {40, 40, 36, 35};
+        demo_note(&t->step[b * 16u], R[b], 112); demo_hold(t, b * 16u, 3);
+        demo_note(&t->step[b * 16u + 6u], R[b] + 12u, 96); demo_hold(t, b * 16u + 6u, 2);
+        demo_note(&t->step[b * 16u + 10u], R[b], 100); demo_hold(t, b * 16u + 10u, 4);
+    }
+    t->p[P_DIST] = 40; t->p[P_ITYPE] = IT_SOFT; t->p[P_IMIX] = 70;
+    t->p[P_EQHI] = 80; t->p[P_EQ1F] = 20; t->p[P_EQ1G] = 12;
+    trkx[1].rsv0 = 80; trkx[1].rsv1 = 50;
+    t->p[P_DKSRC] = 1; t->p[P_DKAMT] = 70; t->p[P_DKREL] = -10;
+    t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    t = &trk[2];
+    demo_sound(t, 0, 1);                      /* ANALOG SOFT PAD */
+    for (b = 0; b < 4u; b++) {
+        static const uint8_t C[4][4] = {{52, 55, 59, 62}, {52, 55, 59, 66}, {52, 55, 59, 60}, {51, 54, 57, 59}};
+        dm_bar(t, b, C[b], 4, 90);
+    }
+    t->p[P_ITYPE] = IT_PHASER; t->p[P_IA] = 20; t->p[P_IB] = 80; t->p[P_IMIX] = 90;
+    t->p[P_SLCR] = 1; t->p[P_SLDEPTH] = 90;
+    t->p[P_EQLO] = 40; t->p[P_EQ1F] = 80; t->p[P_EQ1G] = 10;
+    t->p[P_DKSRC] = 1; t->p[P_DKAMT] = 80; t->p[P_DKREL] = -10;
+    t->p[P_CHOR] = 60; t->p[P_REV] = 70; t->p[P_DLY] = 0;
+    t = &trk[3];
+    demo_sound(t, 0, 0);                      /* ANALOG SAW LEAD */
+    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 60;
+    {
+        static const uint8_t L[8][2] = {{71, 8}, {69, 8}, {66, 16}, {64, 8}, {67, 8}, {66, 12}, {63, 4}, {0, 0}};
+        uint32_t at = 0;
+        for (i = 0; L[i][1]; i++) {
+            demo_note(&t->step[at], L[i][0], 100);
+            demo_hold(t, at, L[i][1]);
+            t->step[at + L[i][1] - 1u].flags |= SF_SLIDE;
+            at += L[i][1];
+        }
+    }
+    t->p[P_ITYPE] = IT_FLANGER; t->p[P_IA] = 30; t->p[P_IB] = 70; t->p[P_IC] = 60; t->p[P_IMIX] = 60;
+    t->p[P_DIST] = 30; t->p[P_EQLO] = 44; t->p[P_EQ1F] = 84; t->p[P_EQ1G] = 8;
+    trkx[3].rsv0 = 60; trkx[3].rsv1 = 60;
+    t->p[P_DLY] = 70; t->p[P_REV] = 60; t->p[P_CHOR] = 0;
+    for (i = 0; i < 4u; i++)
+        (void)pattern_go(i, 1);
+    chain_defaults(&chain_config);            /* the SONG: one section, round */
+    chain_config.count = 1;
+    for (i = 0; i < NTRK; i++)
+        chain_config.row[0].slot[i] = i < 4u ? 1u : (uint8_t)CHAIN_SILENT;
+    chain_config.row[0].repeat = 1;
+    for (i = 0; i < NTRK; i++)
+        pat_sig[i] = steps_sig(&trk[i]);
+    (void)demo_song;
 }
 #endif
 

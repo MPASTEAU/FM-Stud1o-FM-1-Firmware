@@ -567,25 +567,25 @@ static void graph_fx_lanes(const track_t *t, uint16_t c)
  * scale) across, output up, dry and wet blended by MIX (fx.c ins_shape: the same shape; the dry diagonal RAISE); the
  * swept ones as two cycles of their sweep, as deep as DEPTH (FLANG the squared triangle, CHOR a sine, PHASR a
  * triangle). OFF: the dry diagonal, dim */
-static void graph_insert(const track_t *t, uint16_t c)
+static void graph_insert(const track_t *t, uint16_t c, int32_t pw)   /* (Dah: pw wide from the left) */
 {
     int32_t x, cy = graph_ht / 2, a = 38 * graph_ht / 100, py = cy, ty = clamp(t->p[P_ITYPE], 0, IT_N - 1);
     int32_t m = ins_mixq(t->p[P_IMIX]), g = 4096 + t->p[P_IA] * t->p[P_IA] * 3, lvl = LEVEL_Q12[t->p[P_IC] & 127];
     uint32_t sh = ins_bits_sh(t->p[P_IA]);
-    cv_rect(PANEL_X0, cy, PANEL_W, 1, T_RAISE);
-    cv_line(PANEL_X0 + PANEL_W / 2, cy - a, PANEL_X0 + PANEL_W / 2, cy + a, T_RAISE);
+    cv_rect(PANEL_X0, cy, pw, 1, T_RAISE);
+    cv_line(PANEL_X0 + pw / 2, cy - a, PANEL_X0 + pw / 2, cy + a, T_RAISE);
     if (ty == IT_OFF || ty >= IT_PHASER || !m)
-        cv_line(PANEL_X0 + PANEL_W / 6, cy + a, PANEL_X0 + PANEL_W * 5 / 6, cy - a, ty ? T_RAISE : T_DIM);
+        cv_line(PANEL_X0 + pw / 6, cy + a, PANEL_X0 + pw * 5 / 6, cy - a, ty ? T_RAISE : T_DIM);
     if (ty == IT_OFF)
         return;
-    for (x = 0; x < PANEL_W; x++) {
+    for (x = 0; x < pw; x++) {
         int32_t y, w;
         if (ty >= IT_PHASER) {                       /* the sweep, two cycles */
-            uint32_t ph = (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 2u)), tr = pf_tri(ph);
+            uint32_t ph = (uint32_t)x * (0xFFFFFFFFu / ((uint32_t)pw / 2u)), tr = pf_tri(ph);
             w = ty == IT_CHORUS ? osc_sine(ph) * 2 : ty == IT_FLANGER ? (int32_t)((tr * tr) >> 16) * 2 - 65536 : (int32_t)tr * 2 - 65536;
             y = cy - (w >> 1) * a / 32768 * t->p[P_IB] / 127;
         } else {                                     /* the curve: v in, dry v, wet shaped */
-            int32_t v = (x - PANEL_W / 2) * 49152 / (PANEL_W / 2), o;
+            int32_t v = (x - pw / 2) * 49152 / (pw / 2), o;
             o = ty == IT_CRUSH ? ins_shape(IT_CRUSH, v, sh) : (ins_shape((uint32_t)ty, ((v >> 3) * g) >> 9, 0) * lvl) >> 12;
             w = v + mulq16(o - v, (uint32_t)m << 1);
             y = cy - clamp(w, -49152, 49152) * a / 49152;
@@ -597,25 +597,25 @@ static void graph_insert(const track_t *t, uint16_t c)
 }
 /* SLICER page: the pattern's 16 steps, a 'x' step a full bar; a '.' step: GATE a bar as high as it stays
  * open (DEPTH), STUT hatched (it repeats the last 'x'); the step playing underlined. Grey when OFF. */
-static void graph_slicer(const track_t *t, uint16_t c)
+static void graph_slicer(const track_t *t, uint16_t c, int32_t pw)   /* (Dah: pw wide from the left) */
 {
     uint32_t i, pat = sl_pattern(t), mode = (uint32_t)t->p[P_SLCR], cur = sl[t - trk].idx;
     int32_t open = 70 - t->p[P_SLDEPTH] * 70 / 127;      /* px a closed GATE step keeps */
     uint16_t col = mode == SL_OFF ? T_DIM : c;
     for (i = 0; i < 16u; i++) {
-        int32_t x = bar_x(i), y;
+        int32_t x = pw >= (int32_t)PANEL_W ? bar_x(i) : PANEL_X0 + (int32_t)i * pw / 16, y, bw = pw >= (int32_t)PANEL_W ? 9 : pw / 16 - 2;
         if ((pat >> i) & 1u) {
-            cv_rrect(x, 8, 9, 72, 2, mode == SL_OFF ? T_RAISE : col, T_SURF);
+            cv_rrect(x, 8, bw, 72, 2, mode == SL_OFF ? T_RAISE : col, T_SURF);
         } else if (mode == SL_STUT) {
             for (y = 8; y < 80; y += 4)
-                cv_rect(x, y, 9, 1, col);
+                cv_rect(x, y, bw, 1, col);
         } else {
-            cv_rrect(x, 77, 9, 3, 1, T_RAISE, T_SURF);
+            cv_rrect(x, 77, bw, 3, 1, T_RAISE, T_SURF);
             if (open > 3)
-                cv_rrect(x, 80 - open, 9, open, 2, T_RAISE, T_SURF);
+                cv_rrect(x, 80 - open, bw, open, 2, T_RAISE, T_SURF);
         }
         if (mode != SL_OFF && i == cur)
-            cv_rect(x, 84, 9, 2, T_ACCENT);
+            cv_rect(x, 84, bw, 2, T_ACCENT);
     }
 }
 /* MOD page: the four slots as rows "1 LFO > CUT +50%" (M, a list's rows: the source to x 78, the arrow 84..98, the
@@ -1380,7 +1380,7 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
-    if (pg->graph == GR_NONE || pg->graph == GR_ARP) h ^= ui.frame / 2u;
+    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX) h ^= ui.frame / 2u;   /* (Dah: FX's: live) */
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
@@ -2911,11 +2911,21 @@ static void draw_graph_in(void)
         case GR_FX:
             graph_fx(t, c);
             break;
-        case GR_SLCR:
-            graph_slicer(t, c);
+        case GR_SLCR:                                /* (Dah) its pattern at the left, the sound gated at the right */
+            if (fx_mst(t))
+                graph_slicer(t, c, PANEL_W);
+            else {
+                graph_slicer(t, c, FXV_LW);
+                fxv_split(t, DV_SLCR, c, "IN", "OUT", FXV_CUT);
+            }
             break;
-        case GR_INS:
-            graph_insert(t, c);
+        case GR_INS:                                 /* (Dah) its shape at the left, the sound through it at the right */
+            if (fx_mst(t))
+                graph_insert(t, c, PANEL_W);
+            else {
+                graph_insert(t, c, FXV_LW);
+                fxv_split(t, DV_INS, c, "DRY", "WET", 0);
+            }
             break;
         case GR_MOD:
             cv_oy = 0;
