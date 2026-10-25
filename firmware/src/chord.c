@@ -20,10 +20,10 @@ enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS, VC_AUTO };
  *   CHRD COLOR  the scale's chord on the key as DIA7 does, each degree its usual colour: the tonic add9 (not a seventh),
  *               the dominant (the fifth degree) a 7 with its flat ninth in a minor key (the raised third: harmonic),
  *               the others their seventh
- *   CHRD DARK EPIC SAD POP CINE  a progression of four: the key is its tonic, each chord played (a key, a MIDI note, a
- *               step) the next one of it (chord_build, prog_step), round
- *       DARK  i(add9) bII i(m7) V7b9      EPIC  i(add9) bVI bIII bVII    SAD  i iv(m7) bVImaj7 V7b9
- *       POP   I V vi(m7) IVmaj7           CINE  i(add9) bVImaj7 iv V7
+ *   CHRD DARK EPIC SAD POP CINE  a chord map: the key played is the chord's root, always (no note chosen for you); its
+ *               place above the track's ROOT (0..11 semitones) picks the chord's kind and its inversion, as that style
+ *               uses it (CHORD_MAP: DARK's minor and Phrygian, EPIC's minor with the major bVI bIII bVII, SAD's minor
+ *               sevenths and V7b9, POP's major with its m7s, CINE's add9s and maj7s)
  *   VOIC AUTO   voice leading: of the chord's inversions an octave either way, the one nearest the chord before (each
  *               tone to its nearest, the bass moving less), close position for the first */
 #define CHORD_MAX 4u
@@ -32,19 +32,28 @@ enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS, VC_AUTO };
 static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
     {0, 4, 7, -1}, {0, 3, 7, -1}, {0, 4, 7, 10}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 5, 7, -1}, {0, 7, 12, -1},
 };
-/* (Dah) the progressions' chords: {semitones from the tonic, shape}; the shapes: */
-enum { PS_MIN, PS_MADD9, PS_MAJ, PS_MAJ7, PS_MIN7, PS_D7B9, PS_DOM7 };
-static const int8_t PROG_SHAPE[7][CHORD_MAX] = {
+/* (Dah) the chord maps' shapes */
+enum { PS_MIN, PS_MADD9, PS_MAJ, PS_MAJ7, PS_MIN7, PS_D7B9, PS_DOM7, PS_SUS2, PS_SUS4, PS_M7B5, PS_DIM, PS_DIM7, PS_ADD9,
+       PS_7SUS4, PS_N };
+static const int8_t PROG_SHAPE[PS_N][CHORD_MAX] = {
     {0, 3, 7, -1}, {0, 3, 7, 14}, {0, 4, 7, -1}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 4, 10, 13}, {0, 4, 7, 10},
+    {0, 2, 7, -1}, {0, 5, 7, -1}, {0, 3, 6, 10}, {0, 3, 6, -1}, {0, 3, 6, 9}, {0, 4, 7, 14}, {0, 5, 7, 10},
 };
-static const int8_t PROG[CH_CINE - CH_DARK + 1][4][2] = {
-    {{0, PS_MADD9}, {1, PS_MAJ}, {0, PS_MIN7}, {7, PS_D7B9}},            /* DARK */
-    {{0, PS_MADD9}, {8, PS_MAJ}, {3, PS_MAJ}, {10, PS_MAJ}},              /* EPIC */
-    {{0, PS_MIN}, {5, PS_MIN7}, {8, PS_MAJ7}, {7, PS_D7B9}},              /* SAD */
-    {{0, PS_MAJ}, {7, PS_MAJ}, {9, PS_MIN7}, {5, PS_MAJ7}},               /* POP */
-    {{0, PS_MADD9}, {8, PS_MAJ7}, {5, PS_MIN}, {7, PS_DOM7}},             /* CINE */
+/* each style: for the key's place above ROOT (0..11) its shape and inversion (0 root position, 1, 2) */
+#define CM(sh, inv) ((uint8_t)((sh) | (inv) << 5))
+static const uint8_t CHORD_MAP[CH_CINE - CH_DARK + 1][12] = {
+    /*            i             bII          ii            bIII         III          iv           bV           V            bVI          vi           bVII         VII */
+    /* DARK */ {CM(PS_MADD9, 0), CM(PS_MAJ, 1), CM(PS_M7B5, 1), CM(PS_MAJ7, 0), CM(PS_MIN, 1), CM(PS_MIN7, 0), CM(PS_DIM, 1),
+                CM(PS_D7B9, 1), CM(PS_MAJ7, 1), CM(PS_M7B5, 0), CM(PS_MAJ, 2), CM(PS_DIM7, 1)},
+    /* EPIC */ {CM(PS_MADD9, 0), CM(PS_MAJ, 1), CM(PS_SUS2, 0), CM(PS_MAJ, 1), CM(PS_MIN, 1), CM(PS_MIN, 2), CM(PS_SUS2, 1),
+                CM(PS_SUS4, 1), CM(PS_ADD9, 0), CM(PS_MIN, 1), CM(PS_MAJ, 2), CM(PS_DIM, 1)},
+    /* SAD */  {CM(PS_MIN, 0), CM(PS_MAJ7, 1), CM(PS_M7B5, 1), CM(PS_MAJ7, 0), CM(PS_MAJ, 1), CM(PS_MIN7, 1), CM(PS_DIM7, 0),
+                CM(PS_D7B9, 1), CM(PS_MAJ7, 2), CM(PS_MIN7, 0), CM(PS_DOM7, 2), CM(PS_DIM7, 1)},
+    /* POP */  {CM(PS_ADD9, 0), CM(PS_DIM7, 1), CM(PS_MIN7, 1), CM(PS_MAJ, 1), CM(PS_MIN7, 2), CM(PS_MAJ7, 1), CM(PS_M7B5, 1),
+                CM(PS_MAJ, 1), CM(PS_MAJ, 2), CM(PS_MIN7, 1), CM(PS_MAJ, 1), CM(PS_M7B5, 1)},
+    /* CINE */ {CM(PS_MADD9, 0), CM(PS_MAJ7, 1), CM(PS_SUS2, 1), CM(PS_MAJ7, 0), CM(PS_MAJ, 1), CM(PS_MADD9, 1), CM(PS_DIM, 1),
+                CM(PS_7SUS4, 1), CM(PS_MAJ7, 2), CM(PS_MIN, 1), CM(PS_ADD9, 1), CM(PS_DIM7, 1)},
 };
-static uint8_t prog_step[NTRK];                        /* each track's place in its progression (chord_build) */
 
 static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: track + 1, 0 = free */
@@ -65,11 +74,21 @@ static int chord_kit(const track_t *t)
 static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int32_t *iv)
 {
     uint32_t n = 0, i;
-    if (mode >= CH_DARK && mode <= CH_CINE) {          /* (Dah) the progression's chord now, on the key as tonic */
-        const int8_t *c = PROG[mode - CH_DARK][prog_step[trk_index(t) % NTRK] & 3u];
-        *root += c[0];
-        for (i = 0; i < CHORD_MAX && PROG_SHAPE[c[1]][i] >= 0; i++)
-            iv[n++] = PROG_SHAPE[c[1]][i];
+    if (mode >= CH_DARK && mode <= CH_CINE) {          /* (Dah) the style's chord for the key: its root the key */
+        uint8_t e = CHORD_MAP[mode - CH_DARK][(uint32_t)(*root - t->p[P_ROOT] + 120) % 12u];
+        uint32_t inv = (uint32_t)e >> 5, k;
+        for (i = 0; i < CHORD_MAX && PROG_SHAPE[e & 31u][i] >= 0; i++)
+            iv[n++] = PROG_SHAPE[e & 31u][i];
+        if (t->p[P_VOIC] != VC_AUTO)                     /* its inversion (AUTO: the voice leading chooses) */
+            for (k = 0; k < inv && n > 1u; k++) {
+                int32_t x = iv[0] + 12;
+                for (i = 1; i < n; i++)
+                    iv[i - 1u] = iv[i];
+                iv[n - 1u] = x;
+            }
+        while (iv[0] > 5)                                /* (an inversion around the key, not climbing over it) */
+            for (i = 0; i < n; i++)
+                iv[i] -= 12;
         return n;
     }
     if (mode >= CH_MAJ && mode <= CH_POW) {
@@ -219,8 +238,6 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
             chord_last[k].note[i] = i < m ? out[i] : 0u;
         chord_last[k].gen++;
     }
-    if (t->p[P_CHRD] >= CH_DARK && t->p[P_CHRD] <= CH_CINE)
-        prog_step[k % NTRK] = (uint8_t)((prog_step[k % NTRK] + 1u) & 3u);   /* (Dah: the next chord next time) */
     return m;
 }
 
