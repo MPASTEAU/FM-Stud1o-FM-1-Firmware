@@ -2990,6 +2990,7 @@ static int test_product_ux(void)
     go_page(GR_SONG);
     song.rec = 1; chain.armed = 1; press(B_REC);
     ok = song.rec == 0 && msg_is("REC OFF") && !ui.confirm;   /* (Dah: armed, REC disarms first, every page) */
+    frames(320);
     press(B_REC);
     ok &= song.rec == 0 && msg_is("STOP TO EDIT") && !ui.confirm;
     bad += check("REC on SONG armed: disarms (REC OFF); again with the song pending: nothing deleted (STOP TO EDIT)", ok);
