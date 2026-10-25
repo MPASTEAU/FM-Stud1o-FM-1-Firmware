@@ -993,6 +993,20 @@ static int test_save(void)
             break;
     ui.page = (uint8_t)i;
     page_entered();
+    {                                                   /* (Dah) the drawn LFO goes with the sound */
+        int8_t d0[LDRAW_N];
+        uint32_t j;
+        for (j = 0; j < LDRAW_N; j++) trkx[song.sel].draw[j] = (int8_t)(j * 7 - 50);
+        trkx[song.sel].smooth = 0;
+        memcpy(d0, trkx[song.sel].draw, sizeof d0);
+        up_store(5, "DRAWN");
+        memset(trkx[song.sel].draw, 0, sizeof d0);
+        trkx[song.sel].smooth = 1;
+        up_load(5);
+        bad += check("USER preset: LFO DRAW's points and SMOOTH stored and loaded with the sound (Dah)",
+                     !memcmp(d0, trkx[song.sel].draw, sizeof d0) && trkx[song.sel].smooth == 0);
+        up_ui(1u, 5);                                   /* (erased again) */
+    }
     up_store(4, "OLD");
     ui.uslot = 4;
     turn(EN_K4, 1);

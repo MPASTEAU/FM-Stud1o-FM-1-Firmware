@@ -76,6 +76,11 @@ static up_rec_t *up_rec(uint32_t k) { return &up_bank[k / UP_PER_BANK].r[k % UP_
  * versions 1..3 (a 16-bit value in every pair) has none; giving it one (a rename) rewrites it as version 4 / 5 when its
  * values fit a byte (up_to_v4; not a version 1 PHYS sound, whose MODEL 2 means DUST) */
 #define UP_CAT_AT (UP_PMAX * 2u - 1u)
+/* (Dah) LFO DRAW's 16 points and its SMOOTH (trkx) in the free bytes before the category, marked 'D' after them: a
+ * record without (stored before, or by Felucca) leaves the track's drawing as it is. Older firmware never reads them */
+#define UP_DRAW_AT 124u
+#define UP_DRAW_MARK (UP_DRAW_AT + LDRAW_N + 1u)
+_Static_assert(P_COUNT <= UP_DRAW_AT && UP_DRAW_MARK < UP_CAT_AT, "user preset record: LFO DRAW's room");
 #include "category.c"
 static uint32_t up_cat_of(const up_rec_t *r)
 {
@@ -410,6 +415,9 @@ static int up_store_cat(uint32_t k, const char *name, uint32_t cat)
         up_set_value(&r, i, motion_base_value(TSEL, i));
     up_pat_from(&r, TSEL->step);
     up_set_cat(&r, cat ? cat : track_cat(TSEL));
+    memcpy(&r.packed[UP_DRAW_AT], trkx[song.sel % NTRK].draw, LDRAW_N);   /* (Dah: the drawn LFO with the sound) */
+    r.packed[UP_DRAW_AT + LDRAW_N] = trkx[song.sel % NTRK].smooth;
+    r.packed[UP_DRAW_MARK] = 'D';
     if (drum_track(TSEL)) {                             /* a DRUM track that strikes a lane: its grid */
         uint32_t any = 0;
         for (i = 0; i < 16u; i++)
@@ -480,6 +488,10 @@ static int up_load(uint32_t k)
             if (!param_kept(i))
                 t->p[i] = v[i];
         t->preset = 0;
+        if (r->ver >= 4u && r->np <= UP_DRAW_AT && r->packed[UP_DRAW_MARK] == 'D') {   /* (Dah: its drawn LFO) */
+            memcpy(trkx[song.sel % NTRK].draw, &r->packed[UP_DRAW_AT], LDRAW_N);
+            trkx[song.sel % NTRK].smooth = (uint8_t)(r->packed[UP_DRAW_AT + LDRAW_N] != 0u);
+        }
         fm1_irq_on();
         upf_track_load(t, k);                           /* FM6: the preset's own patch (up_fm6.c) */
     }
