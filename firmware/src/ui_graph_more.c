@@ -243,6 +243,35 @@ static void graph_clock(uint16_t c)
         cv_rrect(x, bot - h, 5, h, 2, (uint32_t)i == ph ? T_TEXT : i % 4 == 0 ? c : ux_mix(c, T_SURF, 40), T_SURF);
     }
 }
+/* DUCK: the level of the track over a bar of four kicks: each one dips it by DEPTH, held a moment, back with REL; the
+ * source named, or how to set it */
+static void graph_duck(const track_t *t, uint16_t c)
+{
+    int32_t top = 10, bot = graph_ht - 8, x, py = top, env = 0, hold = 0, beat = PANEL_W / 4;
+    int32_t rel = 23790 / (20 + (t->p[P_DKREL] + 64) * 3), depth = t->p[P_DKAMT];
+    if (!t->p[P_DKSRC]) {
+        panel_note("DUCK OFF", "[K1] A TRACK DUCKS IT", 0);
+        return;
+    }
+    for (x = 0; x < PANEL_W; x++) {
+        int32_t lvl, y, k;
+        if (x % beat == 0) {                            /* a kick */
+            env = 32767;
+            hold = 40 * beat / 1000 + 2;                /* (~30 ms of a beat at 92 BPM: a sketch) */
+            cv_rect(PANEL_X0 + x, bot + 2, 3, 4, T_TEXT);
+        }
+        for (k = 0; k < 14; k++)                        /* ~14 blocks a pixel (a beat ~ 55 px, ~650 ms) */
+            if (hold > 0)
+                hold--;
+            else
+                env = (env * (32768 - rel)) >> 15;
+        lvl = 32767 - ((env >> 8) * (depth * 258) >> 7);
+        y = bot - (lvl * (bot - top)) / 32767;
+        if (x)
+            cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, c, 2);
+        py = y;
+    }
+}
 /* the page's own panel when it has one here (1), else 0 (the scope) */
 static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
 {
@@ -251,6 +280,7 @@ static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
     else if (pg->scope == SC_TRACK && id == P_ED_FLT) graph_envdest(t, c);
     else if (pg->scope == SC_TRACK && (id == P_VOICE || id == P_ALLOC || id == P_SPRD)) graph_voice(t, c);
     else if (pg->scope == SC_TRACK && (id == P_AMODE || id == P_ASWING)) graph_arp(t, c);
+    else if (pg->scope == SC_TRACK && id == P_DKSRC) graph_duck(t, c);
     else if (pg->scope == SC_GLOBAL && id == G_DTIME) graph_dly(c);
     else if (pg->scope == SC_GLOBAL && id == G_RTYPE) graph_reverb(c);
     else if (pg->scope == SC_GLOBAL && id == G_CRATE) graph_chorus(c);

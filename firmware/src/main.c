@@ -277,6 +277,14 @@ static void felucca_demo(void)
     t->p[P_E0 + 6] = 100;                     /* Q */
     t->p[P_E0 + 7] = 24;                      /* RAND */
     t->p[P_ATK] = 90; t->p[P_REL] = 100; t->p[P_LEVEL] = 74; t->p[P_REV] = 110;
+    {                                         /* the sidechain: the pad, strings, sub and choir dip on each kick (T5) */
+        static const int8_t DK[4][3] = {{0, 120, 14}, {1, 112, 14}, {3, 127, 8}, {6, 100, 18}};   /* track, DEPTH, REL: a deep pump */
+        for (i = 0; i < 4u; i++) {
+            trk[DK[i][0]].p[P_DKSRC] = 5;
+            trk[DK[i][0]].p[P_DKAMT] = (int16_t)DK[i][1];
+            trk[DK[i][0]].p[P_DKREL] = (int16_t)DK[i][2];
+        }
+    }
     demo_pattern(1);
     for (k = 0; k < 7u; k++)                  /* pattern 1 kept, 2 written, 1 back on the tracks */
         (void)pattern_new(k, 0);

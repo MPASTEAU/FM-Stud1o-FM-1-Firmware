@@ -931,13 +931,18 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n)
  * time (P_DKREL -64..63: ~20 .. 400 ms, 0 ~210 ms; an exponential per block). Applied to the part's mono buffer after its FX chain, before LEVEL,
  * PAN and the sends: the sends dip with it. OFF: nothing runs (the track as before) */
 static int32_t duck_env[NPART], duck_att[NPART];       /* the envelope (Q15), the dip applied last block (Q15) */
+static uint8_t duck_hold[NPART];                        /* (Dah) blocks the dip stays full after a hit (~30 ms): it pumps */
+#define DUCK_HOLD 40u
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d: SPREAD's side signal, dipped alike) */
 {
     uint32_t k = (uint32_t)(t - trk) % NPART, src = (uint32_t)t->p[P_DKSRC], i;
     int32_t a0 = duck_att[k], a1 = 0;
     if (src && src <= NPART) {
-        if ((duck_hit >> (src - 1u)) & 1u)
+        if ((duck_hit >> (src - 1u)) & 1u) {
             duck_env[k] = 32767;
+            duck_hold[k] = DUCK_HOLD;                   /* (Dah: held down a moment, then back) */
+        } else if (duck_hold[k])
+            duck_hold[k]--;
         else
             duck_env[k] = (duck_env[k] * (32768 - 23790 / (20 + (t->p[P_DKREL] + 64) * 3))) >> 15;
         a1 = mulq15(duck_env[k], t->p[P_DKAMT] * 258);
