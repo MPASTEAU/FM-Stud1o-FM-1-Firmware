@@ -172,7 +172,7 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
         break;
     }
 }
-/* CHAIN's actions on the row picked: ADD (a free effect at the end of its kind), REMOVE, TYPE (another free one in its
+/* CHAIN's actions on the row picked: ADD (a free effect, last: Dah), REMOVE, TYPE (another free one in its
  * place), MOVE (in series only: the sends are after them) */
 static void fx_chain_add(track_t *t)
 {
@@ -183,18 +183,15 @@ static void fx_chain_add(track_t *t)
     if (x >= FXU_N_ALL)
         return;
     fx_unit_set(t, x, 1);
-    if (x < FXU_SER) {                                  /* (in series: after the last one, the sends after it stay
-                                                         * after it) */
-        uint32_t at = 0;
-        for (i = 0; i < n; i++)
-            if (u[i] < FXU_SER)
-                at = i + 1u;
+    {                                                   /* (Dah) last: before the COMPRESSOR and the SIDECHAIN only */
+        uint32_t at = n;
+        while (at && (u[at - 1u] == FXU_COMP || u[at - 1u] == 4u))
+            at--;
         for (i = n; i > at; i--)
             u[i] = u[i - 1u];
         u[at] = (uint8_t)x;
         n++;
-    } else
-        u[n++] = (uint8_t)x;
+    }
     fx_set_list(t, u, n);
     n = fx_list(t, u);
     for (i = 0; i < n; i++)

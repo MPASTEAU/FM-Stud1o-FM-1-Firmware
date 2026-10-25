@@ -1628,7 +1628,7 @@ static void draw_columns_in(void)
             }
             continue;
         }
-        if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, TYPE, MOVE */
+        if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, MOVE, TYPE, MIX */
             uint8_t u[FXU_N_ALL];
             track_t *ft = fx_tsel();
             uint32_t n = fx_list(ft, u);
@@ -1637,12 +1637,12 @@ static void draw_columns_in(void)
             if (c == 0u) {
                 card_span_by(span_fxrow, 0, 0, 9, 1);
                 draw_column(0, "EFFECT", on ? pl : "ADD", "", VAL(0u), -1, ICON_AUTO);
-            } else if (c == 1u && on) {
-                card_span_by(span_fxu, 0, 0, FXU_N_ALL - 1, 0);
-                draw_column(1, "TYPE", FXU_N[u[ch_cur % FXU_N_ALL]], "", VAL(1u), -1, ICON_AUTO);
             } else if (c == 2u && on) {
+                card_span_by(span_fxu, 0, 0, FXU_N_ALL - 1, 0);
+                draw_column(2, "TYPE", FXU_N[u[ch_cur % FXU_N_ALL]], "", VAL(2u), -1, ICON_AUTO);
+            } else if (c == 1u && on) {
                 card_span_by(span_fxmv, 0, 0, FXU_N_ALL - 1, 1);
-                draw_column(2, "MOVE", pl, "", VAL(2u), n > 1u ? (int32_t)ch_cur * 1000 / (int32_t)(n - 1u) : -1, ICON_AUTO);
+                draw_column(1, "MOVE", pl, "", VAL(1u), n > 1u ? (int32_t)ch_cur * 1000 / (int32_t)(n - 1u) : -1, ICON_AUTO);
             } else if (c == 3u && on && FXU_MIX[u[ch_cur % FXU_N_ALL]] != 0xFFu) {   /* MIX */
                 uint32_t mid = FXU_MIX[u[ch_cur % FXU_N_ALL]];
                 const param_desc_t *md = track_desc(ft, mid);

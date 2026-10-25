@@ -1312,15 +1312,15 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
-    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 its effect, 3 moves it */
+    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 moves it, 3 its effect */
         uint8_t u[FXU_N_ALL];
         track_t *ft = fx_tsel();
         uint32_t n = fx_list(ft, u), rows = n < fx_max(ft) ? n + 1u : n;
         if (slot == 0u)
             ch_cur = (uint8_t)clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, (int32_t)rows - 1);
-        else if (slot == 1u)
+        else if (slot == 2u)                            /* (KNOB 3 the TYPE, KNOB 2 MOVE) */
             fx_chain_type(ft, steps);
-        else if (slot == 2u)
+        else if (slot == 1u)
             fx_chain_move(ft, steps);
         else if (ch_cur < n && u[ch_cur] == FXU_COMP)   /* (COMP's MIX: its AMOUNT) */
             fx_cset(ft, clamp((int32_t)fx_camt(ft) + steps, 1, 127), -1);

@@ -1062,7 +1062,7 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
 }
 
 /* HA HA HE HU: DUCK, the sidechain. A track whose DUCK names a source track (T1..T4) dips when that track starts a note
- * (voice.c duck_hit; a DRUM source: its KICK lane only): its level falls by DEPTH at once and comes back with REL's
+ * (voice.c duck_hit; a DRUM source: its KICK, SNARE and CLAP lanes): its level falls by DEPTH at once and comes back with REL's
  * time (P_DKREL -64..63: ~20 .. 400 ms, 0 ~210 ms; an exponential per block). Applied to the part's mono buffer after its FX chain, before LEVEL,
  * PAN and the sends: the sends dip with it. OFF: nothing runs (the track as before) */
 static int32_t duck_env[NPART], duck_att[NPART];       /* the envelope (Q15), the dip applied last block (Q15) */
