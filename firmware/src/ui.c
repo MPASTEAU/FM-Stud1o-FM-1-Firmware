@@ -1767,7 +1767,7 @@ static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 
 /* HOME: the track KNOB k edits (MENU > HOME LEVELS, 1.5: track k; else the selected one) and what: the engine's four
  * main parameters, or (LEVELS) the track's LEVEL, as the GLO layer's knobs */
-static track_t *home_trk(uint32_t k) { return home_levels() ? &trk[trk_bank() + (k & 3u)] : TSEL; }
+static track_t *home_trk(uint32_t k) { return home_levels() && trk_bank() + (k & 3u) < trk_count() ? &trk[trk_bank() + (k & 3u)] : TSEL; }   /* (Dah: past the project's tracks, the selected one) */
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
     uint32_t id = home_levels() ? (uint32_t)P_LEVEL : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
@@ -1830,6 +1830,8 @@ static void track_reset(uint32_t k)
     pat_from[k % NTRK] = 0;
     trkx_defaults(&trkx[k % NTRK]);
     undo_depth--;
+    if (undo.trk == k % NTRK + 1u)                   /* (Dah: no undo onto a track reset) */
+        undo.trk = 0;
 }
 static void track_add(void)
 {
@@ -1842,6 +1844,17 @@ static void track_add(void)
     ui_message("TRACK ADDED");
 }
 static void ps_drop_trk(uint32_t k);                   /* (pstore.c, below) */
+/* (Dah) the project's track count went down (a track removed, a project opened): nothing left on the tracks past it */
+static void trk_count_changed(void)
+{
+    uint32_t n = trk_count();
+    song.rec &= (uint8_t)((1u << n) - 1u);              /* (no arm, no solo on a hidden track) */
+    perf_solo &= (uint8_t)((1u << n) - 1u);
+    if (ui.song_trk < NTRK && ui.song_trk >= n)
+        ui.song_trk = NTRK;                             /* (SONG's lane: SEC) */
+    if (song.sel >= n)
+        track_select(n - 1u);
+}
 static void track_remove_last(void)
 {
     uint32_t k = trk_count();
@@ -1858,8 +1871,7 @@ static void track_remove_last(void)
     track_reset(k);
     ps_drop_trk(k);                                  /* (its patterns: memory free again) */
     song.ntrk = (uint8_t)k;
-    if (song.sel >= k)
-        song.sel = (uint8_t)(k - 1u);
+    trk_count_changed();
     ui.force = 1;
     ui_message("TRACK REMOVED");
 }

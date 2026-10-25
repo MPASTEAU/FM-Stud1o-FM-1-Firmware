@@ -580,7 +580,8 @@ static void song_keys(uint32_t notes)
 static uint32_t song_leds(void)
 {
     uint32_t k, s;
-    if (ui.song_row >= chain_config.count || !(s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) || s > 4u)
+    if (ui.song_trk >= NTRK || ui.song_row >= chain_config.count || !(s = chain_config.row[ui.song_row].slot[ui.song_trk]) ||
+        s > 4u)                                         /* (Dah: SEC, every lane: none lit) */
         return 0;
     for (k = 0; k < 27u; k++)
         if (song_key(k) == (int32_t)s - 1)
@@ -604,7 +605,8 @@ static int rec_tap(void)                                /* 1: the arming changed
         return 1;
     }
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
-        confirm_open(CF_DEL_PAT, pt_pick());
+        if (chain_busy()) ui_message("STOP TO EDIT");
+        else confirm_open(CF_DEL_PAT, pt_pick());
         return 0;
     }
     if (g == GR_FILE) {
@@ -1172,7 +1174,9 @@ static void act_do(void)
     }
     if (cur_page()->graph == GR_PATTERN) {              /* (Dah) PATTERN: OPEN, COPY, NEW, DELETE (the dialog) */
         ui.act = 0;
-        if (c == 3u)
+        if (chain_busy())                               /* (the song owns the tracks' timing meanwhile) */
+            ui_message("STOP TO EDIT");
+        else if (c == 3u)
             confirm_open(CF_DEL_PAT, pt_pick());
         else
             pt_do(c + 1u);
@@ -1616,6 +1620,8 @@ static void ui_input(void)
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: how to UNDO */
+    if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && ui.confirm)
+        ui.save_t0 |= 2u;                               /* (Dah: OCT- cancels the dialog; SAVE let go is no tap then) */
     if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && !ui.menu && !ui.confirm &&
         !name_on()) {                                   /* (HA HA HE HU) SAVE + OCT-: UNDO (ui.c undo_swap); SAVE let go */
         ui.save_t0 |= 2u;                               /* after: no tap, and OCT- no octave */

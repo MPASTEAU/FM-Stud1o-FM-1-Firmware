@@ -636,10 +636,12 @@ static void layer_key(uint32_t l, uint32_t k)
             lys.fxk = (uint8_t)(k + 1u);                /* (PRESETS assigns it while held) */
     } else if (l == LAYER_GLO) {
         if (key_black(k)) {
-            if (p < 4u)                                 /* (HA HA HE HU: the selected track's bank of four) */
+            if (p < 4u && trk_bank() + p < trk_count())   /* (HA HA HE HU: the selected track's bank of four; Dah:
+                                                         * the project's tracks only) */
                 trk[trk_bank() + p].p[P_MUTE] = (int16_t)!trk[trk_bank() + p].p[P_MUTE];
         } else if (p < 4u) {
-            lys.solo |= 1u << k;                        /* (layer_masks: perf_solo while held) */
+            if (trk_bank() + p < trk_count())
+                lys.solo |= 1u << k;                        /* (layer_masks: perf_solo while held) */
         } else if (p == 4u) {
             for (i = 0; i < NTRK; i++)
                 trk[i].p[P_MUTE] = 0;
@@ -709,6 +711,8 @@ static void layer_knob(uint32_t k, int32_t s)
     } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER (HA HA HE HU: the bank's) */
         track_t *bt = &trk[trk_bank() + (k & 3u)];
         int16_t *vp = &bt->p[P_LEVEL];
+        if (trk_bank() + (k & 3u) >= trk_count())       /* (Dah: no hidden track's level) */
+            return;
         *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
                              TP[P_LEVEL].max);
         motion_capture(bt, P_LEVEL, *vp);
@@ -847,9 +851,10 @@ static uint32_t layer_leds(uint32_t *br)
             can = e < PF_N && ((ok >> e) & 1u);
             on = can && ((held >> e) & 1u);
         } else if (l == LAYER_GLO) {                    /* sounding lit; SOLO held lit, the others, C4, F4 breathe */
-            on = b ? p < 4u && glo_sounding(trk_bank() + p) : (p < 4u && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
+            uint32_t here = p < 4u && trk_bank() + p < trk_count();   /* (Dah: a track of the project) */
+            on = b ? here && glo_sounding(trk_bank() + p) : (here && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
                  (p == 6u && seq_fill);
-            can = !b && (p < 4u || p == 4u || p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
+            can = !b && (here || p == 4u || p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
         } else if (l == LAYER_SCL) {                    /* the root lit, the scale's notes breathe */
             e = (k + 5u + 12u - root) % 12u;
             on = e == 0u;

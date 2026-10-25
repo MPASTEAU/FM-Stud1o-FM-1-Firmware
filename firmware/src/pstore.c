@@ -101,6 +101,9 @@ static uint32_t ps_encode(const track_t *t, uint8_t *b)
     uint32_t k = trk_index(t), pos = 0, i, n = 0, at;
     for (i = 0; i < 5u; i++) {
         int16_t v = motion_base_value(t, PS_TIMING[i]);
+        if (chain.running)                              /* (Dah: a song plays: t->p holds its section's timing; the
+                                                         * track's own is kept in chain.timing / chain.qnt) */
+            v = i < 4u ? chain.timing[k % NTRK][i] : (int16_t)chain.qnt[k % NTRK];
         b[pos++] = (uint8_t)v;
         b[pos++] = (uint8_t)((uint16_t)v >> 8);
     }
@@ -193,6 +196,15 @@ static void ps_blank(uint32_t k)
 }
 /* track k plays pattern num (1..PS_NUM): the one on it into the heap, num onto it (none in the heap: a new, empty one,
  * the timing kept). 1 = no room for the one it leaves (nothing changed) */
+/* (Dah) the SONG's sections no longer name track k's pattern num (0: any): "-" there, a later pattern of that number
+ * does not take them over */
+static void ps_song_forget(uint32_t k, uint32_t num)
+{
+    uint32_t r;
+    for (r = 0; r < chain_config.count && r < CHAIN_ROWS; r++)
+        if (num ? chain_config.row[r].slot[k % NTRK] == num : 1)
+            chain_config.row[r].slot[k % NTRK] = (uint8_t)CHAIN_SILENT;
+}
 static int pattern_go(uint32_t k, uint32_t num)
 {
     int32_t at;
@@ -205,9 +217,12 @@ static int pattern_go(uint32_t k, uint32_t num)
         return 1;
     ps_cur[k] = (uint8_t)num;
     ps_gen++;
+    if (undo.trk == k + 1u)                             /* (Dah: the undo copy is the other pattern's) */
+        undo.trk = 0;
     at = ps_find(k, num);
     if (at < 0 || !ps_decode(&trk[k], ps_heap + at + 4u, ps_rlen((uint32_t)at)))
         ps_blank(k);
+    ps_del(k, num);                                     /* (the one played lives on the track: no stale copy) */
     pat_sig[k] = steps_sig(&trk[k]);
     ui.force = 1;
     return 0;
@@ -251,6 +266,9 @@ static void pattern_del(uint32_t k, uint32_t num)
     uint32_t n, i;
     k %= NTRK;
     ps_del(k, num);
+    ps_song_forget(k, num);
+    if (undo.trk == k + 1u)
+        undo.trk = 0;
     if (num != ps_num(k))
         return;
     n = ps_list(k, nums);
@@ -363,6 +381,7 @@ static void ps_drop_trk(uint32_t k)                     /* track k's patterns go
 {
     uint32_t i;
     k %= NTRK;
+    ps_song_forget(k, 0);
     for (i = 1; i <= PS_NUM; i++)
         ps_del(k, i);
     ps_cur[k] = 0;
