@@ -845,11 +845,26 @@ static void seq_start(void)
     perf_start();                                  /* perform.c: its 1/16 grid too */
 }
 
+/* (Dah) a step's note on / off: through the track's ARP when it runs (the sequence feeds it as the keys do) */
+static void seq_note_on(track_t *t, uint32_t note, uint32_t vel)
+{
+    if (t->p[P_AMODE])
+        arp_add(t, note);
+    else
+        trk_note_on(t, note, vel);
+}
+static void seq_note_off(track_t *t, uint32_t note)
+{
+    if (t->p[P_AMODE])
+        arp_remove(t, note);
+    else
+        trk_note_off(t, note);
+}
 static void seq_release(track_t *t)
 {
     uint32_t i;
     for (i = 0; i < t->seq_n; i++)
-        trk_note_off(t, t->seq_notes[i]);
+        seq_note_off(t, t->seq_notes[i]);
     t->seq_n = 0;
     t->seq_hold = 0;
     t->slide_glide = 0;                             /* live MONO / LEG keys must not glide after it */
@@ -981,13 +996,13 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
         seq_release(t);
     for (i = 0; i < m; i++)
         if (!((sk >> i) & 1u))
-            trk_note_on(t, nn[i], vv[i]);
+            seq_note_on(t, nn[i], vv[i]);
     if (slide_in)                                   /* release what is not held over */
         for (i = 0; i < t->seq_n; i++) {
             for (j = 0; j < m && nn[j] != t->seq_notes[i]; j++)
                 ;
             if (j == m)
-                trk_note_off(t, t->seq_notes[i]);
+                seq_note_off(t, t->seq_notes[i]);
         }
     t->seq_n = 0;
     for (i = 0; i < m; i++)
