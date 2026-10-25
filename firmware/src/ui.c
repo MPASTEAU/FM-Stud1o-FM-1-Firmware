@@ -519,7 +519,7 @@ static int chain_busy(void) { return chain.running || chain.armed; }
  * following (content px), FOLLOW (playing: the playhead held in the middle; on by default), the frame a section was
  * picked last (its block shown a while, then the playhead again) */
 #define SG_ZOOM0 24u
-static struct { uint8_t on, nofollow, zoom; int32_t at; uint32_t touch; } sgw;
+static struct { uint8_t on, nofollow, zoom, run; int32_t at; uint32_t touch; } sgw;   /* (run: the song playing last frame) */
 static uint32_t sg_zoom(void) { return sgw.zoom ? sgw.zoom : SG_ZOOM0; }
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */

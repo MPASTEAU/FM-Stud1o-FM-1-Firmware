@@ -1251,6 +1251,11 @@ static int32_t song_follow(const song_lay_t *L)
     int fresh = !sgv.init || ui.frame != sgv.frame + 1u, snap = fresh || ui.force || (ui_prefs & PREF_ANIM_OFF);
     if (sgv.init && sgv.frame == ui.frame)
         return sgv.off;
+    if (chain.running && !sgw.run) {                  /* (Dah) the song starts: FOLLOW on, the grid followed at once */
+        sgw.nofollow = 0;
+        sgw.touch = ui.frame - 1000u;
+    }
+    sgw.run = chain.running;
     if (fresh) {                                     /* the page (re)entered: the playing row first */
         sgv.off = 0;
         sgv.last = p != 0xFFu;
