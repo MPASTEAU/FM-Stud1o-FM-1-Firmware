@@ -99,14 +99,16 @@ static void fm1_fault(const fm1_crash_t *c)
 }
 
 #if FELUCCA_DEMO
-/* Dah's power-on sound (FELUCCA_DEMO): slow and dark, D minor with the Phrygian Eb, 62 BPM, five tracks (song.ntrk), no
- * project written, no SONG. PLAY plays it, a loop of four bars (64 x 1/16), Dm Eb Dm A:
- *   track 1  PHYS HARP: low arpeggios in 1/8, dull (BRIT down), ringing long
- *   track 2  PHYS PLUCK: a low, sparse tune over it, three notes a bar
- *   track 3  ANALOG SUB BASS: D1 held under everything, swelling in
+/* Dah's power-on sound (FELUCCA_DEMO): slow and dark, 62 BPM, seven tracks (song.ntrk), no project written, no SONG.
+ * PLAY plays it, a loop of four bars (64 x 1/16) over a D pedal, from tension to its resolution: Dm9, Eb/D (the minor
+ * second against the pedal), Gm(add9)/D (a cluster), A7b9 (the dominant, its flat ninth), back home on Dm:
+ *   track 1  PHYS HARP: low arpeggios of the chords in 1/8, dull, ringing long
+ *   track 2  PHYS PLUCK: a low, sparse tune over it, three notes a bar (the b9 and the C# leading home in bar 4)
+ *   track 3  ANALOG SUB BASS: D1 for three bars, A1 for the dominant, loud and held
  *   track 4  DRUM DEEP KIT: a slow heartbeat, a dull round kick twice a bar (lub-dub: a 1/16 apart), dry
  *   track 5  DRUM KIT: a dark snare on the third beat of bars 2 and 4, drowned in the hall reverb
- *   track 6  VOICE CHOIR AAH: the chords held, far behind, a bar each */
+ *   track 6  VOICE CHOIR AAH: a short sung stab on each chord, far behind
+ *   track 7  FM6 ORGAN: the chords held, the bed under everything */
 static void demo_note(step_t *s, uint32_t note, uint32_t vel)
 {
     s->note[s->n < 4u ? s->n : 3u] = (uint8_t)note;
@@ -146,11 +148,13 @@ static void dm_chord(track_t *t, uint32_t at, uint32_t len, const uint8_t *n, ui
 }
 static void felucca_demo(void)
 {
-    static const uint8_t HARP[4][4] = {{38, 45, 50, 53}, {39, 46, 51, 55}, {38, 45, 50, 53}, {33, 40, 45, 49}};   /* Dm Eb
-                                                     * Dm A, low */
+    static const uint8_t HARP[4][4] = {{38, 45, 50, 53}, {38, 46, 51, 55}, {38, 46, 50, 55}, {33, 40, 43, 46}};   /* Dm
+                                                     * Eb/D Gm/D A7b9, low */
     static const uint8_t ARP[8] = {0, 1, 2, 3, 2, 1, 2, 3};
-    static const uint8_t CHOIR[4][3] = {{62, 65, 69}, {63, 67, 70}, {62, 65, 69}, {61, 64, 69}};   /* Dm Eb Dm A */
-    static const uint8_t MEL[4][3] = {{69, 65, 62}, {67, 63, 58}, {65, 62, 57}, {61, 64, 57}};   /* the pluck's, steps 0 6 12 */
+    static const uint8_t MEL[4][3] = {{69, 65, 64}, {70, 67, 63}, {69, 67, 62}, {70, 67, 61}};   /* the pluck's, steps 0 6 12 */
+    static const uint8_t ORGAN[4][4] = {{50, 53, 57, 64}, {50, 51, 55, 58}, {50, 55, 57, 58}, {49, 55, 58, 64}};
+    static const uint8_t CHOIR[4][3] = {{62, 65, 69}, {63, 67, 70}, {62, 67, 70}, {61, 67, 70}};
+    static const uint8_t SUB[4] = {26, 26, 26, 33};    /* D1 D1 D1 A1 */
     uint32_t i;
     track_t *t;
     song.g[G_BPM] = 62;
@@ -158,7 +162,7 @@ static void felucca_demo(void)
     song.g[G_RSIZE] = 124;
     song.g[G_RDAMP] = 104;
     song.g[G_DFDBK] = 70;
-    song.ntrk = 6;                            /* (the others: their power-on sounds, hidden) */
+    song.ntrk = 7;                            /* (the last: its power-on sound, hidden) */
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
         trk[i].p[P_SLEN] = 64;
@@ -168,19 +172,20 @@ static void felucca_demo(void)
     demo_sound(t, ENGI_PHYS, 8);              /* PHYS HARP */
     t->p[P_E0 + 2] = 34;                      /* BRIT down */
     t->p[P_E0 + 3] = 96;                      /* DAMP: rings long */
-    t->p[P_LEVEL] = 94; t->p[P_REV] = 84; t->p[P_DLY] = 20;
+    t->p[P_LEVEL] = 90; t->p[P_REV] = 84; t->p[P_DLY] = 20;
     for (i = 0; i < 32u; i++)
-        demo_note(&t->step[i * 2u], HARP[i / 8u][ARP[i % 8u]], i % 8u ? 58 : 74);
+        demo_note(&t->step[i * 2u], HARP[i / 8u][ARP[i % 8u]], i % 8u ? 56 : 72);
     t = &trk[1];                              /* the pluck, the tune, low */
     demo_sound(t, ENGI_PHYS, 2);              /* PHYS PLUCK */
     t->p[P_E0 + 2] = 44;                      /* BRIT down */
     t->p[P_LEVEL] = 88; t->p[P_REV] = 76; t->p[P_DLY] = 44;
     for (i = 0; i < 12u; i++)
         demo_note(&t->step[(i / 3u) * 16u + (i % 3u) * 6u], MEL[i / 3u][i % 3u], 66);
-    t = &trk[2];                              /* the floor: a sub, swelling */
+    t = &trk[2];                              /* the floor: a loud sub */
     demo_sound(t, 0, 7);                      /* ANALOG SUB BASS */
-    t->p[P_ATK] = 96; t->p[P_REL] = 100; t->p[P_LEVEL] = 84; t->p[P_REV] = 10;
-    dm_chord(t, 0, 64, (const uint8_t[]){26}, 1, 70);
+    t->p[P_ATK] = 60; t->p[P_REL] = 90; t->p[P_LEVEL] = 96; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    for (i = 0; i < 4u; i++)
+        dm_chord(t, i * 16u, 16, &SUB[i], 1, 100);
     t = &trk[3];                              /* the heartbeat: dull, slow, dry */
     demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT */
     t->p[P_E0 + 1] = 46;                      /* TUNE down */
@@ -199,17 +204,21 @@ static void felucca_demo(void)
     t->p[P_LEVEL] = 72; t->p[P_REV] = 127; t->p[P_DLY] = 22;
     demo_hit(t, 24, 1u << 1, 58);             /* (lane 1: SNARE) bar 2's third beat */
     demo_hit(t, 56, 1u << 1, 54);             /* .. bar 4's */
-    t = &trk[5];                              /* the choir, far behind */
+    t = &trk[5];                              /* the choir: a short stab on each chord, behind */
     demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH */
-    t->p[P_E0 + 1] = 40;                      /* VOWL2: from AAH towards OOH, */
-    t->p[P_E0 + 2] = 96;                      /* TALK: slowly, as a voice moves */
     t->p[P_E0 + 4] = 72;                      /* BUZZ up: a voiced throat */
     t->p[P_E0 + 5] = 12;                      /* BRTH down */
     t->p[P_E0 + 6] = 100;                     /* Q: the formants sharper, more vocal */
     t->p[P_E0 + 7] = 24;                      /* RAND: the voices apart */
-    t->p[P_ATK] = 70; t->p[P_REL] = 100; t->p[P_LEVEL] = 90; t->p[P_REV] = 72; t->p[P_DLY] = 10;
+    t->p[P_ATK] = 18; t->p[P_DEC] = 70; t->p[P_SUS] = 0; t->p[P_REL] = 80;   /* one shot: up and gone */
+    t->p[P_LEVEL] = 84; t->p[P_REV] = 110; t->p[P_DLY] = 30;
     for (i = 0; i < 4u; i++)
-        dm_chord(t, i * 16u, 16, CHOIR[i], 3, 72);
+        dm_chord(t, i * 16u, 3, CHOIR[i], 3, 76);
+    t = &trk[6];                              /* the organ, the bed */
+    demo_sound(t, ENGI_FM6, 6);               /* FM6 ORGAN */
+    t->p[P_ATK] = 40; t->p[P_REL] = 70; t->p[P_LEVEL] = 62; t->p[P_REV] = 70; t->p[P_CHOR] = 40;
+    for (i = 0; i < 4u; i++)
+        dm_chord(t, i * 16u, 16, ORGAN[i], 4, 64);
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
