@@ -1908,6 +1908,7 @@ static void trk_count_changed(void)
     uint32_t n = trk_count();
     song.rec &= (uint8_t)((1u << n) - 1u);              /* (no arm, no solo on a hidden track) */
     perf_solo &= (uint8_t)((1u << n) - 1u);
+    mix_solo &= (uint8_t)((1u << n) - 1u);
     if (ui.song_trk < NTRK && ui.song_trk >= n)
         ui.song_trk = NTRK;                             /* (SONG's lane: SEC) */
     if (song.sel >= n)

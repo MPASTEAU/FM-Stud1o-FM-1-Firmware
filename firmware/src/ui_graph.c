@@ -1988,9 +1988,10 @@ static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int 
 static void mixer_strip(uint32_t c)
 {
     track_t *t = &trk[c];
-    uint32_t sel = c == song.sel, lvl = trk_level(c), mute = t->p[P_MUTE] != 0, arm = (song.rec >> c) & 1u, sig;
+    uint32_t sel = c == song.sel, lvl = trk_level(c), arm = (song.rec >> c) & 1u, sig;
+    uint32_t mute = t->p[P_MUTE] != 0 || (perf_solo && !((perf_solo >> c) & 1u));   /* (Dah: another one SOLO: grey) */
     uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u, lit = (uint32_t)midi_lit(c);
-    int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_REV], 0, 127), f, mh, x;
+    int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127), f, mh, x;   /* (rv: WIDTH) */
     uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute ? T_DIM : ux.trk[c % NTRK];
     char b[16], v[8], d[2] = {(char)('1' + c), 0};
     t->peak = 0;
@@ -2031,9 +2032,11 @@ static void mixer_strip(uint32_t c)
         cv_rect(MX_W / 2, py, 1, 5, T_LINE);
         x = 4 + (pan + 64) * (MX_W - 8 - 4) / 127;
         cv_rrect(x, py, 4, 5, 2, hot == 2u ? T_TEXT : tc, bg);
-        cv_rrect(4, ry, MX_W - 8, 3, 1, T_LINE, bg);   /* REV: the send */
-        if (rv)
-            cv_rrect(4, ry, 1 + rv * (MX_W - 9) / 127, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
+        cv_rrect(4, ry, MX_W - 8, 3, 1, T_LINE, bg);   /* WIDTH (Dah: not REV): from the middle out */
+        if (rv) {
+            int32_t hw = 1 + rv * (MX_W - 10) / 254;
+            cv_rrect(MX_W / 2 - hw, ry, 2 * hw, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
+        }
     }
     cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH);
 }
@@ -2063,11 +2066,12 @@ static void draw_tracks(void)
     }
     for (c = trk_bank(); c < trk_bank() + 4u; c++) {   /* (HA HA HE HU: the selected track's bank of four) */
         track_t *t = &trk[c];
-        uint32_t sel = c == song.sel, lvl = trk_level(c), mute = t->p[P_MUTE] != 0, lit = (uint32_t)midi_lit(c);
+        uint32_t sel = c == song.sel, lvl = trk_level(c), lit = (uint32_t)midi_lit(c);
+        uint32_t mute = t->p[P_MUTE] != 0 || (perf_solo && !((perf_solo >> c) & 1u));
         uint32_t arm = (song.rec >> c) & 1u, st = arm ? (song.playing ? 1u : 2u) : mute ? 3u : 0u, sig;
         uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u;   /* the knob just turned (hot_col + 1): 1 LEVEL, 2 PAN,
                                                                 * 3 REV, 4 MUTE (its badge) */
-        int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_REV], 0, 127);
+        int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127);
         uint16_t vc;
         ux_tint(ux.trk[c]);                            /* (HA HA HE HU) each column in its track's colour */
         vc = mute ? T_DIM : T_THEME;
@@ -2394,7 +2398,7 @@ static void draw_home_tracks(void)
         cv_rrect(0, 0, TR_W, RK_H, 3, T_LINE, T_BG);
         cv_rrect(1, 1, TR_W - 2, RK_H - 2, 2, T_BG, T_LINE);
         GFX_HOOK_ALIGN(0, 0, 0, RK_H, AL_V, "rack add row on its line");
-        cv_free_text(18, CAP_IN(S, RK_H), &AF_S, "+ TRACK  (ALGORITHM)", T_DIM, T_BG, TR_W - 24);
+        cv_free_hint(18, CAP_IN(S, RK_H), "[ALGO] TURN RIGHT: ADD A TRACK", T_DIM, T_BG, TR_W - 24);   /* (Dah: what to do, said) */
         cv_blit(3, (uint32_t)y);
         for (c = trk_count() + 1u; c < NTRK; c++)
             lcd_fill(3, (uint32_t)(Y_GRAPH + 1 + (int32_t)c * RK_PITCH), TR_W, RK_H, T_BG);

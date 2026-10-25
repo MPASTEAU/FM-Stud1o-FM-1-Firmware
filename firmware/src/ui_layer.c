@@ -697,7 +697,7 @@ static void layer_keys(uint32_t keys)
     for (k = 0; k < 27u; k++)
         if ((lys.solo >> k) & 1u)
             s |= 1u << (trk_bank() + key_place(k));    /* (HA HA HE HU: the bank's tracks) */
-    perf_solo = (uint8_t)s;
+    perf_solo = (uint8_t)(s | mix_solo);                /* (Dah: and MIXER's SOLO, kept) */
 }
 
 /* KNOB 1..4 in the open layer: its own (FX macros, GLO levels, EDIT's sound), else the four of its page */

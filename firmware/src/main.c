@@ -258,6 +258,7 @@ static void felucca_init(void)
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
     undo_depth++;                             /* (no undo copy of the power-on loads) */
+    mix_solo = 0;                             /* (Dah: MIXER's SOLO, none) */
     fm6_init();                               /* every track's FM6 patch: the init voice */
     ps_reset();                               /* (HA HA HE HU: each track on its pattern 1, no other) */
     for (i = 0; i < NTRK; i++) {

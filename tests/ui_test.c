@@ -191,6 +191,7 @@ static void ui_power_on(void)
     for (i = 0; i < NTRK; i++)                    /* (HA HA HE HU: the tracks' extras as at power-on) */
         trkx_defaults(&trkx[i]);
     xp_point = xp_shape = 0;
+    mix_solo = 0;                                 /* (Dah: MIXER's SOLO, none at power-on) */
     ps_reset();
     memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (.bss at power-on: the engines' regions) */
     memset(midi_lit_ms, 0, sizeof midi_lit_ms); midi_seen = 0;   /* (1.5.5: no MIDI IN light) */
@@ -2959,9 +2960,10 @@ static int test_product_ux(void)
     ui_power_on(); press(B_HOME);
     bad += check("1.2: HOME tapped on HOME opens the four-channel MIXER", cur_page()->graph == GR_TRK && !ui.home &&
                  cur_fam() == FAM_TRK && FAM_BTN[cur_fam()] == B_HOME);
-    int16_t len = TSEL->p[P_SLEN], send = TSEL->p[P_REV];
+    int16_t len = TSEL->p[P_SLEN], send = TSEL->p[P_SPRD];
     turn(EN_K3, 1);
-    bad += check("MIXER K3 edits reverb, never sequence length", TSEL->p[P_SLEN] == len && TSEL->p[P_REV] == send + 1);
+    bad += check("MIXER K3 edits WIDTH (Dah: the stereo spread, not the reverb), never sequence length",
+                 TSEL->p[P_SLEN] == len && TSEL->p[P_SPRD] == send + 1);
     press(B_HOME);
     ok = !ui.home && !ui.menu && str_eq(cur_page()->title, "CLOCK") && cur_fam() == FAM_TRK && FAM_BTN[cur_fam()] == B_HOME;
     {   /* (CLOCK: HOME's LED lit, as on MIXER; GLO's not) */
@@ -6030,7 +6032,7 @@ static int test_momentary(void)
     /* #195: MIXER's LEVEL PAN REV MUTE (the selected track's) are momentary too, as on HOME LEVELS and the FX page */
     go_page(GR_TRK); frame();
     {
-        int16_t lv = TSEL->p[P_LEVEL], pn = TSEL->p[P_PAN], rv = TSEL->p[P_REV], mu = TSEL->p[P_MUTE];
+        int16_t lv = TSEL->p[P_LEVEL], pn = TSEL->p[P_PAN], rv = TSEL->p[P_SPRD], mu = TSEL->p[P_MUTE];
         song.playing = 1; song.rec = 1u << song.sel;
         k = motion.count;
         btn_down(B_LFO); frame();
@@ -6038,15 +6040,15 @@ static int test_momentary(void)
         turn(EN_K2, 7);
         turn(EN_K3, 9);
         turn(EN_K4, 1);
-        ok = TSEL->p[P_LEVEL] != lv && TSEL->p[P_PAN] != pn && TSEL->p[P_REV] != rv && TSEL->p[P_MUTE] != mu &&
+        ok = TSEL->p[P_LEVEL] != lv && TSEL->p[P_PAN] != pn && TSEL->p[P_SPRD] != rv && TSEL->p[P_MUTE] != mu &&
              mom.n == 4u && motion.count == k;
         btn_up(B_LFO); frame();
         song.playing = 0; song.rec = 0;
-        ok &= TSEL->p[P_LEVEL] == lv && TSEL->p[P_PAN] == pn && TSEL->p[P_REV] == rv && TSEL->p[P_MUTE] == mu &&
+        ok &= TSEL->p[P_LEVEL] == lv && TSEL->p[P_PAN] == pn && TSEL->p[P_SPRD] == rv && TSEL->p[P_MUTE] == mu &&
               !mom.n && cur_page()->graph == GR_TRK && msg_is("BACK");
         turn(EN_K3, 4);                            /* (without LFO: a turn stays) */
-        ok &= TSEL->p[P_REV] != rv && !mom.n;
-        TSEL->p[P_REV] = rv;
+        ok &= TSEL->p[P_SPRD] != rv && !mom.n;
+        TSEL->p[P_SPRD] = rv;
         bad += check("  #195 MIXER: LEVEL PAN REV MUTE momentary (not recorded), back on release; without LFO they stay", ok);
     }
     /* a layer: its knobs */

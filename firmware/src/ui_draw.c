@@ -1273,11 +1273,19 @@ static void draw_columns_in(void)
         card_mot_of(&TSEL->p[P_PAN]);
         card_span_of(&TP[P_PAN]);
         draw_column(1, "PAN", val, unit, VAL(1u), RATIO(&TP[P_PAN], t->p[P_PAN]), param_icon(&TP[P_PAN], t->p[P_PAN]));
-        param_format(&TP[P_REV], t->p[P_REV], val, &unit);
-        card_mot_of(&TSEL->p[P_REV]);
-        card_span_of(&TP[P_REV]);
-        draw_column(2, "REV", val, unit, VAL(2u), RATIO(&TP[P_REV], t->p[P_REV]), ICON_AUTO);
-        draw_column(3, "MUTE", t->p[P_MUTE] ? "ON" : "OFF", "", t->p[P_MUTE] ? T_ACCENT : VAL(3u), -1, ICON_AUTO);
+        if (t->p[P_SPRD] == 0 || t->p[P_SPRD] == 127) {   /* (Dah) WIDTH, its ends named */
+            str_cpy(val, t->p[P_SPRD] ? "WIDE" : "MONO", 8);
+            unit = "";
+        } else
+            param_format(&TP[P_SPRD], t->p[P_SPRD], val, &unit);
+        card_mot_of(&TSEL->p[P_SPRD]);
+        card_span_of(&TP[P_SPRD]);
+        draw_column(2, "WIDTH", val, unit, VAL(2u), RATIO(&TP[P_SPRD], t->p[P_SPRD]), ICON_AUTO);
+        {
+            uint32_t solo = (mix_solo >> (song.sel % NTRK)) & 1u;
+            draw_column(3, "STATE", solo ? "SOLO" : t->p[P_MUTE] ? "MUTE" : "ON", "", solo || t->p[P_MUTE] ? T_ACCENT : VAL(3u),
+                        -1, ICON_AUTO);
+        }
         return;
     }
     if (cur_page()->graph == GR_BROWSE) {

@@ -13,14 +13,38 @@
  * engine that maps the keys itself) ignores CHRD. Every source keeps the notes it started (kb_chord for a
  * key, mchord for a MIDI note) and its release ends exactly those, so CHRD / VOIC changed while it is held
  * leave nothing hanging. A note several sources hold sounds once and ends with the last of them. */
-enum { CH_OFF, CH_DIA3, CH_DIA7, CH_MAJ, CH_MIN, CH_DOM7, CH_MAJ7, CH_MIN7, CH_SUS4, CH_POW };
-enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS };
+enum { CH_OFF, CH_DIA3, CH_DIA7, CH_MAJ, CH_MIN, CH_DOM7, CH_MAJ7, CH_MIN7, CH_SUS4, CH_POW,
+       CH_COLOR, CH_DARK, CH_EPIC, CH_SAD, CH_POP, CH_CINE };   /* (Dah: COLOR and the progressions, appended) */
+enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS, VC_AUTO };
+/* Dah:
+ *   CHRD COLOR  the scale's chord on the key as DIA7 does, each degree its usual colour: the tonic add9 (not a seventh),
+ *               the dominant (the fifth degree) a 7 with its flat ninth in a minor key (the raised third: harmonic),
+ *               the others their seventh
+ *   CHRD DARK EPIC SAD POP CINE  a progression of four: the key is its tonic, each chord played (a key, a MIDI note, a
+ *               step) the next one of it (chord_build, prog_step), round
+ *       DARK  i(add9) bII i(m7) V7b9      EPIC  i(add9) bVI bIII bVII    SAD  i iv(m7) bVImaj7 V7b9
+ *       POP   I V vi(m7) IVmaj7           CINE  i(add9) bVImaj7 iv V7
+ *   VOIC AUTO   voice leading: of the chord's inversions an octave either way, the one nearest the chord before (each
+ *               tone to its nearest, the bass moving less), close position for the first */
 #define CHORD_MAX 4u
 #define MCHORD_N 24u                     /* MIDI notes held as chords at once (more: their root alone) */
 
 static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
     {0, 4, 7, -1}, {0, 3, 7, -1}, {0, 4, 7, 10}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 5, 7, -1}, {0, 7, 12, -1},
 };
+/* (Dah) the progressions' chords: {semitones from the tonic, shape}; the shapes: */
+enum { PS_MIN, PS_MADD9, PS_MAJ, PS_MAJ7, PS_MIN7, PS_D7B9, PS_DOM7 };
+static const int8_t PROG_SHAPE[7][CHORD_MAX] = {
+    {0, 3, 7, -1}, {0, 3, 7, 14}, {0, 4, 7, -1}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 4, 10, 13}, {0, 4, 7, 10},
+};
+static const int8_t PROG[CH_CINE - CH_DARK + 1][4][2] = {
+    {{0, PS_MADD9}, {1, PS_MAJ}, {0, PS_MIN7}, {7, PS_D7B9}},            /* DARK */
+    {{0, PS_MADD9}, {8, PS_MAJ}, {3, PS_MAJ}, {10, PS_MAJ}},              /* EPIC */
+    {{0, PS_MIN}, {5, PS_MIN7}, {8, PS_MAJ7}, {7, PS_D7B9}},              /* SAD */
+    {{0, PS_MAJ}, {7, PS_MAJ}, {9, PS_MIN7}, {5, PS_MAJ7}},               /* POP */
+    {{0, PS_MADD9}, {8, PS_MAJ7}, {5, PS_MIN}, {7, PS_DOM7}},             /* CINE */
+};
+static uint8_t prog_step[NTRK];                        /* each track's place in its progression (chord_build) */
 
 static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: track + 1, 0 = free */
@@ -41,7 +65,14 @@ static int chord_kit(const track_t *t)
 static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int32_t *iv)
 {
     uint32_t n = 0, i;
-    if (mode >= CH_MAJ) {
+    if (mode >= CH_DARK && mode <= CH_CINE) {          /* (Dah) the progression's chord now, on the key as tonic */
+        const int8_t *c = PROG[mode - CH_DARK][prog_step[trk_index(t) % NTRK] & 3u];
+        *root += c[0];
+        for (i = 0; i < CHORD_MAX && PROG_SHAPE[c[1]][i] >= 0; i++)
+            iv[n++] = PROG_SHAPE[c[1]][i];
+        return n;
+    }
+    if (mode >= CH_MAJ && mode <= CH_POW) {
         for (i = 0; i < CHORD_MAX && CHORD_SHAPE[mode - CH_MAJ][i] >= 0; i++)
             iv[n++] = CHORD_SHAPE[mode - CH_MAJ][i];
         return n;
@@ -59,9 +90,18 @@ static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int3
                     at = c;
                 deg[c++] = i;
             }
-        for (i = 0; i < (mode == CH_DIA7 ? 4u : 3u); i++) {   /* every other note of the scale */
+        for (i = 0; i < (mode == CH_DIA3 ? 3u : 4u); i++) {   /* every other note of the scale */
             uint32_t k = at + 2u * i;
             iv[n++] = (int32_t)deg[k % c] + 12 * (int32_t)(k / c) - (int32_t)deg[at];
+        }
+        if (mode == CH_COLOR && n == 4u) {              /* (Dah) each degree its colour */
+            int minor = (mask >> 3) & 1u && !((mask >> 4) & 1u);   /* (the key's third) */
+            if (at == 0u) {                             /* the tonic: add9 */
+                uint32_t k = at + 8u;
+                iv[3] = (int32_t)deg[k % c] + 12 * (int32_t)(k / c) - (int32_t)deg[at];
+            } else if (deg[at] == 7u && minor) {        /* the minor key's dominant: 7 b9 (harmonic) */
+                iv[1] = 4; iv[2] = 10; iv[3] = 13;
+            }
         }
         return n;
     }
@@ -77,7 +117,7 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     uint16_t mask = 0;
     *rp = r;
     *maskp = 0;
-    if (!mode || mode > CH_POW || chord_kit(t)) {
+    if (!mode || mode > CH_CINE || chord_kit(t)) {
         out[0] = (uint8_t)root;
         return 1;
     }
@@ -104,6 +144,35 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
             iv[n - 1u] = x;
         }
         break;
+    case VC_AUTO: {                                     /* (Dah) voice leading: the inversion nearest the chord before */
+        uint32_t k = trk_index(t) % NTRK, pn = chord_last[k].n, inv, best = 0, bo = 0;
+        int32_t bc = 0x7FFFFFFF, o;
+        if (pn < 2u || n < 2u)
+            break;
+        for (inv = 0; inv < n; inv++)
+            for (o = -12; o <= 12; o += 12) {
+                int32_t cost = 0, lo = 1000;
+                for (i = 0; i < n; i++) {
+                    int32_t v = r + iv[i] + (i < inv ? 12 : 0) + o, d = 1000;
+                    for (j = 0; j < pn; j++) {
+                        int32_t e = v - (int32_t)chord_last[k].note[j];
+                        e = e < 0 ? -e : e;
+                        d = e < d ? e : d;
+                    }
+                    cost += d;
+                    lo = v < lo ? v : lo;
+                }
+                cost += (lo > (int32_t)chord_last[k].note[0] ? lo - chord_last[k].note[0] : chord_last[k].note[0] - lo) / 2;
+                if (cost < bc) {
+                    bc = cost;
+                    best = inv;
+                    bo = (uint32_t)(o + 12);
+                }
+            }
+        for (i = 0; i < n; i++)
+            iv[i] += (i < best ? 12 : 0) + (int32_t)bo - 12;
+        break;
+    }
     case VC_BASS:                                       /* the root an octave down; a seventh drops its fifth */
         if (n == CHORD_MAX) {
             iv[2] = iv[3];
@@ -150,6 +219,8 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
             chord_last[k].note[i] = i < m ? out[i] : 0u;
         chord_last[k].gen++;
     }
+    if (t->p[P_CHRD] >= CH_DARK && t->p[P_CHRD] <= CH_CINE)
+        prog_step[k % NTRK] = (uint8_t)((prog_step[k % NTRK] + 1u) & 3u);   /* (Dah: the next chord next time) */
     return m;
 }
 

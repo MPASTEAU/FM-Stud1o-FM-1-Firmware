@@ -76,7 +76,7 @@ static int mom_turn(uint32_t k, int32_t s)
     if (ui.home) {
         d = home_param(k, &vp);
     } else if (pg->scope == SC_TRK && !lock_held()) {  /* MIXER (#195): the selected track's LEVEL PAN REV MUTE */
-        static const uint8_t MIX_ID[4] = {P_LEVEL, P_PAN, P_REV, P_MUTE};   /* (tracks_edit's knobs) */
+        static const uint8_t MIX_ID[4] = {P_LEVEL, P_PAN, P_SPRD, P_MUTE};   /* (tracks_edit's knobs; Dah: WIDTH) */
         vp = &TSEL->p[MIX_ID[k & 3u]];
         d = &TP[MIX_ID[k & 3u]];
     } else {
@@ -503,17 +503,22 @@ static void tracks_edit(uint32_t slot, int32_t steps)
     int16_t *vp;
     const param_desc_t *d;
     switch (slot) {
-    case 3:
-        t->p[P_MUTE] = (int16_t)(steps > 0);
+    case 3: {                                           /* (Dah) STATE: NORMAL, MUTE, SOLO (the others grey, their own MUTE
+                                                         * kept: SOLO off, they are as they were) */
+        uint32_t b = 1u << (song.sel % NTRK), st = (mix_solo & b) ? 2u : t->p[P_MUTE] ? 1u : 0u;
+        st = (uint32_t)clamp((int32_t)st + (steps > 0 ? 1 : -1), 0, 2);
+        t->p[P_MUTE] = (int16_t)(st == 1u);
+        mix_solo = (uint8_t)(st == 2u ? mix_solo | b : mix_solo & ~b);
         ml_knob(t, P_MUTE);                             /* (MIDI LEARN: picked) */
         return;
+    }
     case 0:
         vp = &t->p[P_LEVEL];
         d = &TP[P_LEVEL];
         break;
-    case 2:
-        vp = &t->p[P_REV];
-        d = &TP[P_REV];
+    case 2:                                             /* (Dah) WIDTH: the voices' stereo spread, MONO .. WIDE */
+        vp = &t->p[P_SPRD];
+        d = &TP[P_SPRD];
         break;
     default:
         vp = &t->p[P_PAN];
