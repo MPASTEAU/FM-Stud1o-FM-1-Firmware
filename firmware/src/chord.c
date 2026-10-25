@@ -26,18 +26,19 @@ enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS, VC_AUTO };
  *   VOIC AUTO   voice leading: of the chord's inversions an octave either way, the one nearest the chord before (each
  *               tone to its nearest, the bass moving less), close position for the first */
 #define CHORD_MAX 4u
+#define MATCH_MAX 6u                                    /* (Dah) MATCH's chords: up to six notes (NOTES) */
 #define MCHORD_N 24u                     /* MIDI notes held as chords at once (more: their root alone) */
 
 static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
     {0, 4, 7, -1}, {0, 3, 7, -1}, {0, 4, 7, 10}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 5, 7, -1}, {0, 7, 12, -1},
 };
 
-static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
+static uint8_t kb_chord[27][MATCH_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
 typedef struct { uint8_t id, ch, src, n, note[CHORD_MAX]; } mchord_t;   /* id: track + 1, 0 = free */
 static mchord_t mchord[MCHORD_N];
 /* the last chord played per track (the CHORD page shows it): its root, notes, and the shape's tones above the
  * root (bit i = i semitones, 0..11) */
-static struct { uint8_t root, n, note[CHORD_MAX]; uint16_t mask; uint8_t gen; } chord_last[NTRK];
+static struct { uint8_t root, n, note[MATCH_MAX]; uint16_t mask; uint8_t gen; } chord_last[NTRK];
 
 /* 1 = the track's keys are a kit: no chords */
 static int chord_kit(const track_t *t)
@@ -184,20 +185,33 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     return m;
 }
 
-/* (Dah) MATCH: the chords it knows (tones above the root, a bit each), the simplest first */
+/* (Dah) MATCH: the chords it knows (tones above the root, a bit each), the simplest first in each size: triads, then
+ * sevenths and sixths, ninths, elevenths and thirteenths */
 static const uint16_t MATCH_T[] = {
-    0x091u, 0x089u, 0x491u, 0x891u, 0x489u, 0x0A1u, 0x085u, 0x049u, 0x449u, 0x111u, 0x095u, 0x08Du, 0x291u, 0x289u,
-};   /* maj min 7 maj7 m7 sus4 sus2 dim m7b5 aug add9 madd9 6 m6 */
+    0x091u, 0x089u, 0x0A1u, 0x085u, 0x049u, 0x111u,                   /* maj min sus4 sus2 dim aug */
+    0x491u, 0x891u, 0x489u, 0x291u, 0x289u, 0x449u, 0x4A1u, 0x889u,   /* 7 maj7 m7 6 m6 m7b5 7sus4 mM7 */
+    0x095u, 0x08Du,                                                   /* add9 madd9 */
+    0x495u, 0x895u, 0x48Du,                                           /* 9 maj9 m9 */
+    0x4ADu, 0x695u, 0xA95u, 0x68Du,                                   /* m11 13 maj13 m13 */
+};
+/* (Dah) MATCH's own settings, the track's (trkx rsv: they are not sound parameters, a preset leaves them): COLOR bits
+ * 0..1 (0 FREE: the closest chord; 1 SCALE: only the track's scale's notes; 2 MAJOR, 3 MINOR: the third), NOTES bits
+ * 2..3 (3 + n: the notes the chord aims at, 3 a triad .. 6) */
+enum { MC_FREE, MC_SCALE, MC_MAJOR, MC_MINOR };
+static uint32_t match_color(uint32_t k) { return trkx[k % NTRK].rsv & 3u; }
+static uint32_t match_notes(uint32_t k) { return 3u + ((trkx[k % NTRK].rsv >> 2) & 3u); }
+static uint32_t pop12(uint32_t m) { uint32_t c = 0; for (m &= 0xFFFu; m; m &= m - 1u) c++; return c; }
 /* key `key` pressed on track t with MATCH: the notes the other keys of t sound now and it make the chord; out: the key's
  * note, then the tones missing (each near the notes held). The number of notes */
 static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
 {
     uint32_t j, i, held[32], nh = 0, pcs, lo = key, scale = scale_mask(t), best_r = 0, best_m = 0, n = 1, k = trk_index(t);
+    uint32_t col = match_color(k), want = match_notes(k), sm;
     int32_t best = 0x7FFFFFFF, sum = (int32_t)key;
     out[0] = (uint8_t)key;
     for (j = 0; j < 27u; j++)                           /* the other keys of the track held: their own notes (not the
                                                          * tones an earlier match added: the chord made again from the
-                                                         * keys, seq.c match_revoice lets go of those it drops) */
+                                                         * keys, seq.c match_rechord lets go of those it drops) */
         if (kb_chn[j] && kb_trk[j] == k && kb_note[j] != key && nh < 32u) {
             held[nh++] = kb_note[j];
             sum += kb_note[j];
@@ -208,21 +222,26 @@ static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
     pcs = 1u << (key % 12u);
     for (i = 0; i < nh; i++)
         pcs |= 1u << (held[i] % 12u);
-    for (j = 0; j < 12u; j++)                           /* each root, each chord: all the notes in it, the fewest added */
+    sm = (scale << ((uint32_t)t->p[P_ROOT] % 12u) | scale >> (12u - (uint32_t)t->p[P_ROOT] % 12u)) & 0xFFFu;
+    for (j = 0; j < 12u; j++)                           /* each root, each chord: all the notes in it, as many notes as
+                                                         * NOTES asks (or the closest), the fewest added */
         for (i = 0; i < NELEM(MATCH_T); i++) {
-            uint32_t m = ((uint32_t)MATCH_T[i] << j | (uint32_t)MATCH_T[i] >> (12u - j)) & 0xFFFu, x, c;
+            uint32_t m = ((uint32_t)MATCH_T[i] << j | (uint32_t)MATCH_T[i] >> (12u - j)) & 0xFFFu, sz = pop12(m), tw;
             int32_t sc;
             if ((pcs & m) != pcs)
                 continue;
-            for (x = m & ~pcs, c = 0; x; x &= x - 1u)
-                c++;
-            sc = (int32_t)c * 10 + (int32_t)i;          /* (the simpler chord first) */
+            tw = pop12(pcs) > want ? pop12(pcs) : want;  /* (more keys than NOTES: theirs) */
+            sc = (int32_t)(sz > tw ? sz - tw : tw - sz) * 30 + (int32_t)pop12(m & ~pcs) * 4 + (int32_t)i;
             if (!((pcs >> j) & 1u))
                 sc += 8;                                /* its root not played */
             else if (j != lo % 12u)
                 sc += 2;                                /* its root not the lowest */
-            if (scale != 0xFFFu && (m & ~(scale << ((uint32_t)t->p[P_ROOT] % 12u) | scale >> (12u - (uint32_t)t->p[P_ROOT] % 12u)) & 0xFFFu))
-                sc += 3;                                /* out of the track's scale */
+            if (scale != 0xFFFu && (m & ~sm))
+                sc += col == MC_SCALE ? 1000 : 3;       /* out of the track's scale (SCALE: only if nothing else) */
+            if (col == MC_MAJOR && !((MATCH_T[i] >> 4) & 1u))
+                sc += 1000;                             /* MAJOR: a major third */
+            if (col == MC_MINOR && !((MATCH_T[i] >> 3) & 1u))
+                sc += 1000;                             /* MINOR: a minor third */
             if (sc < best) {
                 best = sc;
                 best_r = j;
@@ -234,7 +253,7 @@ static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
     {
         int32_t mid = sum / (int32_t)(nh + 1u);
         uint32_t miss = best_m & ~pcs;
-        for (j = 0; j < 12u && n < CHORD_MAX; j++)      /* the missing tones, each its octave nearest the notes held */
+        for (j = 0; j < 12u && n < MATCH_MAX; j++)      /* the missing tones, each its octave nearest the notes held */
             if ((miss >> j) & 1u) {
                 int32_t v = mid - ((mid - (int32_t)j) % 12 + 12) % 12;
                 if (mid - v > 6)
@@ -246,7 +265,7 @@ static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
     chord_last[k % NTRK].root = (uint8_t)(lo - (lo % 12u) + best_r);   /* (the CHORD page: its name) */
     chord_last[k % NTRK].mask = (uint16_t)(((best_m >> best_r) | (best_m << (12u - best_r))) & 0xFFFu);
     chord_last[k % NTRK].n = (uint8_t)n;
-    for (i = 0; i < CHORD_MAX; i++)
+    for (i = 0; i < MATCH_MAX; i++)
         chord_last[k % NTRK].note[i] = i < n ? out[i] : 0u;
     chord_last[k % NTRK].gen++;
     return n;
@@ -262,7 +281,7 @@ static uint32_t chord_build(track_t *t, uint32_t root, uint8_t *out)
         chord_last[k].root = (uint8_t)clamp(r, 0, 127);
         chord_last[k].mask = mask;
         chord_last[k].n = (uint8_t)m;
-        for (i = 0; i < CHORD_MAX; i++)
+        for (i = 0; i < MATCH_MAX; i++)
             chord_last[k].note[i] = i < m ? out[i] : 0u;
         chord_last[k].gen++;
     }
@@ -293,6 +312,12 @@ static void chord_name(char *b, uint32_t root, uint32_t mask)
         x = "sus2";
     } else
         q = "5";
+    if ((mi ^ ma) && (m7 || M7) && (((mask >> 2) | (mask >> 5)) & 1u || d7)) {   /* (Dah) 9, 11, 13 */
+        static const char *const EXT[3][3] = {{"9", "11", "13"}, {"maj9", "maj11", "maj13"}, {"m9", "m11", "m13"}};
+        uint32_t e = d7 ? 2u : (mask >> 5) & 1u ? 1u : 0u;
+        q = EXT[mi ? 2 : M7 ? 1 : 0][e];
+    } else if ((mi ^ ma) && (mask >> 2) & 1u && !b5)
+        x = "add9";
     str_cpy(b + str_len(b), q, 12 - str_len(b));
     str_cpy(b + str_len(b), x, 12 - str_len(b));
 }

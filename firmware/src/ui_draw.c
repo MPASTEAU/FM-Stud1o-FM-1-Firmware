@@ -611,6 +611,17 @@ static void span_fxmv(const card_span_t *sp, int32_t v, char *val)      /* (Dah)
     (void)sp;
     val[0] = (char)('1' + (v & 3)); val[1] = '/'; val[2] = '4'; val[3] = 0;
 }
+static void span_mcol(const card_span_t *sp, int32_t v, char *val)      /* (Dah) MATCH's COLOR */
+{
+    static const char *const MCN[4] = {"FREE", "SCALE", "MAJOR", "MINOR"};
+    (void)sp;
+    str_cpy(val, MCN[v & 3], 8);
+}
+static void span_mnot(const card_span_t *sp, int32_t v, char *val)      /* (Dah) MATCH's NOTES */
+{
+    (void)sp;
+    val[0] = (char)('0' + v); val[1] = 0;
+}
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
     card_span.fn = fn;
@@ -1531,6 +1542,18 @@ static void draw_columns_in(void)
         if (cur_page()->graph == GR_FILE) {             /* (Dah) FILE: OPEN COPY NEW DELETE (the memory: the list's) */
             int ok = c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
             draw_act_column(c, act_name(c), ok ? T_THEME : T_DIM, ICON_AUTO);
+            continue;
+        }
+        if (cur_page()->graph == GR_CHORD && TSEL->p[P_CHRD] == CH_MATCH && c >= 2u) {   /* (Dah) MATCH: COLOR, NOTES */
+            static const char *const MCN[4] = {"FREE", "SCALE", "MAJOR", "MINOR"};
+            char nv[2] = {(char)('0' + match_notes(song.sel)), 0};
+            if (c == 2u) {
+                card_span_by(span_mcol, 0, 0, 3, 2);
+                draw_column(2, "COLOR", MCN[match_color(song.sel)], "", VAL(2u), -1, ICON_AUTO);
+            } else {
+                card_span_by(span_mnot, 0, 3, 6, 3);
+                draw_column(3, "NOTES", nv, "", VAL(3u), ((int32_t)match_notes(song.sel) - 3) * 1000 / 3, ICON_AUTO);
+            }
             continue;
         }
         if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, TYPE, MOVE */

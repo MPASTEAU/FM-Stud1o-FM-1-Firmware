@@ -713,7 +713,7 @@ static uint8_t kb_ages;
 static __attribute__((noinline)) void match_rechord(track_t *t)
 {
     uint32_t j, i, a, own = 27u, n, mc = trk_midi_ch(trk_index(t));
-    uint8_t out[CHORD_MAX];
+    uint8_t out[MATCH_MAX];
     for (j = 0; j < 27u; j++)                           /* the key pressed last */
         if (kb_chn[j] && kb_trk[j] == trk_index(t) && (own == 27u || (uint8_t)(kb_age[j] - kb_age[own]) < 128u))
             own = j;
@@ -739,7 +739,7 @@ static __attribute__((noinline)) void match_rechord(track_t *t)
             }
         }
     }
-    for (a = 1; a < n && kb_chn[own] < CHORD_MAX; a++) {   /* the new ones: in (the key pressed last's) */
+    for (a = 1; a < n && kb_chn[own] < MATCH_MAX; a++) {   /* the new ones: in (the key pressed last's) */
         uint32_t x = out[a], have = 0;
         for (i = 0; i < kb_chn[own]; i++)
             have |= kb_chord[own][i] == x;

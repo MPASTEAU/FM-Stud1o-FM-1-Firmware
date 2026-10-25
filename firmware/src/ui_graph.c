@@ -420,7 +420,7 @@ static void panel_alert(uint32_t id, const char *a);
 static void graph_chord(const track_t *t, uint16_t c)
 {
     static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint8_t nn[CHORD_MAX];
+    uint8_t nn[MATCH_MAX];
     uint32_t n, i, j, k = trk_index(t), lo, cnt, w;
     int32_t r;
     uint16_t mask;

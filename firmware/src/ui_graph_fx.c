@@ -8,6 +8,7 @@
  * Included by ui_graph_more.c */
 static uint8_t ch_cur;                                  /* CHAIN: the row picked (an effect, or + ADD after them) */
 static const char *const FXU_N[4] = {"DIST", "INSERT", "SLICER", "EQ"};
+static const char *const FXU_S[4] = {"DST", "INS", "SLC", "EQ"};   /* (FX's strip, narrow: four and DUCK) */
 static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (2u * (i & 3u))) & 3u; }
 static int fx_unit_on(const track_t *t, uint32_t u)       /* in the chain: doing something */
 {
@@ -161,23 +162,28 @@ static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, 
 {
     uint8_t u[4];
     uint32_t n = fx_list(t, u), i;
-    int32_t bw = n ? (PANEL_W - 48 - (int32_t)n * 8) / (int32_t)n : 0, x = PANEL_X0;
+    int32_t bw = n ? (PANEL_W - 40 - (t->p[P_DKSRC] ? 48 : 0) - (int32_t)n * 8) / (int32_t)n : 0, x = PANEL_X0;
     (void)cur;
     if (bw > 52)
         bw = 52;
     for (i = 0; i < n; i++, x += bw + 8) {
         cv_rrect(x, y, bw, h, 3, c, T_SURF);
-        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, bw, &AF_S, FXU_N[u[i]], T_INK, c);
+        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, bw, &AF_S, bw < 44 ? FXU_S[u[i]] : FXU_N[u[i]], T_INK, c);
         cv_rect(x + bw + 1, y + h / 2, 6, 1, T_MID);   /* the arrow on */
     }
     if (!n)
         cv_text_on(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "NO EFFECT", T_MID, T_SURF), x += 70;
-    {
-        int dk = t->p[P_DKSRC] != 0;
-        cv_rrect(x, y, 40, h, 3, dk ? c : T_RAISE, T_SURF);
-        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, 40, &AF_S, dk ? "DUCK" : "OUT", dk ? T_INK : T_MID,
-                   dk ? c : T_RAISE);
-    }
+    if (t->p[P_DKSRC]) {                                /* DUCK (an effect too, after the chain), then */
+        cv_rrect(x, y, 40, h, 3, c, T_SURF);
+        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, 40, &AF_S, "DUCK", T_INK, c);
+        cv_rect(x + 41, y + h / 2, 6, 1, T_MID);
+        x += 48;
+    } else if (n)
+        x -= 8;                                         /* (the last arrow drawn: on) */
+    cv_rect(x, y + h / 2, 10, 1, T_MID);                /* -> OUT: an arrow and the word, no box */
+    cv_line_t(x + 7, y + h / 2 - 3, x + 10, y + h / 2, T_MID, 1);
+    cv_line_t(x + 7, y + h / 2 + 3, x + 10, y + h / 2, T_MID, 1);
+    cv_text_on(x + 13, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "OUT", T_MID, T_SURF);
 }
 /* CHAIN: the list, an effect a row (its number, name, what it does), the sound flowing down a line at the left; the
  * row picked outlined; + ADD after them (four at most); the sound out at the right */

@@ -1151,6 +1151,14 @@ static void edit_param(uint32_t slot, int32_t steps)
         mod_ui_slot = (uint8_t)clamp((int32_t)mod_ui_slot + (steps > 0 ? 1 : -1), 0, 3);
         return;
     }
+    if (pg->graph == GR_CHORD && TSEL->p[P_CHRD] == CH_MATCH && slot >= 2u) {   /* (Dah) MATCH: KNOB 3 COLOR, 4 NOTES */
+        trkx_t *x = &trkx[song.sel % NTRK];
+        uint32_t v = slot == 2u ? x->rsv & 3u : (x->rsv >> 2) & 3u;
+        v = (uint32_t)clamp((int32_t)v + (steps > 0 ? 1 : -1), 0, 3);
+        x->rsv = (uint8_t)(slot == 2u ? (x->rsv & ~3u) | v : (x->rsv & ~0xCu) | v << 2);
+        ui.force = 1;
+        return;
+    }
     if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 its effect, 3 moves it */
         uint8_t u[4];
         uint32_t n = fx_list(TSEL, u), rows = n < 4u ? n + 1u : 4u;
