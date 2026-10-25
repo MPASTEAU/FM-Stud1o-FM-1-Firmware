@@ -100,55 +100,86 @@ static void graph_voice(const track_t *t, uint16_t c)
         cv_rect(gx + 30 + gw, gy1, 30, 2, c);
     }
 }
-/* the ARP's sixteen notes of a C chord (C E G over OCT octaves), as seq.c's modes order them (a picture of the order:
- * RND, WALK drawn from a fixed seed) */
-static uint32_t gm_arp_notes(const track_t *t, uint8_t *idx)
+/* (Dah) the place in the list (len notes) step i of the arp's cycle plays, as seq.c arp_pick (RND, WALK: in order, a
+ * picture: they draw anew each time) */
+static uint32_t gm_arp_at(uint32_t m, uint32_t i, uint32_t len)
 {
-    uint32_t oct = (uint32_t)clamp(t->p[P_AOCT], 1, 4), n = 3u * oct, i, mode = (uint32_t)t->p[P_AMODE], r = 0x2545F491u;
-    for (i = 0; i < 16u; i++) {
-        uint32_t k = i % n, cyc = 2u * n - 2u;
-        switch (mode) {
-        case 2: idx[i] = (uint8_t)(n - 1u - k); break;                                       /* DN */
-        case 3: k = n > 1u ? i % cyc : 0u; idx[i] = (uint8_t)(k < n ? k : cyc - k); break;   /* UPDN */
-        case 7: k = n > 1u ? i % cyc : 0u; idx[i] = (uint8_t)(k < n ? n - 1u - k : k - n + 1u); break;   /* DNUP */
-        case 4: case 13: r = r * 1664525u + 1013904223u; idx[i] = (uint8_t)((r >> 16) % n); break;   /* RND, WALK */
-        case 6: idx[i] = (uint8_t)(i / 2u % n); break;                                       /* REPEAT */
-        case 9: idx[i] = (uint8_t)(i & 1u ? n - 1u - (i / 2u) % n : (i / 2u) % n); break;     /* CONV */
-        case 10: idx[i] = (uint8_t)(i & 1u ? n / 2u + (i / 2u) % (n - n / 2u) : n / 2u - (i / 2u) % (n / 2u + 1u)); break;   /* DIVG */
-        case 11: idx[i] = (uint8_t)(i & 1u ? n - 1u : (i / 2u) % n); break;                   /* PINKY */
-        case 12: idx[i] = (uint8_t)(i & 1u ? 0u : (i / 2u) % n); break;                       /* THUMB */
-        case 14: idx[i] = 0xFFu; break;                                                       /* CHORD: all */
-        default: idx[i] = (uint8_t)k; break;                                                  /* UP, ORD, UP+8 */
-        }
+    uint32_t cyc = len > 1u ? 2u * len - 2u : 1u, k = i % cyc;
+    switch (m) {
+    case AM_DN: return len - 1u - i % len;
+    case AM_UPDN: return k < len ? k : cyc - k;
+    case AM_DNUP: return k < len ? len - 1u - k : k - (len - 1u);
+    case AM_CONV: case AM_DIVG:
+        k = i % len;
+        if (m == AM_DIVG) k = len - 1u - k;
+        return (k & 1u) ? len - 1u - k / 2u : k / 2u;
+    case AM_PINKY: return len < 2u ? 0u : (k & 1u) ? len - 1u : k / 2u;
+    case AM_THUMB: return len < 2u ? 0u : (k & 1u) ? 1u + k / 2u : 0u;
+    default: return i % len;
     }
-    return n;
 }
+static uint32_t gm_arp_cycle(uint32_t m, uint32_t len)   /* the steps of one whole cycle */
+{
+    if (m == AM_UPDN || m == AM_DNUP || m == AM_PINKY || m == AM_THUMB)
+        return len > 1u ? 2u * len - 2u : 1u;
+    return m == AM_CHORD || m == AM_REPEAT ? 1u : len;
+}
+/* ARP: what it plays from the keys held now, one cycle of it as a little roll (each note its row, the gate its length;
+ * ARP 2: the swing's late steps, PROB's faint), the step playing in TEXT. No key held: a C chord's, faint, and how */
 static void graph_arp(const track_t *t, uint16_t c)
 {
-    uint8_t idx[16];
-    uint32_t n, i, j;
-    int32_t top = 6, bot = graph_ht - 6, cw = PANEL_W / 16, rh, gate = clamp(t->p[P_AGATE], 1, 127);
-    if (!t->p[P_AMODE]) {
+    uint32_t list[64], cnt, len, m = (uint32_t)t->p[P_AMODE], cyc, i, j, nrow = 0, playing;
+    uint8_t row[128];
+    int32_t top = 6, bot = graph_ht - 6, cw, rh, gate = clamp(t->p[P_AGATE], 1, 127), demo = 0;
+    if (!m) {
         panel_note("ARP OFF", "[K1] MODE", 0);
         return;
     }
-    n = gm_arp_notes(t, idx);
-    rh = (bot - top) / (int32_t)n;
-    if (rh > 10) rh = 10;
-    for (i = 0; i <= 16u; i++)
+    len = arp_list(t, list, &cnt);
+    if (!len) {                                         /* nothing held: a C chord over its octaves, as an example */
+        uint32_t o;
+        demo = 1;
+        for (o = 0; o < (uint32_t)clamp(t->p[P_AOCT], 1, 4) && len < 60u; o++) {
+            list[len++] = 60u + 12u * o; list[len++] = 64u + 12u * o; list[len++] = 67u + 12u * o;
+        }
+        if (m == AM_REPEAT)
+            len = 1;
+    }
+    if (m == AM_UP8 && len < 64u) {                     /* UP+8: the first note again over the top */
+        list[len] = (uint32_t)clamp((int32_t)list[0] + 12 * t->p[P_AOCT], 0, 127);
+        len++;
+    }
+    cyc = gm_arp_cycle(m, len);
+    if (cyc > 32u)
+        cyc = 32u;
+    memset(row, 0xFF, sizeof row);
+    for (i = 0; i < 128u; i++)                          /* the rows: the notes of the list, low to high */
+        for (j = 0; j < len; j++)
+            if (list[j] == i) {
+                row[i] = (uint8_t)nrow++;
+                break;
+            }
+    cw = PANEL_W / (int32_t)(cyc < 4u ? 4u : cyc);
+    rh = nrow ? (bot - top) / (int32_t)nrow : 1;
+    if (rh > 12) rh = 12;
+    playing = !demo && t->arp_idx ? (t->arp_idx - 1u) % cyc : 0xFFu;   /* (arp_fire: idx counted first) */
+    for (i = 0; i <= cyc; i++)
         cv_rect(PANEL_X0 + (int32_t)i * cw, top, 1, bot - top, i % 4u ? T_GRID : T_RAISE);
-    for (i = 0; i < 16u; i++) {
+    for (i = 0; i < cyc; i++) {
         int32_t x = PANEL_X0 + (int32_t)i * cw + 1, w = (cw - 2) * gate / 127;
-        uint16_t col = t->p[P_APROB] < 127 && ((i * 2654435761u) >> 24) > (uint32_t)t->p[P_APROB] * 2u ? T_RAISE : c;   /* PROB:
-                                                         * some steps left out, faint */
+        uint16_t col = demo ? ux_mix(c, T_SURF, 50) : i == playing ? T_TEXT : c;
         if (i & 1u)
-            x += (cw - 2) * t->p[P_ASWING] / 200;       /* SWING: the off-steps later */
-        for (j = 0; j < n; j++)
-            if (idx[i] == 0xFFu || idx[i] == j) {
-                int32_t y = bot - (int32_t)(j + 1u) * rh;
+            x += (cw - 2) * t->p[P_ASWING] / 200;      /* SWING: the off-steps later */
+        for (j = 0; j < len; j++)
+            if (m == AM_CHORD || m == AM_REPEAT ? 1 : j == gm_arp_at(m, i, len)) {
+                int32_t y = bot - (int32_t)(row[list[j] & 127u] + 1u) * rh;
                 cv_rect(x, y + 1, w < 2 ? 2 : w, rh - 2 > 2 ? rh - 2 : 2, col);
+                if (m != AM_CHORD)
+                    break;
             }
     }
+    if (demo)
+        cv_text_r(PANEL_X0 + PANEL_W, top + 2, &AF_S, "HOLD KEYS", T_MID, T_SURF);
 }
 /* the delay's TIME in quarters x 24 (N_DTIME's order) */
 static const uint16_t GM_DT24[13] = {24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36};
