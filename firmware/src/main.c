@@ -105,7 +105,8 @@ static void fm1_fault(const fm1_crash_t *c)
  *   track 2  PHYS PLUCK: a low, sparse tune over it, three notes a bar
  *   track 3  ANALOG SUB BASS: D1 held under everything, swelling in
  *   track 4  DRUM DEEP KIT: a slow heartbeat, a dull round kick twice a bar (lub-dub: a 1/16 apart), dry
- *   track 5  DRUM KIT: a dark snare on the third beat of bars 2 and 4, drowned in the hall reverb */
+ *   track 5  DRUM KIT: a dark snare on the third beat of bars 2 and 4, drowned in the hall reverb
+ *   track 6  VOICE CHOIR AAH: the chords held, far behind, a bar each */
 static void demo_note(step_t *s, uint32_t note, uint32_t vel)
 {
     s->note[s->n < 4u ? s->n : 3u] = (uint8_t)note;
@@ -148,6 +149,7 @@ static void felucca_demo(void)
     static const uint8_t HARP[4][4] = {{38, 45, 50, 53}, {39, 46, 51, 55}, {38, 45, 50, 53}, {33, 40, 45, 49}};   /* Dm Eb
                                                      * Dm A, low */
     static const uint8_t ARP[8] = {0, 1, 2, 3, 2, 1, 2, 3};
+    static const uint8_t CHOIR[4][3] = {{62, 65, 69}, {63, 67, 70}, {62, 65, 69}, {61, 64, 69}};   /* Dm Eb Dm A */
     static const uint8_t MEL[4][3] = {{69, 65, 62}, {67, 63, 58}, {65, 62, 57}, {61, 64, 57}};   /* the pluck's, steps 0 6 12 */
     uint32_t i;
     track_t *t;
@@ -156,7 +158,7 @@ static void felucca_demo(void)
     song.g[G_RSIZE] = 124;
     song.g[G_RDAMP] = 104;
     song.g[G_DFDBK] = 70;
-    song.ntrk = 5;                            /* (the others: their power-on sounds, hidden) */
+    song.ntrk = 6;                            /* (the others: their power-on sounds, hidden) */
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
         trk[i].p[P_SLEN] = 64;
@@ -197,6 +199,11 @@ static void felucca_demo(void)
     t->p[P_LEVEL] = 72; t->p[P_REV] = 127; t->p[P_DLY] = 22;
     demo_hit(t, 24, 1u << 1, 58);             /* (lane 1: SNARE) bar 2's third beat */
     demo_hit(t, 56, 1u << 1, 54);             /* .. bar 4's */
+    t = &trk[5];                              /* the choir, far behind */
+    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH */
+    t->p[P_ATK] = 100; t->p[P_REL] = 104; t->p[P_LEVEL] = 66; t->p[P_REV] = 120; t->p[P_DLY] = 10;
+    for (i = 0; i < 4u; i++)
+        dm_chord(t, i * 16u, 16, CHOIR[i], 3, 52);
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
