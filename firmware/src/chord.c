@@ -14,16 +14,15 @@
  * key, mchord for a MIDI note) and its release ends exactly those, so CHRD / VOIC changed while it is held
  * leave nothing hanging. A note several sources hold sounds once and ends with the last of them. */
 enum { CH_OFF, CH_DIA3, CH_DIA7, CH_MAJ, CH_MIN, CH_DOM7, CH_MAJ7, CH_MIN7, CH_SUS4, CH_POW,
-       CH_COLOR, CH_DARK, CH_EPIC, CH_SAD, CH_POP, CH_CINE };   /* (Dah: COLOR and the progressions, appended) */
+       CH_COLOR, CH_MATCH };                         /* (Dah: COLOR and MATCH, appended) */
 enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS, VC_AUTO };
 /* Dah:
  *   CHRD COLOR  the scale's chord on the key as DIA7 does, each degree its usual colour: the tonic add9 (not a seventh),
  *               the dominant (the fifth degree) a 7 with its flat ninth in a minor key (the raised third: harmonic),
  *               the others their seventh
- *   CHRD DARK EPIC SAD POP CINE  a chord map: the key played is the chord's root, always (no note chosen for you); its
- *               place above the track's ROOT (0..11 semitones) picks the chord's kind and its inversion, as that style
- *               uses it (CHORD_MAP: DARK's minor and Phrygian, EPIC's minor with the major bVI bIII bVII, SAD's minor
- *               sevenths and V7b9, POP's major with its m7s, CINE's add9s and maj7s)
+ *   CHRD MATCH  the keys held together make the chord: one key, its note alone; two or more, the chord they belong to
+ *               (the least notes added; its root among them, the lowest best; in the track's scale best) completed by
+ *               the key pressed last with the tones missing, each placed nearest the notes held (chord_match)
  *   VOIC AUTO   voice leading: of the chord's inversions an octave either way, the one nearest the chord before (each
  *               tone to its nearest, the bass moving less), close position for the first */
 #define CHORD_MAX 4u
@@ -31,28 +30,6 @@ enum { VC_CLOSE, VC_OPEN, VC_INV1, VC_INV2, VC_BASS, VC_AUTO };
 
 static const int8_t CHORD_SHAPE[CH_POW - CH_MAJ + 1][CHORD_MAX] = {
     {0, 4, 7, -1}, {0, 3, 7, -1}, {0, 4, 7, 10}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 5, 7, -1}, {0, 7, 12, -1},
-};
-/* (Dah) the chord maps' shapes */
-enum { PS_MIN, PS_MADD9, PS_MAJ, PS_MAJ7, PS_MIN7, PS_D7B9, PS_DOM7, PS_SUS2, PS_SUS4, PS_M7B5, PS_DIM, PS_DIM7, PS_ADD9,
-       PS_7SUS4, PS_N };
-static const int8_t PROG_SHAPE[PS_N][CHORD_MAX] = {
-    {0, 3, 7, -1}, {0, 3, 7, 14}, {0, 4, 7, -1}, {0, 4, 7, 11}, {0, 3, 7, 10}, {0, 4, 10, 13}, {0, 4, 7, 10},
-    {0, 2, 7, -1}, {0, 5, 7, -1}, {0, 3, 6, 10}, {0, 3, 6, -1}, {0, 3, 6, 9}, {0, 4, 7, 14}, {0, 5, 7, 10},
-};
-/* each style: for the key's place above ROOT (0..11) its shape and inversion (0 root position, 1, 2) */
-#define CM(sh, inv) ((uint8_t)((sh) | (inv) << 5))
-static const uint8_t CHORD_MAP[CH_CINE - CH_DARK + 1][12] = {
-    /*            i             bII          ii            bIII         III          iv           bV           V            bVI          vi           bVII         VII */
-    /* DARK */ {CM(PS_MADD9, 0), CM(PS_MAJ, 1), CM(PS_M7B5, 1), CM(PS_MAJ7, 0), CM(PS_MIN, 1), CM(PS_MIN7, 0), CM(PS_DIM, 1),
-                CM(PS_D7B9, 1), CM(PS_MAJ7, 1), CM(PS_M7B5, 0), CM(PS_MAJ, 2), CM(PS_DIM7, 1)},
-    /* EPIC */ {CM(PS_MADD9, 0), CM(PS_MAJ, 1), CM(PS_SUS2, 0), CM(PS_MAJ, 1), CM(PS_MIN, 1), CM(PS_MIN, 2), CM(PS_SUS2, 1),
-                CM(PS_SUS4, 1), CM(PS_ADD9, 0), CM(PS_MIN, 1), CM(PS_MAJ, 2), CM(PS_DIM, 1)},
-    /* SAD */  {CM(PS_MIN, 0), CM(PS_MAJ7, 1), CM(PS_M7B5, 1), CM(PS_MAJ7, 0), CM(PS_MAJ, 1), CM(PS_MIN7, 1), CM(PS_DIM7, 0),
-                CM(PS_D7B9, 1), CM(PS_MAJ7, 2), CM(PS_MIN7, 0), CM(PS_DOM7, 2), CM(PS_DIM7, 1)},
-    /* POP */  {CM(PS_ADD9, 0), CM(PS_DIM7, 1), CM(PS_MIN7, 1), CM(PS_MAJ, 1), CM(PS_MIN7, 2), CM(PS_MAJ7, 1), CM(PS_M7B5, 1),
-                CM(PS_MAJ, 1), CM(PS_MAJ, 2), CM(PS_MIN7, 1), CM(PS_MAJ, 1), CM(PS_M7B5, 1)},
-    /* CINE */ {CM(PS_MADD9, 0), CM(PS_MAJ7, 1), CM(PS_SUS2, 1), CM(PS_MAJ7, 0), CM(PS_MAJ, 1), CM(PS_MADD9, 1), CM(PS_DIM, 1),
-                CM(PS_7SUS4, 1), CM(PS_MAJ7, 2), CM(PS_MIN, 1), CM(PS_ADD9, 1), CM(PS_DIM7, 1)},
 };
 
 static uint8_t kb_chord[27][CHORD_MAX], kb_chn[27];   /* the notes key k started (kb_chn 0: none) */
@@ -74,23 +51,6 @@ static int chord_kit(const track_t *t)
 static uint32_t chord_tones(const track_t *t, uint32_t mode, int32_t *root, int32_t *iv)
 {
     uint32_t n = 0, i;
-    if (mode >= CH_DARK && mode <= CH_CINE) {          /* (Dah) the style's chord for the key: its root the key */
-        uint8_t e = CHORD_MAP[mode - CH_DARK][(uint32_t)(*root - t->p[P_ROOT] + 120) % 12u];
-        uint32_t inv = (uint32_t)e >> 5, k;
-        for (i = 0; i < CHORD_MAX && PROG_SHAPE[e & 31u][i] >= 0; i++)
-            iv[n++] = PROG_SHAPE[e & 31u][i];
-        if (t->p[P_VOIC] != VC_AUTO)                     /* its inversion (AUTO: the voice leading chooses) */
-            for (k = 0; k < inv && n > 1u; k++) {
-                int32_t x = iv[0] + 12;
-                for (i = 1; i < n; i++)
-                    iv[i - 1u] = iv[i];
-                iv[n - 1u] = x;
-            }
-        while (iv[0] > 5)                                /* (an inversion around the key, not climbing over it) */
-            for (i = 0; i < n; i++)
-                iv[i] -= 12;
-        return n;
-    }
     if (mode >= CH_MAJ && mode <= CH_POW) {
         for (i = 0; i < CHORD_MAX && CHORD_SHAPE[mode - CH_MAJ][i] >= 0; i++)
             iv[n++] = CHORD_SHAPE[mode - CH_MAJ][i];
@@ -136,7 +96,7 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
     uint16_t mask = 0;
     *rp = r;
     *maskp = 0;
-    if (!mode || mode > CH_CINE || chord_kit(t)) {
+    if (!mode || mode > CH_COLOR || chord_kit(t)) {   /* (MATCH: chord_match, by the key) */
         out[0] = (uint8_t)root;
         return 1;
     }
@@ -222,6 +182,73 @@ static uint32_t chord_make(const track_t *t, uint32_t root, uint8_t *out, int32_
         return 1;
     }
     return m;
+}
+
+/* (Dah) MATCH: the chords it knows (tones above the root, a bit each), the simplest first */
+static const uint16_t MATCH_T[] = {
+    0x091u, 0x089u, 0x491u, 0x891u, 0x489u, 0x0A1u, 0x085u, 0x049u, 0x449u, 0x111u, 0x095u, 0x08Du, 0x291u, 0x289u,
+};   /* maj min 7 maj7 m7 sus4 sus2 dim m7b5 aug add9 madd9 6 m6 */
+/* key `key` pressed on track t with MATCH: the notes the other keys of t sound now and it make the chord; out: the key's
+ * note, then the tones missing (each near the notes held). The number of notes */
+static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
+{
+    uint32_t j, i, held[32], nh = 0, pcs, lo = key, scale = scale_mask(t), best_r = 0, best_m = 0, n = 1, k = trk_index(t);
+    int32_t best = 0x7FFFFFFF, sum = (int32_t)key;
+    out[0] = (uint8_t)key;
+    for (j = 0; j < 27u; j++)                           /* the notes the other keys of the track sound */
+        if (kb_chn[j] && kb_trk[j] == k)
+            for (i = 0; i < kb_chn[j] && nh < 32u; i++) {
+                held[nh++] = kb_chord[j][i];
+                sum += kb_chord[j][i];
+                lo = kb_chord[j][i] < lo ? kb_chord[j][i] : lo;
+            }
+    if (!nh || chord_kit(t) || trk_vmode(t) != V_POLY)
+        return 1;                                       /* (one key: its note alone) */
+    pcs = 1u << (key % 12u);
+    for (i = 0; i < nh; i++)
+        pcs |= 1u << (held[i] % 12u);
+    for (j = 0; j < 12u; j++)                           /* each root, each chord: all the notes in it, the fewest added */
+        for (i = 0; i < NELEM(MATCH_T); i++) {
+            uint32_t m = ((uint32_t)MATCH_T[i] << j | (uint32_t)MATCH_T[i] >> (12u - j)) & 0xFFFu, x, c;
+            int32_t sc;
+            if ((pcs & m) != pcs)
+                continue;
+            for (x = m & ~pcs, c = 0; x; x &= x - 1u)
+                c++;
+            sc = (int32_t)c * 10 + (int32_t)i;          /* (the simpler chord first) */
+            if (!((pcs >> j) & 1u))
+                sc += 8;                                /* its root not played */
+            else if (j != lo % 12u)
+                sc += 2;                                /* its root not the lowest */
+            if (scale != 0xFFFu && (m & ~(scale << ((uint32_t)t->p[P_ROOT] % 12u) | scale >> (12u - (uint32_t)t->p[P_ROOT] % 12u)) & 0xFFFu))
+                sc += 3;                                /* out of the track's scale */
+            if (sc < best) {
+                best = sc;
+                best_r = j;
+                best_m = m;
+            }
+        }
+    if (best == 0x7FFFFFFF)
+        return 1;                                       /* (no chord holds them: the note alone) */
+    {
+        int32_t mid = sum / (int32_t)(nh + 1u);
+        uint32_t miss = best_m & ~pcs;
+        for (j = 0; j < 12u && n < CHORD_MAX; j++)      /* the missing tones, each its octave nearest the notes held */
+            if ((miss >> j) & 1u) {
+                int32_t v = mid - ((mid - (int32_t)j) % 12 + 12) % 12;
+                if (mid - v > 6)
+                    v += 12;
+                if (v >= 0 && v <= 127)
+                    out[n++] = (uint8_t)v;
+            }
+    }
+    chord_last[k % NTRK].root = (uint8_t)(lo - (lo % 12u) + best_r);   /* (the CHORD page: its name) */
+    chord_last[k % NTRK].mask = (uint16_t)(((best_m >> best_r) | (best_m << (12u - best_r))) & 0xFFFu);
+    chord_last[k % NTRK].n = (uint8_t)n;
+    for (i = 0; i < CHORD_MAX; i++)
+        chord_last[k % NTRK].note[i] = i < n ? out[i] : 0u;
+    chord_last[k % NTRK].gen++;
+    return n;
 }
 
 /* chord_make for a note played now: a chord is kept in chord_last (the CHORD page shows it) */

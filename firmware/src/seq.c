@@ -709,8 +709,10 @@ static __attribute__((noinline)) void perf_key_remap(void)
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
 {
-    uint32_t n = chord_build(t, kb_note[k], kb_chord[k]), i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel;
+    uint32_t n, i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel;
     kb_chn[k] = 0;
+    n = t->p[P_CHRD] == CH_MATCH ? chord_match(t, kb_note[k], kb_chord[k])   /* (Dah: the keys held make the chord) */
+                                 : chord_build(t, kb_note[k], kb_chord[k]);
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
