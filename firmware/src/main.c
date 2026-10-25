@@ -223,8 +223,8 @@ static void demo_var(uint32_t k, uint32_t v)
             demo_hit(t, s0 + 10u, 1u << 0, 104);
             if (v >= 2u)
                 demo_hit(t, s0 + 7u, 1u << 0, 86);
-            demo_hit(t, s0 + 4u, 1u << 1, 118);
-            demo_hit(t, s0 + 12u, 1u << 1, 122);
+            demo_hit(t, s0 + 4u, 1u << 1 | 1u << 2, 118);                  /* snare and clap on 2 and 4 */
+            demo_hit(t, s0 + 12u, 1u << 1 | 1u << 2, 122);
             if (v >= 2u)
                 demo_hit(t, s0 + 15u, 1u << 1, 44);                         /* a ghost */
             for (i = 0; i < 16u; i += 2u)
@@ -341,10 +341,11 @@ static void felucca_demo(void)
             trkx[i].rsv1 = 60;
         }
     }
-    for (i = 1; i < 3u; i++) {                /* the air and the pad duck on the kick */
+    for (i = 1; i < 3u; i++) {                /* the air and the pad duck on the kicks (both kits), dry */
         trk[i].p[P_DKSRC] = 6;
-        trk[i].p[P_DKAMT] = 70;
-        trk[i].p[P_DKREL] = 60;
+        trkx[i].sc2 = 7;
+        trk[i].p[P_DKAMT] = 80;
+        trk[i].p[P_DKREL] = -10;
     }
     for (k = 0; k < 8u; k++)                  /* each track's variants: 1 on it, the others new patterns */
         for (v = 1; v <= NV[k]; v++) {

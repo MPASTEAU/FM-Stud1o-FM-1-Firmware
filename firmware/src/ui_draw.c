@@ -616,6 +616,11 @@ static void span_fxu(const card_span_t *sp, int32_t v, char *val)       /* (Dah)
     (void)sp;
     str_cpy(val, FXU_N[(uint32_t)v % FXU_N_ALL], 16);
 }
+static void span_src(const card_span_t *sp, int32_t v, char *val)       /* (Dah) SIDECHAIN's SOURCE 2 */
+{
+    (void)sp;
+    str_cpy(val, N_DKSRC[(uint32_t)v % (NTRK + 1u)], 4);
+}
 static void span_fxmv(const card_span_t *sp, int32_t v, char *val)      /* (Dah) CHAIN's MOVE: the place, of 4 */
 {
     (void)sp;
@@ -1598,6 +1603,13 @@ static void draw_columns_in(void)
                 card_span_by(span_mnot, 0, 3, 6, 3);
                 draw_column(3, "NOTES", nv, "", VAL(3u), ((int32_t)match_notes(song.sel) - 3) * 1000 / 3, ICON_AUTO);
             }
+            continue;
+        }
+        if (cur_page()->fam == FAM_FX && cur_page()->id[0] == P_DKSRC && c == 3u) {   /* (Dah) SIDECHAIN: SOURCE 2 */
+            uint32_t s2 = trkx[song.sel % NTRK].sc2;
+            card_span_by(span_src, 0, 0, NTRK, 0);
+            draw_column(3, "SRC 2", N_DKSRC[s2 <= NTRK ? s2 : 0u], "", s2 ? ux.trk[(s2 - 1u) % NTRK] : VAL(3u),
+                        (int32_t)s2 * 1000 / NTRK, ICON_AUTO);
             continue;
         }
         if (cur_page()->fam == FAM_FX && str_eq(cur_page()->title, "COMP")) {   /* (Dah) COMP: AMOUNT RELEASE, the GR */

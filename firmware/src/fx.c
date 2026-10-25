@@ -979,13 +979,12 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
             else if ((o & 7u) == 3u) {
                 if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
                     track_eq(t, b, n);                  /* (the mono sum: the side passes it by) */
-            } else {
-                if (trkx[(uint32_t)(t - trk) % NTRK].rsv0 | cmp_trk[(uint32_t)(t - trk) % NTRK].gr)
-                    comp_track(t, b, d, n);             /* (Dah) the COMPRESSOR: just before the SIDECHAIN */
-                if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
-                    duck_part_sd(t, b, d, n);           /* (Dah: the SIDECHAIN, where ORDER puts it; the side too) */
-            }
+            }                                   /* (4, the SIDECHAIN: last, below) */
         }
+        if (trkx[(uint32_t)(t - trk) % NTRK].rsv0 | cmp_trk[(uint32_t)(t - trk) % NTRK].gr)
+            comp_track(t, b, d, n);                     /* (Dah) the COMPRESSOR, then the SIDECHAIN: always last */
+        if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+            duck_part_sd(t, b, d, n);                   /* (the side too) */
         if (tp & 1u) c = 0;                             /* (taken already) */
         if (tp & 2u) dl = 0;
         if (tp & 4u) r = 0;
@@ -1051,14 +1050,14 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
             if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
                 track_eq(t, b, n);                      /* (Dah) the EQ: flat, nothing */
             break;
-        default:
-            if (trkx[(uint32_t)(t - trk) % NTRK].rsv0 | cmp_trk[(uint32_t)(t - trk) % NTRK].gr)
-                comp_track(t, b, 0, n);                 /* (Dah) the COMPRESSOR: just before the SIDECHAIN */
-            if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
-                duck_part(t, b, n);                     /* (Dah) the SIDECHAIN, where ORDER puts it */
+        default:                                        /* (4, the SIDECHAIN: last, below) */
             break;
         }
     }
+    if (trkx[(uint32_t)(t - trk) % NTRK].rsv0 | cmp_trk[(uint32_t)(t - trk) % NTRK].gr)
+        comp_track(t, b, 0, n);                         /* (Dah) the COMPRESSOR, then the SIDECHAIN: always last */
+    if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+        duck_part(t, b, n);
     eq_tap(t, b, n);
 }
 
@@ -1072,19 +1071,21 @@ static uint8_t duck_hold[NPART];                        /* (Dah) blocks the dip 
  * level before and after the dip (their loudest), the deepest dip, a hit; the tracks watched (a bit each) */
 static volatile int32_t dv_pre, dv_post, dv_att;
 static volatile uint8_t dv_hit, dv_watch;
-#define DUCK_HOLD 40u
+#define DUCK_HOLD 12u                                   /* (Dah: dry: down a moment only) */
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d: SPREAD's side signal, dipped alike) */
 {
-    uint32_t k = (uint32_t)(t - trk) % NPART, src = (uint32_t)t->p[P_DKSRC], i;
+    uint32_t k = (uint32_t)(t - trk) % NPART, src = (uint32_t)t->p[P_DKSRC], s2 = trkx[k % NTRK].sc2, i, hit;
     int32_t a0 = duck_att[k], a1 = 0;
+    hit = (src && src <= NPART && ((duck_hit >> (src - 1u)) & 1u)) || (s2 && s2 <= NPART && ((duck_hit >> (s2 - 1u)) & 1u));
     if (src && src <= NPART) {
-        if ((duck_hit >> (src - 1u)) & 1u) {
+        if (hit) {                                      /* (Dah: either source) */
             duck_env[k] = 32767;
             duck_hold[k] = DUCK_HOLD;                   /* (Dah: held down a moment, then back) */
         } else if (duck_hold[k])
             duck_hold[k]--;
         else
-            duck_env[k] = (duck_env[k] * (32768 - 23790 / (20 + (t->p[P_DKREL] + 64) * 3))) >> 15;
+            duck_env[k] = (duck_env[k] * (32768 - 47580 / (20 + (t->p[P_DKREL] + 64) * 3))) >> 15;   /* (Dah: back
+                                                         * twice as fast: dry) */
         a1 = mulq15(duck_env[k], t->p[P_DKAMT] * 258);
     } else {
         duck_env[k] = 0;
@@ -1110,7 +1111,7 @@ static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d
             if (post > dv_post) dv_post = post;
             if (a1 > dv_att)
                 dv_att = a1;
-            if (src && src <= NPART && ((duck_hit >> (src - 1u)) & 1u))
+            if (hit)
                 dv_hit = 1;
         }
     }

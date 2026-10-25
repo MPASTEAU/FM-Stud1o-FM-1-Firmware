@@ -421,6 +421,7 @@ typedef struct {
                                   * rsv1 the COMPRESSOR's RELEASE */
     uint8_t home[4];             /* (Dah) HOME's knobs: a parameter id + 1 each (0: the engine's, as before; ui.c) */
     int8_t cin, cout;            /* (Dah) the COMPRESSOR's IN and OUT gains (-64..63: +-15 dB, 0 as before; fx_comp.c) */
+    uint8_t sc2, rsv2;           /* (Dah) the SIDECHAIN's second source (a track + 1, 0 none; fx.c duck_part_sd) */
 } trkx_t;
 #define TRKX_V2 20u                      /* (Dah) the extras' size before tap and home */
 static trkx_t trkx[NTRK];

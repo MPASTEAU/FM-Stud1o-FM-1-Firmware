@@ -82,8 +82,8 @@ static uint32_t fx_list(const track_t *t, uint8_t *u)
         for (j = 0; j < 3u; j++)
             if (x->tap[j] == i + 1u && fx_unit_on(t, FXU_SER + j))
                 u[n++] = (uint8_t)(FXU_SER + j);
-        if (fx_unit_at(t, i) == 4u && fx_unit_on(t, FXU_COMP) && !fx_mst(t))
-            u[n++] = FXU_COMP;                          /* (the COMPRESSOR: just before SIDECHAIN) */
+        if (fx_unit_at(t, i) == 4u)
+            continue;                                   /* (the SIDECHAIN: last, below) */
         if (fx_unit_on(t, fx_unit_at(t, i)))
             u[n++] = (uint8_t)fx_unit_at(t, i), ns++;
     }
@@ -96,8 +96,10 @@ static uint32_t fx_list(const track_t *t, uint8_t *u)
         if (!in && fx_unit_on(t, FXU_SER + j))
             u[n++] = (uint8_t)(FXU_SER + j);
     }
-    if (fx_mst(t) && fx_unit_on(t, FXU_COMP))
-        u[n++] = FXU_COMP;                              /* (the MASTER's: last) */
+    if (fx_unit_on(t, FXU_COMP) && n < FXU_N_ALL)
+        u[n++] = FXU_COMP;                              /* (the COMPRESSOR, then the SIDECHAIN: last, fixed) */
+    if (fx_unit_on(t, 4u) && n < FXU_N_ALL)
+        u[n++] = 4u;
     (void)ns;
     return n;
 }
@@ -116,7 +118,7 @@ static void fx_set_list(track_t *t, const uint8_t *u, uint32_t n)
             for (j = 0; j < i; j++)
                 before += u[j] < FXU_SER;
             for (j = i + 1u; j < n; j++)
-                after |= u[j] < FXU_SER;
+                after |= u[j] < FXU_SER && u[j] != 4u;   /* (the SIDECHAIN, last: not a place to tap before) */
             x->tap[u[i] - FXU_SER] = (uint8_t)(after ? before + 1u : 0u);
         }
     for (i = 0; i < FXU_SER; i++) {
@@ -239,8 +241,9 @@ static void fx_chain_move(track_t *t, int32_t dir)
     uint8_t u[FXU_N_ALL], a;
     uint32_t n = fx_list(t, u);
     int32_t j = (int32_t)ch_cur + (dir > 0 ? 1 : -1);
-    if (ch_cur >= n || j < 0 || j >= (int32_t)n || u[ch_cur] == FXU_COMP || u[j] == FXU_COMP)
-        return;                                         /* (the COMPRESSOR stays before SIDECHAIN) */
+    if (ch_cur >= n || j < 0 || j >= (int32_t)n || u[ch_cur] == FXU_COMP || u[j] == FXU_COMP || u[ch_cur] == 4u ||
+        u[j] == 4u)
+        return;                                         /* (the COMPRESSOR and the SIDECHAIN stay last) */
     a = u[ch_cur]; u[ch_cur] = u[j]; u[j] = a;
     fx_set_list(t, u, n);
     ch_cur = (uint8_t)j;

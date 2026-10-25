@@ -286,7 +286,14 @@ static void graph_duck(const track_t *t, uint16_t c)
         cv_rrect(x, 2, 12, 12, 3, ux.trk[s], T_SURF);
         cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[s]);
         sound_name(&trk[s], nm);
-        cv_text_on(x + 16, 2 + CAP_IN(S, 12), &AF_S, nm, T_TEXT, T_SURF);
+        x = cv_text_on(x + 16, 2 + CAP_IN(S, 12), &AF_S, nm, T_TEXT, T_SURF);
+        s = trkx[trk_index(t) % NTRK].sc2;
+        if (s && s <= NTRK) {                           /* (and the second source) */
+            d[0] = (char)('0' + s);
+            x += 8;
+            cv_rrect(x, 2, 12, 12, 3, ux.trk[s - 1u], T_SURF);
+            cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[s - 1u]);
+        }
     }
     if (!dv.live) {                                     /* nothing sounding: the shape, faint */
         int32_t py = top, env = 0, hold = 0, beat = PANEL_W / 4;

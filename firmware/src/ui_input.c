@@ -1288,6 +1288,19 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
+    if (pg->fam == FAM_FX && pg->id[0] == P_DKSRC && slot == 3u && !mx_master) {   /* (Dah) SIDECHAIN: KNOB 4 a
+                                                         * second source (OFF, the other tracks) */
+        trkx_t *x = &trkx[song.sel % NTRK];
+        int32_t v = x->sc2;
+        do
+            v = clamp(v + (steps > 0 ? 1 : -1), 0, (int32_t)trk_count());
+        while (v && v == (int32_t)song.sel + 1 && v < (int32_t)trk_count() && steps > 0);
+        if (v == (int32_t)song.sel + 1)                 /* (not itself) */
+            v = steps > 0 ? x->sc2 : v - 1;
+        x->sc2 = (uint8_t)v;
+        ui.force = 1;
+        return;
+    }
     if (pg->fam == FAM_FX && str_eq(pg->title, "COMP")) {   /* (Dah) COMP: KNOB 1 AMOUNT, 2 RELEASE (trkx; the MASTER's: GLO) */
         const track_t *ft = fx_tsel();
         if (slot == 0u)
