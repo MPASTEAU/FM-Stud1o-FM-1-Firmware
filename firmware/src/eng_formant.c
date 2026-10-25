@@ -292,6 +292,5 @@ static const engine_t ENG_FORMANT = {
     .render = formant_render,
     .knob = {P_E0, P_E4, P_E5, P_E2},
     .poly = 4,
-    .post = formant_post,
     .mem = sizeof(fmt_mem_t),
 };
