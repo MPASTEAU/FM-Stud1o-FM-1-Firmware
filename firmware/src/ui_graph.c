@@ -1285,6 +1285,8 @@ static uint32_t graph_signature(void)
         h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
+    if (pg->graph == GR_TOOLS)                       /* (Dah) the picked action's line */
+        h ^= (ui.act + 1u) * 2654435761u + ui.tl_clean * 7919u;
     if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
         h ^= (ps_used + 1u) * 2654435761u + (pt_sel + 1u) * 7919u + (ps_num(song.sel) + 1u) * 104729u + steps_sig(t) * 31u;
     if (pg->graph == GR_FILE)                        /* (HA HA HE HU) the projects (graph_arch_*), the one picked */
@@ -2644,26 +2646,13 @@ static void graph_song(void)
                 last = cv_text_on(lx[k] + 3, SG_RY + 4 - AF_S_CAP_Y, &AF_S, a, T_DIM, T_SURF);
         }
     }
-    /* one line: the song's length right (where it fits), the selected cell's project left */
+    /* (Dah: no line of the cell's pattern nor the song's length: the PAT card and the ruler say them) */
     x0 = hi;
-    if (L.n) {
-        fmt_int(b, (int32_t)bars);
-        str_cpy(b + str_len(b), bars == 1u ? " BAR" : " BARS", 6);
-        x0 = hi - text_w(fl, b);
-        cv_text_on(x0, ly, fl, b, T_MID, T_SURF);
-    }
+    (void)bars; (void)b; (void)fl;
     if (c < L.n) {
-        uint32_t s = chain_config.row[c].slot[lane < NTRK ? lane : 0u];   /* (SEC: the first track's) */
-        uint32_t ql, qd, qn;
-        if (s == CHAIN_SILENT)
-            cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (!sg_pat(lane < NTRK ? lane : 0u, s, &ql, &qd, &qn))
-            cv_free_text(SG_X0, ly, fl, "NO PATTERN", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else {
-            char m[16] = "PATTERN ";
-            fmt_int(m + 8, (int32_t)s);
-            cv_free_text(SG_X0, ly, fl, m, T_MID, T_SURF, x0 - 10 - SG_X0);
-        }
+        uint32_t s = chain_config.row[c].slot[lane < NTRK ? lane : 0u], ql, qd, qn;
+        if (s != CHAIN_SILENT && !sg_pat(lane < NTRK ? lane : 0u, s, &ql, &qd, &qn))
+            cv_free_text(SG_X0, ly, &AF_S, "NO SUCH PATTERN", T_DIM, T_SURF, x0 - 10 - SG_X0);   /* (a cell to fix) */
     } else {                                           /* + ADD: how */
         cv_free_hint(SG_X0, ly + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H,   /* (a key hint: S) */
                      "[K3] ADD SECTION", T_MID, T_SURF, x0 - 10 - SG_X0);
@@ -2788,7 +2777,13 @@ static void draw_graph_in(void)
             break;
         case GR_TOOLS:
             cv_oy = 0;
-            panel_note("TURN TO PICK", "[OCT+] CONFIRM", 0);
+            {                                        /* (Dah) what the picked action does, not how to press it */
+                static const char *const TL_DO[4] = {"THE TRACK'S STEPS CLEARED", "THE SOUND TO ITS PRESET",
+                                                     "THE LAST TRACK REMOVED", "THE SONG CLEARED"};
+                uint32_t a = act_col();
+                if (a)
+                    panel_note(a == 2u && ui.tl_clean ? "THE SOUND CLEANED" : TL_DO[(a - 1u) & 3u], "", 0);
+            }
             break;
 #if FELUCCA_SLICE
         case GR_SLICES:
