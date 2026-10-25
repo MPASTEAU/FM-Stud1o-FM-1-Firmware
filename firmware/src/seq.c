@@ -924,6 +924,7 @@ static void seq_release(track_t *t)
         seq_note_off(t, t->seq_notes[i]);
     t->seq_n = 0;
     t->seq_hold = 0;
+    t->tie_over = 0;
     t->slide_glide = 0;                             /* live MONO / LEG keys must not glide after it */
 }
 
@@ -991,17 +992,23 @@ static int seq_miss(const track_t *t, const step_t *s, uint32_t idx)
 /* (Dah) the step after idx is a note step of the notes t holds now (all of them, no more): the step after the loop's
  * end is its first, or at a SONG's section's end the next section's first (its pattern ready: chain_poll). A held
  * note tied up to it then goes on (no release, no new attack: a drone, a pad over the loop or the next section) */
-static __attribute__((noinline)) int seq_same_next(const track_t *t, uint32_t idx, uint32_t len)
+static const step_t *seq_next_step(const track_t *t, uint32_t idx, uint32_t len)   /* (Dah) the step after idx (the
+                                                         * loop's first, or the next section's), 0 none known */
 {
-    const step_t *nx = &seq_steps(t)[(idx + 1u) % len];
-    uint32_t k = (uint32_t)(t - trk) % NTRK, i, j;
+    uint32_t k = (uint32_t)(t - trk) % NTRK;
     if (idx + 1u >= len && chain.running && chain.remaining <= 1u) {   /* (the section's end: its next's step 1) */
         uint32_t b = chain.cur ^ 1u, r = chain.row + 1u < chain.config.count ? chain.row + 1u : 0u;
         if (!chain.src_ok[b] || chain.src_row[b] != r || chain.config.row[r].slot[k] == CHAIN_SILENT)
             return 0;
-        nx = &chain.source[b].step[k][0];
+        return &chain.source[b].step[k][0];
     }
-    if (nx->time != ST_NOTE || nx->hit || nx->n != t->seq_n || step_ratchet(nx) > 1u || step_chance(nx) < 100u)
+    return &seq_steps(t)[(idx + 1u) % len];
+}
+static __attribute__((noinline)) int seq_same_next(const track_t *t, uint32_t idx, uint32_t len)
+{
+    const step_t *nx = seq_next_step(t, idx, len);
+    uint32_t i, j;
+    if (!nx || nx->time != ST_NOTE || nx->hit || nx->n != t->seq_n || step_ratchet(nx) > 1u || step_chance(nx) < 100u)
         return 0;
     for (i = 0; i < nx->n; i++) {
         for (j = 0; j < t->seq_n && t->seq_notes[j] != nx->note[i]; j++)
@@ -1020,7 +1027,7 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     uint32_t next_tie = seq_steps(t)[(idx + 1u) % len].time == ST_TIE;
     uint32_t hits = step_ratchet(s);
     uint8_t nn[4 + NLANE], vv[4 + NLANE];           /* the notes it plays: its notes, then its hits */
-    uint32_t m = 0, sk = 0, sl;
+    uint32_t m = 0, sk = 0, sl, over;
     /* QNT SEQ: the step's notes (not the lane hits) snap to the scale as they play; never on a drum kit, the slices
      * or another engine that maps the keys itself. SEQ+T (#218): moved by TRN first, as the keys are. seq_notes keeps
      * the notes that sound: their note-offs match */
@@ -1037,8 +1044,12 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     if (s->time == ST_TIE) {
         if (t->seq_n) {
             t->seq_off = gate + period / 2u;
+            const step_t *nx = seq_next_step(t, idx, len);
+            uint32_t into = nx && nx->time == ST_NOTE && nx->n && !nx->hit;   /* (Dah) a note comes next */
             t->seq_hold = (s->flags & SF_SLIDE) != 0 || next_tie ||   /* chains hold at any GATE / swing; (Dah) */
-                          seq_same_next(t, idx, len);   /* into the same notes (the loop's, the next section's): on */
+                          seq_same_next(t, idx, len) || into;   /* into the same notes (the loop's, the next section's):
+                                                         * on; into others: held till they start (no gap) */
+            t->tie_over = (uint8_t)(!(s->flags & SF_SLIDE) && !next_tie && into);
         }
         return;
     }
@@ -1072,8 +1083,10 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
             sk |= ((skip >> (8u + i)) & 1u) << m;
             m++;
         }
-    t->slide_glide = (uint8_t)slide_in;
-    sl = slide_in && !t->p[P_AMODE] && trk_vmode(t) == V_POLY ? seq_chord_slide(t, nn, m) : 0u;   /* (Dah) a chord slid
+    over = slide_in && t->tie_over;                 /* (Dah) held over, no SLIDE: the new notes take over, no glide */
+    t->tie_over = 0;
+    t->slide_glide = (uint8_t)(slide_in && !over);
+    sl = slide_in && !over && !t->p[P_AMODE] && trk_vmode(t) == V_POLY ? seq_chord_slide(t, nn, m) : 0u;   /* (Dah) a chord slid
                                                      * into: its voices glide over, not started again */
     if (!slide_in)
         seq_release(t);

@@ -2630,8 +2630,8 @@ static int test_song_timeline(void)
     chain_config.row[0].repeat = chain_config.row[2].repeat = 16;
     song_layout(&L);
     w0 = L.x[1] - L.x[0]; w1 = L.x[2] - L.x[1];
-    bad += check("SONG timeline: a block far shorter than the rest keeps the least width (its letter)",
-                 L.fit && w1 >= SG_MINW && w1 <= SG_MINW + 1 && L.x[3] == SG_W - SG_ADDW && w0 > 80);
+    bad += check("SONG timeline: a block far shorter than the rest keeps the least width (its letter) (Dah: 33 bars: not "
+                 "fitted under SG_BAR px a bar, scrolled)", w1 == SG_MINW && w0 == 16 * SG_BAR && !L.fit);
     chain_config.count = CHAIN_ROWS;                 /* 16 rows of 2 bars x 16: 512 bars, scrolled */
     for (k = 0; k < CHAIN_ROWS; k++) chain_config.row[k] = chain_row_of(2, 16);
     song_layout(&L);
@@ -2667,7 +2667,9 @@ static int test_song_timeline(void)
                  chain.running && chain.row == 9u && ui.song_row == 0u && sg_seen(&L, 9) && !sg_seen(&L, 0) &&
                  song_playx(&L) >= L.x[9] && song_playx(&L) < L.x[10]);
     turn(EN_K1, 1); frames(800);
-    bad += check("SONG timeline: the cursor moved while playing: its block in view", ui.song_row == 1u && sg_seen(&L, 1));
+    bad += check("SONG timeline: playing, the playhead held in the middle (Dah), the cursor moved all the same",
+                 ui.song_row == 1u && SG_X0 + song_playx(&L) - sgv.off >= SG_X0 + SG_W / 2 - 1 &&
+                 SG_X0 + song_playx(&L) - sgv.off <= SG_X0 + SG_W / 2 + 1);
     seq_stop(); chain_stop(); frames(100);
     /* styles: a slot not saved outlined (DIM), the selected one filled (THEME), the others RAISE; + ADD dashed */
     chain_config.count = 3;
@@ -8931,7 +8933,7 @@ static int test_song_lanes(void)
 {
     int bad = 0, ok;
     uint32_t n = 0, h, k, i, st, rev[NTRK];
-    h = song_probe(&n);
+    h = song_probe(&n); if (getenv("PROBE_PRINT")) printf("PROBE %08X %u\n", h, n);
     bad += check("SONG of rows (one slot each): bit for bit as before lanes, block by block (song_probe.h)",
                  h == SONG_PROBE_GOLDEN && n == SONG_PROBE_BLOCKS);
     seq_stop();

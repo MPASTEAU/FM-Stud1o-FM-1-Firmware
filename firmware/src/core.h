@@ -353,9 +353,11 @@ typedef struct track {
     uint8_t lfo_wrap;            /* the LFO's phase wrapped this block: its S&H is drawn after the parts (voice.c) */
     uint32_t esync_k[3];         /* ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
     uint8_t spread_on;           /* SPREAD this block (fx.c mix_part, voice.c track_render) */
-    uint8_t rsv_sz[8];           /* (sizeof(track_t) a multiple of 16: below; Dah: 8 with its 13 parameters) */
+    uint8_t tie_over;            /* (Dah) the notes held over to the next step's (a TIE into another note): no glide */
+    uint8_t rsv_sz[7];           /* (sizeof(track_t) a multiple of 16: below; Dah: 7 with its 13 parameters, tie_over) */
 #else
-    uint8_t rsv_sz[9];           /* (sizeof(track_t) a multiple of 16: below; Dah: 9) */
+    uint8_t tie_over;            /* (Dah) as above */
+    uint8_t rsv_sz[8];           /* (sizeof(track_t) a multiple of 16: below; Dah: 8) */
 #endif
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */

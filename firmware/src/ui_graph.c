@@ -1120,8 +1120,10 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
 #define SG_GAP 2                                       /* between two blocks (in a block's width) */
 #define SG_MINW 16                                     /* a block's least width, its gap included: a letter in it */
 #define SG_ADDW 20                                     /* + ADD's slot */
-#define SG_BAR 6                                       /* scrolled: px a bar */
-#define SG_FITBAR 3                                    /* fitted: at least this many px a bar */
+#define SG_BAR 6                                       /* scrolled: px a bar (Dah: a song too long to fit at it scrolls at
+                                                         * it, a constant zoom, the playhead in the middle) */
+#define SG_FITBAR SG_BAR                               /* fitted: at least this many px a bar (Dah: never smaller than
+                                                         * scrolled: no song squeezed) */
 #define SG_BARU 192u                                   /* a 4/4 bar in 1/48 quarters */
 #define SG_RY (SG_Y + SG_H + 3)                        /* the ruler's line (92); its ticks and numbers under it */
 typedef struct {
@@ -1270,6 +1272,11 @@ static int32_t song_follow(const song_lay_t *L)
     if (a - m < tgt) tgt = a - m;
     if (b + m > tgt + SG_W) tgt = b + m - SG_W;
     end = L->x[L->n + 1u] - SG_W;
+    if (p != 0xFFu && song_playx(L) >= 0) {           /* (Dah) playing: the playhead stays in the middle once there,
+                                                         * the song going by under it */
+        tgt = song_playx(L) - SG_W / 2;
+        snap = 1;
+    }
     tgt = L->fit || end < 0 ? 0 : tgt < 0 ? 0 : tgt > end ? end : tgt;
     d = tgt - sgv.off;
     sgv.off = snap ? tgt : sgv.off + (d / 3 ? d / 3 : d > 0 ? 1 : d < 0 ? -1 : 0);

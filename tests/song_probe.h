@@ -26,7 +26,8 @@ static chain_row_t probe_row(uint32_t s, uint32_t r)  /* (HA HA HE HU: tracks 5.
 #define PROBE_POLL()
 #define PROBE_ROW(s, r) ((chain_row_t){s, r})
 #endif
-#define SONG_PROBE_GOLDEN 0x676A420Du              /* the firmware before lanes (bddbbd8), 11026 blocks */
+#define SONG_PROBE_GOLDEN 0x8E72200Du              /* (Dah: a TIE into another note held till it starts; before: 0x676A420D,
+                                                    * the firmware before lanes, bddbbd8), 11026 blocks */
 #define SONG_PROBE_BLOCKS 11026u
 static uint32_t song_probe_mix(uint32_t h, uint32_t v) { return (h ^ v) * 16777619u; }
 static uint32_t song_probe(uint32_t *blocks)
