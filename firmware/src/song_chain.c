@@ -212,29 +212,14 @@ static void chain_seek(void)
             t->seq_idx = (uint16_t)((at % len + len - 1u) % len);
         }
 }
-/* (Dah) the song stopping: its GRID where it was (the bar it played), PLAY goes on from there; not when the GRID was
- * just turned while it played (chain_seek_req: from the one turned to) */
+/* (Dah) SONG's GRID turned while the song plays: it stops and starts again from there (ui_input.c) */
 static volatile uint8_t chain_seek_req;
-static void chain_resume_point(void)
-{
-    const track_t *t = &trk[chain.clk % NTRK];
-    uint32_t len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u, idx = t->seq_pos >= 0x7FFFFFFFu ? 0u : t->seq_idx % len;
-    uint32_t reps = CHAIN_REP(chain.config.row[chain.row]) ? CHAIN_REP(chain.config.row[chain.row]) : 1u;
-    uint32_t pos = (reps - (chain.remaining <= reps ? chain.remaining : reps)) * len + idx, q = div_samples(0) / 48u, u;
-    if (chain.row >= chain.config.count || !q)
-        return;
-    u = pos * div_samples((uint32_t)t->p[P_SDIV]) / q;
-    chain_from_row = chain.row;
-    chain_from_u = u - u % 192u;                    /* (a 4/4 bar: 192) */
-}
 static void chain_stop(void)
 {
     uint32_t i;
     chain.armed = 0;
     if (!chain.running)
         return;
-    if (!chain_seek_req)
-        chain_resume_point();
     for (i = 0; i < NTRK; i++) {
         memcpy(&trk[i].p[P_SLEN], chain.timing[i], sizeof chain.timing[i]);
         trk[i].p[P_SQNT] = chain.qnt[i];
@@ -268,11 +253,7 @@ static void chain_tick(uint32_t n)
         return;
     }
     if (chain.row + 1u >= chain.config.count && !song_round) {
-        chain_seek_req = 1;                         /* (at its end: PLAY from the top) */
         seq_stop();
-        chain_seek_req = 0;
-        chain_from_row = 0;
-        chain_from_u = 0;
         return;
     }
     chain.carry = t->seq_pos + n - length;

@@ -455,6 +455,11 @@ static void ui_leds(void)
         nl[c] &= (uint8_t)~nb[c];                       /* breathing: neither lit (INV's idle) nor the glow */
         nd[c] &= (uint8_t)~nb[c];
     }
+    if (mx_master && !ui.menu && !ui.confirm) {         /* (Dah) the MASTER: FX breathes, the rest dark */
+        for (c = 0; c < FM1_NCOL; c++)
+            nl[c] = nd[c] = nm[c] = nb[c] = 0;
+        led_put(nb, panel.btn[B_FX], 1);
+    }
     if (song.playing || (seq_counting() && cin_pos < click_beat_len() / 4u))   /* counting in: green on each beat */
         nl[LED_PLAY_GREEN >> 3] |= (uint8_t)(1u << (LED_PLAY_GREEN & 7u));
     fm1_led_dim_level(mode == LEDS_DIM_LO || inv == 1u);   /* (INV LO: the darker mid level, ~8 %; HI ~12.5 %) */
@@ -1125,8 +1130,11 @@ static void edit_param(uint32_t slot, int32_t steps)
         if (slot == 0u) {                               /* GRID: a bar a detent; the view on it */
             song_lay_t L;
             uint32_t r = 0;
-            int32_t g = (int32_t)sgw.gu + steps * (int32_t)SG_BARU;
+            int32_t g;
             song_layout(&L);
+            if (chain.running && !chain_seek_req && song_playu(&L) >= 0)   /* (Dah: playing: from the bar playing) */
+                sgw.gu = (uint32_t)song_playu(&L) - (uint32_t)song_playu(&L) % SG_BARU;
+            g = (int32_t)sgw.gu + steps * (int32_t)SG_BARU;
             g = clamp(g, 0, L.u0[L.n] ? (int32_t)L.u0[L.n] - 1 : 0);
             sgw.gu = (uint32_t)(g - g % (int32_t)SG_BARU);
             while (r + 1u < L.n && sgw.gu >= L.u0[r + 1u])
@@ -1652,9 +1660,9 @@ static int sel_is_list(void)                           /* (Dah) the page shown h
 static void sel_list(int32_t s)
 {
     if (!ui.home && cur_page()->graph == GR_TRK) {      /* (Dah) MIXER: SELECT along the tracks, then the MASTER */
-        if (s > 0 && !mx_master && song.sel + 1u >= trk_count())
+        if (s < 0 && !mx_master && !song.sel)       /* (the MASTER at the left) */
             mx_master = 1;
-        else if (s < 0 && mx_master)
+        else if (s > 0 && mx_master)
             mx_master = 0;
         else if (!mx_master)
             track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
@@ -1895,6 +1903,21 @@ static void ui_input(void)
         ui.save_t0 |= 2u;                               /* after: no tap, and OCT- no octave */
         pressed &= ~(1u << panel.btn[B_OCTDN]);
         save = BT_UNDO;
+    }
+    kb_master = mx_master;                              /* (Dah: the MASTER picked: the keys silent, seq.c) */
+    if (mx_master && !ui.menu && !ui.confirm) {         /* .. FX, PLAY and FX's OCT+ OCT- REC only; ALGO leaves it */
+        uint32_t ok = 1u << panel.btn[B_FX] | 1u << panel.btn[B_PLAY];
+        if (!ui.home && cur_page()->fam == FAM_FX)
+            ok |= 1u << panel.btn[B_OCTUP] | 1u << panel.btn[B_OCTDN] | 1u << panel.btn[B_REC];
+        if ((pressed & ~ok) || notes)
+            ui_message("MASTER: FX ONLY");
+        pressed &= ok;
+        notes = 0;
+        if (ui.home_t0) ui.home_t0 |= 2u;               /* (held: no tap, no hold) */
+        if (ui.save_t0) ui.save_t0 |= 2u;
+        if (ui.rec_t0 && !(ok >> panel.btn[B_REC] & 1u)) ui.rec_t0 |= 2u;
+        home = save = BT_NONE;
+        if (!(ok >> panel.btn[B_REC] & 1u)) rec = BT_NONE;
     }
     layer_lock_input(pressed);                          /* (#83: a button closes a locked layer) */
     layer_arm(pressed, now);
@@ -2165,19 +2188,23 @@ static void ui_input(void)
         chain_play_ui();
         chain_seek_req = 0;
     }
-    if (!lay && (s = panel_enc(EN_PRESET)) != 0)
-        presets_turn(s);
+    if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
+        if (mx_master)
+            ui_message("MASTER: FX ONLY");              /* (Dah: no sound to load there) */
+        else
+            presets_turn(s);
+    }
     if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page; (HA HA HE HU) past the
                                                       * project's last: ADD TRACK? (the dialog) */
-        int mix = !ui.home && cur_page()->graph == GR_TRK;   /* (Dah) MIXER: past the last track the MASTER, then ADD */
-        if (s < 0 && mx_master) {
+        if (s > 0 && mx_master) {                       /* (Dah) the MASTER, left of track 1, on every page */
             mx_master = 0;
+            track_select(0);
             ui.force = 1;
-        } else if (s > 0 && mix && !mx_master && song.sel + 1u >= trk_count()) {
+        } else if (s < 0 && !mx_master && !song.sel) {
             mx_master = 1;
+            ui_message("MASTER: FX");
             ui.force = 1;
-        } else if (s > 0 && song.sel + 1u >= trk_count() && trk_count() < NTRK && !ui.confirm && !name_on() && !ui.menu &&
-                   (!mix || mx_master))
+        } else if (s > 0 && song.sel + 1u >= trk_count() && trk_count() < NTRK && !ui.confirm && !name_on() && !ui.menu)
             confirm_open(CF_ADD_TRACK, trk_count());
         else if (!mx_master)
             track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
@@ -2212,6 +2239,10 @@ static void ui_input(void)
             continue;
         if (ka.st) {                                    /* (Dah) ASSIGN: the knob names, it edits nothing */
             ka_knob(k);
+            continue;
+        }
+        if (mx_master && (ui.home || (pg->fam != FAM_FX && pg->graph != GR_TRK))) {   /* (Dah) the MASTER: FX's pages */
+            ui_message("MASTER: PRESS FX");
             continue;
         }
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */

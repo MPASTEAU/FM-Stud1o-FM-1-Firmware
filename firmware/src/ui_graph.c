@@ -1270,11 +1270,8 @@ static int32_t song_follow(const song_lay_t *L)
         sgw.touch = ui.frame - 1000u;
     }
     sgw.run = chain.running;
-    if (chain.running) {                              /* (Dah) the GRID along with the song (the bar playing) */
-        int32_t pu = song_playu(L);
-        if (pu >= 0 && !chain_seek_req)
-            sgw.gu = (uint32_t)pu - (uint32_t)pu % SG_BARU;
-    } else if (chain_from_row < L->n)                 /* .. stopped: where PLAY goes on */
+    if (chain_from_row < L->n && !chain_seek_req)      /* (Dah) the GRID: where PLAY starts (the song playing on
+                                                         * does not move it; turned, it does) */
         sgw.gu = L->u0[chain_from_row] + chain_from_u;
     if (fresh) {                                     /* the page (re)entered: the playing row first */
         sgv.off = 0;
@@ -2091,9 +2088,9 @@ static void mixer_strip(uint32_t c)
             cv_rrect(MX_W / 2 - hw, ry, 2 * hw, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
         }
     }
-    cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH);
+    cv_blit((uint32_t)(MX_X0 + (int32_t)(c + 1u) * MX_PITCH), Y_GRAPH);   /* (Dah: after the MASTER's) */
 }
-/* (Dah) the MASTER's strip after the tracks: M, the output's meter, its COMPRESSOR's reduction (ACCENT, from the top) */
+/* (Dah) the MASTER's strip before the tracks: M, the output's meter, its COMPRESSOR's reduction (ACCENT, from the top) */
 static int32_t mx_mpk;
 static void mixer_master(uint32_t c)
 {
@@ -2141,7 +2138,7 @@ static void draw_tracks(void)
         }
         for (c = 0; c < trk_count(); c++)
             mixer_strip(c);
-        mixer_master(trk_count());                     /* (Dah) the MASTER */
+        mixer_master(0);                               /* (Dah) the MASTER, at the left */
         return;
     }
     if (ui.force) {                                  /* the BG beside the columns only, they cover the rest (#181: */

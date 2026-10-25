@@ -5040,8 +5040,9 @@ static int test_bughunt_ui2(void)
          * K2 the PAN dot, K3 the REV bar); K4 MUTE dims the strip (its cushion DIM) */
         uint32_t k, a[4][4], ok = 1;
         for (k = 0; k < 4u; k++) {
-            int32_t X = MX_X0, Y = Y_GRAPH;
+            int32_t X, Y = Y_GRAPH;
             ui_power_on();
+            X = MX_X0 + MX_PITCH;                                     /* (Dah: track 1's strip, after the MASTER's) */
             settings.palette = 1; palette_set(1);
             go_page(GR_TRK); frame(); frame();
             turn(EN_K1 + k, 1);                                       /* (K4 right: MUTE on) */
@@ -8787,8 +8788,8 @@ static int test_head_centres(void)
                 memset(host_screen, 0, sizeof host_screen);
                 ui.force = 1; draw_head(); ui.force = 0;
                 ok &= head_centres(HS_NAME[s], pr);
-                okp = nhel > 0 && hel[0][0] == (rail ? 2 : 4);   /* the track cushion first, its ink from x 4 (HA HA HE HU:
-                                                        * the rail's, its ring from x 2) */
+                okp = nhel > 0 && hel[0][0] == (rail ? 3 : 4);   /* the track cushion first, its ink from x 4 (HA HA HE HU:
+                                                        * the rail's, Dah: the MASTER's M from x 3) */
                 if (s != HS_GLO_TURN) {                /* the battery last, in its cell; nothing between 208 and it */
                     okp &= head_span2(HEAD_BAT_X, 239, &a, &b) && a >= 214 && b <= 236;
                     okp &= !head_span2(HEAD_GRP_R, HEAD_BAT_X - 1, &a, &b);

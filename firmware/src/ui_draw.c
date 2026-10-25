@@ -180,12 +180,14 @@ static int32_t roll_text(uint32_t k, int32_t x, int32_t y, const char *s, uint16
  * way round, and the lock's) */
 typedef struct { int32_t bx, b[4], mx0, mx1, sx0, sx1, px0, px1, gx0, gx1; } head_geo_t;
 /* HA HA HE HU: the track rail, the eight tracks left in the header while no message shows (head_rail_on): a cell each
- * (RAIL_W x 16, RAIL_P apart from x 3: 3 .. 98), the track's colour bright while it sounds, faint while silent, a well
+ * (RAIL_W x 16, RAIL_P apart from x 3, the MASTER's M first, 3 .. 16, then 18 .. 96), the track's colour bright while it sounds, faint while silent, a well
  * when muted; the selected one ringed (TEXT), an armed one ringed REC. The play group then starts at RAIL_GX (not
  * centred on 120) and the cushion, the slot letter and the REC mark of before give way to it */
-#define RAIL_W 11
-#define RAIL_P 12
+#define RAIL_W 9
+#define RAIL_P 10                                      /* (Dah: the MASTER's M first, then the tracks) */
 #define RAIL_GX 104
+#define RAIL_MW 13                                     /* (Dah) the MASTER's M: from x 3 */
+#define RAIL_T0 (3 + RAIL_MW + 2)                      /* .. the tracks after it */
 static int head_rail_on(void) { return !(ui.msg_t || ui.layer); }
 static uint32_t rail_sounding(void)                    /* bit k: track k has a voice sounding */
 {
@@ -209,16 +211,24 @@ static uint32_t rail_muted(void)
 static void head_rail(void)
 {
     uint32_t k, snd = rail_sounding(), mu = rail_muted(), n = trk_count();
+    {                                                  /* (Dah) the MASTER: an M, grey; picked (ALGORITHM left of 1): lit */
+        int32_t x = 3;
+        if (mx_master)
+            cv_rrect(x - 1, 2, RAIL_MW + 2, 20, 4, T_TEXT, T_BG);
+        cv_rrect(x, 4, RAIL_MW, 16, 3, mx_master ? T_TEXT : T_RAISE, mx_master ? T_TEXT : T_BG);
+        GFX_HOOK_ALIGN(x, 4, x + RAIL_MW, 20, AL_HV, "rail digit centred");
+        cv_text_in(x, 4 + CAP_IN(S, 16), RAIL_MW, &AF_S, "M", mx_master ? T_INK : T_MID, mx_master ? T_TEXT : T_RAISE);
+    }
     if (n < NTRK) {                                    /* (HA HA HE HU) the project's tracks, then a "+": ALGORITHM on adds one */
-        int32_t x = 3 + (int32_t)n * RAIL_P;
+        int32_t x = RAIL_T0 + (int32_t)n * RAIL_P;
         cv_rrect(x, 4, RAIL_W, 16, 3, T_LINE, T_BG);
         cv_rrect(x + 1, 5, RAIL_W - 2, 14, 2, T_BG, T_LINE);
         GFX_HOOK_ALIGN(x, 4, x + RAIL_W, 20, AL_HV, "rail digit centred");
         cv_text_in(x, 4 + CAP_IN(S, 16), RAIL_W, &AF_S, "+", T_DIM, T_BG);
     }
     for (k = 0; k < n; k++) {
-        int32_t x = 3 + (int32_t)k * RAIL_P, y = 4;
-        int sel = k == song.sel, arm = (song.rec >> k) & 1u, on = (snd >> k) & 1u, m = (mu >> k) & 1u;
+        int32_t x = RAIL_T0 + (int32_t)k * RAIL_P, y = 4;
+        int sel = k == song.sel && !mx_master, arm = (song.rec >> k) & 1u, on = (snd >> k) & 1u, m = (mu >> k) & 1u;
         uint16_t fill = m ? T_RAISE : on ? ux.trk[k] : ux_mix(ux.bg, ux.trk[k], 38);
         char d[2] = {(char)('1' + k), 0};
         if (sel || arm)
@@ -416,7 +426,7 @@ static void draw_head(void)
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
                    (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u +   /* (1.5.5) */
                    (head_rail_on() ? (rail_sounding() * 2654435761u) ^ (rail_muted() * 40503u) ^ song.rec * 977u : 0u) +   /* (the rail) */
-                   trk_count() * 3141592653u;
+                   trk_count() * 3141592653u + mx_master * 2246822519u;
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
