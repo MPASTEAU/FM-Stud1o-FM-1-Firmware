@@ -2989,7 +2989,10 @@ static int test_product_ux(void)
     bad += check("1.2: SEQ held on HOME is SEQ TOOLS (no SONG, no tap on release)", ok && ui.home && !ui.layer);
     go_page(GR_SONG);
     song.rec = 1; chain.armed = 1; press(B_REC);
-    bad += check("REC on SONG armed: nothing deleted, nothing armed (STOP TO EDIT)", song.rec == 1 && msg_is("STOP TO EDIT") && !ui.confirm);
+    ok = song.rec == 0 && msg_is("REC OFF") && !ui.confirm;   /* (Dah: armed, REC disarms first, every page) */
+    press(B_REC);
+    ok &= song.rec == 0 && msg_is("STOP TO EDIT") && !ui.confirm;
+    bad += check("REC on SONG armed: disarms (REC OFF); again with the song pending: nothing deleted (STOP TO EDIT)", ok);
     ui_power_on(); open_family(FAM_EDIT);
     ok = 1;
     for (i = 0; i < 8u; i++) { open_family(FAM_EDIT); ok &= page_visible(ui.page) && !(cur_page()->id[0] >= P_FM1_ATK && cur_page()->id[0] <= P_FM4_LEVEL); }

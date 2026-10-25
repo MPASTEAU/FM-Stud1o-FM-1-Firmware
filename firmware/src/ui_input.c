@@ -596,6 +596,13 @@ static int rec_tap(void)                                /* 1: the arming changed
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
     uint32_t g = ui.home || ui.menu || ui.confirm || name_on() ? GR_NONE : cur_page()->graph;
+    if (song.rec) {                                     /* (Dah) armed (this track or another): REC disarms them all, on
+                                                         * every page; the LED goes out (a list page deletes when none is) */
+        song.rec = 0;
+        ui.force = 1;
+        ui_message("REC OFF");
+        return 1;
+    }
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
         confirm_open(CF_DEL_PAT, pt_pick());
         return 0;
