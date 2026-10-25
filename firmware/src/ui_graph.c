@@ -2658,6 +2658,7 @@ static void graph_song(void)
                      "[K3] ADD SECTION", T_MID, T_SURF, x0 - 10 - SG_X0);
     }
 }
+#include "ui_graph_more.c"                         /* (Dah) FILTER ENV DEST VOICE ARP DLY REVERB CHORUS CLOCK */
 static void draw_graph_in(void);
 /* HA HA HE HU: the panel (curves, scope, roll, grid) in the selected track's colour; MIXER and SONG colour each track */
 static void draw_graph(void)
@@ -2816,6 +2817,7 @@ static void draw_graph_in(void)
             else if ((pg->scope == SC_ENGINE || pg->id[0] == P_FM1_LEVEL) && t->eng_req % NENGINES == ENGI_DIGITAL)
                 graph_fm(t, c);                      /* (OP LEVEL too: the levels on the chart) */
 #endif
+            else if (graph_more(pg, t, c)) { /* (Dah: the page's own: ui_graph_more.c) */ }
             else { cv_oy = 0; graph_scope(c); }
             break;
         }
