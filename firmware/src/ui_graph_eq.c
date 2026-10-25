@@ -97,22 +97,43 @@ static void eqs_take(void)
         eqs_im[i] = 0;
     }
     eqs_fft();
-    for (x = 0; x < PANEL_W; x++) {
-        uint32_t f0 = CUTOFF_HZ[x * 127u / PANEL_W], f1 = CUTOFF_HZ[(x + 1u) * 127u / PANEL_W];
-        uint32_t b0 = f0 * EQS_N / FS, b1 = f1 * EQS_N / FS, b;
-        int64_t best = 0;
-        int32_t db;
-        if (b1 < b0 + 1u)
-            b1 = b0 + 1u;
-        for (b = b0; b < b1 && b < EQS_N / 2u; b++) {
-            int64_t p = (int64_t)eqs_re[b] * eqs_re[b] + (int64_t)eqs_im[b] * eqs_im[b];
-            if (b && p > best)
-                best = p;
+    {
+        static int16_t col[PANEL_W] __attribute__((section(".pool")));   /* (Dah: each column's level, dB x 8) */
+        for (x = 0; x < PANEL_W; x++) {
+            uint32_t f0 = CUTOFF_HZ[x * 127u / PANEL_W], f1 = CUTOFF_HZ[(x + 1u) * 127u / PANEL_W];
+            uint32_t b0 = f0 * EQS_N / FS, b1 = f1 * EQS_N / FS, b;
+            int64_t best = 0;
+            int32_t db;
+            if (b1 <= b0 + 1u) {                        /* (Dah) below a bin a column: between the two bins round
+                                                         * it, in dB (no block for the lows: rounded) */
+                uint32_t q = (f0 + f1) / 2u * EQS_N * 16u / FS, i0 = q >> 4, fr = q & 15u;
+                int32_t d0, d1;
+                int64_t p0, p1;
+                i0 = i0 ? i0 : 1u;
+                p0 = (int64_t)eqs_re[i0] * eqs_re[i0] + (int64_t)eqs_im[i0] * eqs_im[i0];
+                p1 = (int64_t)eqs_re[i0 + 1u] * eqs_re[i0 + 1u] + (int64_t)eqs_im[i0 + 1u] * eqs_im[i0 + 1u];
+                d0 = p0 ? eq_log2q8((uint64_t)p0) : 0;
+                d1 = p1 ? eq_log2q8((uint64_t)p1) : 0;
+                db = d0 + (d1 - d0) * (int32_t)fr / 16;
+                db = db > 0 ? (db - 26 * 256) * 771 / 256 * 8 / 256 : -480;
+            } else {
+                for (b = b0; b < b1 && b < EQS_N / 2u; b++) {
+                    int64_t p = (int64_t)eqs_re[b] * eqs_re[b] + (int64_t)eqs_im[b] * eqs_im[b];
+                    if (b && p > best)
+                        best = p;
+                }
+                db = best ? (eq_log2q8((uint64_t)best) - 26 * 256) * 771 / 256 * 8 / 256 : -480;   /* (a full-scale
+                                                         * sine of the ring: ~ 2^26 a bin's power: 0 dB) */
+            }
+            col[x] = (int16_t)clamp(db, -480, 0);
         }
-        db = best ? (eq_log2q8((uint64_t)best) - 26 * 256) * 771 / 256 * 8 / 256 : -480;   /* (a full-scale sine
-                                                         * of the ring: ~ 2^26 a bin's power: 0 dB) */
-        db = clamp(db, -480, 0) / 4;
-        eqs_bar[x] = (int8_t)(db > eqs_bar[x] - 3 ? db : eqs_bar[x] - 3);
+        for (x = 0; x < PANEL_W; x++) {                 /* (Dah: smoothed, five columns) */
+            int32_t a = x > 1 ? x - 2 : 0, z = x + 2 < PANEL_W ? x + 2 : PANEL_W - 1, i, s = 0, db;
+            for (i = a; i <= z; i++)
+                s += col[i];
+            db = s / (z - a + 1) / 4;
+            eqs_bar[x] = (int8_t)(db > eqs_bar[x] - 3 ? db : eqs_bar[x] - 3);
+        }
     }
 }
 static void graph_eq(const track_t *t, uint16_t c)
@@ -130,10 +151,12 @@ static void graph_eq(const track_t *t, uint16_t c)
     } else
         for (x = 0; x < PANEL_W; x++)                   /* silent: the bars fall */
             eqs_bar[x] = (int8_t)(eqs_bar[x] > -120 + 3 ? eqs_bar[x] - 3 : -120);
-    for (x = 0; x < PANEL_W; x++) {                     /* the spectrum */
+    for (x = 0; x < PANEL_W; x++) {                     /* the spectrum, its top a line (Dah) */
         int32_t h = (120 + eqs_bar[x]) * (bot - top) / 120;
-        if (h > 0)
-            cv_rect(PANEL_X0 + x, bot - h, 1, h, ux_mix(c, T_SURF, 30));
+        if (h > 0) {
+            cv_rect(PANEL_X0 + x, bot - h, 1, h, ux_mix(c, T_SURF, 72));
+            cv_rect(PANEL_X0 + x, bot - h, 1, 1, ux_mix(c, T_SURF, 40));
+        }
     }
     fx_wave_line(top, c);                               /* the waveform, thin, across the top */
     cv_rect(PANEL_X0, mid, PANEL_W, 1, T_RAISE);        /* 0 dB */

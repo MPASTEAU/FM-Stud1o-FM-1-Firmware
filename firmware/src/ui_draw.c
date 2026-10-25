@@ -1605,6 +1605,13 @@ static void draw_columns_in(void)
             }
             continue;
         }
+        if (cur_page()->fam == FAM_FX && str_eq(cur_page()->title, "DIST") && c == 0u) {   /* (Dah) DIST: IN */
+            int32_t gv = fx_mst(fx_tsel()) ? mtrk.p[P_PAN] : trkx[song.sel % NTRK].din;
+            param_format(&TP[P_DOUT], gv, val, &unit);
+            card_span_of(&TP[P_DOUT]);
+            draw_column(0, "IN", val, unit, VAL(0u), (gv + 64) * 1000 / 127, ICON_AUTO);
+            continue;
+        }
         if (cur_page()->fam == FAM_FX && cur_page()->id[0] == P_DKSRC && c == 3u) {   /* (Dah) SIDECHAIN: SOURCE 2 */
             uint32_t s2 = trkx[song.sel % NTRK].sc2;
             card_span_by(span_src, 0, 0, NTRK, 0);

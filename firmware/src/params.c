@@ -137,7 +137,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_SDIV] = PE("DIV", N_DIV, 2),
     [P_SSWING] = PD("SWG", F_PCT, 0, 100, 0),
     [P_SGATE] = PD("GATE", F_PCT, 1, 127, 64),
-    [P_DIST] = PD("IN", F_PCT, 0, 127, 0),          /* (Dah: DIST's input gain, the drive) */
+    [P_DIST] = PD("DRIVE", F_PCT, 0, 127, 0),       /* (Dah: DIST's drive; its IN gain the track's extras') */
     [P_CHOR] = PD("CHO", F_PCT, 0, 127, 0),
     [P_DLY] = PD("DLY", F_PCT, 0, 127, 0),
     [P_REV] = PD("REV", F_PCT, 0, 127, 0),
@@ -509,7 +509,7 @@ static const page_t PAGES[] = {
      * adds one; REC takes it out); then a page each, its own picture live (ui_graph_fx.c). (FX's overview page and its
      * assignable knobs, P_FXK1..4, are gone: the parameters stay, their default the STEP lanes' DST CHO DLY REV) */
     {"CHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_FXORD, 0xFF, 0xFF, 0xFF}},
-    {"DIST", FAM_FX, SC_TRACK, GR_NONE, {P_DIST, P_DOUT, P_DCOL, 0xFF}},   /* (Dah) IN OUT COLOR */
+    {"DIST", FAM_FX, SC_TRACK, GR_NONE, {0xFF, P_DIST, P_DCOL, P_DOUT}},   /* (Dah) IN (trkx din) DRIVE COLOR OUT */
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},

@@ -1296,6 +1296,15 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
+    if (pg->fam == FAM_FX && str_eq(pg->title, "DIST") && slot == 0u) {   /* (Dah) DIST: KNOB 1 its IN gain */
+        track_t *ft = fx_tsel();
+        int16_t *mp = fx_mst(ft) ? &mtrk.p[P_PAN] : 0;   /* (the MASTER's: in its chain, mtrk's P_PAN) */
+        int32_t v = (mp ? *mp : trkx[song.sel % NTRK].din) + accel(EN_K1, steps, 127);
+        v = clamp(v, -64, 63);
+        if (mp) *mp = (int16_t)v; else trkx[song.sel % NTRK].din = (int8_t)v;
+        ui.force = 1;
+        return;
+    }
     if (pg->fam == FAM_FX && pg->id[0] == P_DKSRC && slot == 3u && !mx_master) {   /* (Dah) SIDECHAIN: KNOB 4 a
                                                          * second source (OFF, the other tracks) */
         trkx_t *x = &trkx[song.sel % NTRK];
@@ -1662,7 +1671,7 @@ static void chain_open(void)
     u = l[ch_cur];
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == FAM_FX && PAGES[i].graph != GR_FX &&
-            (u == FXU_COMP ? str_eq(PAGES[i].title, "COMP") : PAGES[i].id[0] == ID[u])) {
+            (u == FXU_COMP ? str_eq(PAGES[i].title, "COMP") : !u ? str_eq(PAGES[i].title, "DIST") : PAGES[i].id[0] == ID[u])) {
             ui.page = (uint8_t)i;
             ui.fam_last[FAM_FX] = ui.page;
             page_entered();

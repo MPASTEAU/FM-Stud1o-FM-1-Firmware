@@ -101,6 +101,27 @@ enum { DV_DUCK, DV_COMP, DV_DIST, DV_SLCR, DV_INS, DV_CHO, DV_DLY, DV_REV };
 static volatile int32_t dv_pre, dv_post, dv_att;
 static volatile uint8_t dv_hit, dv_watch, dv_unit;
 #define DV_ON(t, u) (dv_unit == (u) && ((dv_watch >> ((uint32_t)((t) - trk) % NTRK)) & 1u))
+/* .. kept DVR_K blocks at a time (5.8 ms) in a ring the pages draw (the newest at dvr_w - 1): before, after, the dip
+ * (bit 15 of dvr_att: a hit) */
+#define DVR_N 224u
+#define DVR_K 8u
+static uint16_t dvr_pre[DVR_N], dvr_post[DVR_N], dvr_att[DVR_N];
+static volatile uint32_t dvr_w;
+static uint8_t dvr_k;
+static __attribute__((noinline)) void dv_push(void)
+{
+    uint32_t w;
+    if (++dvr_k < DVR_K)
+        return;
+    dvr_k = 0;
+    w = dvr_w % DVR_N;
+    dvr_pre[w] = (uint16_t)(dv_pre > 65535 ? 65535 : dv_pre);
+    dvr_post[w] = (uint16_t)(dv_post > 65535 ? 65535 : dv_post);
+    dvr_att[w] = (uint16_t)((dv_att > 32767 ? 32767 : dv_att) | (dv_hit ? 32768 : 0));
+    dv_pre = dv_post = dv_att = 0;
+    dv_hit = 0;
+    dvr_w++;
+}
 static void dv_level(const int32_t *b, uint32_t n, int post)   /* (the block's loudest, into dv_pre / dv_post) */
 {
     uint32_t i;
@@ -112,9 +133,15 @@ static void dv_level(const int32_t *b, uint32_t n, int post)   /* (the block's l
     if (post) { if (m > dv_post) dv_post = m; }
     else if (m > dv_pre) dv_pre = m;
 }
-static void dist_run(const track_t *t, int32_t *st, int32_t *b, uint32_t n)   /* st: the low cut's, the two poles' */
+static void dist_run(const track_t *t, int32_t *st, int32_t *b, uint32_t n, int32_t din)   /* st: the low cut's, the
+                                                         * two poles'; din: the IN gain (-64..63) */
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
+    if (din) {
+        int32_t gi = eq_gain_q12(din);
+        for (i = 0; i < (int32_t)n; i++)
+            b[i] = (int32_t)(((int64_t)b[i] * gi) >> 12);
+    }
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
@@ -141,7 +168,7 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
         return;
     if (dv_unit == DV_DIST && ((dv_watch >> ((uint32_t)(t - trk) % NTRK)) & 1u))
         dv_level(b, n, 0);
-    dist_run(t, st, b, n);
+    dist_run(t, st, b, n, trkx[(uint32_t)(t - trk) % NTRK].din);
     if (dv_unit == DV_DIST && ((dv_watch >> ((uint32_t)(t - trk) % NTRK)) & 1u))
         dv_level(b, n, 1);
     t->dist_hp = st[0]; t->dist_lp1 = st[1]; t->dist_lp2 = st[2];
@@ -921,10 +948,12 @@ static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t-
  * right each (a voice's scale: a quarter) */
 static track_t mtrk __attribute__((section(".pool")));
 static int32_t mdist[2][3];
-#define MST_N 14u
+#define MST_N 15u
+#define MST_N5 14u                                      /* (projfs.c format 5's) */
 #define MST_N4 12u                                      /* (projfs.c format 4's: before the COMPRESSOR's IN OUT) */
 static const uint8_t MST_ID[MST_N] = {P_FXORD, P_DIST, P_DOUT, P_DCOL, P_EQLO, P_EQHI, P_EQ1F, P_EQ1G,
-                                      P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G, P_IA, P_IB};   /* (P_IA P_IB: its COMP's IN OUT) */
+                                      P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G, P_IA, P_IB, P_PAN};   /* (P_IA P_IB: its COMP's IN
+                                                         * OUT; P_PAN its DIST's IN) */
 static uint8_t mst_ok;                                  /* (mtrk set: its defaults at least) */
 static void mst_defaults(void)
 {
@@ -937,7 +966,7 @@ static void mst_defaults(void)
     mtrk.p[P_EQLO] = 0;
     mtrk.p[P_EQHI] = EQ_TOP;
     mtrk.p[P_EQ1G] = mtrk.p[P_EQ2G] = mtrk.p[P_EQ3G] = 0;
-    mtrk.p[P_IA] = mtrk.p[P_IB] = 0;
+    mtrk.p[P_IA] = mtrk.p[P_IB] = mtrk.p[P_PAN] = 0;
     memset(mdist, 0, sizeof mdist);
 }
 static int mst_on(void)
@@ -956,8 +985,8 @@ static __attribute__((noinline)) void mst_chain(int32_t *l, int32_t *r, uint32_t
                 l[i] >>= 2;
                 r[i] >>= 2;
             }
-            dist_run(&mtrk, mdist[0], l, n);
-            dist_run(&mtrk, mdist[1], r, n);
+            dist_run(&mtrk, mdist[0], l, n, mtrk.p[P_PAN]);   /* (its IN: mtrk's P_PAN, unused there) */
+            dist_run(&mtrk, mdist[1], r, n, mtrk.p[P_PAN]);
             for (i = 0; i < n; i++) {
                 l[i] <<= 2;
                 r[i] <<= 2;
@@ -1423,6 +1452,8 @@ static void mix_block(int32_t *out, uint32_t n)
         cmp_master.gr = 0;
     if (eq_watch == NTRK + 1u)
         mst_tap(mix_l, mix_r, wet, n);
+    if (dv_watch)
+        dv_push();                                      /* (Dah: an effect's page: its picture) */
     if (scope_mix)
         scope_take_mix(n);
     if (perf) {

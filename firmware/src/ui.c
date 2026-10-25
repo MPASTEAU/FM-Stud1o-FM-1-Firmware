@@ -456,7 +456,7 @@ static int page_visible(uint32_t i)
     if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_TRACK && PAGES[i].graph != GR_FX) {   /* (Dah) an effect's page:
                                                          * while it is in the chain (CHAIN adds it) */
         uint32_t id = PAGES[i].id[0];
-        if (id == P_DIST) return fx_unit_on(fx_tsel(), 0);
+        if (str_eq(PAGES[i].title, "DIST")) return fx_unit_on(fx_tsel(), 0);
         if (id == P_ITYPE || id == P_IMIX) return fx_unit_on(fx_tsel(), 1);
         if (id == P_SLCR) return fx_unit_on(fx_tsel(), 2);
         if (id == P_EQLO || id == P_EQ2F) return fx_unit_on(fx_tsel(), 3);

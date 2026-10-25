@@ -246,8 +246,7 @@ static void graph_clock(uint16_t c)
 /* SIDECHAIN, live: the track it watches (its number at the top), their level over the last
  * ~3 s scrolling left: before the dip faint, after it in the colour, the dip itself a line from the top (ACCENT), each
  * kick a mark under it. Nothing sounding yet: the dip's shape over four kicks, faint (DEPTH, REL) */
-#define DV_N PANEL_W
-static struct { uint16_t pre[DV_N], post[DV_N], att[DV_N]; uint8_t hit[DV_N]; uint32_t w, live; } dv;
+#define DV_N DVR_N                                     /* (fx.c dvr_*) */
 static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
 static uint32_t duck_watch(const track_t *t)            /* this track */
 {
@@ -266,82 +265,93 @@ static void fx_wave_line(int32_t top, uint16_t c)
         pw = y;
     }
 }
-/* (Dah) SIDECHAIN's, COMP's, DIST's live picture: the effect u on track t watched (fx.c dv_*), this frame's column
- * taken; 1 while something sounded in the last ~3 s */
+/* (Dah) an effect's page's live picture: the effect u on track t watched (fx.c dv_*, dvr_*); 1 while something
+ * sounded in the ring's last ~0.6 s */
+static uint8_t fxv_fresh;                               /* (fxv_draw: the scale from scratch) */
 static int fxv_take(const track_t *t, uint32_t u)
 {
-    uint32_t w = dv.w % DV_N;
+    uint32_t k, w = dvr_w;
     if (dv_unit != u) {                                 /* (another effect's page: a fresh picture) */
-        memset(&dv, 0, sizeof dv);
+        dv_watch = 0;
         dv_unit = (uint8_t)u;
-        dv_pre = dv_post = dv_att = 0;
-        dv_hit = 0;
+        fxv_fresh = 1;
+        memset(dvr_pre, 0, sizeof dvr_pre);
+        memset(dvr_post, 0, sizeof dvr_post);
+        memset(dvr_att, 0, sizeof dvr_att);
     }
     dv_watch = (uint8_t)duck_watch(t);
-    dv.pre[w] = (uint16_t)(dv_pre > 65535 ? 65535 : dv_pre);
-    dv.post[w] = (uint16_t)(dv_post > 65535 ? 65535 : dv_post);
-    dv.att[w] = (uint16_t)dv_att;
-    dv.hit[w] = dv_hit;
-    if (dv_pre)
-        dv.live = 90;                                   /* (~3 s of picture after the last sound) */
-    else if (dv.live)
-        dv.live--;
-    dv_pre = dv_post = dv_att = 0;
-    dv_hit = 0;
-    dv.w++;
-    return dv.live != 0u;
+    for (k = 1; k <= 110u; k++)
+        if (dvr_pre[(w - k) % DV_N] | dvr_post[(w - k) % DV_N])
+            return 1;
+    return 0;
 }
-/* .. drawn from top to bot: before the effect faint, after it in the colour, its dip (line) from the top in ACCENT,
- * the hits marked under it */
-#define FXV_LW ((int32_t)PANEL_W / 2 - 6)              /* the effects' pages: the shape's width at the left .. */
-#define FXV_RX (PANEL_X0 + (int32_t)PANEL_W / 2 + 4)   /* .. the sound's at the right */
-#define FXV_RW ((int32_t)PANEL_W - (int32_t)PANEL_W / 2 - 4)
+#define FXV_LW 70                                       /* the effects' pages: the shape's width at the left .. */
+#define FXV_RX (PANEL_X0 + FXV_LW + 8)                  /* .. the sound's at the right, the most of it */
+#define FXV_RW ((int32_t)PANEL_W - FXV_LW - 8)
 #define FXV_LINE 1u                                     /* fxv_draw: the effect's dip (dv att) a line from the top */
 #define FXV_AREA 2u                                     /* .. that dip as an area from the top */
 #define FXV_CUT 4u                                      /* .. what it took away (before less after) as an area */
 #define FXV_OWN 8u                                      /* .. before and after each on its own scale (a send's return) */
 static void fxv_draw(int32_t x0, int32_t wd, int32_t top, int32_t bot, uint16_t c, uint32_t mode)   /* (the newest wd) */
 {
-    int32_t x, fp = 4000, fq = 4000, h = bot - top;
-    uint16_t ar = ux_mix(T_ACCENT, T_SURF, 78);
+    int32_t x, fp = 4000, fq = 4000, band = (mode & (FXV_LINE | FXV_AREA | FXV_CUT)) ? 10 : 0, cy, hh;
+    uint32_t e = dvr_w;
+    uint16_t dry = ux_mix(T_TEXT, T_SURF, 45);
     for (x = 0; x < wd; x++) {                          /* (the scale: the loudest shown) */
-        uint32_t w = (dv.w + (uint32_t)(DV_N - wd + x)) % DV_N;
-        fp = dv.pre[w] > fp ? dv.pre[w] : fp;
-        fq = dv.post[w] > fq ? dv.post[w] : fq;
+        uint32_t w = (e + DV_N - (uint32_t)wd + (uint32_t)x) % DV_N;
+        fp = dvr_pre[w] > fp ? dvr_pre[w] : fp;
+        fq = dvr_post[w] > fq ? dvr_post[w] : fq;
     }
     if (!(mode & FXV_OWN))
         fp = fq = fp > fq ? fp : fq;
-    fp += fp / 8;
-    fq += fq / 8;
+    {                                                   /* (the scale held: up at once, down after ~3 s, slowly) */
+        static int32_t hp0, hq0;
+        static uint32_t tp0, tq0;
+        if (fxv_fresh) {
+            hp0 = hq0 = 0;
+            fxv_fresh = 0;
+        }
+        if (fp >= hp0) { hp0 = fp; tp0 = ui.frame; } else if (ui.frame - tp0 > 200u) hp0 -= (hp0 - fp) / 24 + 1;
+        if (fq >= hq0) { hq0 = fq; tq0 = ui.frame; } else if (ui.frame - tq0 > 200u) hq0 -= (hq0 - fq) / 24 + 1;
+        fp = hp0;
+        fq = hq0;
+    }
+    fp += fp / 10;
+    fq += fq / 10;
+    cy = (top + band + bot) / 2;                        /* the sound mirrored round its middle, under the work's band */
+    hh = (bot - top - band) / 2;
+    if (band)
+        cv_rect(x0, top + band - 2, wd, 1, T_RAISE);
+    cv_rect(x0, cy, wd, 1, T_RAISE);
     for (x = 0; x < wd; x++) {                          /* oldest at the left */
-        uint32_t w = (dv.w + (uint32_t)(DV_N - wd + x)) % DV_N;
-        int32_t hp = clamp((int32_t)dv.pre[w] * h / fp, 0, h);
-        int32_t hq = clamp((int32_t)dv.post[w] * h / fq, 0, h);
-        int32_t ha = (int32_t)dv.att[w] * h / 32767;
-        if ((mode & FXV_CUT) && hp > hq)                /* (what it took away: from the top, as deep) */
-            ha = (hp - hq);
-        if ((mode & (FXV_AREA | FXV_CUT)) && ha > 0)
-            cv_rect(x0 + x, top, 1, ha, ar);            /* the effect's work, from the top */
-        if (hp)
-            cv_rect(x0 + x, bot - hp, 1, hp, ux_mix(c, T_SURF, 70));   /* before */
-        if (hq)
-            cv_rect(x0 + x, bot - hq, 1, hq, c);                       /* after */
-        if (hp)
-            cv_rect(x0 + x, bot - hp, 1, 1, ux_mix(T_TEXT, T_SURF, 70));   /* (before's edge, over it too) */
-        if ((mode & (FXV_LINE | FXV_AREA | FXV_CUT)) && ha > 0)
-            cv_rect(x0 + x, top + ha, 1, 2, T_ACCENT);                 /* its edge */
-        if (dv.hit[w])
+        uint32_t w = (e + DV_N - (uint32_t)wd + (uint32_t)x) % DV_N;
+        int32_t hp = clamp((int32_t)dvr_pre[w] * hh / fp, 0, hh);
+        int32_t hq = clamp((int32_t)dvr_post[w] * hh / fq, 0, hh);
+        int32_t ha = (int32_t)(dvr_att[w] & 32767u) * (band - 3) / 32767;
+        if ((mode & FXV_CUT) && dvr_pre[w] > dvr_post[w])   /* (what it took away, of what came in) */
+            ha = (int32_t)(dvr_pre[w] - dvr_post[w]) * (band - 3) / (dvr_pre[w] | 1);
+        if (band && ha > 0)
+            cv_rect(x0 + x, top, 1, ha, T_ACCENT);      /* the effect's work, down from the top */
+        if (hp >= hq) {                                 /* the dry and the wet, each its colour: the taller behind */
+            if (hp) cv_rect(x0 + x, cy - hp, 1, 2 * hp + 1, dry);
+            if (hq) cv_rect(x0 + x, cy - hq, 1, 2 * hq + 1, c);
+        } else {
+            cv_rect(x0 + x, cy - hq, 1, 2 * hq + 1, c);
+            if (hp) cv_rect(x0 + x, cy - hp, 1, 2 * hp + 1, dry);
+        }
+        if (dvr_att[w] & 32768u)
             cv_rect(x0 + x, bot + 2, 2, 4, T_TEXT);                    /* a kick */
     }
+
 }
 /* the right half of an effect's page: its two labels (before, after), the sound going by */
 static void fxv_split(const track_t *t, uint32_t u, uint16_t c, const char *pre, const char *post, uint32_t mode)
 {
     int32_t x;
     (void)fxv_take(t, u);
-    x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, pre, T_MID, T_SURF);
+    x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, pre, ux_mix(T_TEXT, T_SURF, 45), T_SURF);   /* (the dry's colour) */
     cv_text_on(x + 6, 2 + CAP_IN(S, 12), &AF_S, post, c, T_SURF);
-    fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, mode);
+    fxv_draw(FXV_RX, FXV_RW, 16, graph_ht - 4, c, mode);
 }
 static void graph_duck(const track_t *t, uint16_t c)
 {
@@ -353,7 +363,7 @@ static void graph_duck(const track_t *t, uint16_t c)
         return;
     }
     (void)m;
-    (void)fxv_take(t, DV_DUCK);
+    int live = fxv_take(t, DV_DUCK);
     {                                                   /* (Dah) where it comes from: the track, its sound's name */
         uint32_t s = (uint32_t)clamp(t->p[P_DKSRC], 1, NTRK) - 1u;
         char d[2] = {(char)('1' + s), 0}, nm[16];
@@ -371,7 +381,7 @@ static void graph_duck(const track_t *t, uint16_t c)
             cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[s - 1u]);
         }
     }
-    if (!dv.live) {                                     /* nothing sounding: the shape, faint */
+    if (!live) {                                        /* nothing sounding: the shape, faint */
         int32_t py = top, env = 0, hold = 0, beat = PANEL_W / 4;
         int32_t rel = 23790 / (20 + (t->p[P_DKREL] + 64) * 3), depth = t->p[P_DKAMT];
         for (x = 0; x < PANEL_W; x++) {
