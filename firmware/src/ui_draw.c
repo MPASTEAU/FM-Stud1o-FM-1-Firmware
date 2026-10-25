@@ -919,6 +919,33 @@ static void draw_foot(void)
     draw_foot_in();
     ux_untint();
 }
+/* (Dah) the piano roll's footer row 1: the automation lane, not the steps (the roll shows them) */
+static int lane_shown(const track_t *t)
+{
+    return !ui.home && !ui.menu && cur_page()->graph == GR_ROLL && !drum_track(t) && !detail_on();
+}
+/* the lane: the parameter's short name at the left, under each of the page's steps a bar of its value (a point, its
+ * lock or event, bright; held from the one before, dim), the cursor's step framed; none yet: how to make one */
+static void draw_lane(const track_t *t)
+{
+    uint32_t i, id = lane_id(t), len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
+    const param_desc_t *d;
+    if (id == 0xFFu) {
+        cv_free_text(8, 2, &AF_S, "TURN A SOUND KNOB: ITS LANE HERE", T_DIM, T_BG, 224);
+        return;
+    }
+    d = track_desc(t, id);
+    cv_text_fit(4, 2, &AF_S, d->label, T_THEME, T_BG, 28);
+    for (i = 0; i < 16u && base + i < len; i++) {
+        int pt;
+        int32_t v = lane_value(t, base + i, id, &pt), x = 35 + (int32_t)i * 12 + 2;
+        int32_t h = d->max > d->min ? 1 + (v - d->min) * 12 / (d->max - d->min) : 1;
+        h = clamp(h, 1, 13);
+        cv_rect(x, 14 - h, 9, h, pt ? T_ACCENT : T_RAISE);
+        if (song.seq_mode && base + i == ui.cursor)
+            cv_rect(x, 15, 9, 2, T_TEXT);             /* the step SELECT edits */
+    }
+}
 static void draw_foot_in(void)
 {
     char s[48], pn[16], ti[20], ln[24];
@@ -943,6 +970,13 @@ static void draw_foot_in(void)
         sig = str_hash(0x9E3779B9u, s) + ph * 97u + (song.seq_mode ? ui.cursor : 0xFFu) * 3001u + steps_hash(t) +
               (ui.home ? 0u : page_icon(pg)) * 7121u +
               ui.bank * 7u + (uint32_t)t->p[P_SLEN] * 13u;
+        if (lane_shown(t)) {                          /* (Dah) STEP's automation lane: its parameter and values */
+            uint32_t i, id = lane_id(t);
+            int pt;
+            sig += id * 50331653u;
+            for (i = 0; id != 0xFFu && i < 16u; i++)
+                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i, id, &pt) + 128) * 2u + (uint32_t)pt;
+        }
     }
     if (act_cols()) {                                  /* the hint, and whether OCT+ would act */
         char ha[16], hb[16];
@@ -1001,6 +1035,8 @@ static void draw_foot_in(void)
         else
             cv_key_hint(232 - kh_w(KC_KEYS, grid_write() ? "STEPS" : "PLAY"), 2, KC_KEYS, grid_write() ? "STEPS" : "PLAY", 1,
                         T_BG);                        /* the keys are the steps (Dah: armed; else they play) */
+    } else if (lane_shown(t)) {
+        draw_lane(t);
     } else {
         uint32_t i;
         if ((ui.bank + 1u) * 16u <= (uint32_t)t->p[P_SLEN])

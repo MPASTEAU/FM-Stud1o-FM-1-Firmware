@@ -766,6 +766,8 @@ static uint64_t lock_held(void)
         return 0;
     if (!grid_on())                                     /* the roll: the step being entered */
         return ui.entry_open && !live_rec_sel() && ui.cursor < len ? (uint64_t)1 << ui.cursor : 0u;
+    if (!grid_write())                                  /* (Dah: the grid not armed: its keys play, none is held) */
+        return 0;
     for (k = 0; k < 27u; k++)
         if (((keys >> k) & 1u) && !key_black(k) && ui.bank * 16u + key_place(k) < len)
             m |= (uint64_t)1 << (ui.bank * 16u + key_place(k));
@@ -814,6 +816,30 @@ static void lock_turn(uint32_t k, int32_t s, uint64_t held)
             break;                                      /* (full: ui_notices says so) */
     }
     motion_undo_done(t);
+    ui.auto_id = (uint8_t)(id + 1u);                    /* (Dah: STEP's lane shows it now) */
+    ui.auto_trk = (uint8_t)song.sel;
+}
+/* (Dah) SELECT on STEP's piano roll: the lane's parameter at the cursor step, as a lock there */
+static int lane_turn(int32_t s)
+{
+    track_t *t = TSEL;
+    uint32_t id = lane_id(t);
+    const param_desc_t *d;
+    int pt;
+    if (id == 0xFFu)
+        return 0;
+    if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return 1;
+    }
+    d = track_desc(t, id);
+    motion_undo_take(t, 0x200u);
+    (void)motion_set_lock(t, ui.cursor % NSTEP, id,
+                          (int16_t)param_turn(d, lane_value(t, ui.cursor % NSTEP, id, &pt), accel(EN_SELECT, s, d->max - d->min)));
+    motion_undo_done(t);
+    ui.auto_id = (uint8_t)(id + 1u);
+    ui.auto_trk = (uint8_t)song.sel;
+    return 1;
 }
 
 /* [EDIT] with the steps `held` held: their locks go */
@@ -1115,6 +1141,10 @@ static void edit_param(uint32_t slot, int32_t steps)
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
     *vp = (int16_t)v;
     if (pg->scope != SC_GLOBAL) {
+        if (motion_param((uint32_t)(vp - TSEL->p))) {   /* (Dah: STEP's automation lane shows the last one turned) */
+            ui.auto_id = (uint8_t)((uint32_t)(vp - TSEL->p) + 1u);
+            ui.auto_trk = (uint8_t)song.sel;
+        }
         motion_capture(TSEL, (uint32_t)(vp - TSEL->p), *vp);
         ml_knob(TSEL, (uint32_t)(vp - TSEL->p));        /* (MIDI LEARN: picked) */
     }
@@ -1901,7 +1931,9 @@ static void ui_input(void)
             track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
     }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
-        if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
+        if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
+            /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
+        } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE && !ui.home) {   /* MENU > SELECT LIST (HA HA HE HU; 1.5.5's PAGE, #188, turned the
                                                          * pages): down the page's list (sel_list); the tempo is GLO +

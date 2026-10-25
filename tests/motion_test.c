@@ -623,6 +623,7 @@ static int lock_ui(void)
     t->p[P_SLEN] = 16;
     go_home();
     open_family(FAM_SEQ);
+    song.rec = (uint8_t)(1u << song.sel);               /* (Dah: armed, the grid's keys are its steps) */
     frame();
     k0 = key_at(0, 0); k4 = key_at(0, 4);
     grid_hit(t, 0, 0, 1);                                /* a KICK on step 1 */
@@ -715,6 +716,7 @@ static int lock_undo(void)
     t->p[P_SLEN] = 16;
     go_home();
     open_family(FAM_SEQ);
+    song.rec = (uint8_t)(1u << song.sel);               /* (Dah: armed, the grid's keys are its steps) */
     frame();
     k4 = key_at(0, 4);
     lk_down(k4);

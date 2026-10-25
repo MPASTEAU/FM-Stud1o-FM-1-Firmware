@@ -181,6 +181,7 @@ static struct {
     uint8_t cursor;              /* SEQ: step being edited (STEP page KNOB 1 moves it) */
     uint8_t entry_open;          /* SEQ: keys held since the first press of this entry */
     uint8_t lane;                /* SEQ > STEP on a DRUM track (the grid): the lane the keys and KNOB 3 / 4 edit */
+    uint8_t auto_id, auto_trk;   /* (Dah) STEP's automation lane: the parameter (+ 1, 0 none picked) and its track */
     uint8_t plk_src;             /* parameter locks (ui_input.c lock_*): the sound page whose KNOB 1..4 a step held
                                   * locks, PAGES index + 1; 0 = HOME's four */
     uint8_t plk_lane, plk_trk;   /* .. the grid: the lane and the track of the hits plk_rm takes away */
@@ -629,6 +630,41 @@ static uint32_t grid_write(void) { return grid_on() && ((song.rec >> song.sel) &
 /* SEQ > DETAIL (1.5.1, Discussion #199; params.c, between STEP and AUTOMATION): a step page as STEP (the cursor, the
  * roll's keys, the grid's lane and page keys), its knobs the cursor step's CHANCE RATCH NUDGE VEL (ui_input.c sd_turn),
  * its panel their lanes (ui_graph.c graph_detail). No state of its own: the page is what says so */
+/* (Dah) STEP's automation lane (the footer's first row on the piano roll, ui_draw.c): the parameter it shows and SELECT
+ * edits at the cursor: the last one turned on the track's pages or locked from STEP, else its first automated one;
+ * 0xFF none */
+static uint32_t lane_id(const track_t *t)
+{
+    uint32_t i, k = trk_index(t);
+    if (ui.auto_id && ui.auto_trk == k && motion_param(ui.auto_id - 1u))
+        return ui.auto_id - 1u;
+    for (i = 0; i < motion.count; i++)
+        if ((motion.event[i].place >> 6) == k)
+            return MOTION_ID(&motion.event[i]);
+    return 0xFFu;
+}
+/* the value parameter id has at step si on track t as the lane draws it: its lock there, else the automation's last
+ * event at or before si (from the loop's end before the first), else the track's own value; *pt: a point there */
+static int16_t lane_value(const track_t *t, uint32_t si, uint32_t id, int *pt)
+{
+    uint32_t i, k = trk_index(t), best = 0, found = 0, last = 0, lfound = 0;
+    int16_t v, bv = 0, lv = 0;
+    *pt = 0;
+    if (motion_lock_get(t, si, id, &v)) {
+        *pt = 1;
+        return v;
+    }
+    for (i = 0; i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        uint32_t st = e->place & 63u;
+        if ((e->place >> 6) != k || MOTION_ID(e) != id || (e->param & MOTION_LOCK))
+            continue;
+        if (st <= si && (!found || st >= best)) best = st, bv = e->value, found = 1;
+        if (!lfound || st >= last) last = st, lv = e->value, lfound = 1;
+        if (st == si) *pt = 1;
+    }
+    return found ? bv : lfound ? lv : motion_base_value(t, id);
+}
 static int detail_on(void)
 {
     return !ui.home && !ui.menu && !ui.confirm && cur_page()->scope == SC_STEP && str_eq(cur_page()->title, "DETAIL");
