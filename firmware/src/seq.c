@@ -1100,21 +1100,31 @@ static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *n
             uint8_t a = nw[j]; nw[j] = nw[j - 1u]; nw[j - 1u] = a;
             a = ni[j]; ni[j] = ni[j - 1u]; ni[j - 1u] = a;
         }
-    for (i = 0; i < no && i < nm; i++) {
-        uint32_t v;
+    for (i = 0; i < no; i++) {                      /* (Dah) each old note to the nearest new one 2 semitones at most
+                                                     * from it: that voice glides; a bigger leap starts again */
+        uint32_t v, b = nm, j2;
+        int32_t bd = 3;
+        for (j2 = 0; j2 < nm; j2++) {
+            int32_t dd = (int32_t)nw[j2] - (int32_t)o[i];
+            dd = dd < 0 ? -dd : dd;
+            if (!((done >> ni[j2]) & 1u) && dd < bd)
+                bd = dd, b = j2;
+        }
+        if (b == nm)
+            continue;
         for (v = 0; v < NVOICE; v++) {
             voice_t *vo = &t->v[v];
             if (vo->active && vo->gate && vo->note == o[i]) {
-                vo->note = nw[i];
-                vo->pitch16 = (int32_t)nw[i] * 16;
+                vo->note = nw[b];
+                vo->pitch16 = (int32_t)nw[b] * 16;
                 {                                   /* (~0.3 s for any interval; GLIDE TIME: its own) */
                     int32_t d = vo->pitch16 - vo->pitch_cur;
                     glide_set(t, vo, 1);
                     if (!t->p[P_GLMODE] && vo->pitch_cur != vo->pitch16)
                         vo->gstep = (d < 0 ? -d : d) / 400 > 0 ? (d < 0 ? -d : d) / 400 : 1;
                 }
-                t->seq_notes[oi[i]] = nw[i];        /* (not let go after: it is the new note now) */
-                done |= 1u << ni[i];
+                t->seq_notes[oi[i]] = nw[b];        /* (not let go after: it is the new note now) */
+                done |= 1u << ni[b];
                 break;
             }
         }

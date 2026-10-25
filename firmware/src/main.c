@@ -157,106 +157,82 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
         (void)motion_set_event(t, s, id, (int16_t)(v0 + (v1 - v0) * (int32_t)(s - s0) / (int32_t)(s1 > s0 ? s1 - s0 : 1u)));
     motion_set_enabled(t, 1);
 }
-/* pattern p (1 or 2) of the demo onto the tracks' steps (all empty). Minimal techno in A minor, 126 BPM in 1/16: the
- * kick on the four, hats in sixteenths with their accents on the off-beats (2: open), a clap on 2 and 4 and rims that
- * come and go (CHANCE), the sub on the off-beats, an Am7 stab whose filter opens over pattern 1, stays open on 2 and
- * closes at its end, a KALIMBA blip every three steps (three against four), a quiet pad, a noise riser into the loop */
+/* pattern p (1 or 2) of the demo onto the tracks' steps (all empty). Trippy, 92 BPM in 1/16: a held pad whose chords
+ * move one voice at a time, a semitone, sliding (seq.c seq_chord_slide: the others stay): Cmaj7#11 -> Cmaj7 -> Cm(maj7)
+ * -> B aug, back to C; then Am(add9) -> Am -> Bb7b5 -> Bsus, into C again. An arp an octave up through a dotted delay, a
+ * bell tree drifting across, a choir on the top voice, a sliding sub, a slow half-time kit */
 static void demo_pattern(uint32_t p)
 {
-    static const uint8_t STAB[4] = {57, 60, 64, 67}, PAD1[4] = {57, 60, 64, 71}, PAD2[4] = {53, 57, 60, 64};
-    static const uint8_t HATV[4] = {36, 58, 104, 62};
-    static const uint8_t STAB_G[4] = {55, 59, 62, 67}, STAB_F[4] = {53, 57, 60, 64};
-    /* the bass, a bar: A1 on the off-beats, C2 and G1 around it, slides (a bit a step) into the next note */
-    static const uint8_t BASS[2][16] = {{0, 0, 33, 36, 0, 0, 33, 0, 0, 0, 33, 36, 0, 0, 33, 31},
-                                        {0, 0, 33, 36, 0, 45, 33, 0, 0, 0, 33, 40, 0, 36, 33, 31}};
-    static const uint16_t BSLD[2] = {1u << 2 | 1u << 10 | 1u << 14, 1u << 2 | 1u << 5 | 1u << 10 | 1u << 13 | 1u << 14};
+    static const uint8_t PAD[2][4][4] = {{{48, 52, 59, 66}, {48, 52, 59, 67}, {48, 51, 59, 67}, {47, 51, 59, 67}},
+                                         {{45, 52, 59, 64}, {45, 52, 60, 64}, {46, 52, 60, 64}, {47, 51, 59, 64}}};
+    static const uint8_t SUB[2][4] = {{36, 36, 36, 35}, {33, 33, 34, 35}};
+    static const uint8_t BELL[16] = {0, 0, 0, 79, 0, 0, 0, 0, 0, 0, 86, 0, 0, 0, 0, 0};
     uint32_t b, i;
     track_t *t;
+    demo_note(&trk[0].step[0], p == 1u ? 48 : 45, 90);                      /* the drone: the whole pattern */
+    demo_hold(&trk[0], 0, 64);
+    trk[0].step[63].flags |= SF_SLIDE;
     for (b = 0; b < 4u; b++) {
         uint32_t s0 = b * 16u;
-        for (i = 0; i < 16u; i += 4u)                                       /* the kick */
-            demo_hit(&trk[0], s0 + i, 1u << 0, i ? 112 : 124);
-        if (p == 2u && b == 3u)
-            demo_hit(&trk[0], s0 + 14u, 1u << 0, 64);                       /* (a ghost before the loop) */
-        for (i = 0; i < 16u; i++)                                           /* hats: CL, 2's off-beats OP */
-            demo_hit(&trk[1], s0 + i, p == 2u && i % 4u == 2u ? 1u << 4 : 1u << 3, HATV[i % 4u]);
-        t = &trk[2];                                                        /* clap on 2 and 4, rims around it */
-        demo_hit(t, s0 + 4u, 1u << 2, 96);
-        demo_hit(t, s0 + 12u, 1u << 2, 100);
-        demo_hit(t, s0 + 3u, 1u << 6, 70);
-        demo_hit(t, s0 + 10u, 1u << 6, 76);
-        demo_hit(t, s0 + 7u, 1u << 6, 52);
-        step_set_chance(&t->step[s0 + 7u], 50);
-        demo_hit(t, s0 + 14u, 1u << 6, 60);
-        step_set_chance(&t->step[s0 + 14u], 35);
-        for (i = 0; i < 16u; i++)                                           /* the bass: rolling, sliding */
-            if (BASS[p - 1u][i]) {
-                demo_note(&trk[3].step[s0 + i], (uint32_t)BASS[p - 1u][i] + (b == 3u && i >= 12u ? 2u : 0u), i % 4u == 2u ? 112 : 92);
-                if (BSLD[p - 1u] >> i & 1u)
-                    trk[3].step[s0 + i].flags |= SF_SLIDE;
+        const uint8_t *ch = PAD[p - 1u][b];
+        uint8_t up[4];
+        dm_bar(&trk[1], b, ch, 4, 76);                                      /* the pad, sliding into the next bar */
+        trk[1].step[s0 + 15u].flags |= SF_SLIDE;
+        for (i = 0; i < 4u; i++) up[i] = (uint8_t)(ch[i] + 12u);
+        dm_bar(&trk[2], b, up, 4, 80);                                      /* the arp's chord, an octave up */
+        demo_note(&trk[4].step[s0], SUB[p - 1u][b], 104);                   /* the sub, sliding to the next */
+        demo_hold(&trk[4], s0, 16);
+        trk[4].step[s0 + 15u].flags |= SF_SLIDE;
+        demo_note(&trk[7].step[s0], (uint32_t)ch[3] + 12u, 70);             /* the choir: the voice that moves */
+        demo_hold(&trk[7], s0, 16);
+        trk[7].step[s0 + 15u].flags |= SF_SLIDE;
+        for (i = 0; i < 16u; i++)                                           /* the bells, now and then */
+            if (BELL[(i + b * 5u) % 16u]) {
+                demo_note(&trk[3].step[s0 + i], (uint32_t)BELL[(i + b * 5u) % 16u] - (p == 2u ? 3u : 0u), 84);
+                step_set_chance(&trk[3].step[s0 + i], 70);
             }
-        dm_chord(&trk[4], s0 + 3u, 1, STAB, 4, 96);                         /* the stab, off the grid, sliding into */
-        trk[4].step[s0 + 3u].flags |= SF_SLIDE;                             /* the next chord */
-        dm_chord(&trk[4], s0 + 4u, 1, b & 1u ? STAB_F : STAB_G, 4, 80);
-        dm_chord(&trk[4], s0 + 10u, 1, STAB, 4, 84);
-        if (p == 2u) {
-            trk[4].step[s0 + 10u].flags |= SF_SLIDE;
-            dm_chord(&trk[4], s0 + 11u, 1, STAB_F, 4, 72);
+        t = &trk[5];                                                        /* the kick: half time */
+        demo_hit(t, s0, 1u << 0, 124);
+        demo_hit(t, s0 + 10u, 1u << 0, 96);
+        if (b & 1u)
+            demo_hit(t, s0 + 14u, 1u << 0, 70);
+        t = &trk[6];                                                        /* the kit: rims, soft hats, a far clap */
+        for (i = 0; i < 16u; i += 2u) {
+            demo_hit(t, s0 + i + (i % 4u ? 0u : 1u), 1u << 3, (i % 4u) ? 52 : 34);
+            if (i % 4u == 0u)
+                step_set_chance(&t->step[s0 + i + 1u], 60);
         }
-        dm_bar(&trk[6], b, p == 2u && (b == 1u || b == 2u) ? PAD2 : PAD1, 4, 70);   /* the pad, held, pumping */
-        if (b < 3u)
-            trk[6].step[s0 + 15u].flags |= SF_SLIDE;                        /* (its voices glide over) */
+        demo_hit(t, s0 + 6u, 1u << 6, 72);
+        demo_hit(t, s0 + 8u, 1u << 2, b & 1u ? 104 : 88);
+        if (p == 2u)
+            demo_hit(t, s0 + 13u, 1u << 4, 60);
     }
-    for (i = 0; i < NSTEP; i += 3u) {                                       /* the blip: three against four */
-        demo_note(&trk[5].step[i], (i / 3u) % 4u == 3u ? 81 : 76, (i / 3u) & 1u ? 70 : 92);
-        if ((i / 3u) % 5u == 4u)
-            step_set_chance(&trk[5].step[i], 60);
-    }
-    for (b = 0; b < 2u; b++)                                                /* the bass's filter: a breath every */
-        demo_auto(&trk[3], P_E4, b * 32u, b * 32u + 24u, p == 1u ? 34 : 50, p == 1u ? 70 : 90);   /* two bars */
+    demo_auto(&trk[1], P_E4, 0, 56, p == 1u ? 36 : 96, p == 1u ? 96 : 50);  /* the pad: opening, closing */
+    trkx[1].curve = 1;
+    demo_auto(&trk[2], P_AGATE, 0, 56, p == 1u ? 20 : 90, p == 1u ? 90 : 30);   /* the arp: longer, shorter */
+    demo_auto(&trk[2], P_DLY, 0, 56, p == 1u ? 40 : 100, p == 1u ? 100 : 50);   /* .. its echoes swelling */
+    trkx[2].curve = 1;
+    demo_auto(&trk[3], P_PAN, 0, 56, p == 1u ? -50 : 50, p == 1u ? 50 : -50);   /* the bells across */
     trkx[3].curve = 1;
-    demo_auto(&trk[5], P_PAN, 0, 56, p == 1u ? -44 : 44, p == 1u ? 44 : -44);   /* the blip across */
-    (void)motion_set_event(&trk[2], 60, P_REV, 120);                        /* the clap's reverb thrown at the end */
-    (void)motion_set_event(&trk[2], 0, P_REV, 40);
-    (void)motion_set_event(&trk[2], 28, P_REV, 110);
-    (void)motion_set_event(&trk[2], 32, P_REV, 40);
-    motion_set_enabled(&trk[2], 1);
-    demo_auto(&trk[6], P_EQHI, 0, 56, p == 1u ? 70 : 104, p == 1u ? 104 : 80);   /* the pad opening, closing */
-    trkx[6].curve = 1;
+    demo_auto(&trk[7], P_EQHI, 0, 56, p == 1u ? 60 : 110, p == 1u ? 110 : 70);  /* the choir: breathing */
+    trkx[7].curve = 1;
     if (p == 2u) {
-        demo_auto(&trk[1], P_LN4, 0, 56, 60, 127);                          /* the open hats coming up */
-        trkx[1].curve = 1;
-    }
-    if (p == 1u) {
-        demo_auto(&trk[4], P_E4, 0, 56, 30, 84);                            /* the stab's filter opening */
-        (void)motion_set_event(&trk[4], 63, P_E4, 90);
-        demo_auto(&trk[4], P_DLY, 0, 56, 40, 70);
-        demo_auto(&trk[5], P_DLY, 0, 56, 20, 60);
-    } else {
-        (void)motion_set_event(&trk[4], 0, P_E4, 90);                       /* .. open, closing at the end */
-        (void)motion_set_event(&trk[4], 48, P_E4, 92);
-        (void)motion_set_event(&trk[4], 63, P_E4, 30);
-        motion_set_enabled(&trk[4], 1);
-        demo_auto(&trk[4], P_DLY, 0, 56, 70, 40);
-        demo_auto(&trk[5], P_DLY, 0, 56, 60, 20);
-        demo_note(&trk[7].step[32], 57, 100);                               /* the riser: noise over the last two bars, */
-        demo_hold(&trk[7], 32, 32);                                         /* its HIGH CUT opening, louder */
-        demo_auto(&trk[7], P_EQHI, 32, 56, 30, 110);
-        (void)motion_set_event(&trk[7], 63, P_EQHI, 118);
-        (void)motion_set_event(&trk[7], 0, P_LEVEL, 0);
-        demo_auto(&trk[7], P_LEVEL, 32, 56, 30, 96);
+        (void)motion_set_event(&trk[2], 0, P_ARATE, 2);                     /* 2: the arp twice as fast at the end */
+        (void)motion_set_event(&trk[2], 48, P_ARATE, 3);
     }
 }
 static void felucca_demo(void)
 {
     uint32_t i, k;
     track_t *t;
-    song.g[G_BPM] = 126;
-    song.g[G_RTYPE] = 0;                      /* ROOM, short */
-    song.g[G_RSIZE] = 70;
-    song.g[G_RDAMP] = 80;
-    song.g[G_DFDBK] = 56;
+    song.g[G_BPM] = 92;
+    song.g[G_RTYPE] = 2;                      /* HALL, vast */
+    song.g[G_RSIZE] = 124;
+    song.g[G_RDAMP] = 70;
+    song.g[G_DFDBK] = 70;
     song.g[G_DTIME] = 10;                     /* 1/8D */
+    song.g[G_CRATE] = 30;
+    song.g[G_CDEPTH] = 90;
     song.ntrk = 8;
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
@@ -264,43 +240,45 @@ static void felucca_demo(void)
         trk[i].p[P_SDIV] = 2;                 /* 1/16 */
     }
     t = &trk[0];
-    demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT: the kick, tight */
-    t->p[P_E0 + 1] = 40;
-    t->p[P_E0 + 2] = 20;
-    t->p[P_E0 + 4] = 30;
-    t->p[P_LEVEL] = 108; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    demo_sound(t, 0, 10);                     /* ANALOG WIND: a drone under it all */
+    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 90;
+    t->p[P_ATK] = 100; t->p[P_REL] = 110; t->p[P_LEVEL] = 66; t->p[P_REV] = 100;
     t = &trk[1];
-    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: the hats */
-    t->p[P_LEVEL] = 76; t->p[P_REV] = 10; t->p[P_DLY] = 0; t->p[P_CHOR] = 0; t->p[P_PAN] = 10;
+    demo_sound(t, 0, 1);                      /* ANALOG SOFT PAD: the chords */
+    t->p[P_ATK] = 70; t->p[P_REL] = 100; t->p[P_LEVEL] = 92; t->p[P_REV] = 90; t->p[P_CHOR] = 70;
     t = &trk[2];
-    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: clap and rims */
-    t->p[P_LEVEL] = 82; t->p[P_REV] = 40; t->p[P_DLY] = 14; t->p[P_CHOR] = 0; t->p[P_PAN] = -8;
+    demo_sound(t, 0, 8);                      /* ANALOG PLUCK: the arp */
+    t->p[P_AMODE] = 3; t->p[P_ARATE] = 2; t->p[P_AOCT] = 2; t->p[P_AGATE] = 40;
+    t->p[P_LEVEL] = 74; t->p[P_REV] = 70; t->p[P_DLY] = 60; t->p[P_PAN] = -16;
     t = &trk[3];
-    demo_sound(t, 0, 2);                      /* ANALOG SQR BASS: present, MONO, sliding */
-    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 34;
-    t->p[P_REL] = 30; t->p[P_LEVEL] = 112; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    demo_sound(t, ENGI_PHYS, 0);              /* PHYS BELL TREE */
+    t->p[P_LEVEL] = 68; t->p[P_REV] = 110; t->p[P_DLY] = 50;
     t = &trk[4];
-    demo_sound(t, 0, 8);                      /* ANALOG PLUCK: the stab */
-    t->p[P_REL] = 40; t->p[P_LEVEL] = 80; t->p[P_REV] = 50; t->p[P_DLY] = 40; t->p[P_CHOR] = 20;
+    demo_sound(t, 0, 7);                      /* ANALOG SUB BASS, sliding */
+    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 60;
+    t->p[P_LEVEL] = 100; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     t = &trk[5];
-    demo_sound(t, ENGI_PHYS, 4);              /* PHYS KALIMBA: the blip */
-    t->p[P_LEVEL] = 66; t->p[P_REV] = 40; t->p[P_DLY] = 30; t->p[P_PAN] = 24;
+    demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT: the kick */
+    t->p[P_E0 + 1] = 44; t->p[P_E0 + 2] = 30;
+    t->p[P_LEVEL] = 104; t->p[P_REV] = 6; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     t = &trk[6];
-    demo_sound(t, 0, 1);                      /* ANALOG SOFT PAD: quiet, far */
-    t->p[P_ATK] = 70; t->p[P_REL] = 100; t->p[P_LEVEL] = 86; t->p[P_REV] = 100; t->p[P_CHOR] = 60;
+    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: rims, hats, a clap */
+    t->p[P_LEVEL] = 76; t->p[P_REV] = 100; t->p[P_DLY] = 30; t->p[P_CHOR] = 0;
     t = &trk[7];
-    demo_sound(t, 11, 0);                     /* NOISE WIND: the riser */
-    t->p[P_ATK] = 60; t->p[P_LEVEL] = 0; t->p[P_REV] = 70;
+    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH: the moving voice, high */
+    t->p[P_E0 + 4] = 72; t->p[P_E0 + 6] = 100;
+    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 70;
+    t->p[P_ATK] = 90; t->p[P_REL] = 100; t->p[P_LEVEL] = 64; t->p[P_REV] = 120;
     {                                         /* the mix: each one its own band (EQ: LOW CUT, HIGH CUT, a bell) */
         static const int8_t EQ[8][4] = {
-            {0, 118, 40, 0},                  /* kick: as it is */
-            {70, 118, 112, 10},               /* hats: no low end, air */
-            {44, 118, 80, 8},                 /* clap, rims: their snap */
-            {0, 82, 24, 16},                  /* bass: its weight (~100 Hz) up, its top kept (small speakers) */
-            {46, 104, 60, -20},               /* stab: above the sub, its mud down */
-            {54, 118, 96, 0},                 /* blip */
-            {40, 104, 50, -20},               /* pad: out of the bass's way */
-            {30, 30, 40, 0},                  /* riser: its HIGH CUT opens (automated) */
+            {30, 80, 40, 0},                  /* drone: dark */
+            {34, 104, 52, -18},               /* pad: out of the sub's way, its mud down */
+            {50, 118, 96, 12},                /* arp: above it */
+            {60, 118, 110, 8},                /* bells: air */
+            {0, 50, 22, 12},                  /* sub */
+            {0, 118, 40, 0},                  /* kick */
+            {40, 118, 104, 10},               /* kit */
+            {46, 100, 70, -10},               /* choir */
         };
         for (i = 0; i < NTRK; i++) {
             trk[i].p[P_EQLO] = EQ[i][0];
@@ -309,15 +287,15 @@ static void felucca_demo(void)
             trk[i].p[P_EQ1G] = EQ[i][3];
         }
     }
-    trkx[4].curve = trkx[5].curve = trkx[7].curve = 1;   /* (their automation ramps) */
-    {                                         /* the sidechain: sub, stab, pad and riser pump on the kick (T1) */
-        static const int8_t DK[4][3] = {{3, 80, 6}, {4, 70, 10}, {6, 127, 20}, {7, 90, 14}};   /* track, DEPTH, REL (the pad: */
-        for (i = 0; i < 4u; i++) {
-            trk[DK[i][0]].p[P_DKSRC] = 1;
+    {                                         /* the sidechain, soft: pad, arp, sub and choir breathe with the kick */
+        static const int8_t DK[5][3] = {{0, 90, 30}, {1, 76, 24}, {2, 50, 14}, {4, 110, 10}, {7, 60, 26}};   /* track, DEPTH, REL */
+        for (i = 0; i < 5u; i++) {
+            trk[DK[i][0]].p[P_DKSRC] = 6;
             trk[DK[i][0]].p[P_DKAMT] = (int16_t)DK[i][1];
             trk[DK[i][0]].p[P_DKREL] = (int16_t)DK[i][2];
         }
     }
+    trk[2].p[P_DIST] = 18;                    /* (the arp a little warm) */
     demo_pattern(1);
     for (k = 0; k < 8u; k++)                  /* pattern 1 kept, 2 written, 1 back on the tracks */
         (void)pattern_new(k, 0);
