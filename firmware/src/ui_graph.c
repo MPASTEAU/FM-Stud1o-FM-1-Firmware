@@ -2185,9 +2185,10 @@ static void home_track_row(uint32_t c)
  * selected row RAISE. Each row redrawn only when it changed (ts.col), its meter alone otherwise */
 #define RK_PITCH (foot_free() ? 17 : 15)                  /* (Dah: taller rows when the footer's first row is the panel's) */
 #define RK_H (RK_PITCH - 1)
-#define RK_SX 94                                       /* the steps: x 94 .. 221, 8 apart (Dah: room for the name, the meter
-                                                        * upright at the right end) */
-#define RK_SP 8
+#define RK_SX 32                                       /* the steps: x 32 .. 223, 12 apart (Dah: no name, the colour and the
+                                                        * footer say it; the meter upright at the right end) */
+#define RK_SP 12
+#define RK_CW (RK_SP - 2)                              /* a step's width */
 #define RK_MX 226                                      /* the meter: upright, x 226 .. 229, the row's height */
 #define RK_MW 4
 /* the output meter, upright: rising from the row's foot (x0: its left in the canvas) */
@@ -2236,8 +2237,6 @@ static void rack_row(uint32_t c)
     cv_rrect(2, 1, 12, 12, 3, tc, bg);                 /* the cushion */
     GFX_HOOK_ALIGN(2, 1, 14, 13, AL_HV, "rack cushion digit centred");
     cv_text_in(2, 1 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, tc);
-    GFX_HOOK_ALIGN(0, 0, 0, RK_H, AL_V, "rack name on its row");
-    cv_free_text(18, CAP_IN(S, RK_H), &AF_S, b, sel ? T_TEXT : mute ? T_DIM : T_MID, bg, RK_SX - 4 - 18 - 12);
     {                                                  /* (Dah) the pattern it plays, its number before the steps */
         char pn[4];
         uint32_t pnum = chain.running ? chain.lane[c % NTRK] : ps_num(c);
@@ -2266,26 +2265,26 @@ static void rack_row(uint32_t c)
             int32_t bx = RK_SX + (int32_t)i * RK_SP;
             uint16_t under = bg;
             if (i == ph) {                             /* the step playing: ringed */
-                cv_rrect(bx - 1, 1, 8, RK_H - 2, 2, T_TEXT, bg);
-                cv_rrect(bx, 2, 6, RK_H - 4, 2, bg, T_TEXT);
+                cv_rrect(bx - 1, 1, RK_CW + 2, RK_H - 2, 2, T_TEXT, bg);
+                cv_rrect(bx, 2, RK_CW, RK_H - 4, 2, bg, T_TEXT);
             }
             if (st->time == ST_NOTE && (st->n || st->hit)) {
                 int acc = (st->flags & SF_ACCENT) || (st->acc & st->hit);
                 if (roll && st->n && hi >= lo) {
                     for (j = 0; j < st->n && j < 4; j++) {
                         int32_t ny = hi > lo ? (RK_H - 4) - (st->note[j] - lo) * (RK_H - 6) / (hi - lo) : RK_H / 2 - 1;
-                        cv_rect(bx, ny, 6, 2, acc && !mute ? T_TEXT : tc);
+                        cv_rect(bx, ny, RK_CW, 2, acc && !mute ? T_TEXT : tc);
                         if (!j) cy = ny;
                     }
                 } else
-                    cv_rrect(bx, 3, 6, RK_H - 6, 2, acc && !mute ? T_TEXT : tc, under);
+                    cv_rrect(bx, 3, RK_CW, RK_H - 6, 2, acc && !mute ? T_TEXT : tc, under);
                 carry = 1;
                 continue;
             }
             if (st->time == ST_TIE && carry)           /* carried on: half the colour (the roll: at its height) */
-                cv_rect(bx - 1, roll ? cy : RK_H / 2 - 1, 8, 2, ux_mix(bg, tc, 55));
+                cv_rect(bx - 1, roll ? cy : RK_H / 2 - 1, RK_CW + 2, 2, ux_mix(bg, tc, 55));
             else
-                cv_rect(bx, RK_H - 2, 6, 1, T_LINE);
+                cv_rect(bx, RK_H - 2, RK_CW, 1, T_LINE);
             carry = st->time == ST_TIE && carry;
         }
     }
