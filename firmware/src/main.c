@@ -210,7 +210,7 @@ static void demo_pattern(uint32_t p)
     demo_auto(&trk[1], P_E4, 0, 56, p == 1u ? 36 : 96, p == 1u ? 96 : 50);  /* the pad: opening, closing */
     trkx[1].curve = 1;
     demo_auto(&trk[2], P_AGATE, 0, 56, p == 1u ? 20 : 90, p == 1u ? 90 : 30);   /* the arp: longer, shorter */
-    demo_auto(&trk[2], P_DLY, 0, 56, p == 1u ? 40 : 100, p == 1u ? 100 : 50);   /* .. its echoes swelling */
+    demo_auto(&trk[2], P_DLY, 0, 56, p == 1u ? 24 : 60, p == 1u ? 60 : 30);    /* .. its echoes swelling */
     trkx[2].curve = 1;
     demo_auto(&trk[3], P_PAN, 0, 56, p == 1u ? -50 : 50, p == 1u ? 50 : -50);   /* the bells across */
     trkx[3].curve = 1;
@@ -229,7 +229,7 @@ static void felucca_demo(void)
     song.g[G_RTYPE] = 2;                      /* HALL, vast */
     song.g[G_RSIZE] = 124;
     song.g[G_RDAMP] = 70;
-    song.g[G_DFDBK] = 70;
+    song.g[G_DFDBK] = 52;
     song.g[G_DTIME] = 10;                     /* 1/8D */
     song.g[G_CRATE] = 30;
     song.g[G_CDEPTH] = 90;
@@ -249,7 +249,7 @@ static void felucca_demo(void)
     t = &trk[2];
     demo_sound(t, 0, 8);                      /* ANALOG PLUCK: the arp */
     t->p[P_AMODE] = 3; t->p[P_ARATE] = 2; t->p[P_AOCT] = 2; t->p[P_AGATE] = 40;
-    t->p[P_LEVEL] = 74; t->p[P_REV] = 70; t->p[P_DLY] = 60; t->p[P_PAN] = -16;
+    t->p[P_LEVEL] = 78; t->p[P_REV] = 36; t->p[P_DLY] = 30; t->p[P_PAN] = -16;
     t = &trk[3];
     demo_sound(t, ENGI_PHYS, 0);              /* PHYS BELL TREE */
     t->p[P_LEVEL] = 68; t->p[P_REV] = 110; t->p[P_DLY] = 50;
