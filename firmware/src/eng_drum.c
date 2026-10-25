@@ -62,6 +62,7 @@ typedef struct {
     uint8_t slot;                /* SYNTH: the layer set struck (SYN 1..5: 0..4) */
     uint8_t syn[DS_NF];          /* .. its values the coefficients were set up with */
     uint8_t pg;                  /* .. read at this patch generation (eng_fm6.c fm6_pgen) */
+    int32_t last, off;           /* (Dah) its last sample; the step a hit over its own tail leaves, fading (no click) */
 } drum_lane_t;
 
 ENG_MEM_FITS("DRUM", sizeof(drum_lane_t) * DV_NLANE);
@@ -468,7 +469,19 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (dv_wants_metal(&L->c, &L->v))                    /* (the metal source only while the voice takes it: SYNTH
                                                           * reads mb then only) */
         dv_metal_run(&L->mb, mb, n);
+    if (L->v.trig && L->v.live)                          /* (Dah) struck again while ringing: the tail stops where it
+                                                          * was, the new hit from rest: the step between, faded over
+                                                          * ~1.5 ms, not a click */
+        L->off += L->last;
+    else if (!L->v.live && !L->v.trig)
+        L->off = 0;
     dv_run(&L->c, &L->v, mb, y, n);
+    if (L->off)
+        for (i = 0; i < n; i++) {
+            y[i] += L->off;
+            L->off = (L->off * 61) / 64;
+        }
+    L->last = n ? y[n - 1u] : L->last;
     if ((drum_mute[(uint32_t)(t - trk) % NPART] >> ((uint32_t)v->s[0] & (DV_NLANE - 1u))) & 1u)
         return;                                          /* (a muted lane rings on unheard) */
     if (drv > 0) {                                       /* DRV: x1..x4 into the soft clip, the level kept (Q12) */

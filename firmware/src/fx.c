@@ -832,6 +832,10 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * perf_mute_sd) and passes DIST by (the spread of a distorted chord is its voices' clean difference). The sends
  * take b, mono, as before. SPRD 0, MONO or LEGATO: mix_part's own loop, bit for bit as before. The cost: a block's
  * clear and sum of spread_buf, the side and a wider mix loop, per part; per voice none (it picks its buffer) */
+static const uint8_t FX_ORDER[6] = {0 | 1 << 2 | 2 << 4, 0 | 2 << 2 | 1 << 4, 1 | 0 << 2 | 2 << 4,
+                                    1 | 2 << 2 | 0 << 4, 2 | 0 << 2 | 1 << 4, 2 | 1 << 2 | 0 << 4};   /* (D I S orders: fx_chain, mix_spread) */
+static int32_t duck_att[NPART];
+static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n);
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
     int32_t *d = SPREAD_BUF(t);
@@ -846,10 +850,19 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
     for (i = 0; i < n; i++)
         d[i] = (d[i] << 1) - b[i];                      /* left - right */
-    track_dist(t, b, n);
-    if (t->p[P_ITYPE] | t->ins_run)
-        track_insert(t, b, n);                          /* (the mono sum, as DIST) */
-    slicer_track_sd(t, b, d, n);
+    {                                                   /* (Dah: in ORDER, as fx_chain; the SLICER on both) */
+        uint32_t o = FX_ORDER[(uint32_t)t->p[P_FXORD] < 6u ? (uint32_t)t->p[P_FXORD] : 0u], k;
+        for (k = 0; k < 3u; k++, o >>= 2)
+            if ((o & 3u) == 0u)
+                track_dist(t, b, n);
+            else if ((o & 3u) == 1u) {
+                if (t->p[P_ITYPE] | t->ins_run)
+                    track_insert(t, b, n);              /* (the mono sum, as DIST) */
+            } else
+                slicer_track_sd(t, b, d, n);
+    }
+    if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+        duck_part_sd(t, b, d, n);                       /* (Dah: after the chain, as without SPREAD) */
     if ((pf.mute >> (t - trk)) & 1u)
         perf_mute_sd((uint32_t)(t - trk), b, d, n);
     for (i = 0; i < n; i++) {
@@ -888,8 +901,7 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
 
 /* HA HA HE HU: ORDER (P_FXORD, params.c N_FXORD), the track's DIST (0), INSERT (1) and SLICER (2) in a row, two bits each,
  * first in the low bits. 0, D I S, is the chain as it always was */
-static const uint8_t FX_ORDER[6] = {0 | 1 << 2 | 2 << 4, 0 | 2 << 2 | 1 << 4, 1 | 0 << 2 | 2 << 4,
-                                    1 | 2 << 2 | 0 << 4, 2 | 0 << 2 | 1 << 4, 2 | 1 << 2 | 0 << 4};
+
 static void fx_chain(track_t *t, int32_t *b, uint32_t n)
 {
     uint32_t o = FX_ORDER[(uint32_t)t->p[P_FXORD] < 6u ? (uint32_t)t->p[P_FXORD] : 0u], k;
@@ -913,7 +925,7 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n)
  * time (P_DKREL -64..63: ~20 .. 400 ms, 0 ~210 ms; an exponential per block). Applied to the part's mono buffer after its FX chain, before LEVEL,
  * PAN and the sends: the sends dip with it. OFF: nothing runs (the track as before) */
 static int32_t duck_env[NPART], duck_att[NPART];       /* the envelope (Q15), the dip applied last block (Q15) */
-static void duck_part(track_t *t, int32_t *b, uint32_t n)
+static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d: SPREAD's side signal, dipped alike) */
 {
     uint32_t k = (uint32_t)(t - trk) % NPART, src = (uint32_t)t->p[P_DKSRC], i;
     int32_t a0 = duck_att[k], a1 = 0;
@@ -930,11 +942,15 @@ static void duck_part(track_t *t, int32_t *b, uint32_t n)
     }
     {   /* (the dip from last block's to this one's, a step a sample: one divide a block) */
         int32_t acc = a0 << 8, da = ((a1 - a0) << 8) / (int32_t)n;
-        for (i = 0; i < n; i++, acc += da)
+        for (i = 0; i < n; i++, acc += da) {
             b[i] -= ((b[i] >> 4) * (acc >> 8)) >> 11;
+            if (d)
+                d[i] -= ((d[i] >> 4) * (acc >> 8)) >> 11;
+        }
     }
     duck_att[k] = a1;
 }
+static void duck_part(track_t *t, int32_t *b, uint32_t n) { duck_part_sd(t, b, 0, n); }
 
 /* one synth part into the dry mix and the sends of sm (mx[0]; mx[1] on the second core); a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
@@ -965,9 +981,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         return;
     }
     if (T_SPREAD(t)) {
-        if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
-            duck_part(t, b, n);                         /* (HA HA HE HU) */
-        mix_spread(t, b, n SM_ARG(sm));
+        mix_spread(t, b, n SM_ARG(sm));                 /* (its chain in ORDER, the DUCK after it) */
     } else {
         fx_chain(t, b, n);                              /* DIST INSERT SLICER, in ORDER (HA HA HE HU) */
         if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])

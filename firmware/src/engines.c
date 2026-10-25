@@ -17,7 +17,7 @@
  * largest of DRUM FM6 SLICE): PHYS and GRAIN play on tracks 1..2 only (eng_fits; the FM-1's RAM has no room for more
  * large regions with eight tracks) */
 #define NPART_BIG 2u
-#define ENG_MEM_SMALL 2144u              /* (DRUM's eight lanes with the SYNTH voice's state) */
+#define ENG_MEM_SMALL 2208u              /* (DRUM's eight lanes with the SYNTH voice's state; Dah: + their declick) */
 static union {
     uint64_t align;
     uint8_t b[ENG_MEM_PART];
