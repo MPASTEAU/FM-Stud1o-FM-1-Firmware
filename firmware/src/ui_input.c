@@ -614,6 +614,17 @@ static int rec_tap(void)                                /* 1: the arming changed
         else confirm_open(CF_DEL_PAT, pt_pick());
         return 0;
     }
+    if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
+                                                         * CHAIN: the effect picked out of the chain */
+        uint8_t u[4];
+        if (ch_cur < fx_list(TSEL, u)) {
+            fx_chain_remove(TSEL);
+            ui_message("EFFECT REMOVED");
+            ui.force = 1;
+        } else
+            ui_message("NO EFFECT THERE");
+        return 0;
+    }
     if (g == GR_FILE) {
         if (pfs_there(ui.fsel)) confirm_open(CF_DEL_ARCH, ui.fsel);
         else ui_message("NO PROJECT");
@@ -1140,12 +1151,15 @@ static void edit_param(uint32_t slot, int32_t steps)
         mod_ui_slot = (uint8_t)clamp((int32_t)mod_ui_slot + (steps > 0 ? 1 : -1), 0, 3);
         return;
     }
-    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the unit, KNOB 2 moves it */
-        int32_t j = clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, 3);
-        if (slot == 1u && j != (int32_t)ch_cur)
-            TSEL->p[P_FXORD] = (int16_t)fx_order_swap(TSEL, ch_cur, (uint32_t)j);
-        if (slot <= 1u)
-            ch_cur = (uint8_t)j;
+    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 its effect, 3 moves it */
+        uint8_t u[4];
+        uint32_t n = fx_list(TSEL, u), rows = n < 4u ? n + 1u : 4u;
+        if (slot == 0u)
+            ch_cur = (uint8_t)clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, (int32_t)rows - 1);
+        else if (slot == 1u)
+            fx_chain_type(TSEL, steps);
+        else if (slot == 2u)
+            fx_chain_move(TSEL, steps);
         ui.force = 1;
         return;
     }
@@ -1442,6 +1456,8 @@ static void presets_turn(int32_t s)
     }
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
+    } else if (pg->id[0] == P_FXORD && pg->fam == FAM_FX) {   /* (Dah) CHAIN: its list */
+        edit_param(0, s);
     } else if (g == GR_PATTERN || g == GR_FILE) {          /* (Dah) the list (its knobs are the actions) */
         g == GR_PATTERN ? pt_move(s) : file_move(s);
     } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG ||
@@ -1468,11 +1484,21 @@ static void fxk_assign(uint32_t c, int32_t s)
     ui_message(m);
     ui.force = 1;
 }
-/* (Dah) CHAIN: OCT+ opens the page of the unit picked */
+/* (Dah) CHAIN: OCT+ opens the page of the effect picked; on + ADD, adds one */
 static void chain_open(void)
 {
     static const uint8_t ID[4] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO};
-    uint32_t u = fx_unit_at(TSEL, ch_cur & 3u), i;
+    uint8_t l[4];
+    uint32_t n = fx_list(TSEL, l), u, i;
+    if (ch_cur >= n) {
+        if (n >= 4u)
+            return;
+        fx_chain_add(TSEL);
+        ui_message("EFFECT ADDED");
+        ui.force = 1;
+        return;
+    }
+    u = l[ch_cur];
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].fam == FAM_FX && PAGES[i].id[0] == ID[u] && PAGES[i].graph != GR_FX) {
             ui.page = (uint8_t)i;
@@ -1489,7 +1515,7 @@ static int sel_is_list(void)                           /* (Dah) the page shown h
 {
     uint32_t g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN ||
-           g == GR_PATS || g == GR_SONG || g == GR_EVENTS;
+           g == GR_PATS || g == GR_SONG || g == GR_EVENTS || (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX);
 }
 static void sel_list(int32_t s)
 {

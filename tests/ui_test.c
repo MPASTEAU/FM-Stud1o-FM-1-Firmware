@@ -2729,6 +2729,8 @@ static int test_presets_knob(void)
                 sel_ok &= same_snd && same_steps && ui.page == i && ui.ev_row == 1u;
             } else if (g == GR_TOOLS) {
                 tools_ok &= same_snd && same_steps && !ui.confirm;
+            } else if (PAGES[i].id[0] == P_FXORD && PAGES[i].fam == FAM_FX) {   /* (Dah: CHAIN, its list) */
+                sel_ok &= same_snd && same_steps && ui.page == i;
             } else if (g != GR_BROWSE) {               /* (HA HA HE HU: a sound loads on HOME and PRESETS only) */
                 else_ok &= same_snd && same_steps && ui.page == i && !ui.home && msg_is("PRESETS: ON HOME");
                 n_else++;
@@ -2948,11 +2950,13 @@ static int test_product_ux(void)
             ok &= song.rec == 0 && !transport_req && msg_is("NO PROJECT");
         else if (PAGES[i].graph == GR_USER)
             ok &= song.rec == 0 && !transport_req && msg_is("EMPTY SLOT");
+        else if (PAGES[i].id[0] == P_FXORD && PAGES[i].fam == FAM_FX)   /* (Dah) CHAIN: removes the effect picked */
+            ok &= song.rec == 0 && !transport_req && (msg_is("NO EFFECT THERE") || msg_is("EFFECT REMOVED"));
         else if (PAGES[i].graph == GR_ROLL)            /* #133: STEP's roll arms step recording, stopped */
             ok &= song.rec == 1 && !transport_req && ui.page == i && !ui.home;
         else ok &= song.rec == 1 && transport_req == 1 && ui.page == i && !ui.home;
     }
-    bad += check("REC stays on every page; SONG, PATTERN, FILE, USER: it deletes (the dialog; none: why) (STEP: step recording, stopped)", ok);
+    bad += check("REC stays on every page; SONG, PATTERN, FILE, USER, CHAIN: it deletes (the dialog; none: why) (STEP: step recording, stopped)", ok);
     ui_power_on(); hold(B_HOME); press(B_REC);
     bad += check("REC in the MENU does nothing (the menu stays, no arm, no transport start)",
                  ui.menu == 1 && song.rec == 0 && !transport_req);
@@ -7888,9 +7892,10 @@ static int test_div_order(void)
             int16_t *vp;
             const param_desc_t *d;
             ui_power_on();
+            TSEL->p[P_SLCR] = 1;                        /* (Dah: the SLICER in the chain: its page shows) */
             ui.home = 0; ui.page = (uint8_t)id; page_entered();
-            if (!page_visible(id) || !(d = page_desc(cur_page(), c, &vp)) || !vp || !enum_order(d))
-                continue;
+            if (!page_visible(id) || !(d = page_desc(cur_page(), c, &vp)) || !vp || !enum_order(d) || PAGES[id].id[0] == P_FXORD)
+                continue;                               /* (Dah: CHAIN's knobs are its list's) */
             found++;
             *vp = d->names != N_SLDIV ? 2 : 1;      /* 1/16 */
             turn(EN_K1 + c, 1);

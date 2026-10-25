@@ -1533,14 +1533,20 @@ static void draw_columns_in(void)
             draw_act_column(c, act_name(c), ok ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: UNIT, MOVE */
-            char pl[4] = {(char)('1' + (ch_cur & 3u)), '/', '4', 0};
+        if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, TYPE, MOVE */
+            uint8_t u[4];
+            uint32_t n = fx_list(TSEL, u);
+            char pl[6] = {(char)('1' + (ch_cur & 3u)), '/', (char)('0' + n), 0};
+            int on = ch_cur < n;
             if (c == 0u) {
-                card_span_by(span_fxu, 0, 0, 3, 0);
-                draw_column(0, "UNIT", FXU_N[fx_unit_at(TSEL, ch_cur & 3u)], "", VAL(0u), -1, ICON_AUTO);
-            } else if (c == 1u) {
                 card_span_by(span_fxmv, 0, 0, 3, 1);
-                draw_column(1, "MOVE", pl, "", VAL(1u), (int32_t)(ch_cur & 3u) * 1000 / 3, ICON_AUTO);
+                draw_column(0, "EFFECT", on ? pl : "ADD", "", VAL(0u), -1, ICON_AUTO);
+            } else if (c == 1u && on) {
+                card_span_by(span_fxu, 0, 0, 3, 0);
+                draw_column(1, "TYPE", FXU_N[u[ch_cur & 3u]], "", VAL(1u), -1, ICON_AUTO);
+            } else if (c == 2u && on) {
+                card_span_by(span_fxmv, 0, 0, 3, 1);
+                draw_column(2, "MOVE", pl, "", VAL(2u), n > 1u ? (int32_t)ch_cur * 1000 / (int32_t)(n - 1u) : -1, ICON_AUTO);
             } else
                 draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
             continue;

@@ -1134,7 +1134,7 @@ static void setup(int s)
     case S_FX: go_title("FX"); break;
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
     case S_DLY: go_title("DLY"); break;
-    case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_FXORD] = 13; go_title("CHAIN"); break;
+    case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_EQLO] = 30; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; go_title("CHAIN"); break;
     case S_FX_DIST: TSEL->p[P_DIST] = 70; go_title("DIST"); break;
     case S_FX_EQ: {                                     /* (a saw at 110 Hz in the ring: the spectrum) */
         uint32_t i;

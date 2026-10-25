@@ -198,7 +198,7 @@ static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
     for (j = 0; j < 27u; j++)                           /* the other keys of the track held: their own notes (not the
                                                          * tones an earlier match added: the chord made again from the
                                                          * keys, seq.c match_revoice lets go of those it drops) */
-        if (kb_chn[j] && kb_trk[j] == k && nh < 32u) {
+        if (kb_chn[j] && kb_trk[j] == k && kb_note[j] != key && nh < 32u) {
             held[nh++] = kb_note[j];
             sum += kb_note[j];
             lo = kb_note[j] < lo ? kb_note[j] : lo;

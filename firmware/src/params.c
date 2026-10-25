@@ -361,7 +361,8 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 {
     *unit = "";
     fmt_named = d->fmt == F_ENUM;
-    if ((d == &TP[P_EQLO] && v <= 0) || (d == &TP[P_EQHI] && v >= 118)) {   /* (Dah) the EQ's cuts at rest */
+    if ((d == &TP[P_EQLO] && v <= 0) || (d == &TP[P_EQHI] && v >= 118) ||   /* (Dah) the EQ's cuts at rest, a band */
+        (d == &TP[P_EQ1F] && !TSEL->p[P_EQ1G]) || (d == &TP[P_EQ2F] && !TSEL->p[P_EQ2G])) {   /* at 0 dB: off */
         str_cpy(val, "OFF", 6);
         return;
     }

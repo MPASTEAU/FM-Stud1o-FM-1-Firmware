@@ -705,29 +705,51 @@ static __attribute__((noinline)) void perf_key_remap(void)
     }
 }
 
-/* (Dah) MATCH: key k's chord made again from all the keys held (out: its n notes): the tones the other keys of the track
- * added before and the new chord has not, let go (their keys keep their own notes) */
-static __attribute__((noinline)) void match_revoice(uint32_t k, track_t *t, const uint8_t *out, uint32_t n)
+/* (Dah) MATCH: the chord is the keys held's, whatever their order: on each press and release it is made again
+ * (chord.c chord_match) from the keys of the track held; the tones it adds belong to the key pressed last (`own`), the
+ * others keep their own note only. Tones no longer in it let go, new ones start; the notes sounding still stay */
+static uint8_t kb_age[27];
+static uint8_t kb_ages;
+static __attribute__((noinline)) void match_rechord(track_t *t)
 {
-    uint32_t j, i, a, mc = trk_midi_ch(trk_index(t));
-    for (j = 0; j < 27u; j++) {
-        if (j == k || !kb_chn[j] || kb_trk[j] != trk_index(t))
+    uint32_t j, i, a, own = 27u, n, mc = trk_midi_ch(trk_index(t));
+    uint8_t out[CHORD_MAX];
+    for (j = 0; j < 27u; j++)                           /* the key pressed last */
+        if (kb_chn[j] && kb_trk[j] == trk_index(t) && (own == 27u || (uint8_t)(kb_age[j] - kb_age[own]) < 128u))
+            own = j;
+    if (own == 27u)
+        return;
+    n = chord_match(t, kb_note[own], out);
+    for (j = 0; j < 27u; j++) {                         /* the tones the chord no longer has: out */
+        if (!kb_chn[j] || kb_trk[j] != trk_index(t))
             continue;
         for (i = 1; i < kb_chn[j];) {                   /* (0: the key's own note) */
             uint32_t x = kb_chord[j][i], keep = 0;
-            for (a = 0; a < n && !keep; a++)
-                keep = out[a] == x;
+            for (a = 1; a < n && !keep; a++)
+                keep = out[a] == x && j == own;
             if (keep) {
                 i++;
                 continue;
             }
-            kb_chord[j][i] = kb_chord[j][kb_chn[j] - 1u];   /* (out of the key's list, then let go if no key holds it) */
+            kb_chord[j][i] = kb_chord[j][kb_chn[j] - 1u];
             kb_chn[j]--;
             if (!midi_local_held(t, x)) {
                 input_off(t, x);
                 midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
             }
         }
+    }
+    for (a = 1; a < n && kb_chn[own] < CHORD_MAX; a++) {   /* the new ones: in (the key pressed last's) */
+        uint32_t x = out[a], have = 0;
+        for (i = 0; i < kb_chn[own]; i++)
+            have |= kb_chord[own][i] == x;
+        if (have)
+            continue;
+        if (!midi_local_held(t, x)) {
+            input_on(t, x, kb_vel);
+            midi_out_event(0x09u | (0x90u | mc) << 8 | x << 16 | kb_vel << 24);
+        }
+        kb_chord[own][kb_chn[own]++] = (uint8_t)x;
     }
 }
 
@@ -737,18 +759,11 @@ static void key_on(uint32_t k, track_t *t)
 {
     uint32_t n, i, mc = trk_midi_ch(trk_index(t)), vel = kb_vel;
     kb_chn[k] = 0;
-    n = t->p[P_CHRD] == CH_MATCH ? chord_match(t, kb_note[k], kb_chord[k])   /* (Dah: the keys held make the chord) */
-                                 : chord_build(t, kb_note[k], kb_chord[k]);
-    if (t->p[P_CHRD] == CH_MATCH) {
-        uint8_t all[CHORD_MAX + 27u];                   /* (the new chord: its tones and every key's own note) */
-        uint32_t m = 0, j;
-        for (i = 0; i < n; i++)
-            all[m++] = kb_chord[k][i];
-        for (j = 0; j < 27u; j++)
-            if (kb_chn[j] && kb_trk[j] == trk_index(t))
-                all[m++] = kb_note[j];
-        match_revoice(k, t, all, m);
-    }
+    if (t->p[P_CHRD] == CH_MATCH) {                 /* (Dah) MATCH: the key's note, then the chord of all the keys */
+        kb_chord[k][0] = kb_note[k];
+        n = 1;
+    } else
+        n = chord_build(t, kb_note[k], kb_chord[k]);
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
@@ -759,6 +774,9 @@ static void key_on(uint32_t k, track_t *t)
     }
     in_key = 0;
     kb_chn[k] = (uint8_t)n;
+    kb_age[k] = ++kb_ages;
+    if (t->p[P_CHRD] == CH_MATCH)
+        match_rechord(t);
     last_note = kb_note[k];                         /* (step entry, the SAMPLE zone: the key's note) */
 }
 
@@ -774,6 +792,8 @@ static void key_off(uint32_t k, track_t *t)
         input_off(t, x);
         midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
     }
+    if (t->p[P_CHRD] == CH_MATCH)
+        match_rechord(t);                           /* (Dah) the keys still held: their chord */
 }
 
 #ifdef FM1_INPUT_LAT
