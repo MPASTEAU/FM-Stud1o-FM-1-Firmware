@@ -470,20 +470,16 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
                                                           * reads mb then only) */
         dv_metal_run(&L->mb, mb, n);
     if (L->v.trig && L->v.live)                          /* (Dah) struck again while ringing: the tail stops where it
-                                                          * was, the new hit from rest: the step between, faded over
-                                                          * ~1.5 ms, not a click */
+                                                          * was (as heard: after the level and the voice's amplitude),
+                                                          * the new hit from rest: the step between faded over ~6 ms */
         L->off += L->last;
     else if (!L->v.live && !L->v.trig)
         L->off = 0;
     dv_run(&L->c, &L->v, mb, y, n);
-    if (L->off)
-        for (i = 0; i < n; i++) {
-            y[i] += L->off;
-            L->off = (L->off * 61) / 64;
-        }
-    L->last = n ? y[n - 1u] : L->last;
-    if ((drum_mute[(uint32_t)(t - trk) % NPART] >> ((uint32_t)v->s[0] & (DV_NLANE - 1u))) & 1u)
+    if ((drum_mute[(uint32_t)(t - trk) % NPART] >> ((uint32_t)v->s[0] & (DV_NLANE - 1u))) & 1u) {
+        L->off = L->last = 0;                            /* (nothing heard: no step to fade later) */
         return;                                          /* (a muted lane rings on unheard) */
+    }
     if (drv > 0) {                                       /* DRV: x1..x4 into the soft clip, the level kept (Q12) */
         uint32_t tr = (uint32_t)(t - trk) % NTRK;
         if (drum_drv[tr].drv != drv || !drum_drv[tr].g)
@@ -492,10 +488,13 @@ static void drum_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         mk = drum_drv[tr].mk;
     }
     for (i = 0; i < n; i++) {                            /* x1.25 and the knee below, in 32 bits */
-        int32_t s = y[i];
+        int32_t s = y[i], o;
         if (g)
             s = (softclip((s * g) >> 12) * mk) >> 15;
-        out[i] += voice_amp(soft_knee(s + (s >> 2), 24000), m, i) << 1;
+        o = (voice_amp(soft_knee(s + (s >> 2), 24000), m, i) << 1) + L->off;
+        L->off -= (L->off >> 8) + (L->off > 0) - (L->off < 0);   /* (~6 ms: a low tail's step, no tick) */
+        out[i] += o;
+        L->last = o;
     }
 }
 
