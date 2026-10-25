@@ -22,6 +22,7 @@
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
 #define NPART 8                  /* synth parts: tracks 1..8 (HA HA HE HU; Felucca: 4). Parts 5..8 are light: no PHYS,
                                   * no GRAIN (engines.c NPART_BIG, eng_fits) */
+#define PROJ_NP_W 114u           /* (Dah) the parameters FUN10 / FUNX store: up to P_DKAMT, the eight engine values */
 #define NTRK_V10 4u              /* the tracks of every stored format up to FUN10 (Felucca's) */
 #define NTRK NPART               /* tracks (the formats and the protocol count these): every track is a part */
 #define NSTEP 64
@@ -92,7 +93,9 @@ enum {                          /* per-track parameters */
     P_ESYNC,                                   /* 1.5 (#175): ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
     P_FXORD,                                   /* HA HA HE HU: the order of DIST, INSERT and SLICER (fx.c mix_part) */
     P_DKSRC, P_DKAMT,                          /* HA HA HE HU: DUCK, the sidechain: its source track, depth (fx.c); its release
-                                                * is P_DKREL (P_ED_FX's byte: a project has room for three more only) */
+                                                * is P_DKREL (P_ED_FX's byte) */
+    P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G,   /* Dah: the EQ (fx_eq.c): LOW CUT, HIGH CUT, two bells */
+    P_FXK1, P_FXK2, P_FXK3, P_FXK4,            /* Dah: what FX's four knobs drive (params.c FXK_ID; as before DST CHO DLY REV) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
@@ -349,9 +352,9 @@ typedef struct track {
     uint8_t lfo_wrap;            /* the LFO's phase wrapped this block: its S&H is drawn after the parts (voice.c) */
     uint32_t esync_k[3];         /* ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
     uint8_t spread_on;           /* SPREAD this block (fx.c mix_part, voice.c track_render) */
-    uint8_t rsv_sz[12];          /* (sizeof(track_t) a multiple of 16: below; HA HA HE HU: 12 with its 3 parameters) */
+    uint8_t rsv_sz[8];           /* (sizeof(track_t) a multiple of 16: below; Dah: 8 with its 13 parameters) */
 #else
-    uint8_t rsv_sz[13];          /* (sizeof(track_t) a multiple of 16: below; HA HA HE HU: 13) */
+    uint8_t rsv_sz[9];           /* (sizeof(track_t) a multiple of 16: below; Dah: 9) */
 #endif
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */

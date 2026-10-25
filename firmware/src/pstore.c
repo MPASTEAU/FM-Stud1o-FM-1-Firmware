@@ -404,11 +404,11 @@ static void ps_reset(void)                              /* no pattern but the on
     memset(ps_cur, 0, sizeof ps_cur);
 }
 
-/* HA HA HE HU: section r's patterns into buffer r & 1 (main loop: chain_prepare, chain_poll); each track's pattern
- * decoded from the heap (pstore.c), a silent or missing one empty */
-static void chain_fill(uint32_t r)
+/* HA HA HE HU: section r's patterns into buffer b (main loop: chain_prepare, chain_poll; Dah: the buffers in turn, the
+ * song round); each track's pattern decoded from the heap (pstore.c), a silent or missing one empty */
+static void chain_fill(uint32_t r, uint32_t b)
 {
-    uint32_t b = r & 1u, k, n;
+    uint32_t k, n;
     chain_pattern_t *src = &chain.source[b];
     chain.src_ok[b] = 0;
     memset(&src->motion, 0, sizeof src->motion);
@@ -435,7 +435,7 @@ static void chain_poll(void)
     uint32_t r;
     if (!chain.running)
         return;
-    r = chain.row + 1u;
-    if (r < chain.config.count && !(chain.src_ok[r & 1u] && chain.src_row[r & 1u] == r))
-        chain_fill(r);
+    r = chain.row + 1u < chain.config.count ? chain.row + 1u : 0u;   /* (Dah: after the last, the first again) */
+    if (!(chain.src_ok[chain.cur ^ 1u] && chain.src_row[chain.cur ^ 1u] == r))
+        chain_fill(r, chain.cur ^ 1u);
 }

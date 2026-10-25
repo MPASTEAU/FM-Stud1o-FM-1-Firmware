@@ -187,6 +187,10 @@ static void demo_pattern(uint32_t p)
         demo_hold(&trk[4], s0, 16);
         if (b < 3u) trk[4].step[s0 + 15u].flags |= SF_SLIDE;
         dm_bar(&trk[7], b, pad[b] + 1, 3, 70);                              /* the choir, held */
+        if (b >= 1u) {                                                      /* the dissonance sliding into what */
+            trk[1].step[s0 + 15u].flags |= SF_SLIDE;                        /* resolves it: the pad's and the choir's */
+            trk[7].step[s0 + 15u].flags |= SF_SLIDE;                        /* voices glide over (seq.c seq_chord_slide) */
+        }
         t = &trk[0];                                                        /* the toms */
         for (i = 0; i < 16u; i++) {
             uint8_t n = (p == 1u ? TOM1 : TOM2)[i];
@@ -230,14 +234,29 @@ static void demo_pattern(uint32_t p)
         if (i + 1u < 10u && LEAD[p - 1u][i + 1u].step == LEAD[p - 1u][i].step + LEAD[p - 1u][i].len)
             trk[3].step[LEAD[p - 1u][i].step + LEAD[p - 1u][i].len - 1u].flags |= SF_SLIDE;
     }
-    for (i = 1; i <= 3u; i++)                                               /* the filters, one curve for all three */
-        if (p == 1u)
-            demo_auto(&trk[i], P_E4, 0, 56, 26, 104);                       /* (the build: opening together) */
-        else {
-            demo_auto(&trk[i], P_E4, 0, 40, 104, 116);                      /* (the charge: open, a breath at the end) */
-            (void)motion_set_event(&trk[i], 48, P_E4, 70);
-            (void)motion_set_event(&trk[i], 56, P_E4, 104);
+    for (i = 1; i <= 3u; i++)                                               /* the filters, one curve for all three: */
+        if (p == 1u) {                                                      /* pattern 1 opens them all the way, */
+            demo_auto(&trk[i], P_E4, 0, 56, 22, 110);
+            (void)motion_set_event(&trk[i], 63, P_E4, 118);
+        } else {                                                            /* 2 holds them open, closes at its end */
+            (void)motion_set_event(&trk[i], 0, P_E4, 118);
+            (void)motion_set_event(&trk[i], 52, P_E4, 118);
+            (void)motion_set_event(&trk[i], 58, P_E4, 70);
+            (void)motion_set_event(&trk[i], 63, P_E4, 24);
+            motion_set_enabled(&trk[i], 1);
         }
+    if (p == 1u) {                                                          /* the ARP: its GATE opening with the filter, */
+        demo_auto(&trk[2], P_AGATE, 0, 56, 18, 100);
+        (void)motion_set_event(&trk[2], 0, P_AOCT, 2);
+        (void)motion_set_event(&trk[2], 48, P_AOCT, 3);                     /* three octaves for the last bar */
+    } else {                                                                /* 1/16, then 1/32 for the last bar, four */
+        (void)motion_set_event(&trk[2], 0, P_ARATE, 1);                     /* octaves on the climb */
+        (void)motion_set_event(&trk[2], 0, P_AOCT, 2);
+        (void)motion_set_event(&trk[2], 32, P_AOCT, 3);
+        (void)motion_set_event(&trk[2], 48, P_ARATE, 2);
+        (void)motion_set_event(&trk[2], 48, P_AOCT, 4);
+        demo_auto(&trk[2], P_AGATE, 0, 56, 100, 40);
+    }
     if (p == 1u) {
         demo_auto(&trk[2], P_REV, 0, 56, 30, 110);                          /* the arp's reverb swelling */
         demo_auto(&trk[3], P_DLY, 0, 8, 12, 12);                            /* the lead's delay thrown at the ends */
@@ -255,7 +274,7 @@ static void felucca_demo(void)
 {
     uint32_t i, k;
     track_t *t;
-    song.g[G_BPM] = 84;
+    song.g[G_BPM] = 110;                      /* (steps of 1/8: the half-time pulse) */
     song.g[G_RTYPE] = 2;                      /* HALL, big and dark */
     song.g[G_RSIZE] = 122;
     song.g[G_RDAMP] = 96;
@@ -265,7 +284,7 @@ static void felucca_demo(void)
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
         trk[i].p[P_SLEN] = 64;
-        trk[i].p[P_SDIV] = 2;                 /* 1/16 */
+        trk[i].p[P_SDIV] = 1;                 /* 1/8 */
     }
     t = &trk[0];
     demo_sound(t, ENGI_PHYS, 6);              /* PHYS TOMS: the war drums */
@@ -276,7 +295,7 @@ static void felucca_demo(void)
     t = &trk[2];
     demo_sound(t, 0, 8);                      /* ANALOG PLUCK: the arpeggiator, on the chords held */
     t->p[P_AMODE] = 3;                        /* UPDN */
-    t->p[P_ARATE] = 2;                        /* 1/16 */
+    t->p[P_ARATE] = 1;                        /* 1/8 (a note a step) */
     t->p[P_AOCT] = 2;
     t->p[P_AGATE] = 70;
     t->p[P_LEVEL] = 78; t->p[P_REV] = 60; t->p[P_DLY] = 40; t->p[P_CHOR] = 30;
@@ -305,6 +324,24 @@ static void felucca_demo(void)
     t->p[P_E0 + 6] = 100;
     t->p[P_E0 + 7] = 24;
     t->p[P_ATK] = 90; t->p[P_REL] = 100; t->p[P_LEVEL] = 74; t->p[P_REV] = 110;
+    {                                         /* the mix: each one its own band (EQ: LOW CUT, HIGH CUT, a bell) */
+        static const int8_t EQ[8][5] = {
+            {14, 118, 22, 20, 0},             /* toms: no rumble, their body up (120 Hz) */
+            {34, 104, 50, -24, 0},            /* pad: out of the sub's way, its mud (~400 Hz) down */
+            {46, 118, 96, 16, 0},             /* arp: above the pad, its bite (~3 kHz) */
+            {38, 118, 88, 20, 0},             /* lead: its edge (~2 kHz) */
+            {0, 50, 20, 12, 0},               /* sub: nothing over ~350 Hz, its weight (~70 Hz) */
+            {0, 118, 40, 0, 0},               /* kick: as it is */
+            {36, 118, 108, 12, 0},            /* snare, hats: no low end, air (~6 kHz) */
+            {42, 100, 60, -20, 0},            /* choir: between the pad and the arp */
+        };
+        for (i = 0; i < NTRK; i++) {
+            trk[i].p[P_EQLO] = EQ[i][0];
+            trk[i].p[P_EQHI] = EQ[i][1];
+            trk[i].p[P_EQ1F] = EQ[i][2];
+            trk[i].p[P_EQ1G] = EQ[i][3];
+        }
+    }
     for (i = 1; i <= 2u; i++)
         trkx[i].curve = 1;                    /* (their automation ramps) */
     trkx[3].curve = 1;
@@ -328,8 +365,8 @@ static void felucca_demo(void)
         chain_config.row[0].slot[k] = 1u;
         chain_config.row[1].slot[k] = 2u;
     }
-    chain_config.row[0].repeat = 2;
-    chain_config.row[1].repeat = 2;
+    chain_config.row[0].repeat = 1;          /* (Dah: 1 then 2, round: the filter's arc over both) */
+    chain_config.row[1].repeat = 1;
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }

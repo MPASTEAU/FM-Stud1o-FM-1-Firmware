@@ -655,8 +655,15 @@ static void motion_to_v10(motion_store_v10_t *o, const motion_store_t *m, uint32
         uint32_t k = (uint32_t)m->event[i].place >> 6;
         if (k < base || k >= base + NTRK_V10)
             continue;
+        {   /* (Dah: the ids as PROJ_NP_W counts them; the parameters it does not store, none) */
+            uint32_t id = MOTION_ID(&m->event[i]);
+            if (id >= PROJ_NP_W - 8u && id < P_E0)
+                continue;
+            if (id >= P_E0)
+                id -= P_E0 - (PROJ_NP_W - 8u);
+            o->event[n].param = (uint8_t)((m->event[i].param & MOTION_LOCK) | id);
+        }
         o->event[n].place = (uint8_t)((k - base) << 6 | (m->event[i].place & 63u));
-        o->event[n].param = m->event[i].param;
         o->event[n++].value = m->event[i].value;
     }
     o->count = (uint8_t)n;
@@ -683,9 +690,10 @@ static int motion_from_v10(motion_store_t *m, const motion_store_v10_t *o, uint3
 static uint32_t proj_pack_trk(uint8_t *b, const proj_trk_t *t)
 {
     uint32_t pos = 0, i;
-    for (i = 0; i < P_COUNT; i++) {
-        if (t->p[i] < -64 || t->p[i] > 127) return 0;
-        b[pos++] = (uint8_t)(t->p[i] + 64);
+    for (i = 0; i < PROJ_NP_W; i++) {                  /* (Dah: up to P_DKAMT, then the engine's: params_by_count's) */
+        int32_t v = t->p[i < PROJ_NP_W - 8u ? i : P_E0 + i - (PROJ_NP_W - 8u)];
+        if (v < -64 || v > 127) return 0;
+        b[pos++] = (uint8_t)(v + 64);
     }
     b[pos++] = t->engine; b[pos++] = t->preset;
     for (i = 0; i < NSTEP; i++) {
@@ -749,7 +757,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
     if (!chain_valid(&q->chain) || !motion_valid(&q->motion) || P_COUNT > 127u) return 0;
     memset(out, 0, sizeof *out); memcpy(b, &magic, 4); memcpy(b + 4, &size, 4);
     memcpy(b + 8, q->g, sizeof q->g); b[62] = q->sel < NTRK_V10 ? q->sel : 0u; b[63] = q->parts ? NTRK_V10 : 0u;
-    b[64] = q->phys; b[66] = P_COUNT;
+    b[64] = q->phys; b[66] = PROJ_NP_W;
     for (t = 0; t < NTRK_V10; t++) {
         if (!(n = proj_pack_trk(b + pos, &q->t[t]))) return 0;
         pos += n;
@@ -781,7 +789,7 @@ static int proj_pack_x(uint8_t *b, const project_t *q, uint32_t tag)
     uint32_t magic = PROJX_MAGIC, size = PROJX_SIZE, pos = 16u, t, i, n, sum;
     motion_store_v10_t m10;
     memset(b, 0, PROJX_SIZE);
-    memcpy(b, &magic, 4); memcpy(b + 4, &size, 4); memcpy(b + 8, &tag, 4); b[12] = P_COUNT;
+    memcpy(b, &magic, 4); memcpy(b + 4, &size, 4); memcpy(b + 8, &tag, 4); b[12] = PROJ_NP_W;
     for (t = NTRK_V10; t < NTRK; t++) {
         if (!(n = proj_pack_trk(b + pos, &q->t[t]))) return 0;
         pos += n;
@@ -1557,9 +1565,8 @@ static uint32_t chain_prepare(void)
         return 1;
     chain.config = chain_config;                        /* (HA HA HE HU: each track's patterns, pstore.c: the first two
                                                          * sections now, each next one while the one before plays) */
-    chain_fill(0);
-    if (chain.config.count > 1u)
-        chain_fill(1);
+    chain_fill(0, 0);
+    chain_fill(chain.config.count > 1u ? 1u : 0u, 1);   /* (Dah: one section: itself again, round) */
     RING_PUBLISH();
     chain.armed = 1;
     transport_req = 1;

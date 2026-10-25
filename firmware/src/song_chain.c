@@ -21,6 +21,7 @@ typedef struct {
     motion_store_t motion;
 } chain_pattern_t;
 static chain_config_t chain_config;
+static uint8_t song_round = 1;                       /* (Dah) the song goes round (0: it stops at its end, as before) */
 static struct {
     chain_pattern_t source[2];               /* (HA HA HE HU) the section playing's patterns, the next one's: row & 1 */
     uint8_t src_row[2], src_ok[2];
@@ -136,20 +137,25 @@ static const step_t *seq_steps(const track_t *t)
     return s != CHAIN_SILENT ? chain.source[chain.cur].step[k] : chain_silent;
 }
 static void motion_restore(track_t *t);
+static void motion_restore_keep(track_t *t, const motion_store_t *m);
 /* a section starts (chain_start, chain_tick: once a section, not per block; not inlined: off the audio ISR's loop) */
 static __attribute__((noinline)) void chain_apply(void)
 {
     uint32_t i;
     const chain_row_t *r = &chain.config.row[chain.row];
-    uint32_t b = chain.row & 1u, ok = chain.src_ok[b] && chain.src_row[b] == chain.row;
+    uint32_t b = chain.cur ^ 1u, ok = chain.src_ok[b] && chain.src_row[b] == chain.row;   /* (Dah: the other buffer) */
     chain.cur = (uint8_t)b;
     chain.clk = (uint8_t)chain_clock(r);
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         uint32_t s = ok && i < trk_count() ? r->slot[i] : CHAIN_SILENT;   /* (the buffer not ready: silent) */
         chain.lane[i] = (uint8_t)s;
-        seq_release(t);
-        motion_restore(t);
+        if (!(s != CHAIN_SILENT && t->seq_hold && t->seq_n))
+            seq_release(t);                             /* (Dah: a SLIDE over the section's start held: it slides) */
+        if (s != CHAIN_SILENT && ok)
+            motion_restore_keep(t, &chain.source[b].motion);   /* (Dah: its curves go on from where they are) */
+        else
+            motion_restore(t);
         if (s != CHAIN_SILENT) {
             memcpy(&t->p[P_SLEN], chain.source[b].timing[i], sizeof chain.timing[i]);
             t->p[P_SQNT] = chain.source[b].qnt[i];
@@ -177,6 +183,7 @@ static void chain_start(void)
         chain.qnt[i] = (uint8_t)trk[i].p[P_SQNT];
     }
     chain.row = 0;
+    chain.cur = 1;                                  /* (row 0 in buffer 0: chain_prepare's) */
     chain.remaining = CHAIN_REP(chain.config.row[0]);
     chain_cut(0);
     chain.carry = 0;
@@ -222,13 +229,13 @@ static void chain_tick(uint32_t n)
         chain.remaining--;
         return;
     }
-    if (chain.row + 1u >= chain.config.count) {
+    if (chain.row + 1u >= chain.config.count && !song_round) {
         seq_stop();
         return;
     }
     chain.carry = t->seq_pos + n - length;
-    chain.src_ok[chain.row & 1u] = 0;               /* (HA HA HE HU: free for the one after, chain_poll) */
-    chain.row++;
+    chain.src_ok[chain.cur] = 0;                    /* (HA HA HE HU: free for the one after, chain_poll) */
+    chain.row = chain.row + 1u < chain.config.count ? chain.row + 1u : 0u;   /* (Dah: the song round, no stop) */
     chain.remaining = CHAIN_REP(chain.config.row[chain.row]);
     chain_cut(chain.row);
     chain_apply();

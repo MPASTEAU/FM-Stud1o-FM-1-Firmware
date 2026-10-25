@@ -43,7 +43,8 @@ static int motion_param(uint32_t id)
     return id < P_COUNT && (id <= P_REL || (id >= P_ED_FLT && id <= P_LD_AMP) ||
         (id >= P_DIST && id <= P_REV) || id == P_GLIDE || id == P_PAN ||
         id == P_DETUNE || (id >= P_FM1_ATK && id <= P_FM4_LEVEL) || (id >= P_LN0 && id <= P_LN7) ||
-        id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || id >= P_E0);   /* (not the chord keys, nor 1.2's LFO SYNC TRIG
+        id == P_SPRD || (id >= P_ITYPE && id <= P_IMIX) || (id >= P_EQLO && id <= P_EQ2G) || id == P_DKAMT || (id >= P_ARATE && id <= P_AGATE) || id >= P_E0);   /* (Dah: the
+                                        * EQ, DUCK's depth, the ARP's RATE OCT GATE too) */   /* (not the chord keys, nor 1.2's LFO SYNC TRIG
                                         * POL and QUANTIZE, nor 1.5's filter TYPE and ENV SYNC: settings; the DRUM lane
                                         * levels, SPREAD (#148: continuous, as PAN), 1.5's INSERT (TYPE too: a lock
                                         * switches it for a step, fx.c track_insert fades over), E0..E7) */
@@ -122,6 +123,23 @@ static void motion_restore(track_t *t)
     for (id = 0; id < P_COUNT; id++)
         if ((motion_active[k][id / 32u] >> (id % 32u)) & 1u) t->p[id] = motion_base[k][id];
     memset(motion_active[k], 0, sizeof motion_active[k]);
+    memset(motion_locked[k], 0, sizeof motion_locked[k]);
+    motion_unguard(f);
+}
+/* (Dah) a SONG's section starts: as motion_restore, but a parameter the section's own automation (m) moves too keeps the
+ * value it has now (still automated: STOP puts it back), so its curve goes on from there with no jump to the sound's */
+static void motion_restore_keep(track_t *t, const motion_store_t *m)
+{
+    uint32_t k = trk_index(t), id, i, f = motion_guard(), keep[(P_COUNT + 31u) / 32u];
+    memset(keep, 0, sizeof keep);
+    for (i = 0; i < m->count && i < MOTION_MAX; i++)
+        if ((m->event[i].place >> 6) == k && !(m->event[i].param & MOTION_LOCK) && MOTION_ID(&m->event[i]) < P_COUNT)
+            keep[MOTION_ID(&m->event[i]) / 32u] |= 1u << (MOTION_ID(&m->event[i]) % 32u);
+    mramp[k].n = 0;
+    for (id = 0; id < P_COUNT; id++)
+        if (((motion_active[k][id / 32u] & ~keep[id / 32u]) >> (id % 32u)) & 1u) t->p[id] = motion_base[k][id];
+    for (i = 0; i < (P_COUNT + 31u) / 32u; i++)
+        motion_active[k][i] &= keep[i];
     memset(motion_locked[k], 0, sizeof motion_locked[k]);
     motion_unguard(f);
 }

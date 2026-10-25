@@ -17,7 +17,7 @@ static chain_row_t probe_row(uint32_t s, uint32_t r)  /* (HA HA HE HU: tracks 5.
     return w;
 }
 #define PROBE_ROW(s, r) probe_row((s) + 1u, r)       /* (HA HA HE HU: the slots A, B: patterns 1, 2 (pat_keep)) */
-#define PROBE_START() pat_park()
+#define PROBE_START() (pat_park(), song_round = 0)   /* (Dah: to its end, as before)*/
 #define PROBE_SAVE(s) pat_keep((s) + 1u)
 #define PROBE_POLL() chain_poll()                     /* (the main loop readies the next section) */
 #else
@@ -73,5 +73,8 @@ static uint32_t song_probe(uint32_t *blocks)
         }
     }
     *blocks = n;
+#ifdef CHAIN_SILENT
+    song_round = 1;
+#endif
     return h;
 }

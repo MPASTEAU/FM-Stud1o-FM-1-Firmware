@@ -838,8 +838,11 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * perf_mute_sd) and passes DIST by (the spread of a distorted chord is its voices' clean difference). The sends
  * take b, mono, as before. SPRD 0, MONO or LEGATO: mix_part's own loop, bit for bit as before. The cost: a block's
  * clear and sum of spread_buf, the side and a wider mix loop, per part; per voice none (it picks its buffer) */
-static const uint8_t FX_ORDER[6] = {0 | 1 << 2 | 2 << 4, 0 | 2 << 2 | 1 << 4, 1 | 0 << 2 | 2 << 4,
-                                    1 | 2 << 2 | 0 << 4, 2 | 0 << 2 | 1 << 4, 2 | 1 << 2 | 0 << 4};   /* (D I S orders: fx_chain, mix_spread) */
+static const uint8_t FX_ORDER[24] = {0xE4, 0xD8, 0xE1, 0xC9, 0xD2, 0xC6, 0x93, 0x63, 0x87, 0x27, 0x4B, 0x1B, 0x9C, 0x6C,
+                                     0xB4, 0x78, 0x8D, 0x2D, 0xB1, 0x39, 0x4E, 0x1E, 0x72, 0x36};   /* (Dah: D I S E,
+                                         * params.c N_FXORD's order; fx_chain, mix_spread) */
+static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t->p[P_FXORD] < 24u ? (uint32_t)t->p[P_FXORD] : 0u]; }
+#include "fx_eq.c"                                      /* (Dah) the EQ, the chain's fourth unit */
 static int32_t duck_att[NPART];
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n);
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
@@ -857,16 +860,19 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     for (i = 0; i < n; i++)
         d[i] = (d[i] << 1) - b[i];                      /* left - right */
     {                                                   /* (Dah: in ORDER, as fx_chain; the SLICER on both) */
-        uint32_t o = FX_ORDER[(uint32_t)t->p[P_FXORD] < 6u ? (uint32_t)t->p[P_FXORD] : 0u], k;
-        for (k = 0; k < 3u; k++, o >>= 2)
+        uint32_t o = fx_order(t), k;
+        for (k = 0; k < 4u; k++, o >>= 2)
             if ((o & 3u) == 0u)
                 track_dist(t, b, n);
             else if ((o & 3u) == 1u) {
                 if (t->p[P_ITYPE] | t->ins_run)
                     track_insert(t, b, n);              /* (the mono sum, as DIST) */
-            } else
+            } else if ((o & 3u) == 2u)
                 slicer_track_sd(t, b, d, n);
+            else if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
+                track_eq(t, b, n);                      /* (the mono sum: the side passes it by) */
     }
+    eq_tap(t, b, n);
     if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
         duck_part_sd(t, b, d, n);                       /* (Dah: after the chain, as without SPREAD) */
     if ((pf.mute >> (t - trk)) & 1u)
@@ -910,8 +916,8 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
 
 static void fx_chain(track_t *t, int32_t *b, uint32_t n)
 {
-    uint32_t o = FX_ORDER[(uint32_t)t->p[P_FXORD] < 6u ? (uint32_t)t->p[P_FXORD] : 0u], k;
-    for (k = 0; k < 3u; k++, o >>= 2)
+    uint32_t o = fx_order(t), k;
+    for (k = 0; k < 4u; k++, o >>= 2)
         switch (o & 3u) {
         case 0:
             track_dist(t, b, n);
@@ -920,10 +926,15 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n)
             if (t->p[P_ITYPE] | t->ins_run)
                 track_insert(t, b, n);                  /* the INSERT (1.5): off, nothing */
             break;
-        default:
+        case 2:
             slicer_track(t, b, n);                      /* slicer.c: before the level, pan and sends */
             break;
+        default:
+            if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
+                track_eq(t, b, n);                      /* (Dah) the EQ: flat, nothing */
+            break;
         }
+    eq_tap(t, b, n);
 }
 
 /* HA HA HE HU: DUCK, the sidechain. A track whose DUCK names a source track (T1..T4) dips when that track starts a note

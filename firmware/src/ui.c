@@ -540,7 +540,7 @@ static int lock_page_ok(uint32_t i)
 }
 static uint32_t lock_id(uint32_t k)
 {
-    uint32_t id = ui.plk_src && lock_page_ok(ui.plk_src - 1u) ? PAGES[ui.plk_src - 1u].id[k & 3u]
+    uint32_t id = ui.plk_src && lock_page_ok(ui.plk_src - 1u) ? page_id(&PAGES[ui.plk_src - 1u], k)
                                                                : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
     return id < P_COUNT && motion_param(id) ? id : 0xFFu;
 }
@@ -638,15 +638,21 @@ static uint32_t grid_write(void) { return grid_on() && (((song.rec >> song.sel) 
 /* (Dah) STEP's automation lane (the footer's first row on the piano roll, ui_draw.c): the parameter it shows and SELECT
  * edits at the cursor: the last one turned on the track's pages or locked from STEP, else its first automated one;
  * 0xFF none */
+static int fx_knob_of(const track_t *t, uint32_t id)    /* (Dah) one of FX's four knobs drives id */
+{
+    uint32_t c;
+    for (c = 0; c < 4u; c++)
+        if (fx_knob_id(t, c) == id)
+            return 1;
+    return 0;
+}
 static uint32_t lane_id(const track_t *t)
 {
     uint32_t i, k = trk_index(t);
-    if (ui.auto_id && ui.auto_trk == k && ui.auto_id - 1u >= P_DIST && ui.auto_id - 1u <= P_DIST + 3u)   /* (Dah: the
-                                                         * FX sends' only: FX's four lanes) */
+    if (ui.auto_id && ui.auto_trk == k && fx_knob_of(t, ui.auto_id - 1u))   /* (Dah: FX's knobs' only: its lanes) */
         return ui.auto_id - 1u;
     for (i = 0; i < motion.count; i++)
-        if ((motion.event[i].place >> 6) == k && MOTION_ID(&motion.event[i]) >= P_DIST &&
-            MOTION_ID(&motion.event[i]) <= P_DIST + 3u)
+        if ((motion.event[i].place >> 6) == k && fx_knob_of(t, MOTION_ID(&motion.event[i])))
             return MOTION_ID(&motion.event[i]);
     return 0xFFu;
 }
@@ -1970,7 +1976,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return 15u;                              /* (Dah) FILE, PATTERN: OPEN COPY NEW DELETE (the list: PRESETS, SELECT) */
     if (pg->scope == SC_GLOBAL)
         for (c = 0; c < 4u; c++)
-            if (go_id(pg->id[c]))
+            if (go_id(page_id(pg, c)))
                 m |= 1u << c;
     return m;
 }
@@ -1986,7 +1992,7 @@ static uint32_t act_col(void)
 static const char *act_name(uint32_t c)          /* column c's action (the footer hint) */
 {
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
-    uint32_t id = cur_page()->id[c & 3u];
+    uint32_t id = page_id(cur_page(), c);
     if (cur_page()->graph == GR_EVENTS) return ev_act_name();
     if (cur_page()->graph == GR_TOOLS) {
         static const char *const actions[] = {"CLEAR", "INIT", "DEL TRK", "CLEAR"};   /* (HA HA HE HU: KNOB 3 the last
@@ -2037,7 +2043,7 @@ static int act_ready(void)
         return c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PATTERN ERASE: a used slot, stopped */
         return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
-    id = cur_page()->id[c & 3u];
+    id = page_id(cur_page(), c);
     if (id == G_LOAD)
         return project_used((uint32_t)song.g[G_SLOT] - 1u);
     if (id == G_SAVE)

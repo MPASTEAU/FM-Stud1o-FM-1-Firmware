@@ -467,7 +467,19 @@ static void graph_chord(const track_t *t, uint16_t c)
 /* (Dah) FX: its four sends as four automation lanes, as HOME's rows: each one's name, then its value over the page's
  * sixteen steps as a curve (held, or ramped: CURVE), its points (locks, events) marked; none: its value flat across.
  * The step playing marked */
-static void graph_fx(const track_t *t, uint16_t c)
+static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, uint16_t c);   /* ui_graph_fx.c */
+static void graph_fx_lanes(const track_t *t, uint16_t c);
+static void graph_fx(const track_t *t, uint16_t c)       /* (Dah) the chain on top, then the lanes */
+{
+    int32_t sh = graph_ht / 6, ht = graph_ht;
+    fx_chain_strip(t, 3, sh - 5, -1, c);
+    cv_oy += sh;
+    graph_ht = ht - sh;
+    graph_fx_lanes(t, c);
+    cv_oy -= sh;
+    graph_ht = ht;
+}
+static void graph_fx_lanes(const track_t *t, uint16_t c)
 {
     uint32_t r, i, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), p0, ph;
     int32_t nh = graph_ht / 5, rh = (graph_ht - nh) / 4, x0 = PANEL_X0 + 34, cw = (PANEL_W - 34) / 16;
@@ -526,7 +538,7 @@ static void graph_fx(const track_t *t, uint16_t c)
                                                          * through the lanes */
     }
     for (r = 0; r < 4u; r++) {
-        uint32_t id = P_DIST + r;
+        uint32_t id = fx_knob_id(t, r);                 /* (what its knob drives) */
         const param_desc_t *d = track_desc(t, id);
         int32_t top = nh + (int32_t)r * rh + 3, bot = top + rh - 6, px = -1, py = 0;
         cv_text_on(PANEL_X0, (top + bot) / 2 - AF_S_CAP_Y - AF_S_CAP_H / 2, &AF_S, d->label, T_MID, T_SURF);
@@ -899,7 +911,7 @@ static uint32_t fm6_alg_of(const track_t *t)
 static void graph_fm6(const track_t *t, uint16_t c, uint32_t sel)
 {
     uint32_t alg = fm6_alg_of(t), k, j, car = fm6_car_ops(alg), top = 0, hi = 0, fbop = fm6_fb_op(alg), hotset = 0;
-    uint32_t hot = ui.hot_t ? (uint32_t)cur_page()->id[ui.hot_col & 3u] : 0u;
+    uint32_t hot = ui.hot_t ? page_id(cur_page(), ui.hot_col) : 0u;
     const uint8_t *pt = fm6_patch[(t - trk) % NTRK];
     int32_t x[6], y[6], bus, cl = 240, cr = 0, fb = clamp(pt[FP_FB] + t->p[P_E1], 0, 7);
     uint8_t m[6], fan[6] = {0, 0, 0, 0, 0, 0};
@@ -1023,7 +1035,7 @@ static const uint16_t FM_MOD[8] = {0x0842, 0x00C2, 0x004A, 0x0806, 0x0802, 0x088
 static void graph_fm(const track_t *t, uint16_t c)
 {
     uint32_t alg = (uint32_t)t->p[P_E0] & 7u, k, j, mods = FM_MOD[alg], car = 0, hop = 9;
-    uint32_t hot = ui.hot_t ? (uint32_t)cur_page()->id[ui.hot_col & 3u] : 0u;
+    uint32_t hot = ui.hot_t ? page_id(cur_page(), ui.hot_col) : 0u;
     int32_t x[4], y[4], lo = 7, hi = 0, top = 0, bus, cl = 240, cr = 0, idx = t->p[P_E4];
     uint16_t ec = hot == P_E4 ? T_ACCENT : !idx ? T_DIM : idx < 64 ? T_MID : c;
     if (hot >= P_E1 && hot <= P_E3) hop = hot - P_E1 + 1u;
@@ -1367,7 +1379,7 @@ static uint32_t graph_signature(void)
         h ^= (song.playing ? t->seq_idx + 1u : 0u) * 2654435761u + motion.count * 7919u + steps_sig(t) * 31u;
         for (r = 0; r < 4u; r++)
             for (i = 0; i < 16u; i++)
-                h = (h ^ (uint32_t)(lane_value(t, (ui.cursor / 16u) * 16u + i, P_DIST + r, &pt) + 128)) * 16777619u;
+                h = (h ^ (uint32_t)(lane_value(t, (ui.cursor / 16u) * 16u + i, fx_knob_id(t, r), &pt) + 128)) * 16777619u;
     }
     if (pg->graph == GR_TOOLS)                       /* (Dah) the picked action's line */
         h ^= (ui.act + 1u) * 2654435761u + ui.tl_clean * 7919u;
@@ -1959,6 +1971,8 @@ static void track_strip(uint32_t c, uint32_t sel, uint32_t st, uint32_t mute, ui
 static uint16_t meter_col(int32_t f, int32_t n)
 {
     int32_t p = n > 0 ? f * 100 / n : 0;
+    if (ux.mono || ux.trk[0] == ux.trk[1])              /* (GREY, MONO: no hues; lighter to the top) */
+        return ux_mix(T_MID, T_TEXT, p);
     if (p < 60)
         return MTR_GREEN;
     if (p < 85)
@@ -2786,6 +2800,8 @@ static void draw_graph_in(void)
         cv_oy = 0;
         graph_scope(c);
     } else {
+        eq_watch = pg->fam == FAM_FX && pg->scope == SC_TRACK ? (uint8_t)(trk_index(t) % NTRK + 1u) : 0u;   /* (Dah: the
+                                                         * FX pages' sound live, fx_eq.c) */
         switch (pg->graph) {
         case GR_ADSR:
             graph_adsr(t, c);
@@ -2898,7 +2914,7 @@ static void draw_graph_in(void)
             else if ((pg->scope == SC_ENGINE || pg->id[0] == P_FM1_LEVEL) && t->eng_req % NENGINES == ENGI_DIGITAL)
                 graph_fm(t, c);                      /* (OP LEVEL too: the levels on the chart) */
 #endif
-            else if (graph_more(pg, t, c)) { /* (Dah: the page's own: ui_graph_more.c) */ }
+            else if (graph_fxfam(pg, t, c) || graph_more(pg, t, c)) { /* (Dah: the page's own: ui_graph_more.c) */ }
             else { cv_oy = 0; graph_scope(c); }
             break;
         }

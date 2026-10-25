@@ -368,8 +368,8 @@ static void head_pattern(int slot, const char *sl)
         const aafont_t *nf = l[1] ? &AF_S : &AF_M;
         int32_t w = text_w(&AF_S, "P") + 1 + text_w(nf, l), x = HEAD_PAT_X + (HEAD_PAT_W - w) / 2;
         int32_t sy = 3 + CAP_IN(M, 18) + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;   /* (S on M's baseline) */
-        cv_text(x, sy, &AF_S, "P", on ? T_INK : T_DIM);
-        cv_text(x + text_w(&AF_S, "P") + 1, l[1] ? sy : 3 + CAP_IN(M, 18), nf, l, on ? T_INK : T_DIM);
+        cv_text_on(x, sy, &AF_S, "P", on ? T_INK : T_MID, on ? tc : T_BG);
+        cv_text_on(x + text_w(&AF_S, "P") + 1, l[1] ? sy : 3 + CAP_IN(M, 18), nf, l, on ? T_INK : T_MID, on ? tc : T_BG);
     }
 }
 /* the octave, or the song row while a song plays, its right end at HEAD_GRP_R (the rail: left of the pattern's badge,
@@ -600,6 +600,16 @@ static void span_dln(const card_span_t *sp, int32_t v, char *val)       /* DRUM'
     int32_t r;
     uint32_t ic;
     (void)dln_card_at((uint32_t)sp->ctx, v, &l, val, &u, &r, &ic);
+}
+static void span_fxu(const card_span_t *sp, int32_t v, char *val)       /* (Dah) CHAIN's UNIT: the units' names */
+{
+    (void)sp;
+    str_cpy(val, FXU_N[v & 3], 16);
+}
+static void span_fxmv(const card_span_t *sp, int32_t v, char *val)      /* (Dah) CHAIN's MOVE: the place, of 4 */
+{
+    (void)sp;
+    val[0] = (char)('1' + (v & 3)); val[1] = '/'; val[2] = '4'; val[3] = 0;
 }
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
@@ -944,7 +954,7 @@ static void draw_lane(const track_t *t)
         uint32_t r;
         int32_t ramp = trkx[trk_index(t) % NTRK].curve != 0u;
         for (r = 0; r < 4u; r++) {
-            uint32_t pid = P_DIST + r;
+            uint32_t pid = fx_knob_id(t, r);
             int32_t px = -1, py = 0, y0 = 1 + (int32_t)r * 4;
             uint16_t col = pid == id ? T_THEME : T_MID;
             d = track_desc(t, pid);
@@ -1000,7 +1010,7 @@ static void draw_foot_in(void)
             int pt;
             sig += id * 50331653u;
             for (i = 0; id != 0xFFu && i < 64u; i++)     /* (FX's four lanes) */
-                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i % 16u, P_DIST + i / 16u, &pt) + 128) * 2u +
+                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i % 16u, fx_knob_id(t, i / 16u), &pt) + 128) * 2u +
                       (uint32_t)pt;
         }
     }
@@ -1521,6 +1531,18 @@ static void draw_columns_in(void)
         if (cur_page()->graph == GR_FILE) {             /* (Dah) FILE: OPEN COPY NEW DELETE (the memory: the list's) */
             int ok = c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
             draw_act_column(c, act_name(c), ok ? T_THEME : T_DIM, ICON_AUTO);
+            continue;
+        }
+        if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: UNIT, MOVE */
+            char pl[4] = {(char)('1' + (ch_cur & 3u)), '/', '4', 0};
+            if (c == 0u) {
+                card_span_by(span_fxu, 0, 0, 3, 0);
+                draw_column(0, "UNIT", FXU_N[fx_unit_at(TSEL, ch_cur & 3u)], "", VAL(0u), -1, ICON_AUTO);
+            } else if (c == 1u) {
+                card_span_by(span_fxmv, 0, 0, 3, 1);
+                draw_column(1, "MOVE", pl, "", VAL(1u), (int32_t)(ch_cur & 3u) * 1000 / 3, ICON_AUTO);
+            } else
+                draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
             continue;
         }
         if (c == 3u && cur_page()->id[0] == P_DKSRC && cur_page()->scope == SC_TRACK) {   /* (Dah) DUCK's GROUP */

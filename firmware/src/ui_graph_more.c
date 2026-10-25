@@ -324,6 +324,7 @@ static void graph_duck(const track_t *t, uint16_t c)
             cv_rect(PANEL_X0 + x, bot + 2, 2, 4, T_TEXT);                    /* a kick */
     }
 }
+#include "ui_graph_fx.c"                           /* (Dah) the FX family's: CHAIN DIST EQ SENDS */
 /* the page's own panel when it has one here (1), else 0 (the scope) */
 static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
 {

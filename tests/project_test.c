@@ -175,8 +175,8 @@ int main(void)
     bad += check("layout: SLICER after DETUNE, then the matrix just before P_E0",
                  P_SLCR == P_DETUNE + 1 && P_SLDEPTH + 1 == P_M1SRC && P_M4AMT + 1 == P_FM1_ATK && P_FM4_LEVEL + 1 == P_CHRD && P_VOIC + 1 == P_LN0 &&
                  P_LN7 + 1 == P_LSYNC && P_LSYNC + 3 == P_SQNT && P_SQNT + 1 == P_SPRD && P_SPRD + 1 == P_ITYPE &&
-                 P_ITYPE + 4 == P_IMIX && P_IMIX + 1 == P_FTYPE && P_FTYPE + 1 == P_ESYNC && P_ESYNC + 1 == P_FXORD && P_DKAMT + 1 == P_E0 && P_E0 == 106 &&
-                 P_COUNT == PROJ_NP_V3 + 57u && PROJ_NP_V3 == PROJ_NP_V2 + 4u);
+                 P_ITYPE + 4 == P_IMIX && P_IMIX + 1 == P_FTYPE && P_FTYPE + 1 == P_ESYNC && P_ESYNC + 1 == P_FXORD && P_DKAMT + 1 == P_EQLO && P_FXK4 + 1 == P_E0 && P_E0 == 116 &&
+                 P_COUNT == PROJ_NP_V3 + 67u && PROJ_NP_V3 == PROJ_NP_V2 + 4u);
     bad += check("FUN10 fits one flash object, the retained cache in NOINIT", sizeof(project_store_t) <= 4096u - 256u &&
                  sizeof(project_store_t) == 3840u && 0xC8u + 4u * sizeof(project_store_t) <= 0x3D50u);
 
@@ -419,7 +419,7 @@ int main(void)
         project_store_t st, st2;
         uint32_t i, zero = 1;
         bad += check("FUN10 name at the end of the reserved tail, the FM6 patches before it, after the data (4 spare: HA HA HE HU took 12)",
-                     PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + NTRK_V10 * (P_COUNT + 2u + NSTEP * 9u) +
+                     PROJ_NAME_OFF == 3824u && PROJ_FM6_OFF == 3312u && 68u + NTRK_V10 * (PROJ_NP_W + 2u + NSTEP * 9u) +
                      sizeof(chain_v10_t) + sizeof(motion_store_v10_t) + 4u == PROJ_FM6_OFF);   /* (HA HA HE HU: 12 taken) */
         memset(&a, 0, sizeof a);
         a.magic = PROJ_MAGIC; a.size = sizeof a; a.parts = NPART; a.phys = PROJ_PHYS;
@@ -494,7 +494,7 @@ int main(void)
                 f.sum = proj_sum(&f);
                 ok = proj_pack(&st, &f) && proj_import(&g, &st, sizeof st) && !memcmp(&f.motion, &g.motion, sizeof f.motion);
                 bad += check("FUN10 round trip: locks on a lane level (P_LN2) and an engine value (P_E5) kept", ok &&
-                             st.raw[68u + NTRK_V10 * (P_COUNT + 2u + NSTEP * 9u) + sizeof(chain_v10_t) + 4u + 6u + 1u] ==
+                             st.raw[68u + NTRK_V10 * (PROJ_NP_W + 2u + NSTEP * 9u) + sizeof(chain_v10_t) + 4u + 6u + 1u] ==
                              (P_LN2 | MOTION_LOCK) && g.motion.event[3].param == (P_E5 | MOTION_LOCK));
             }
             e.motion.count = 3;   /* a FUN8 of a 1.1 development build (91 parameters) could hold a lock: its E5 then */

@@ -184,7 +184,7 @@ static int cond_song(void)
 {
     int bad = 0, ok;
     uint8_t nt[256];
-    uint32_t n = 0, i, c1 = 0, c4 = 0;
+    uint32_t n = 0, i, c1 = 0, c4 = 0, seen = 0;
     track_t *t = melody(1u | 1u << 4 | 1u << 8);
     set_cond(&t->step[4], 3);                          /* 1:3 */
     set_cond(&t->step[8], 9);                          /* 4:4 */
@@ -196,9 +196,10 @@ static int cond_song(void)
     chain_config.row[0] = (chain_row_t){{2, 2, 2, 2}, 4};
     chain_config.row[1] = (chain_row_t){{2, 2, 2, 2}, 2};
     ok = chain_prepare() == 0;
-    while (n < 256u && i++ < 40000u && (chain.running || chain.armed)) {
+    while (n < 256u && i++ < 40000u && (chain.running || chain.armed) && !(seen && !chain.row)) {   /* (Dah: once round) */
         uint32_t v0 = vage, k;
         events_block(CTL);
+        seen |= chain.row == 1u;
         for (; v0 < vage; v0++)
             for (k = 0; k < NVOICE; k++)
                 if (trk[0].v[k].age == v0 + 1u && n < 256u)
@@ -208,7 +209,8 @@ static int cond_song(void)
         c1 += nt[i] == 64u;
         c4 += nt[i] == 68u;
     }
-    ok &= !chain.running && c1 == 3u && c4 == 1u;     /* 1:3: section 1 loops 1 4, section 2 loop 1; 4:4: section 1's 4th */
+    seq_stop();
+    ok &= c1 == 3u && c4 == 1u;                        /* 1:3: section 1 loops 1 4, section 2 loop 1; 4:4: section 1's 4th */
     bad += check("conditions in a SONG: each section from its loop 1 (1:3 x3 over 4 + 2 repeats, 4:4 once)", ok);
     chain_defaults(&chain_config);
     memset(proj_slot, 0, sizeof proj_slot);
@@ -313,7 +315,7 @@ static int old_accepts(const project_store_t *p)   /* 1.5 / 1.5.1's proj_unpack 
     uint32_t t, i, base;
     for (t = 0; t < NTRK_V10; t++)
         for (i = 0; i < NSTEP; i++) {
-            base = 68u + t * (P_COUNT + 2u + NSTEP * 9u) + P_COUNT + 2u + i * 9u;
+            base = 68u + t * (PROJ_NP_W + 2u + NSTEP * 9u) + PROJ_NP_W + 2u + i * 9u;
             if ((p->raw[base + 8u] & 127u) > 101u)
                 return 0;
         }
@@ -340,7 +342,7 @@ static int cond_store(void)
     bad += check("FUN10: the conditions round trip (the chance byte 102..112), the size unchanged", ok && sizeof pk == 3840u);
     bad += check("  1.5 / 1.5.1's rule refuses a project holding one (the slot reads empty there), one without loads",
                  old0 && !old_accepts(&pk));
-    pk.raw[68u + P_COUNT + 2u + 8u] = 113;
+    pk.raw[68u + PROJ_NP_W + 2u + 8u] = 113;
     {
         uint32_t s = proj_hash(pk.raw, PROJ_STORE_SIZE - 4u);
         memcpy(pk.raw + PROJ_STORE_SIZE - 4u, &s, 4);

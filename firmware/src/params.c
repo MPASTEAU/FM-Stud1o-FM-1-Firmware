@@ -64,7 +64,19 @@ static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"}
 /* the INSERT's types (1.5, fx.c IT_*; append-only: stored). Its three values A B C mean what the type says (ins_desc) */
 static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"};
 /* HA HA HE HU: ORDER, DIST (D) INSERT (I) SLICER (S) in a row (fx.c FX_ORDER); DUCK's source (fx.c duck_part) */
-static const char *const N_FXORD[] = {"D I S", "D S I", "I D S", "I S D", "S D I", "S I D"};
+/* (Dah) ORDER: DIST (D), INSERT (I), SLICER (S), EQ (E): the six of D I S first (E last: as they were), then the rest
+ * (fx.c FX_ORDER, the same order) */
+static const char *const N_FXORD[] = {"DISE", "DSIE", "IDSE", "ISDE", "SDIE", "SIDE", "EDIS", "EDSI", "EIDS", "EISD",
+                                      "ESDI", "ESID", "DEIS", "DESI", "DIES", "DSEI", "IEDS", "IESD", "IDES", "ISED",
+                                      "SEDI", "SEID", "SDEI", "SIED"};
+/* (Dah) what FX's four knobs can drive (P_FXK1..4): the track's effects' values, as the lists name them */
+static const uint8_t FXK_ID[] = {P_DIST, P_CHOR, P_DLY, P_REV, P_IA, P_IB, P_IC, P_IMIX, P_SLDEPTH, P_SLRATE,
+                                 P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G, P_DKAMT, P_DKREL, P_LEVEL, P_PAN,
+                                 P_SPRD};
+static const char *const N_FXK[] = {"DIST", "CHO", "DLY", "REV", "INS A", "INS B", "INS C", "INS MX", "SL DPT",
+                                    "SL RATE", "LO CUT", "HI CUT", "FREQ1", "GAIN1", "FREQ2", "GAIN2", "DUCK", "DK REL",
+                                    "LEVEL", "PAN", "WIDTH"};
+_Static_assert(sizeof FXK_ID == sizeof N_FXK / sizeof N_FXK[0], "FX's knobs: a name each");
 static const char *const N_DKSRC[] = {"OFF", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"};   /* (Dah: eight) */
 /* CRUSH: BITS 1..16 and RATE (the held sample's rate, fx.c INS_HOLD) over the range in 16 even parts (0-terminated) */
 static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15",
@@ -178,6 +190,18 @@ static const param_desc_t TP[P_COUNT] = {
     [P_FXORD] = PE("ORDER", N_FXORD, 0),          /* D I S: as before */
     [P_DKSRC] = PE("DUCK", N_DKSRC, 0),           /* OFF: as before */
     [P_DKAMT] = PD("DEPTH", F_PCT, 0, 127, 100),
+    /* Dah: the EQ (fx_eq.c): LOW CUT OFF (0) / 32 Hz .., HIGH CUT .. 10.2 kHz / OFF (118), the bells' FREQ and GAIN
+     * (-15 .. +15 dB, 0: off); param_format names them */
+    [P_EQLO] = PD("LOCUT", F_CUTOFF, 0, 118, 0),
+    [P_EQHI] = PD("HICUT", F_CUTOFF, 0, 118, 118),
+    [P_EQ1F] = PD("FREQ1", F_CUTOFF, 0, 118, 40),
+    [P_EQ1G] = PD("GAIN1", F_BIPCT, -64, 63, 0),
+    [P_EQ2F] = PD("FREQ2", F_CUTOFF, 0, 118, 90),
+    [P_EQ2G] = PD("GAIN2", F_BIPCT, -64, 63, 0),
+    [P_FXK1] = PE("KNOB1", N_FXK, 0),             /* Dah: FX's knobs (FXK_ID): DST CHO DLY REV, as before */
+    [P_FXK2] = PE("KNOB2", N_FXK, 1),
+    [P_FXK3] = PE("KNOB3", N_FXK, 2),
+    [P_FXK4] = PE("KNOB4", N_FXK, 3),
 };
 
 /* the INSERT's A B C as its TYPE means them (TP's ranges and defaults): the drives DRIVE TONE LEVEL, CRUSH BITS RATE
@@ -337,6 +361,18 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 {
     *unit = "";
     fmt_named = d->fmt == F_ENUM;
+    if ((d == &TP[P_EQLO] && v <= 0) || (d == &TP[P_EQHI] && v >= 118)) {   /* (Dah) the EQ's cuts at rest */
+        str_cpy(val, "OFF", 6);
+        return;
+    }
+    if (d == &TP[P_EQ1G] || d == &TP[P_EQ2G]) {         /* (Dah) the bells' GAIN: dB, a tenth */
+        int32_t t = v * 150 / 64;
+        fmt_fix(val + (t > 0), t, 1);
+        if (t > 0)
+            val[0] = '+';
+        *unit = "dB";
+        return;
+    }
     switch (d->fmt) {
     case F_PCT:                                     /* a 0..100 range (SWG) is its value, others a share of 127 */
         fmt_int(val, d->max == 100 ? v : (v * 100 + 63) / 127);
@@ -466,11 +502,19 @@ static const page_t PAGES[] = {
     {"LFO DRAW", FAM_LFO, SC_TRACK, GR_LDRAW, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (HA HA HE HU) POINT VALUE SHAPE SMOOTH */
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
     {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
+    /* (Dah) FX: the chain at the top, its four knobs what P_FXK1..4 name (fx_knob_id; a knob turned, then SELECT: what
+     * it drives), their automation; CHAIN: the units' order (KNOB 1 the unit, KNOB 2 moves it; OCT+ its page); then a
+     * page each, its own picture live (ui_graph_more.c) */
     {"FX", FAM_FX, SC_TRACK, GR_FX, {P_DIST, P_CHOR, P_DLY, P_REV}},
-    {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
+    {"CHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_FXORD, 0xFF, 0xFF, 0xFF}},
+    {"DIST", FAM_FX, SC_TRACK, GR_NONE, {P_DIST, 0xFF, 0xFF, 0xFF}},
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
-    {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, P_FXORD, 0xFF, 0xFF}},   /* .. its dry / wet; ORDER (HA HA HE HU) */
+    {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
+    {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
+    {"EQ", FAM_FX, SC_TRACK, GR_NONE, {P_EQLO, P_EQHI, P_EQ1F, P_EQ1G}},   /* (Dah) the EQ (fx_eq.c): its spectrum */
+    {"EQ 2", FAM_FX, SC_TRACK, GR_NONE, {P_EQ2F, P_EQ2G, 0xFF, 0xFF}},
     {"DUCK", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* the sidechain (HA HA HE HU, fx.c) */
+    {"SENDS", FAM_FX, SC_TRACK, GR_NONE, {P_CHOR, P_DLY, P_REV, 0xFF}},   /* (Dah) to GLO's CHORUS, DLY, REVERB */
     {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's first (1.2; up to 1.1.5 SEQ's); HA HA HE HU: then
                                                                                * the global FX, DLY REVERB CHORUS (FX: the track's) */
     {"DLY", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
@@ -527,6 +571,16 @@ static const page_t PAGES[] = {
     {"CLOCK", FAM_TRK, SC_GLOBAL, GR_NONE, {G_BPM, G_SWING, G_CLOCK, 0xFF}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
+/* (Dah) the parameter a page's knob c edits: FX's what P_FXK1..4 name, the others their own */
+static uint32_t fx_knob_id(const track_t *t, uint32_t c)
+{
+    uint32_t i = (uint32_t)t->p[P_FXK1 + (c & 3u)];
+    return FXK_ID[i < sizeof FXK_ID ? i : 0u];
+}
+static uint32_t page_id(const page_t *pg, uint32_t c)
+{
+    return pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : pg->id[c & 3u];
+}
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
@@ -546,6 +600,8 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     }
     if (pg->graph == GR_MOD)                          /* SRC DST AMT of the slot shown */
         id += 3u * mod_ui_slot;
+    if (pg->graph == GR_FX)                           /* (Dah) FX: what its knobs drive */
+        id = fx_knob_id(TSEL, slot);
     *valp = &TSEL->p[id];
     return track_desc(TSEL, id);
 }

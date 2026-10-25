@@ -195,13 +195,14 @@ static uint32_t chord_match(track_t *t, uint32_t key, uint8_t *out)
     uint32_t j, i, held[32], nh = 0, pcs, lo = key, scale = scale_mask(t), best_r = 0, best_m = 0, n = 1, k = trk_index(t);
     int32_t best = 0x7FFFFFFF, sum = (int32_t)key;
     out[0] = (uint8_t)key;
-    for (j = 0; j < 27u; j++)                           /* the notes the other keys of the track sound */
-        if (kb_chn[j] && kb_trk[j] == k)
-            for (i = 0; i < kb_chn[j] && nh < 32u; i++) {
-                held[nh++] = kb_chord[j][i];
-                sum += kb_chord[j][i];
-                lo = kb_chord[j][i] < lo ? kb_chord[j][i] : lo;
-            }
+    for (j = 0; j < 27u; j++)                           /* the other keys of the track held: their own notes (not the
+                                                         * tones an earlier match added: the chord made again from the
+                                                         * keys, seq.c match_revoice lets go of those it drops) */
+        if (kb_chn[j] && kb_trk[j] == k && nh < 32u) {
+            held[nh++] = kb_note[j];
+            sum += kb_note[j];
+            lo = kb_note[j] < lo ? kb_note[j] : lo;
+        }
     if (!nh || chord_kit(t) || trk_vmode(t) != V_POLY)
         return 1;                                       /* (one key: its note alone) */
     pcs = 1u << (key % 12u);

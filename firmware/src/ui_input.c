@@ -1140,6 +1140,15 @@ static void edit_param(uint32_t slot, int32_t steps)
         mod_ui_slot = (uint8_t)clamp((int32_t)mod_ui_slot + (steps > 0 ? 1 : -1), 0, 3);
         return;
     }
+    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the unit, KNOB 2 moves it */
+        int32_t j = clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, 3);
+        if (slot == 1u && j != (int32_t)ch_cur)
+            TSEL->p[P_FXORD] = (int16_t)fx_order_swap(TSEL, ch_cur, (uint32_t)j);
+        if (slot <= 1u)
+            ch_cur = (uint8_t)j;
+        ui.force = 1;
+        return;
+    }
     if (pg->id[0] == P_DKSRC && pg->scope == SC_TRACK && slot == 3u) {   /* (Dah) DUCK's GROUP: in it, the group's settings */
         uint32_t k = song.sel % NTRK, i;
         if (steps > 0 && !(trkx[k].group & 1u)) {
@@ -1268,7 +1277,7 @@ static void act_do(void)
             confirm_open(CF_ERASE_PROJ, k);
         return;
     }
-    id = cur_page()->id[c & 3u];
+    id = page_id(cur_page(), c);
     if (id != G_LOAD)
         ui.act = 0;
     switch (id) {
@@ -1444,6 +1453,33 @@ static void presets_turn(int32_t s)
                                                          * turn on a sound's page no longer replaces it) */
         ui_message("PRESETS: ON HOME");
     }
+}
+
+/* (Dah) FX: knob c drives the next (s > 0) or the one before of FXK_ID */
+static void fxk_assign(uint32_t c, int32_t s)
+{
+    int32_t n = (int32_t)(sizeof FXK_ID), v = TSEL->p[P_FXK1 + (c & 3u)];
+    char m[24] = "KNOB ";
+    v = ((v + (s > 0 ? 1 : -1)) % n + n) % n;
+    TSEL->p[P_FXK1 + (c & 3u)] = (int16_t)v;
+    m[5] = (char)('1' + (c & 3u));
+    m[6] = ':'; m[7] = ' ';
+    str_cpy(m + 8, N_FXK[v], 16);
+    ui_message(m);
+    ui.force = 1;
+}
+/* (Dah) CHAIN: OCT+ opens the page of the unit picked */
+static void chain_open(void)
+{
+    static const uint8_t ID[4] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO};
+    uint32_t u = fx_unit_at(TSEL, ch_cur & 3u), i;
+    for (i = 0; i < NPAGES; i++)
+        if (PAGES[i].fam == FAM_FX && PAGES[i].id[0] == ID[u] && PAGES[i].graph != GR_FX) {
+            ui.page = (uint8_t)i;
+            ui.fam_last[FAM_FX] = ui.page;
+            page_entered();
+            return;
+        }
 }
 
 /* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
@@ -1897,6 +1933,10 @@ static void ui_input(void)
         case B_OCTDN:
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
+            if (b == B_OCTUP && !ui.home && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {
+                chain_open();                           /* (Dah) CHAIN: the unit picked, its page */
+                break;
+            }
             if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
                 break;                                  /* MIDI LEARN: clear / done (below) */
             if ((fm1_in.buttons & both) == both)
@@ -1963,6 +2003,9 @@ static void ui_input(void)
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
         if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
+        } else if (!glo && !ui.home && ui.hot_t && cur_page()->graph == GR_FX && sel_mode() < SEL_MODW) {
+            fxk_assign(ui.hot_col, s);                   /* (Dah) FX: a knob turned, then SELECT: what it drives */
+            ui.hot_t = 40;
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && sel_mode() == SEL_PAGE && !ui.home && sel_is_list()) {   /* MENU > SELECT LIST (HA HA HE HU;

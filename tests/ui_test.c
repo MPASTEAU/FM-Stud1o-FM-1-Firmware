@@ -2478,10 +2478,12 @@ static int test_chain(void)
     events_block(period);
     events_block(period);
     events_block(period);
-    ok = !song.playing && !chain.running && song.rec == 3;
+    ok = song.playing && chain.running && chain.row == 0 && trk[0].seq_idx == 0 && seq_steps(&trk[0])[0].note[0] == 60;
+    seq_stop();                                         /* (Dah: the song goes round; STOP restores) */
+    ok &= !song.playing && !chain.running && song.rec == 3;
     for (i = 0; i < NTRK_V10; i++) ok &= !trk[i].seq_n && !memcmp(trk[i].step, before[i], sizeof before[i]) &&
         !memcmp(&trk[i].p[P_SLEN], timing[i], sizeof timing[i]);
-    bad += check("SONG end: stops and restores editable patterns, timing and record arms", ok);
+    bad += check("SONG end: round to the first section (Dah); STOP restores editable patterns, timing and record arms", ok);
     {
         static step_t st[NSTEP];
         bad += check("SONG source patterns stay unchanged", pat_steps(0, 1, st) && st[0].note[0] == 60 &&
@@ -3208,7 +3210,7 @@ static int test_layer(void)
     bad += check("FX tap: nothing on press, the FX page when let go", ok && !ui.home && cur_page()->fam == FAM_FX);
     frames(320);                                       /* (not a double tap: #83) */
     press(B_FX);
-    bad += check("  a second tap: the next page of the family (SLICER)", str_eq(cur_page()->title, "SLICER"));
+    bad += check("  a second tap: the next page of the family (CHAIN)", str_eq(cur_page()->title, "CHAIN"));
     ui_power_on();
     btn_down(B_FX);
     for (flash = 0, i = 0; i < 22u; i++) { frame(); flash |= ui.layer; }      /* 0.35 s */
@@ -8923,6 +8925,7 @@ static int test_song_lanes(void)
     seq_stop();
     ui_power_on();
     pat_park();                                           /* (HA HA HE HU: A, B below: patterns 1, 2) */
+    song_round = 0;                                       /* (Dah: these songs stop at their end, as before) */
     for (k = 0; k < NTRK_V10; k++) rev[k] = (uint32_t)trk[k].p[P_REV];
     /* A: notes 60 + k, LEN 4 of 1/16, QUANTIZE ON; T3 automated (REV 100 on its step 1). B: notes 72 + k, T1 LEN 8,
      * T2 LEN 6, T3 LEN 4 of 1/8 QUANTIZE OFF, T4 LEN 2 */
@@ -9020,6 +9023,7 @@ static int test_song_lanes(void)
     chain_config.row[0].slot[0] = 33;
     bad += check("SONG lanes: a pattern past the 32 is no section", !chain_valid(&chain_config));
     chain_defaults(&chain_config);
+    song_round = 1;
     return bad;
 }
 
@@ -9759,7 +9763,7 @@ static int test_home_tracks(void)
     t->p[P_MUTE] = 1;
     trk[3].peak = 20000;
     frame();
-    ok = rk_px(0, 2, 7) == T_DIM && rk_at(3, 2, 7) == T_DIM && rk_at(RK_MX + 1, 3, RK_H - 4) == MTR_GREEN &&   /* (Dah: upright, green at its foot) */
+    ok = rk_px(0, 2, 7) == T_DIM && rk_at(3, 2, 7) == T_DIM && rk_at(RK_MX + 1, 3, RK_H - 4) != T_LINE && rk_at(RK_MX + 1, 3, RK_H - 4) != T_BG &&   /* (Dah: upright, lit at its foot) */
          rk_at(RK_MX + 1, 2, 7) == T_LINE;   /* (Dah: the meter centred on the taller row) */
     t->p[P_MUTE] = 0;
     frame();

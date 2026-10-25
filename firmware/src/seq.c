@@ -705,6 +705,32 @@ static __attribute__((noinline)) void perf_key_remap(void)
     }
 }
 
+/* (Dah) MATCH: key k's chord made again from all the keys held (out: its n notes): the tones the other keys of the track
+ * added before and the new chord has not, let go (their keys keep their own notes) */
+static __attribute__((noinline)) void match_revoice(uint32_t k, track_t *t, const uint8_t *out, uint32_t n)
+{
+    uint32_t j, i, a, mc = trk_midi_ch(trk_index(t));
+    for (j = 0; j < 27u; j++) {
+        if (j == k || !kb_chn[j] || kb_trk[j] != trk_index(t))
+            continue;
+        for (i = 1; i < kb_chn[j];) {                   /* (0: the key's own note) */
+            uint32_t x = kb_chord[j][i], keep = 0;
+            for (a = 0; a < n && !keep; a++)
+                keep = out[a] == x;
+            if (keep) {
+                i++;
+                continue;
+            }
+            kb_chord[j][i] = kb_chord[j][kb_chn[j] - 1u];   /* (out of the key's list, then let go if no key holds it) */
+            kb_chn[j]--;
+            if (!midi_local_held(t, x)) {
+                input_off(t, x);
+                midi_out_event(0x08u | (0x80u | mc) << 8 | x << 16);
+            }
+        }
+    }
+}
+
 /* key k plays kb_note[k] on track t: its chord (chord.c; the note alone with CHRD OFF). A note another key
  * holds already sounds: it is not started again (nor sent to MIDI OUT); the key keeps its notes */
 static void key_on(uint32_t k, track_t *t)
@@ -713,6 +739,16 @@ static void key_on(uint32_t k, track_t *t)
     kb_chn[k] = 0;
     n = t->p[P_CHRD] == CH_MATCH ? chord_match(t, kb_note[k], kb_chord[k])   /* (Dah: the keys held make the chord) */
                                  : chord_build(t, kb_note[k], kb_chord[k]);
+    if (t->p[P_CHRD] == CH_MATCH) {
+        uint8_t all[CHORD_MAX + 27u];                   /* (the new chord: its tones and every key's own note) */
+        uint32_t m = 0, j;
+        for (i = 0; i < n; i++)
+            all[m++] = kb_chord[k][i];
+        for (j = 0; j < 27u; j++)
+            if (kb_chn[j] && kb_trk[j] == trk_index(t))
+                all[m++] = kb_note[j];
+        match_revoice(k, t, all, m);
+    }
     in_key = (uint8_t)(k + 1u);                     /* (the arp keeps the key: arp_add) */
     for (i = 0; i < n; i++) {
         uint32_t x = kb_chord[k][i];
@@ -846,6 +882,7 @@ static void seq_start(void)
 }
 
 /* (Dah) a step's note on / off: through the track's ARP when it runs (the sequence feeds it as the keys do) */
+static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *nn, uint32_t m);
 static void seq_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
     if (t->p[P_AMODE])
@@ -940,7 +977,7 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     uint32_t next_tie = seq_steps(t)[(idx + 1u) % len].time == ST_TIE;
     uint32_t hits = step_ratchet(s);
     uint8_t nn[4 + NLANE], vv[4 + NLANE];           /* the notes it plays: its notes, then its hits */
-    uint32_t m = 0, sk = 0;
+    uint32_t m = 0, sk = 0, sl;
     /* QNT SEQ: the step's notes (not the lane hits) snap to the scale as they play; never on a drum kit, the slices
      * or another engine that maps the keys itself. SEQ+T (#218): moved by TRN first, as the keys are. seq_notes keeps
      * the notes that sound: their note-offs match */
@@ -992,10 +1029,12 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
             m++;
         }
     t->slide_glide = (uint8_t)slide_in;
+    sl = slide_in && !t->p[P_AMODE] && trk_vmode(t) == V_POLY ? seq_chord_slide(t, nn, m) : 0u;   /* (Dah) a chord slid
+                                                     * into: its voices glide over, not started again */
     if (!slide_in)
         seq_release(t);
     for (i = 0; i < m; i++)
-        if (!((sk >> i) & 1u))
+        if (!(((sk | sl) >> i) & 1u))
             seq_note_on(t, nn[i], vv[i]);
     if (slide_in)                                   /* release what is not held over */
         for (i = 0; i < t->seq_n; i++) {
@@ -1010,6 +1049,57 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
             t->seq_notes[t->seq_n++] = nn[i];
     t->seq_off = gate;
     t->seq_hold = hits == 1u && ((s->flags & SF_SLIDE) != 0 || next_tie);   /* next step a TIE: keep the notes to it */
+}
+
+/* (Dah) a POLY chord slid into (SLIDE on the step before): the old notes and the new ones each low to high, in pairs,
+ * the voice of an old note moved to its new one, gliding (GLIDE, legato: no new attack); the bit of each new note so
+ * played (the caller starts the others; the old notes left over are let go after: not among the new) */
+static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *nn, uint32_t m)
+{
+    uint8_t o[4], nw[4], oi[4], ni[4];
+    uint32_t no = 0, nm = 0, i, j, done = 0;
+    for (i = 0; i < t->seq_n && no < 4u; i++) {     /* the old ones not in the new chord */
+        for (j = 0; j < m && nn[j] != t->seq_notes[i]; j++)
+            ;
+        if (j == m)
+            o[no] = t->seq_notes[i], oi[no++] = (uint8_t)i;
+    }
+    for (j = 0; j < m && nm < 4u; j++) {            /* the new ones not sounding */
+        for (i = 0; i < t->seq_n && nn[j] != t->seq_notes[i]; i++)
+            ;
+        if (i == t->seq_n)
+            nw[nm] = nn[j], ni[nm++] = (uint8_t)j;
+    }
+    for (i = 1; i < no; i++)                        /* low to high, both */
+        for (j = i; j > 0 && o[j - 1u] > o[j]; j--) {
+            uint8_t a = o[j]; o[j] = o[j - 1u]; o[j - 1u] = a;
+            a = oi[j]; oi[j] = oi[j - 1u]; oi[j - 1u] = a;
+        }
+    for (i = 1; i < nm; i++)
+        for (j = i; j > 0 && nw[j - 1u] > nw[j]; j--) {
+            uint8_t a = nw[j]; nw[j] = nw[j - 1u]; nw[j - 1u] = a;
+            a = ni[j]; ni[j] = ni[j - 1u]; ni[j - 1u] = a;
+        }
+    for (i = 0; i < no && i < nm; i++) {
+        uint32_t v;
+        for (v = 0; v < NVOICE; v++) {
+            voice_t *vo = &t->v[v];
+            if (vo->active && vo->gate && vo->note == o[i]) {
+                vo->note = nw[i];
+                vo->pitch16 = (int32_t)nw[i] * 16;
+                {                                   /* (~0.3 s for any interval; GLIDE TIME: its own) */
+                    int32_t d = vo->pitch16 - vo->pitch_cur;
+                    glide_set(t, vo, 1);
+                    if (!t->p[P_GLMODE] && vo->pitch_cur != vo->pitch16)
+                        vo->gstep = (d < 0 ? -d : d) / 400 > 0 ? (d < 0 ? -d : d) / 400 : 1;
+                }
+                t->seq_notes[oi[i]] = nw[i];        /* (not let go after: it is the new note now) */
+                done |= 1u << ni[i];
+                break;
+            }
+        }
+    }
+    return done;
 }
 
 /* MENU > CONTROL > STEP PREVIEW (1.2, Discussion #169): the UI asks for a step of a track to sound once (aud_req: step
