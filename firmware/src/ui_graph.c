@@ -2165,7 +2165,8 @@ static void home_track_row(uint32_t c)
  * selected row RAISE. Each row redrawn only when it changed (ts.col), its meter alone otherwise */
 #define RK_PITCH 15
 #define RK_H 14
-#define RK_SX 78                                       /* the steps: x 78 .. 205, 8 apart */
+#define RK_SX 94                                       /* the steps: x 94 .. 205, 7 apart (Dah: room for the name) */
+#define RK_SP 7
 #define RK_MX 212                                      /* the meter: x 212 .. 229 */
 #define RK_MW 18
 static void rack_meter(uint32_t c, uint16_t bg)
@@ -2227,7 +2228,7 @@ static void rack_row(uint32_t c)
         }
     for (i = 0; i < 16u && p0 + i < len; i++) {
         const step_t *st = &s[p0 + i];
-        int32_t bx = RK_SX + (int32_t)i * 8;
+        int32_t bx = RK_SX + (int32_t)i * RK_SP;
         uint16_t under = bg;
         if (i == ph) {                                 /* the step playing: ringed */
             cv_rrect(bx - 1, 1, 8, 12, 2, T_TEXT, bg);

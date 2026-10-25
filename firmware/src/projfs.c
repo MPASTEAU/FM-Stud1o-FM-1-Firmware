@@ -16,7 +16,7 @@
 #define PFS_PAY 64u                                /* the payload's offset in the first sector */
 #define PFS_MAGIC 0x4A525048u                      /* "HPRJ" */
 #define PFS_VER 1u
-#define PFS_CUR (favorites.factory[15][16])        /* the project open, its id (0 none): kept with the settings */
+#define PFS_CUR DAH_CUR                           /* the project open, its id (0 none): kept with the settings (favorites.c) */
 _Static_assert(PFS_BASE + PFS_NSECT * ST_SECTOR <= 0xDC000u, "the projects in USR2 and USR3");
 typedef struct {
     uint32_t magic, gen, len, sum;

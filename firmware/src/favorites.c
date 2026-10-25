@@ -52,6 +52,10 @@ static int favorite_set(uint32_t engine, uint32_t preset, int on)
 static uint32_t cpal_on(void) { return (ui_cpal_flags & (CPAL_STORED | CPAL_ACTIVE)) == (CPAL_STORED | CPAL_ACTIVE); }
 static uint32_t palette_n(void) { return NPALETTES + ((ui_cpal_flags & CPAL_STORED) ? 1u : 0u); }     /* COLOR's values */
 static uint32_t palette_cur(void) { return cpal_on() ? NPALETTES : settings.palette % NPALETTES; }
+/* (Dah) its settings outside row 15 (full): row 13 (SLICE's favourites, no engine has 224 presets) bytes 30, 31 */
+#define DAH_MIG (favorites.factory[13][30])            /* the one-time changes done: bit 0 SELECT LIST, 1 CHORD ADD, 2 the
+                                                        * key map's bytes freed */
+#define DAH_CUR (favorites.factory[13][31])            /* the project open (projfs.c PFS_CUR), its id, 0 none */
 static const char *palette_name(uint32_t v) { return v == NPALETTES ? "CUSTOM" : UI_PALETTES[v % NPALETTES].name; }
 /* the palette in use into gfx.c (the settings changed under it: a start, an import, a restore, a STYLE change) */
 static void palette_apply(void)
@@ -62,11 +66,25 @@ static void palette_apply(void)
         settings.palette = NPALETTES - 1u;
         favorites.factory[15][26] = 1u;             /* .. and HOME's TRACKS, the channel rack (ui.c ui_home_view HV_TRACKS) */
     }
-    if (favorites.factory[15][17] != 'P') {         /* .. and, once (byte 17: free), SELECT on the pages (MENU > SELECT PAGE,
-                                                     * ui.c sel_mode, bit 4 of byte 24): the tempo on GLO + SELECT and
-                                                     * HOME > CLOCK */
-        favorites.factory[15][17] = 'P';
+    if (!(DAH_MIG & 4u)) {                          /* (Dah) once: bytes 16, 17 of row 15 are the FX layer's key map
+                                                     * (ui_layer.c fx_keys, 14..23): the open project and a mark were kept
+                                                     * there by mistake: moved out (DAH_CUR), the keys' map back */
+        DAH_MIG |= 4u;
+        if (favorites.factory[15][17] == 'P') {
+            DAH_CUR = favorites.factory[15][16];
+            favorites.factory[15][16] = favorites.factory[15][17] = 0;
+            DAH_MIG |= 1u;
+        }
+    }
+    if (!(DAH_MIG & 1u)) {                          /* .. once, SELECT on the lists (MENU > SELECT LIST, ui.c sel_mode, bit 4
+                                                     * of byte 24): the tempo on HOME, GLO + SELECT and HOME > CLOCK */
+        DAH_MIG |= 1u;
         favorites.factory[15][24] = (uint8_t)((favorites.factory[15][24] & ~0x30u) | 0x10u);
+    }
+    if (!(DAH_MIG & 2u)) {                          /* .. once, CHORD ENTRY ADD: step recording adds each key to the cursor
+                                                     * step and stays on it (bit 2 of byte 24; KNOB 1 / PRESETS move on) */
+        DAH_MIG |= 2u;
+        favorites.factory[15][24] |= 0x04u;
     }
 #endif
     if (cpal_on()) {
