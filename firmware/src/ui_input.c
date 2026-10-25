@@ -2076,11 +2076,9 @@ static void ui_input(void)
         chain_open();                                   /* (Dah) CHAIN: the effect picked, its page (or + ADD) */
     } else if (act_cols() && (oct & 2u)) {              /* action pages: OCT+ does the picked action, */
         act_do();
-    } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it, or (none picked) goes HOME */
+    } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it (Dah: no more BACK to HOME) */
         if (cur_page()->graph != GR_PATS && ui.act)
             ui.act = 0;
-        else
-            go_home();
     } else if (ui.ml.on && oct) {                          /* MIDI LEARN: OCT- clears the picked CC, OCT+ done */
         ml_oct(oct);
     }

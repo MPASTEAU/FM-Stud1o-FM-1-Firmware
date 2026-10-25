@@ -907,7 +907,7 @@ static void foot_hint(char *a, char *b)
     uint32_t c = act_col();
     str_cpy(a, "OCT+ ", 8);
     str_cpy(a + 5, c ? act_name(c - 1u) : "--", 8);
-    str_cpy(b, ui.act && cur_page()->graph != GR_PATS ? "OCT- CANCEL" : "OCT- BACK", 16);
+    str_cpy(b, ui.act && cur_page()->graph != GR_PATS ? "OCT- CANCEL" : "", 16);   /* (Dah: no BACK) */
 }
 
 /* SAVE > USER / PROJECT: EDIT renames the selected slot (ui_name.c); SEQ > AUTOMATION: EDIT deletes the row's
@@ -1067,18 +1067,19 @@ static void draw_foot_in(void)
         khint_t kh[3];
         uint32_t rn = foot_rename(), dl = foot_del();
         foot_hint(ha, hb);                            /* "OCT+ LOAD", "OCT- BACK": keycaps and their words */
+        uint32_t nk = hb[0] ? 2u : 1u;                /* (Dah: OCT- shown only when it cancels) */
         kh[0] = (khint_t){KC_OCTUP, ha + 5};
-        kh[1] = (khint_t){KC_OCTDN, hb + 5};
-        if (dl) {                                     /* (Dah) FILE, PATTERN, SONG: "REC DELETE" between them */
+        kh[1] = (khint_t){KC_OCTDN, hb[0] ? hb + 5 : ""};
+        if (dl) {                                     /* (Dah) FILE, PATTERN, SONG: "REC DELETE" after OCT+ */
             kh[2] = kh[1];
             kh[1] = (khint_t){KC_REC, "DELETE"};
-            cv_key_row(8, 232, 2, kh, 3, (act_ready() ? 1u : 0u) | (dl == 2u ? 2u : 0u) | 4u, T_BG);
-        } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" between them */
+            cv_key_row(8, 232, 2, kh, nk + 1u, (act_ready() ? 1u : 0u) | (dl == 2u ? 2u : 0u) | 4u, T_BG);
+        } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" after OCT+ */
             kh[2] = kh[1];
             kh[1] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
-            cv_key_row(8, 232, 2, kh, 3, (act_ready() ? 1u : 0u) | (rn == 2u ? 2u : 0u) | 4u, T_BG);
+            cv_key_row(8, 232, 2, kh, nk + 1u, (act_ready() ? 1u : 0u) | (rn == 2u ? 2u : 0u) | 4u, T_BG);
         } else {
-            cv_key_row(8, 232, 2, kh, 2, act_ready() ? 3u : 2u, T_BG);
+            cv_key_row(8, 232, 2, kh, nk, act_ready() ? 3u : 2u, T_BG);
         }
     } else if (ui.ml.on) {                               /* row 1: MIDI LEARN's line, OCT+ DONE at the right */
         khint_t kh = {KC_OCTUP, "DONE"};

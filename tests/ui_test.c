@@ -1070,7 +1070,7 @@ static int test_actions(void)
     {
         char a[16], b[16];
         foot_hint(a, b);
-        bad += check("..the footer: OCT+ LOAD / OCT- BACK", str_eq(a, "OCT+ LOAD") && str_eq(b, "OCT- BACK"));
+        bad += check("..the footer: OCT+ LOAD (Dah: no OCT- BACK)", str_eq(a, "OCT+ LOAD") && !b[0]);
     }
     fm1_in.buttons |= 1u << panel.btn[B_OCTUP];   /* both together (the UPDATE MODE hold): nothing */
     host_pressed |= 1u << panel.btn[B_OCTUP];
@@ -1095,7 +1095,7 @@ static int test_actions(void)
     frame();
     bad += check("a press that began elsewhere does not load", steps_are(t, 0) && song.octave == 2);
     press(B_OCTDN);
-    bad += check("PATTERNS: OCT- goes HOME (the octave stays)", ui.home && song.octave == 2);
+    bad += check("PATTERNS: OCT- does nothing (Dah: no BACK; the octave stays)", !ui.home && song.octave == 2);
     /* TOOLS: CLRSQ and INIT are picked, not done, by their knobs */
     my_steps(t);
     go_title("TOOLS");
@@ -1127,7 +1127,7 @@ static int test_actions(void)
     press(B_OCTUP);
     bad += check("KNOB 2 INIT, OCT+: SOUND INIT", msg_is("SOUND INIT") && ui.act == 0u);
     press(B_OCTDN);
-    bad += check("OCT- with nothing picked: HOME", ui.home);
+    bad += check("OCT- with nothing picked: nothing (Dah: no BACK)", !ui.home);
     /* the dialogs and the menu */
     open_family(FAM_SEQ);
     my_steps(t);
@@ -4029,8 +4029,8 @@ static int test_slices(void)
     btn_down(B_OCTDN); frame(); btn_up(B_OCTDN); frame();
     ok = ui.act == 0u && !ui.home;
     btn_down(B_OCTDN); frame(); btn_up(B_OCTDN); frame();
-    ok &= ui.home;
-    bad += check("SLICES: OCT- drops the pick, then goes HOME", ok);
+    ok &= !ui.home;
+    bad += check("SLICES: OCT- drops the pick, then nothing (Dah: no BACK)", ok);
     go_page(GR_SLICES); frame();
     set_engine_of(TSEL, 0); frame();
     bad += check("SLICES: on another engine the page is not there (EDIT 1)", str_eq(cur_page()->title, "EDIT 1"));
