@@ -1101,7 +1101,7 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
 #define SG_X0 24                                       /* the strip: x 24 .. 234 (the lanes' cushions left of it) */
 #define SG_W 210
 #define SG_Y 3                                         /* the lanes: y 3 .. 88 */
-#define SG_LH 10                                       /* a lane's height (its letter, the pattern's picture), SG_LG between two */
+#define SG_LH 11                                       /* a lane's height (its letter, the pattern's picture), SG_LG between two */
 #define SG_LG 1
 #define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)         /* (HA HA HE HU: the eight lanes at once, thin) */
 #define SG_LY(k) (SG_Y + (int32_t)(k) * (SG_LH + SG_LG))   /* lane k's top */
@@ -2737,14 +2737,7 @@ static void graph_song(void)
     /* (Dah: no line of the cell's pattern nor the song's length: the PAT card and the ruler say them) */
     x0 = hi;
     (void)bars; (void)b; (void)fl;
-    if (c < L.n) {
-        uint32_t s = chain_config.row[c].slot[lane < NTRK ? lane : 0u], ql, qd, qn;
-        if (s != CHAIN_SILENT && !sg_pat(lane < NTRK ? lane : 0u, s, &ql, &qd, &qn))
-            cv_free_text(SG_X0, ly, &AF_S, "NO SUCH PATTERN", T_DIM, T_SURF, x0 - 10 - SG_X0);   /* (a cell to fix) */
-    } else {                                           /* + ADD: how */
-        cv_free_hint(SG_X0, ly + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H,   /* (a key hint: S) */
-                     "[K3] ADD SECTION", T_MID, T_SURF, x0 - 10 - SG_X0);
-    }
+    (void)ly;                                          /* (Dah: the lanes take the panel; + ADD's slot says itself) */
 }
 #include "ui_graph_more.c"                         /* (Dah) FILTER ENV DEST VOICE ARP DLY REVERB CHORUS CLOCK */
 static void draw_graph_in(void);
