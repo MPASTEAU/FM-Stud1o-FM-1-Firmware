@@ -370,6 +370,14 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
         c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
 #endif
+    if (!ui.layer && !ui.menu && !name_on() && !ui.home && cur_page()->graph >= GR_DLANE &&
+        cur_page()->graph <= GR_DSYN5 && TSEL->eng_req % NENGINES == ENGI_DRUM) {   /* (Dah) a DRUM lane's pages: the
+                                                         * keys that play the lane picked */
+        uint32_t k;
+        for (k = 0; k < 27u; k++)
+            if (drum_lane((uint32_t)drum_keys(TSEL, k)) == dln_lane())
+                c |= 1u << k;
+    }
     return c;
 }
 
@@ -2101,7 +2109,8 @@ static void ui_input(void)
                     ui_message("PATTERN CLEARED");
                 }
             }
-        } else if (oct & 1u) {
+        } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0)) {   /* (Dah: ADD TRACK: ALGO
+                                                         * turned back cancels too) */
             ui.confirm = 0;
             ui.force = 1;
         }

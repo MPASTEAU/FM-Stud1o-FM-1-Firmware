@@ -253,6 +253,74 @@ static uint32_t duck_watch(const track_t *t)            /* this track */
 {
     return 1u << (trk_index(t) % NTRK);
 }
+/* (Dah) the track's sound now, thin, across the panel's top (the EQ's: fx_eq.c eq_ring) */
+static void fx_wave_line(int32_t top, uint16_t c)
+{
+    uint32_t w = eq_wp;
+    int32_t wy = top + 10, pw = wy, x;
+    (void)c;
+    for (x = 0; x < (int32_t)PANEL_W; x++) {
+        int32_t v = eq_ring[(w + EQ_RN - PANEL_W + (uint32_t)x) & (EQ_RN - 1u)], y = wy - v * 9 / 32768;
+        if (x)
+            cv_line_t(PANEL_X0 + x - 1, pw, PANEL_X0 + x, y, ux_mix(T_TEXT, T_SURF, 45), 1);
+        pw = y;
+    }
+}
+/* (Dah) SIDECHAIN's, COMP's, DIST's live picture: the effect u on track t watched (fx.c dv_*), this frame's column
+ * taken; 1 while something sounded in the last ~3 s */
+static int fxv_take(const track_t *t, uint32_t u)
+{
+    uint32_t w = dv.w % DV_N;
+    if (dv_unit != u) {                                 /* (another effect's page: a fresh picture) */
+        memset(&dv, 0, sizeof dv);
+        dv_unit = (uint8_t)u;
+        dv_pre = dv_post = dv_att = 0;
+        dv_hit = 0;
+    }
+    dv_watch = (uint8_t)duck_watch(t);
+    dv.pre[w] = (uint16_t)(dv_pre > 65535 ? 65535 : dv_pre);
+    dv.post[w] = (uint16_t)(dv_post > 65535 ? 65535 : dv_post);
+    dv.att[w] = (uint16_t)dv_att;
+    dv.hit[w] = dv_hit;
+    if (dv_pre)
+        dv.live = 90;                                   /* (~3 s of picture after the last sound) */
+    else if (dv.live)
+        dv.live--;
+    dv_pre = dv_post = dv_att = 0;
+    dv_hit = 0;
+    dv.w++;
+    return dv.live != 0u;
+}
+/* .. drawn from top to bot: before the effect faint, after it in the colour, its dip (line) from the top in ACCENT,
+ * the hits marked under it */
+#define FXV_LW ((int32_t)PANEL_W / 2 - 6)              /* COMP's, DIST's: the curve's width at the left .. */
+#define FXV_RX (PANEL_X0 + (int32_t)PANEL_W / 2 + 4)   /* .. the sound's at the right */
+#define FXV_RW ((int32_t)PANEL_W - (int32_t)PANEL_W / 2 - 4)
+static void fxv_draw(int32_t x0, int32_t wd, int32_t top, int32_t bot, uint16_t c, int line)   /* (the newest wd) */
+{
+    int32_t x, full = 4000;
+    for (x = 0; x < wd; x++) {                          /* (the scale: the loudest shown, before or after) */
+        uint32_t w = (dv.w + (uint32_t)(DV_N - wd + x)) % DV_N;
+        full = dv.pre[w] > full ? dv.pre[w] : dv.post[w] > full ? dv.post[w] : full;
+    }
+    full += full / 8;
+    for (x = 0; x < wd; x++) {                          /* oldest at the left */
+        uint32_t w = (dv.w + (uint32_t)(DV_N - wd + x)) % DV_N;
+        int32_t hp = clamp((int32_t)dv.pre[w] * (bot - top) / full, 0, bot - top);
+        int32_t hq = clamp((int32_t)dv.post[w] * (bot - top) / full, 0, bot - top);
+        int32_t ha = (int32_t)dv.att[w] * (bot - top) / 32767;
+        if (hp)
+            cv_rect(x0 + x, bot - hp, 1, hp, ux_mix(c, T_SURF, 70));   /* before */
+        if (hq)
+            cv_rect(x0 + x, bot - hq, 1, hq, c);                       /* after */
+        if (hp)
+            cv_rect(x0 + x, bot - hp, 1, 1, ux_mix(T_TEXT, T_SURF, 70));   /* (before's edge, over it too) */
+        if (line)
+            cv_rect(x0 + x, top + ha, 1, 2, T_ACCENT);                 /* the dip, from the top */
+        if (dv.hit[w])
+            cv_rect(x0 + x, bot + 2, 2, 4, T_TEXT);                    /* a kick */
+    }
+}
 static void graph_duck(const track_t *t, uint16_t c)
 {
     int32_t top = 18, bot = graph_ht - 8, x, i;
@@ -262,22 +330,8 @@ static void graph_duck(const track_t *t, uint16_t c)
         dv_watch = 0;
         return;
     }
-    dv_watch = (uint8_t)m;
-    {                                                   /* this frame's column */
-        uint32_t w = dv.w % DV_N;
-        dv.pre[w] = (uint16_t)(dv_pre > 65535 ? 65535 : dv_pre);
-        dv.post[w] = (uint16_t)(dv_post > 65535 ? 65535 : dv_post);
-        dv.att[w] = (uint16_t)dv_att;
-        dv.hit[w] = dv_hit;
-        if (dv_pre)
-            dv.live = 90;                               /* (~3 s of picture after the last sound) */
-        else if (dv.live)
-            dv.live--;
-        dv_pre = dv_post = dv_att = 0;
-        dv_hit = 0;
-        dv.w++;
-    }
     (void)m;
+    (void)fxv_take(t, DV_DUCK);
     {                                                   /* (Dah) where it comes from: the track, its sound's name */
         uint32_t s = (uint32_t)clamp(t->p[P_DKSRC], 1, NTRK) - 1u;
         char d[2] = {(char)('1' + s), 0}, nm[16];
@@ -315,19 +369,7 @@ static void graph_duck(const track_t *t, uint16_t c)
         }
         return;
     }
-    for (x = 0; x < DV_N; x++) {                        /* oldest at the left */
-        uint32_t w = (dv.w + (uint32_t)x) % DV_N;
-        int32_t hp = clamp((int32_t)dv.pre[w] * (bot - top) / 24000, 0, bot - top);
-        int32_t hq = clamp((int32_t)dv.post[w] * (bot - top) / 24000, 0, bot - top);
-        int32_t ha = (int32_t)dv.att[w] * (bot - top) / 32767;
-        if (hp)
-            cv_rect(PANEL_X0 + x, bot - hp, 1, hp, ux_mix(c, T_SURF, 70));   /* before */
-        if (hq)
-            cv_rect(PANEL_X0 + x, bot - hq, 1, hq, c);                       /* after */
-        cv_rect(PANEL_X0 + x, top + ha, 1, 2, T_ACCENT);                     /* the dip, from the top */
-        if (dv.hit[w])
-            cv_rect(PANEL_X0 + x, bot + 2, 2, 4, T_TEXT);                    /* a kick */
-    }
+    fxv_draw(PANEL_X0, (int32_t)PANEL_W, top, bot, c, 1);
 }
 #include "ui_graph_fx.c"                           /* (Dah) the FX family's: CHAIN DIST EQ SENDS */
 /* the page's own panel when it has one here (1), else 0 (the scope) */

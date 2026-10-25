@@ -2878,7 +2878,8 @@ static void draw_graph_in(void)
         graph_scope(c);
     } else {
         if (pg->fam == FAM_FX)
-            t = fx_tsel();                           /* (Dah: the MASTER's chain, MIXER's MASTER picked) */
+            t = fx_tsel();
+        dv_watch = 0;                                /* (Dah: SIDECHAIN COMP DIST's pages watch again, fxv_take) */                           /* (Dah: the MASTER's chain, MIXER's MASTER picked) */
         eq_watch = pg->fam == FAM_FX && pg->scope == SC_TRACK ? (uint8_t)(fx_mst(t) ? NTRK + 1u : trk_index(t) % NTRK + 1u) : 0u;   /* (Dah: the
                                                          * FX pages' sound live, fx_eq.c) */
         switch (pg->graph) {

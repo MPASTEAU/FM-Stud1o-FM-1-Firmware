@@ -94,6 +94,23 @@ static struct {                          /* HALL's state (in the pool: no .bss) 
  * make-up gain (straight into tanh over the full band, it would sound like a
  * broken digital fuzz). State per part (track_t dist_*). */
 static int32_t eq_gain_q12(int32_t g);                  /* fx_eq.c */
+/* (Dah) what SIDECHAIN's, COMP's and DIST's pages show live (ui_graph_more.c fxv_take), taken until the page reads it:
+ * the watched track's level before and after the effect (its loudest), the effect's dip or reduction (Q15), a hit;
+ * dv_watch the tracks watched (a bit each), dv_unit the effect (DV_DUCK DV_COMP DV_DIST) */
+enum { DV_DUCK, DV_COMP, DV_DIST };
+static volatile int32_t dv_pre, dv_post, dv_att;
+static volatile uint8_t dv_hit, dv_watch, dv_unit;
+static void dv_level(const int32_t *b, uint32_t n, int post)   /* (the block's loudest, into dv_pre / dv_post) */
+{
+    uint32_t i;
+    int32_t m = 0;
+    for (i = 0; i < n; i++) {
+        int32_t a = b[i] < 0 ? -b[i] : b[i];
+        m = a > m ? a : m;
+    }
+    if (post) { if (m > dv_post) dv_post = m; }
+    else if (m > dv_pre) dv_pre = m;
+}
 static void dist_run(const track_t *t, int32_t *st, int32_t *b, uint32_t n)   /* st: the low cut's, the two poles' */
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
@@ -121,7 +138,11 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
     int32_t st[3] = {t->dist_hp, t->dist_lp1, t->dist_lp2};
     if (!t->p[P_DIST])
         return;
+    if (dv_unit == DV_DIST && ((dv_watch >> ((uint32_t)(t - trk) % NTRK)) & 1u))
+        dv_level(b, n, 0);
     dist_run(t, st, b, n);
+    if (dv_unit == DV_DIST && ((dv_watch >> ((uint32_t)(t - trk) % NTRK)) & 1u))
+        dv_level(b, n, 1);
     t->dist_hp = st[0]; t->dist_lp1 = st[1]; t->dist_lp2 = st[2];
 }
 
@@ -1069,12 +1090,11 @@ static int32_t duck_env[NPART], duck_att[NPART];       /* the envelope (Q15), th
 static uint8_t duck_hold[NPART];                        /* (Dah) blocks the dip stays full after a hit (~30 ms): it pumps */
 /* (Dah) what DUCK's page shows live (ui_graph_more.c graph_duck), taken until the page reads it: the watched tracks'
  * level before and after the dip (their loudest), the deepest dip, a hit; the tracks watched (a bit each) */
-static volatile int32_t dv_pre, dv_post, dv_att;
-static volatile uint8_t dv_hit, dv_watch;
 #define DUCK_HOLD 12u                                   /* (Dah: dry: down a moment only) */
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d: SPREAD's side signal, dipped alike) */
 {
     uint32_t k = (uint32_t)(t - trk) % NPART, src = (uint32_t)t->p[P_DKSRC], s2 = trkx[k % NTRK].sc2, i, hit;
+    uint32_t wch = dv_unit == DV_DUCK && ((dv_watch >> k) & 1u);
     int32_t a0 = duck_att[k], a1 = 0;
     hit = (src && src <= NPART && ((duck_hit >> (src - 1u)) & 1u)) || (s2 && s2 <= NPART && ((duck_hit >> (s2 - 1u)) & 1u));
     if (src && src <= NPART) {
@@ -1093,7 +1113,7 @@ static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d
             return;
     }
     {   /* (the dip from last block's to this one's, a step a sample: one divide a block) */
-        int32_t acc = a0 << 8, da = ((a1 - a0) << 8) / (int32_t)n, pre = 0, post = 0, w = (dv_watch >> k) & 1u;
+        int32_t acc = a0 << 8, da = ((a1 - a0) << 8) / (int32_t)n, pre = 0, post = 0, w = (int32_t)wch;
         for (i = 0; i < n; i++, acc += da) {
             int32_t x = b[i];
             b[i] -= ((b[i] >> 4) * (acc >> 8)) >> 11;

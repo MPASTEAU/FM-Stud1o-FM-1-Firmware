@@ -377,10 +377,13 @@ static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, t
         return x;
     return mulq15(softclip((((x >> 2) * g) >> 10) + bias) - softclip(bias), mk);
 }
-static void graph_dist(const track_t *t, uint16_t c)
+static void graph_dist(const track_t *t, uint16_t c, int32_t pw)   /* (Dah: pw wide from the left; the panel's: the
+                                                         * sound out each side) */
 {
-    int32_t cx = PANEL_X0 + PANEL_W / 2, cy = graph_ht / 2, a = graph_ht * 42 / 100, x, py = 0;
-    cv_rect(PANEL_X0, cy, PANEL_W, 1, T_GRID);
+    int32_t cx = PANEL_X0 + pw / 2, cy = graph_ht / 2, a = graph_ht * 42 / 100, x, py = 0;
+    if (a > pw / 2 - 2)
+        a = pw / 2 - 2;
+    cv_rect(PANEL_X0, cy, pw, 1, T_GRID);
     cv_rect(cx, cy - a, 1, 2 * a, T_GRID);
     cv_line_t(cx - a, cy + a, cx + a, cy - a, T_RAISE, 1);   /* clean */
     for (x = -a; x <= a; x++) {                          /* the curve: -1.5 .. +1.5 of a voice across */
@@ -389,8 +392,10 @@ static void graph_dist(const track_t *t, uint16_t c)
             cv_line_t(cx + x - 1, py, cx + x, y, c, 2);
         py = y;
     }
-    fx_wave(PANEL_X0, cx - a - 6 - PANEL_X0, cy, a, ux_mix(c, T_SURF, 70));   /* the sound out, each side */
-    fx_wave(cx + a + 6, PANEL_X0 + PANEL_W - cx - a - 6, cy, a, ux_mix(c, T_SURF, 70));
+    if (pw >= (int32_t)PANEL_W) {
+        fx_wave(PANEL_X0, cx - a - 6 - PANEL_X0, cy, a, ux_mix(c, T_SURF, 70));   /* the sound out, each side */
+        fx_wave(cx + a + 6, PANEL_X0 + PANEL_W - cx - a - 6, cy, a, ux_mix(c, T_SURF, 70));
+    }
     {                                                    /* where the sound is on the curve now */
         int32_t p = clamp(fx_peak() * 4 * a / 49152, 0, a);
         if (p > 1)
@@ -416,9 +421,9 @@ static void graph_sends(const track_t *t, uint16_t c)
 }
 /* COMP: its curve (in across, out up, -36 .. 0 dB; the threshold marked), the reduction now (a bar falling from the
  * top, ACCENT), the sound out under it */
-static void graph_comp(uint32_t amt, int32_t gr, uint16_t c)
+static void graph_comp(uint32_t amt, int32_t gr, uint16_t c, int32_t pw)   /* (Dah: pw wide from the left) */
 {
-    int32_t x0 = PANEL_X0, w = 150, top = 4, bot = graph_ht - 8, x, py = 0, h = bot - top;
+    int32_t x0 = PANEL_X0, w = pw >= (int32_t)PANEL_W ? 150 : pw - 22, top = 4, bot = graph_ht - 8, x, py = 0, h = bot - top;
     int32_t thr = -(int32_t)amt * 240 / 127, keep = 32 * 256 / (32 + (int32_t)amt);   /* (dB x 8) */
     cv_rect(x0, bot, w, 1, T_GRID);
     cv_line_t(x0, bot, x0 + w, top, T_RAISE, 1);       /* (clean) */
@@ -433,7 +438,7 @@ static void graph_comp(uint32_t amt, int32_t gr, uint16_t c)
     }
     cv_rect(x0 + (thr + 288) * w / 288, top, 1, h, T_MID);   /* the threshold */
     {                                                   /* the reduction now: 0 .. 18 dB */
-        int32_t gx = x0 + w + 20, gh = clamp(gr * h / (18 * 8), 0, h);
+        int32_t gx = x0 + w + (pw >= (int32_t)PANEL_W ? 20 : 8), gh = clamp(gr * h / (18 * 8), 0, h);
         cv_rrect(gx, top, 14, h, 3, T_RAISE, T_SURF);
         if (gh > 1)
             cv_rect(gx + 2, top, 10, gh, T_ACCENT);
@@ -445,14 +450,36 @@ static void graph_comp(uint32_t amt, int32_t gr, uint16_t c)
 static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
 {
     uint32_t id = pg->id[0];
+    int32_t x;
     if (pg->fam != FAM_FX || pg->scope != SC_TRACK)
         return 0;
     if (str_eq(pg->title, "COMP")) {
-        graph_comp(fx_camt(t), fx_mst(t) ? cmp_master.gr : cmp_trk[trk_index(t) % NTRK].gr, c);
+        if (fx_mst(t))                                  /* (the MASTER's: its curve, the panel's) */
+            graph_comp(fx_camt(t), cmp_master.gr, c, PANEL_W);
+        else {                                          /* (Dah) the curve at the left, the sound at the right */
+            char b[12];
+            int32_t gr = cmp_trk[trk_index(t) % NTRK].gr * 10 / 8;
+            (void)fxv_take(t, DV_COMP);
+            graph_comp(fx_camt(t), cmp_trk[trk_index(t) % NTRK].gr, c, FXV_LW);
+            fmt_fix(b, -gr, 1);
+            x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, b, T_TEXT, T_SURF);
+            cv_text_on(x + 3, 2 + CAP_IN(S, 12), &AF_S, "dB", T_MID, T_SURF);
+            fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, 1);
+        }
         return 1;
     }
     if (id == P_FXORD) graph_chain(t, c);
-    else if (id == P_DIST && pg->graph == GR_NONE) graph_dist(t, c);
+    else if (id == P_DIST && pg->graph == GR_NONE) {
+        if (fx_mst(t))
+            graph_dist(t, c, PANEL_W);
+        else {                                          /* (Dah) the curve at the left, the sound in and out at the right */
+            (void)fxv_take(t, DV_DIST);
+            graph_dist(t, c, FXV_LW);
+            x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, "IN", T_MID, T_SURF);
+            cv_text_on(x + 6, 2 + CAP_IN(S, 12), &AF_S, "OUT", c, T_SURF);
+            fxv_draw(FXV_RX, FXV_RW, 18, graph_ht - 8, c, 0);
+        }
+    }
     else if (id == P_EQLO || id == P_EQ2F) graph_eq(t, c);
     else return 0;
     return 1;

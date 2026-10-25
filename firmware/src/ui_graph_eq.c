@@ -135,16 +135,7 @@ static void graph_eq(const track_t *t, uint16_t c)
         if (h > 0)
             cv_rect(PANEL_X0 + x, bot - h, 1, h, ux_mix(c, T_SURF, 30));
     }
-    {                                                   /* the waveform, thin, across the top */
-        uint32_t w = eq_wp;
-        int32_t wy = top + 10, pw = wy;
-        for (x = 0; x < PANEL_W; x++) {
-            int32_t v = eq_ring[(w + EQ_RN - PANEL_W + (uint32_t)x) & (EQ_RN - 1u)], y = wy - v * 9 / 32768;
-            if (x)
-                cv_line_t(PANEL_X0 + x - 1, pw, PANEL_X0 + x, y, ux_mix(T_TEXT, T_SURF, 45), 1);
-            pw = y;
-        }
-    }
+    fx_wave_line(top, c);                               /* the waveform, thin, across the top */
     cv_rect(PANEL_X0, mid, PANEL_W, 1, T_RAISE);        /* 0 dB */
     for (i = 0; i < 4; i++) {                           /* the decades: 100 Hz, 1 kHz, 10 kHz */
         static const uint8_t DEC[3] = {24, 71, 117};

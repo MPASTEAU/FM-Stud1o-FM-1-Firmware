@@ -57,6 +57,8 @@ static __attribute__((noinline)) void comp_track(track_t *t, int32_t *b, int32_t
         c->gr = 0;
         return;
     }
+    if (dv_unit == DV_COMP && ((dv_watch >> k) & 1u))
+        dv_level(b, n, 0);                              /* (COMP's page: before, after, the reduction) */
     gi = trkx[k].cin ? eq_gain_q12(trkx[k].cin) : 4096;
     go = trkx[k].cout ? eq_gain_q12(trkx[k].cout) : 4096;
     for (i = 0; i < n; i++) {
@@ -74,6 +76,12 @@ static __attribute__((noinline)) void comp_track(track_t *t, int32_t *b, int32_t
         b[i] = (int32_t)(((int64_t)b[i] * g0) >> 12);
         if (d)
             d[i] = (int32_t)(((int64_t)d[i] * g0) >> 12);
+    }
+    if (dv_unit == DV_COMP && ((dv_watch >> k) & 1u)) {
+        int32_t a = c->gr * 32767 / (18 * 8);
+        dv_level(b, n, 1);
+        if (a > dv_att)
+            dv_att = a > 32767 ? 32767 : a;
     }
 }
 /* the MASTER: the mix's left and right (their louder followed) */
