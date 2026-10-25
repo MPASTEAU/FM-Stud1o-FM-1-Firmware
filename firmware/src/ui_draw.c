@@ -877,6 +877,18 @@ static void foot_hint(char *a, char *b)
 
 /* SAVE > USER / PROJECT: EDIT renames the selected slot (ui_name.c); SEQ > AUTOMATION: EDIT deletes the row's
  * record (ui_events.c); 0 = not such a page, 1 an empty slot (PLAY, QUANTIZE, + ADD), 2 used */
+/* (Dah) the list pages: REC deletes the row picked; 0 none, 1 nothing there to delete, 2 something */
+static uint32_t foot_del(void)
+{
+    uint32_t g = ui.home ? GR_NONE : cur_page()->graph;
+    if (g == GR_FILE)
+        return 1u + (uint32_t)pfs_there(ui.fsel);
+    if (g == GR_PATTERN)
+        return 2u;
+    if (g == GR_SONG)
+        return 1u + (ui.song_row < chain_config.count);
+    return 0;
+}
 static uint32_t foot_rename(void)
 {
     uint32_t g = ui.home ? GR_NONE : cur_page()->graph;
@@ -939,7 +951,7 @@ static void draw_foot_in(void)
     if (act_cols()) {                                  /* the hint, and whether OCT+ would act */
         char ha[16], hb[16];
         foot_hint(ha, hb);
-        sig += str_hash(str_hash(act_ready() ? 7u : 3u, ha), hb) + foot_rename() * 7717u;
+        sig += str_hash(str_hash(act_ready() ? 7u : 3u, ha), hb) + foot_rename() * 7717u + foot_del() * 31u;
     }
     if (grid_on())
         sig += 0x51EDu + (uint32_t)black_held(GK_ACC) * 977u;
@@ -960,11 +972,15 @@ static void draw_foot_in(void)
     } else if (act_cols()) {                          /* row 1: the OCT+ / OCT- hint in place of the steps */
         char ha[16], hb[16];
         khint_t kh[3];
-        uint32_t rn = foot_rename();
+        uint32_t rn = foot_rename(), dl = foot_del();
         foot_hint(ha, hb);                            /* "OCT+ LOAD", "OCT- BACK": keycaps and their words */
         kh[0] = (khint_t){KC_OCTUP, ha + 5};
         kh[1] = (khint_t){KC_OCTDN, hb + 5};
-        if (rn) {                                     /* USER / PROJECT: "EDIT NAME" between them */
+        if (dl) {                                     /* (Dah) FILE, PATTERN, SONG: "REC DELETE" between them */
+            kh[2] = kh[1];
+            kh[1] = (khint_t){KC_REC, "DELETE"};
+            cv_key_row(8, 232, 2, kh, 3, (act_ready() ? 1u : 0u) | (dl == 2u ? 2u : 0u) | 4u, T_BG);
+        } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" between them */
             kh[2] = kh[1];
             kh[1] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
             cv_key_row(8, 232, 2, kh, 3, (act_ready() ? 1u : 0u) | (rn == 2u ? 2u : 0u) | 4u, T_BG);
