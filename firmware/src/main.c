@@ -101,9 +101,8 @@ static void fm1_fault(const fm1_crash_t *c)
 #if FELUCCA_DEMO
 /* Dah's power-on sound (FELUCCA_DEMO): a slow, quiet drone in D minor at 70 BPM, five tracks (song.ntrk), no project
  * written, no SONG. PLAY plays it, a loop of four bars (64 x 1/16):
- *   track 1  PHYS DRONE STRING: D2, held (the floor)
- *   track 2  ANALOG SOFT PAD: Dm9 Bbmaj7 Fmaj7 Gm7, a bar each; its filter breathing on the drawn LFO (LFO DRAW, slow):
- *            the one pad
+ *   track 1  PHYS HARP: Dm Bb Gm A (D minor, harmonic: A major back home), a bar each, arpeggiated in 1/8
+ *   track 2  PHYS PLUCK: a slow minor melody over it, three notes a bar
  *   track 3  FM6 BELL: a few notes of D minor's pentatonic, far apart, in the delay and the reverb
  *   track 4  DRUM DEEP KIT: a slow heartbeat, a dull round kick twice a bar (lub-dub: a 1/16 apart), dry
  *   track 5  DRUM KIT: a soft snare on each bar's last beat, drowned in the hall reverb */
@@ -146,8 +145,10 @@ static void dm_chord(track_t *t, uint32_t at, uint32_t len, const uint8_t *n, ui
 }
 static void felucca_demo(void)
 {
-    static const uint8_t PAD[4][4] = {{50, 53, 57, 64}, {46, 50, 53, 57}, {41, 53, 57, 60}, {43, 46, 50, 53}};   /* Dm9
-                                                     * Bbmaj7 Fmaj7 Gm7 */
+    static const uint8_t HARP[4][4] = {{50, 57, 62, 65}, {46, 53, 58, 62}, {43, 50, 55, 58}, {45, 52, 57, 61}};   /* Dm Bb
+                                                     * Gm A */
+    static const uint8_t ARP[8] = {0, 1, 2, 3, 2, 1, 2, 3};
+    static const uint8_t MEL[4][3] = {{74, 77, 76}, {74, 72, 70}, {67, 70, 74}, {73, 76, 69}};   /* the pluck's, steps 0 6 12 */
     static const struct { uint8_t step, note; } BELL[] = {{4, 74}, {22, 81}, {38, 77}, {54, 72}, {60, 69}};
     uint32_t i;
     track_t *t;
@@ -162,18 +163,16 @@ static void felucca_demo(void)
         trk[i].p[P_SLEN] = 64;
         trk[i].p[P_SDIV] = 2;                 /* 1/16 */
     }
-    t = &trk[0];                              /* the floor */
-    demo_sound(t, ENGI_PHYS, 7);              /* PHYS DRONE STRING */
-    t->p[P_LEVEL] = 96; t->p[P_REV] = 60;
-    dm_chord(t, 0, 64, (const uint8_t[]){38}, 1, 80);
-    t = &trk[1];                              /* the pad, breathing */
-    demo_sound(t, 0, 1);                      /* ANALOG SOFT PAD */
-    t->p[P_ATK] = 70; t->p[P_REL] = 90; t->p[P_REV] = 90; t->p[P_DLY] = 20; t->p[P_LEVEL] = 88;
-    t->p[P_LWAVE] = 5;                        /* DRAW (trkx: SIN, joined) */
-    t->p[P_LRATE] = 18;                       /* slow */
-    t->p[P_LD_FLT] = 30;
-    for (i = 0; i < 4u; i++)
-        dm_chord(t, i * 16u, 16, PAD[i], 4, 70);
+    t = &trk[0];                              /* the harp, arpeggiated */
+    demo_sound(t, ENGI_PHYS, 8);              /* PHYS HARP */
+    t->p[P_LEVEL] = 92; t->p[P_REV] = 80; t->p[P_DLY] = 24;
+    for (i = 0; i < 32u; i++)
+        demo_note(&t->step[i * 2u], HARP[i / 8u][ARP[i % 8u]], i % 8u ? 62 : 76);
+    t = &trk[1];                              /* the pluck, the tune */
+    demo_sound(t, ENGI_PHYS, 2);              /* PHYS PLUCK */
+    t->p[P_LEVEL] = 90; t->p[P_REV] = 70; t->p[P_DLY] = 40;
+    for (i = 0; i < 12u; i++)
+        demo_note(&t->step[(i / 3u) * 16u + (i % 3u) * 6u], MEL[i / 3u][i % 3u], 70);
     t = &trk[2];                              /* the bell, far apart */
     demo_sound(t, ENGI_FM6, 1);               /* FM6 BELL */
     t->p[P_LEVEL] = 84; t->p[P_DLY] = 70; t->p[P_REV] = 100;
