@@ -99,13 +99,13 @@ static void fm1_fault(const fm1_crash_t *c)
 }
 
 #if FELUCCA_DEMO
-/* Dah's power-on sound (FELUCCA_DEMO): a slow, quiet drone in D minor at 70 BPM, five tracks (song.ntrk), no project
- * written, no SONG. PLAY plays it, a loop of four bars (64 x 1/16):
- *   track 1  PHYS HARP: Dm Bb Gm A (D minor, harmonic: A major back home), a bar each, arpeggiated in 1/8
- *   track 2  PHYS PLUCK: a slow minor melody over it, three notes a bar
- *   track 3  FM6 BELL: a few notes of D minor's pentatonic, far apart, in the delay and the reverb
+/* Dah's power-on sound (FELUCCA_DEMO): slow and dark, D minor with the Phrygian Eb, 62 BPM, five tracks (song.ntrk), no
+ * project written, no SONG. PLAY plays it, a loop of four bars (64 x 1/16), Dm Eb Dm A:
+ *   track 1  PHYS HARP: low arpeggios in 1/8, dull (BRIT down), ringing long
+ *   track 2  PHYS PLUCK: a low, sparse tune over it, three notes a bar
+ *   track 3  ANALOG SUB BASS: D1 held under everything, swelling in
  *   track 4  DRUM DEEP KIT: a slow heartbeat, a dull round kick twice a bar (lub-dub: a 1/16 apart), dry
- *   track 5  DRUM KIT: a soft snare on each bar's last beat, drowned in the hall reverb */
+ *   track 5  DRUM KIT: a dark snare on the third beat of bars 2 and 4, drowned in the hall reverb */
 static void demo_note(step_t *s, uint32_t note, uint32_t vel)
 {
     s->note[s->n < 4u ? s->n : 3u] = (uint8_t)note;
@@ -145,45 +145,46 @@ static void dm_chord(track_t *t, uint32_t at, uint32_t len, const uint8_t *n, ui
 }
 static void felucca_demo(void)
 {
-    static const uint8_t HARP[4][4] = {{50, 57, 62, 65}, {46, 53, 58, 62}, {43, 50, 55, 58}, {45, 52, 57, 61}};   /* Dm Bb
-                                                     * Gm A */
+    static const uint8_t HARP[4][4] = {{38, 45, 50, 53}, {39, 46, 51, 55}, {38, 45, 50, 53}, {33, 40, 45, 49}};   /* Dm Eb
+                                                     * Dm A, low */
     static const uint8_t ARP[8] = {0, 1, 2, 3, 2, 1, 2, 3};
-    static const uint8_t MEL[4][3] = {{74, 77, 76}, {74, 72, 70}, {67, 70, 74}, {73, 76, 69}};   /* the pluck's, steps 0 6 12 */
-    static const struct { uint8_t step, note; } BELL[] = {{4, 74}, {22, 81}, {38, 77}, {54, 72}, {60, 69}};
+    static const uint8_t MEL[4][3] = {{69, 65, 62}, {67, 63, 58}, {65, 62, 57}, {61, 64, 57}};   /* the pluck's, steps 0 6 12 */
     uint32_t i;
     track_t *t;
-    song.g[G_BPM] = 70;
-    song.g[G_RTYPE] = 2;                      /* HALL */
-    song.g[G_RSIZE] = 118;
-    song.g[G_RDAMP] = 70;
-    song.g[G_DFDBK] = 72;
+    song.g[G_BPM] = 62;
+    song.g[G_RTYPE] = 2;                      /* HALL, big and dark */
+    song.g[G_RSIZE] = 124;
+    song.g[G_RDAMP] = 104;
+    song.g[G_DFDBK] = 70;
     song.ntrk = 5;                            /* (the others: their power-on sounds, hidden) */
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
         trk[i].p[P_SLEN] = 64;
         trk[i].p[P_SDIV] = 2;                 /* 1/16 */
     }
-    t = &trk[0];                              /* the harp, arpeggiated */
+    t = &trk[0];                              /* the harp, low and dull */
     demo_sound(t, ENGI_PHYS, 8);              /* PHYS HARP */
-    t->p[P_LEVEL] = 92; t->p[P_REV] = 80; t->p[P_DLY] = 24;
+    t->p[P_E0 + 2] = 34;                      /* BRIT down */
+    t->p[P_E0 + 3] = 96;                      /* DAMP: rings long */
+    t->p[P_LEVEL] = 94; t->p[P_REV] = 84; t->p[P_DLY] = 20;
     for (i = 0; i < 32u; i++)
-        demo_note(&t->step[i * 2u], HARP[i / 8u][ARP[i % 8u]], i % 8u ? 62 : 76);
-    t = &trk[1];                              /* the pluck, the tune */
+        demo_note(&t->step[i * 2u], HARP[i / 8u][ARP[i % 8u]], i % 8u ? 58 : 74);
+    t = &trk[1];                              /* the pluck, the tune, low */
     demo_sound(t, ENGI_PHYS, 2);              /* PHYS PLUCK */
-    t->p[P_LEVEL] = 90; t->p[P_REV] = 70; t->p[P_DLY] = 40;
+    t->p[P_E0 + 2] = 44;                      /* BRIT down */
+    t->p[P_LEVEL] = 88; t->p[P_REV] = 76; t->p[P_DLY] = 44;
     for (i = 0; i < 12u; i++)
-        demo_note(&t->step[(i / 3u) * 16u + (i % 3u) * 6u], MEL[i / 3u][i % 3u], 70);
-    t = &trk[2];                              /* the bell, far apart */
-    demo_sound(t, ENGI_FM6, 1);               /* FM6 BELL */
-    t->p[P_LEVEL] = 84; t->p[P_DLY] = 70; t->p[P_REV] = 100;
-    for (i = 0; i < NELEM(BELL); i++)
-        demo_note(&t->step[BELL[i].step], BELL[i].note, 64);
+        demo_note(&t->step[(i / 3u) * 16u + (i % 3u) * 6u], MEL[i / 3u][i % 3u], 66);
+    t = &trk[2];                              /* the floor: a sub, swelling */
+    demo_sound(t, 0, 7);                      /* ANALOG SUB BASS */
+    t->p[P_ATK] = 96; t->p[P_REL] = 100; t->p[P_LEVEL] = 84; t->p[P_REV] = 10;
+    dm_chord(t, 0, 64, (const uint8_t[]){26}, 1, 70);
     t = &trk[3];                              /* the heartbeat: dull, slow, dry */
     demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT */
-    t->p[P_E0 + 1] = 50;                      /* TUNE down */
-    t->p[P_E0 + 2] = 22;                      /* TONE dark: muffled */
+    t->p[P_E0 + 1] = 46;                      /* TUNE down */
+    t->p[P_E0 + 2] = 18;                      /* TONE dark: muffled */
     t->p[P_E0 + 3] = 84;                      /* DECY a little longer */
-    t->p[P_E0 + 4] = 8;                       /* SNAP: no click */
+    t->p[P_E0 + 4] = 6;                       /* SNAP: no click */
     t->p[P_E0 + 6] = 1;                       /* KICK ROUND */
     t->p[P_LEVEL] = 100; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     for (i = 0; i < 64u; i += 8u) {
@@ -192,10 +193,10 @@ static void felucca_demo(void)
     }
     t = &trk[4];                              /* the snare, far away in the hall */
     demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT */
-    t->p[P_E0 + 2] = 48;                      /* TONE a little soft */
-    t->p[P_LEVEL] = 74; t->p[P_REV] = 127; t->p[P_DLY] = 18;
-    for (i = 12; i < 64u; i += 16u)
-        demo_hit(t, i, 1u << 1, 58);              /* (lane 1: SNARE) */
+    t->p[P_E0 + 2] = 30;                      /* TONE dark */
+    t->p[P_LEVEL] = 72; t->p[P_REV] = 127; t->p[P_DLY] = 22;
+    demo_hit(t, 24, 1u << 1, 58);             /* (lane 1: SNARE) bar 2's third beat */
+    demo_hit(t, 56, 1u << 1, 54);             /* .. bar 4's */
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
