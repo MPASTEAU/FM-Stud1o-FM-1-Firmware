@@ -54,12 +54,12 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"USER", "[K2]LOAD[K4]SAVE[REC]ERASE"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
-    {"FILE", "[K2]OPEN[K4]NEW[REC]DELETE"},   /* (HA HA HE HU: the projects; REC deletes, EDIT renames) */
-    {"PATTERN", "[K2]OPEN[K3]COPY[REC]DELETE"},   /* (HA HA HE HU: a track's patterns; REC deletes) */
+    {"FILE", "[PRESETS]PROJECT[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: the projects; REC deletes, EDIT renames) */
+    {"PATTERN", "[PRESETS]PATTERN[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: a track's patterns; REC deletes) */
     {"TOOLS", "[K2]INIT, CLEAN[K3]DEL TRK[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
-    {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */
+    {"STEP", "[KEYS]WRITE[K1]STEP[EDIT]CLEAR"},   /* (1.5.1: SEQ to DETAIL; Dah: EDIT clears the step) */
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
     {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},

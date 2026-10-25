@@ -976,13 +976,16 @@ static int test_save(void)
     bad += check("a pending SONG cannot save a user preset", up_store(0, "X") == 2 && !up_used(0));
     chain.armed = 0;
     song.playing = 1;
-    go_page(GR_FILE);                             /* (HA HA HE HU: FILE, the projects: OPEN COPY NEW, no slots) */
-    ok = act_cols() == 14u && str_eq(act_name(1), "OPEN") && str_eq(act_name(2), "COPY") && str_eq(act_name(3), "NEW");
+    go_page(GR_FILE);                             /* (Dah: FILE, the projects: OPEN COPY NEW DELETE, the list on PRESETS) */
+    ok = act_cols() == 15u && str_eq(act_name(0), "OPEN") && str_eq(act_name(1), "COPY") && str_eq(act_name(2), "NEW") &&
+         str_eq(act_name(3), "DELETE");
+    turn(EN_K3, 1);
+    ok &= ui.act == 3u && act_ready();
+    turn(EN_K1, 1);
+    ok &= ui.act == 1u && !act_ready();               /* (OPEN: no project there) */
     turn(EN_K4, 1);
-    ok &= ui.act == 4u && act_ready();
-    turn(EN_K2, 1);
-    ok &= ui.act == 2u && !act_ready();               /* (OPEN: no project there) */
-    bad += check("FILE: KNOB 2 OPEN (a project there only), 3 COPY, 4 NEW", ok);
+    ok &= ui.act == 4u && !act_ready();               /* (DELETE: none either) */
+    bad += check("FILE: KNOB 1 OPEN (a project there only), 2 COPY, 3 NEW, 4 DELETE", ok);
     stop_transport();
     /* user presets */
     for (i = 0; i < NPAGES; i++)
@@ -9493,7 +9496,7 @@ static int test_help(void)
     frames(2200);
     ok &= ui.help_t == 0u;
     press(B_SAVE);                                       /* (HA HA HE HU: FILE first) */
-    ok &= ui.help_t > 0u && cur_page()->graph == GR_FILE && str_eq(help_page(), "[K2]OPEN[K4]NEW[REC]DELETE");
+    ok &= ui.help_t > 0u && cur_page()->graph == GR_FILE && str_eq(help_page(), "[PRESETS]PROJECT[K1]OPEN[K4]DELETE");
     press(B_HOME);
     ok &= ui.home && ui.help_t > 0u && str_eq(help_page(), H_HOME);
     menu_put(MI_HOME, HV_LEVELS);

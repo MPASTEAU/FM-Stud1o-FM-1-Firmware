@@ -1288,7 +1288,7 @@ static uint32_t graph_signature(void)
     if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
         h ^= (ps_used + 1u) * 2654435761u + (pt_sel + 1u) * 7919u + (ps_num(song.sel) + 1u) * 104729u + steps_sig(t) * 31u;
     if (pg->graph == GR_FILE)                        /* (HA HA HE HU) the projects (graph_arch_*), the one picked */
-        h ^= graph_arch_sig() * 31u + (ui.fsel + 1u) * 7919u + pfs_cur() * 104729u;
+        h ^= graph_arch_sig() * 31u + (ui.fsel + 1u) * 7919u + pfs_cur() * 104729u + pfs_mem_pct() * 613u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
@@ -1671,11 +1671,15 @@ static void graph_pattern(void)
         list_row(y, num == cur, b, num == ps_num(song.sel) ? ux.trk[song.sel % NTRK] : T_MID, nm, T_TEXT, 232);
     }
     {
-        char m[24] = "MEMORY ";
-        fmt_int(m + 7, (int32_t)pt_mem_pct());
+        char m[32] = "PATTERN ";                        /* (Dah: the one picked of how many, then the memory) */
+        fmt_int(m + str_len(m), (int32_t)(at + 1u));
+        str_cpy(m + str_len(m), "/", 4);
+        fmt_int(m + str_len(m), (int32_t)n);
+        str_cpy(m + str_len(m), "  MEMORY ", 12);
+        fmt_int(m + str_len(m), (int32_t)pt_mem_pct());
         str_cpy(m + str_len(m), " %", 4);
-        GFX_HOOK_ALIGN(0, 112, 0, 122, AL_V, "pattern memory line");
-        cv_text_on(14, 112 - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
+        GFX_HOOK_ALIGN(0, 110, 0, 120, AL_V, "pattern memory line");   /* (its "/": 2 px higher) */
+        cv_text_on(14, 110 - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
     }
 }
 /* HA HA HE HU: SAVE > FILE's projects (projfs.c), read again when one changed (proj_wire_gen: a save, an open, a delete):
@@ -1702,7 +1706,12 @@ static uint32_t graph_arch_sig(void)
 static void graph_file(void)
 {
     uint32_t i, at = 0, first, cur = pfs_cur();
+    char m[24] = "MEMORY ";                             /* (Dah) the memory the projects take, on the last line */
     graph_file_read();
+    fmt_int(m + 7, (int32_t)pfs_mem_pct());
+    str_cpy(m + str_len(m), " %", 4);
+    GFX_HOOK_ALIGN(0, 112, 0, 122, AL_V, "file memory line");
+    cv_text_on(14, 112 - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
     if (!gfile.n) {
         list_row(12, 0, "", T_MID, "NO PROJECT YET", T_DIM, 232);
         return;

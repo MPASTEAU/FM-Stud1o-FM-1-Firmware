@@ -881,10 +881,6 @@ static void foot_hint(char *a, char *b)
 static uint32_t foot_del(void)
 {
     uint32_t g = ui.home ? GR_NONE : cur_page()->graph;
-    if (g == GR_FILE)
-        return 1u + (uint32_t)pfs_there(ui.fsel);
-    if (g == GR_PATTERN)
-        return 2u;
     if (g == GR_SONG)
         return 1u + (ui.song_row < chain_config.count);
     return 0;
@@ -1460,25 +1456,13 @@ static void draw_columns_in(void)
             draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->graph == GR_PATTERN) {          /* (HA HA HE HU) PATTERN: the one picked, OPEN COPY NEW */
-            if (c == 0u) {
-                uint8_t nums[PS_NUM];
-                char u[6] = "/";
-                fmt_int(val, (int32_t)pt_pick());
-                fmt_int(u + 1, (int32_t)pt_list(nums));
-                draw_column(0, "PATTERN", val, u, VAL(0u), -1, ICON_AUTO);
-            } else {
-                draw_act_column(c, act_name(c), pt_ready(c) ? T_THEME : T_DIM, ICON_AUTO);
-            }
+        if (cur_page()->graph == GR_PATTERN) {          /* (Dah) PATTERN: OPEN COPY NEW DELETE */
+            draw_act_column(c, act_name(c), pt_ready(c) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->graph == GR_FILE) {             /* (HA HA HE HU) FILE: the memory, OPEN COPY NEW */
-            if (c == 0u) {
-                fmt_int(val, (int32_t)pfs_mem_pct());
-                draw_column(0, "MEMORY", val, "%", VAL(0u), (int32_t)pfs_mem_pct() * 10, ICON_AUTO);
-            } else {
-                draw_act_column(c, act_name(c), act_ready() || act_col() != c + 1u ? T_THEME : T_DIM, ICON_AUTO);
-            }
+        if (cur_page()->graph == GR_FILE) {             /* (Dah) FILE: OPEN COPY NEW DELETE (the memory: the list's) */
+            int ok = c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
+            draw_act_column(c, act_name(c), ok ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
         if (!d || !d->label || d->label[0] == '-') {

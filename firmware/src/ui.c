@@ -1894,10 +1894,8 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return slice_page_ok() ? 12u : 0u;       /* SPLIT JOIN (a SLICE track only) */
     if (pg->graph == GR_SLOTS)
         return 14u;                              /* PATTERN: ERASE (1.5.5, #199) LOAD SAVE */
-    if (pg->graph == GR_FILE)
-        return 14u;                              /* (HA HA HE HU) FILE: NEW (DELETE) OPEN SAVE */
-    if (pg->graph == GR_PATTERN)
-        return 14u;                              /* (HA HA HE HU) PATTERN: OPEN COPY NEW */
+    if (pg->graph == GR_FILE || pg->graph == GR_PATTERN)
+        return 15u;                              /* (Dah) FILE, PATTERN: OPEN COPY NEW DELETE (the list: PRESETS, SELECT) */
     if (pg->scope == SC_GLOBAL)
         for (c = 0; c < 4u; c++)
             if (go_id(pg->id[c]))
@@ -1931,10 +1929,10 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return UP_GO[(c + 2u) % 3u];
     if (cur_page()->graph == GR_SLICES)
         return c == 3u ? "JOIN" : "SPLIT";
-    if (cur_page()->graph == GR_PATTERN)              /* (HA HA HE HU) */
-        return (c & 3u) == 1u ? "OPEN" : (c & 3u) == 2u ? "COPY" : "NEW";
-    if (cur_page()->graph == GR_FILE)                 /* (HA HA HE HU) */
-        return (c & 3u) == 1u ? "OPEN" : (c & 3u) == 2u ? "COPY" : "NEW";
+    if (cur_page()->graph == GR_PATTERN || cur_page()->graph == GR_FILE) {   /* (Dah) */
+        static const char *const FL_ACT[4] = {"OPEN", "COPY", "NEW", "DELETE"};
+        return FL_ACT[c & 3u];
+    }
     if (cur_page()->graph == GR_SLOTS && (c & 3u) == 1u)
         return "ERASE";
     return id == G_CLRSEQ ? "CLEAR" : id == G_INITSND ? "INIT" : id == G_LOAD ? "LOAD" : "SAVE";
@@ -1961,10 +1959,10 @@ static int act_ready(void)
     if (cur_page()->graph == GR_SLICES)
         return slice_act_ready(c);
 #endif
-    if (cur_page()->graph == GR_PATTERN)                /* (HA HA HE HU) OPEN another, COPY / NEW: a number free */
+    if (cur_page()->graph == GR_PATTERN)                /* (Dah) OPEN another, COPY / NEW: a number free, DELETE */
         return pt_ready(c);
-    if (cur_page()->graph == GR_FILE)                   /* (HA HA HE HU) OPEN another project, COPY, NEW */
-        return c == 1u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : 1;
+    if (cur_page()->graph == GR_FILE)                   /* (Dah) OPEN another project, COPY, NEW, DELETE one there */
+        return c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PATTERN ERASE: a used slot, stopped */
         return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
     id = cur_page()->id[c & 3u];

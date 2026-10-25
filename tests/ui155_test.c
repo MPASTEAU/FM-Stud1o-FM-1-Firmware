@@ -261,7 +261,7 @@ static int oct_press(void)
 }
 
 /* ------------------------------------------- SAVE > PATTERN (HA HA HE HU) --- */
-/* the track's patterns (pstore.c): KNOB 2 OPEN, 3 COPY, 4 NEW, OCT+ does it; REC deletes the one picked (the dialog) */
+/* the track's patterns (pstore.c): KNOB 1 OPEN, 2 COPY, 3 NEW, 4 DELETE (the dialog), OCT+ does it; REC deletes too */
 static int project_erase_ui(void)
 {
     int bad = 0, ok;
@@ -271,15 +271,22 @@ static int project_erase_ui(void)
     song.sel = 0;
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 100};
     go_page(GR_PATTERN); frame();
-    ok = act_cols() == 14u && str_eq(act_name(1), "OPEN") && str_eq(act_name(2), "COPY") && str_eq(act_name(3), "NEW");
-    turn(EN_K3, 1);
-    ok &= ui.act == 3u && act_ready();
+    ok = act_cols() == 15u && str_eq(act_name(0), "OPEN") && str_eq(act_name(1), "COPY") && str_eq(act_name(2), "NEW") &&
+         str_eq(act_name(3), "DELETE");
+    turn(EN_K2, 1);
+    ok &= ui.act == 2u && act_ready();
     press(B_OCTUP);
     ok &= ps_num(0) == 2u && ps_exists(0, 1) && trk[0].step[0].n == 1u && trk[0].step[0].note[0] == 60u && pt_sel == 2u;
-    turn(EN_K4, 1);
+    turn(EN_K3, 1);
     press(B_OCTUP);
     ok &= ps_num(0) == 3u && trk[0].step[0].time != ST_NOTE && ps_exists(0, 2);
-    bad += check("SAVE > PATTERN: KNOB 2 OPEN, 3 COPY (the one played, played now), 4 NEW (empty), OCT+ does it", ok);
+    turn(EN_K4, 1);
+    press(B_OCTUP);
+    confirm_text(a, b);
+    ok &= ui.confirm == CF_DEL_PAT && str_eq(a, "DELETE PATTERN 3?");
+    press(B_OCTDN);
+    ok &= !ui.confirm && ps_exists(0, 3);
+    bad += check("SAVE > PATTERN: KNOB 1 OPEN, 2 COPY (the one played, played now), 3 NEW (empty), 4 DELETE (the dialog)", ok);
 
     press(B_REC);
     ok = ui.confirm == CF_DEL_PAT && !song.rec;
@@ -299,9 +306,9 @@ static int project_erase_ui(void)
     ok &= ps_num(0) == 1u && trk[0].step[0].time != ST_NOTE && !ps_exists(0, 2);
     bad += check("  OCT+ deletes it, the track on another; the last one: emptied", ok);
 
-    turn(EN_K2, 1);
+    turn(EN_K1, 1);
     ok = !act_ready();                                  /* (OPEN: the one played already) */
-    ok &= help_page() && str_eq(help_page(), "[K2]OPEN[K3]COPY[REC]DELETE") && help_fits(help_page());
+    ok &= help_page() && str_eq(help_page(), "[PRESETS]PATTERN[K1]OPEN[K4]DELETE") && help_fits(help_page());
     bad += check("  OPEN on the one played: nothing to do; its HELP hint", ok);
     return bad;
 }

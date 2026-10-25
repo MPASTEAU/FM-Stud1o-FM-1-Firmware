@@ -1054,14 +1054,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
-    if (pg->graph == GR_PATTERN && slot == 0u) {         /* (HA HA HE HU) PATTERN's KNOB 1: the pattern */
-        pt_move(steps);
-        return;
-    }
-    if (pg->graph == GR_FILE && slot == 0u) {            /* (HA HA HE HU) FILE's KNOB 1: the project */
-        file_move(steps);
-        return;
-    }
     if (pg->graph == GR_TOOLS && slot == 1u) {           /* TOOLS' KNOB 2 (1.5.5, #190): right INIT, on CLEAN INIT; */
         if (steps > 0) {                                  /* left back, then none */
             ui.tl_clean = ui.act == 2u;
@@ -1171,9 +1163,12 @@ static void act_do(void)
             name_open(NK_USER_SAVE, ui.uslot);
         return;
     }
-    if (cur_page()->graph == GR_PATTERN) {              /* (HA HA HE HU) PATTERN: OPEN, COPY, NEW */
+    if (cur_page()->graph == GR_PATTERN) {              /* (Dah) PATTERN: OPEN, COPY, NEW, DELETE (the dialog) */
         ui.act = 0;
-        pt_do(c);
+        if (c == 3u)
+            confirm_open(CF_DEL_PAT, pt_pick());
+        else
+            pt_do(c + 1u);
         return;
     }
     if (cur_page()->graph == GR_FILE) {                 /* (HA HA HE HU) FILE: OPEN, COPY (its name), NEW; the one open is
@@ -1181,9 +1176,11 @@ static void act_do(void)
         ui.act = 0;
         if (transport_busy() || chain_busy())
             ui_message("STOP FIRST");
-        else if (c == 1u)
+        else if (c == 3u)                               /* (Dah) DELETE: the dialog */
+            pfs_there(ui.fsel) ? confirm_open(CF_DEL_ARCH, ui.fsel) : ui_message("NO PROJECT");
+        else if (c == 0u)
             (void)project_open(ui.fsel);
-        else if (c == 2u)
+        else if (c == 1u)
             name_open(NK_ARCH_SAVE, 0);
         else if (!project_new_file())
             file_enter();
@@ -1364,6 +1361,8 @@ static void presets_turn(int32_t s)
     }
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
+    } else if (g == GR_PATTERN || g == GR_FILE) {          /* (Dah) the list (its knobs are the actions) */
+        g == GR_PATTERN ? pt_move(s) : file_move(s);
     } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG ||
                g == GR_EVENTS) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */

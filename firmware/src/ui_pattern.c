@@ -47,7 +47,7 @@ static uint32_t pt_steps(uint32_t num)                  /* its steps that strike
     return c;
 }
 static uint32_t pt_mem_pct(void) { return (ps_used * 100u + PS_HEAP - 1u) / PS_HEAP; }
-/* OCT+: the action picked (col 1 OPEN, 2 COPY, 3 NEW) */
+/* OCT+: the action picked (col 1 OPEN, 2 COPY, 3 NEW; Dah: KNOB 1..3, KNOB 4 DELETE: ui_input.c, the dialog) */
 static void pt_do(uint32_t c)
 {
     uint32_t k = song.sel % NTRK;
@@ -72,9 +72,9 @@ static void pt_do(uint32_t c)
     if (r == 1)
         ui_message("MEMORY FULL");
 }
-static int pt_ready(uint32_t c)
+static int pt_ready(uint32_t c)                         /* column c (Dah: 0 OPEN 1 COPY 2 NEW 3 DELETE) */
 {
-    return c == 1u ? pt_pick() != ps_num(song.sel) : ps_free_num(song.sel) != 0u;
+    return c == 0u ? pt_pick() != ps_num(song.sel) : c == 3u ? 1 : ps_free_num(song.sel) != 0u;
 }
 /* REC: delete the pattern picked (the dialog first; the last one: emptied) */
 static void pt_delete(void)
