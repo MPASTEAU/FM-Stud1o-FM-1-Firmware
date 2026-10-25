@@ -33,14 +33,22 @@ static int project_rename(uint32_t slot, const char *name);
 static int project_erase(uint32_t slot);
 static int project_new(void);                    /* (HA HA HE HU: project.c) */
 static uint32_t project_current(void);           /* (HA HA HE HU: project.c, the slot the music is from) */
-static int arch_used(uint32_t k);                 /* (HA HA HE HU: project_arch.c, the projects) */
-static int arch_name(uint32_t k, char *b);
-static int project_arch_save(uint32_t k, const char *name);
-static int project_arch_open(uint32_t k);
-static int project_arch_delete(uint32_t k);
-static int project_arch_new(void);
-static uint32_t project_arch_cur(void);
-static uint32_t proj_wire_gen_ui(void);         /* (project.c: proj_wire_gen, a save / load / open changed something) */
+static uint32_t pfs_list(uint8_t *ids);           /* (HA HA HE HU: projfs.c, the projects) */
+static int pfs_there(uint32_t id);
+static int pfs_name(uint32_t id, char *b);
+static uint32_t pfs_pct(uint32_t id);
+static uint32_t pfs_mem_pct(void);
+static uint32_t pfs_cur(void);
+static int project_open(uint32_t id);
+static int project_new_file(void);
+static int project_copy(const char *name);
+static int project_rename_cur(const char *name);
+static int project_delete(uint32_t id);
+static void file_enter(void);
+static uint32_t proj_wire_gen_ui(void);
+static uint32_t ps_num(uint32_t k);              /* (HA HA HE HU: pstore.c, ui_pattern.c) */
+static int pt_ready(uint32_t c);
+static void pt_enter(void);         /* (project.c: proj_wire_gen, a save / load / open changed something) */
 static void project_cur_name(char *b);
 static uint32_t user_of(const track_t *t)    /* user preset slot its sound came from, UP_SLOTS = none */
 {
@@ -191,7 +199,7 @@ static struct {
     uint8_t act;                 /* action pages: the column whose action OCT+ does, + 1; 0 = none (act_col) */
     uint8_t tl_clean;            /* SAVE > TOOLS: KNOB 2 turned on past INIT, CLEAN INIT picked (1.5.5, #190) */
     uint8_t fl_del;              /* SAVE > FILE: KNOB 2 turned on past NEW, DELETE picked (HA HA HE HU) */
-    uint8_t fsel;                /* SAVE > FILE: the project picked, 0..3 (HA HA HE HU) */
+    uint8_t fsel;                /* SAVE > FILE: the project picked, its id (HA HA HE HU) */
     uint32_t rec_t0;             /* REC press time: a tap arms (btn_hold, no hold: held, REC opens its layer) */
     uint32_t save_t0;           /* SAVE press time (btn_hold: held = UNDO) */
     uint8_t confirm;             /* the OCT- / OCT+ dialog: CF_*, 0 = none */
@@ -240,7 +248,7 @@ static struct {
 
 enum { CF_NONE, CF_CLEAR_SEQ, CF_CLEAR_TRK, CF_OVR_PROJ, CF_OVR_USER, CF_LOAD_PAT,
        CF_DEL_ROW, CF_CLEAR_SONG, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_TRACK };   /* (+ a track, the last one off) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
+       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_TRACK, CF_DEL_PAT };   /* (+ a track, the last one off) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot; a pattern over the user's steps;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -405,7 +413,7 @@ static uint32_t large_kind(void)
     if (ui.home)                                        /* (HOME > TRACKS: its rows need the panel, the cards as on */
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
     g = cur_page()->graph;
-    return g == GR_BROWSE || g == GR_SLOTS || g == GR_FILE || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
+    return g == GR_BROWSE || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_USER || g == GR_PATS || g == GR_SONG || g == GR_ROLL ||
            g == GR_SLICES || g == GR_EVENTS || (g >= GR_DLANE && g <= GR_DSYN5) ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
@@ -553,9 +561,11 @@ static void page_entered(void)
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
-    ui.act = pg->graph == GR_USER || pg->graph == GR_FILE ? 4u : 0u;   /* the save screens are ready for OCT+ (HA HA HE HU: FILE too) */
-    if (pg->graph == GR_FILE && project_arch_cur() < 4u)
-        ui.fsel = (uint8_t)project_arch_cur();     /* (HA HA HE HU: on the project open: OCT+ saves it there) */
+    ui.act = pg->graph == GR_USER ? 4u : 0u;     /* the save screen is ready for OCT+ */
+    if (pg->graph == GR_PATTERN)
+        pt_enter();                                  /* (HA HA HE HU: on the pattern the track plays) */
+    if (pg->graph == GR_FILE)
+        file_enter();                               /* (HA HA HE HU: on the project open) */
     if (pg->graph == GR_SLOTS && project_current() < 4u)
         song.g[G_SLOT] = (int16_t)(project_current() + 1u);   /* (the pattern on the tracks) */
     ui.tl_clean = 0;
@@ -792,10 +802,10 @@ static void open_family(uint32_t fam)
             if (PAGES[i].fam == fam && page_visible(i)) break;
         }
         ui.page = (uint8_t)i;
-    } else if (fam == FAM_SAVE) {
+    } else if (fam == FAM_SAVE || fam == FAM_GLO) {
         uint32_t i;
         for (i = 0; i < NPAGES; i++)
-            if (PAGES[i].graph == GR_FILE) break;
+            if (PAGES[i].graph == (fam == FAM_GLO ? GR_SONG : GR_FILE)) break;   /* (GLO: SONG, then its FX) */
         ui.page = (uint8_t)i;                         /* (HA HA HE HU) SAVE enters FILE, the projects (was USER, the sound) */
     } else {
         uint32_t i = ui.fam_last[fam];
@@ -1788,6 +1798,27 @@ static const char *track_def_name(uint32_t k)
     const engine_t *e = ENGINES[TRK_DEF[k % NTRK][0] % NENGINES];
     return TRK_DEF[k % NTRK][1] < e->npresets ? e->presets[TRK_DEF[k % NTRK][1]].name : e->name;
 }
+/* HA HA HE HU: SAVE > FILE: the project picked (one of pfs_list), on the one open when it is there */
+static void file_enter(void)
+{
+    uint8_t ids[32];
+    uint32_t n = pfs_list(ids), i;
+    for (i = 0; i < n && ids[i] != pfs_cur(); i++)
+        ;
+    ui.fsel = i < n ? ids[i] : n ? ids[0] : 0u;
+}
+static void file_move(int32_t steps)
+{
+    uint8_t ids[32];
+    uint32_t n = pfs_list(ids), i;
+    if (!n)
+        return;
+    for (i = 0; i < n && ids[i] != ui.fsel; i++)
+        ;
+    i = (uint32_t)clamp((int32_t)(i < n ? i : 0u) + (steps > 0 ? 1 : -1), 0, (int32_t)n - 1);
+    ui.fsel = ids[i];
+    ui.force = 1;
+}
 static void track_reset(uint32_t k)
 {
     track_t *t = &trk[k % NTRK];
@@ -1810,6 +1841,7 @@ static void track_add(void)
     track_select(k);
     ui_message("TRACK ADDED");
 }
+static void ps_drop_trk(uint32_t k);                   /* (pstore.c, below) */
 static void track_remove_last(void)
 {
     uint32_t k = trk_count();
@@ -1824,12 +1856,15 @@ static void track_remove_last(void)
     k--;
     panic_req |= 1u << k;
     track_reset(k);
+    ps_drop_trk(k);                                  /* (its patterns: memory free again) */
     song.ntrk = (uint8_t)k;
     if (song.sel >= k)
         song.sel = (uint8_t)(k - 1u);
     ui.force = 1;
     ui_message("TRACK REMOVED");
 }
+
+#include "pstore.c"                               /* (HA HA HE HU) each track's patterns */
 
 #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
 #include "ui_events.c"                            /* SEQ > AUTOMATION: locks, events, CHANCE, RATCH as a list (an action page) */
@@ -1861,6 +1896,8 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return 14u;                              /* PATTERN: ERASE (1.5.5, #199) LOAD SAVE */
     if (pg->graph == GR_FILE)
         return 14u;                              /* (HA HA HE HU) FILE: NEW (DELETE) OPEN SAVE */
+    if (pg->graph == GR_PATTERN)
+        return 14u;                              /* (HA HA HE HU) PATTERN: OPEN COPY NEW */
     if (pg->scope == SC_GLOBAL)
         for (c = 0; c < 4u; c++)
             if (go_id(pg->id[c]))
@@ -1882,7 +1919,8 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
     uint32_t id = cur_page()->id[c & 3u];
     if (cur_page()->graph == GR_EVENTS) return ev_act_name();
     if (cur_page()->graph == GR_TOOLS) {
-        static const char *const actions[] = {"CLEAR", "INIT", "DELETE", "CLEAR"};
+        static const char *const actions[] = {"CLEAR", "INIT", "DEL TRK", "CLEAR"};   /* (HA HA HE HU: KNOB 3 the last
+                                                     * track off; a section: REC on SONG) */
         return (c & 3u) == 1u && ui.tl_clean ? "CLEAN" : actions[c & 3u];   /* (1.5.5: KNOB 2 on: CLEAN INIT) */
     }
     if (cur_page()->graph == GR_SONG)
@@ -1893,8 +1931,10 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return UP_GO[(c + 2u) % 3u];
     if (cur_page()->graph == GR_SLICES)
         return c == 3u ? "JOIN" : "SPLIT";
+    if (cur_page()->graph == GR_PATTERN)              /* (HA HA HE HU) */
+        return (c & 3u) == 1u ? "OPEN" : (c & 3u) == 2u ? "COPY" : "NEW";
     if (cur_page()->graph == GR_FILE)                 /* (HA HA HE HU) */
-        return (c & 3u) == 1u ? (ui.fl_del ? "DELETE" : "NEW") : (c & 3u) == 2u ? "OPEN" : "SAVE";
+        return (c & 3u) == 1u ? "OPEN" : (c & 3u) == 2u ? "COPY" : "NEW";
     if (cur_page()->graph == GR_SLOTS && (c & 3u) == 1u)
         return "ERASE";
     return id == G_CLRSEQ ? "CLEAR" : id == G_INITSND ? "INIT" : id == G_LOAD ? "LOAD" : "SAVE";
@@ -1910,7 +1950,7 @@ static int act_ready(void)
     if (cur_page()->graph == GR_EVENTS) return ev_act_ready();
     if (cur_page()->graph == GR_TOOLS)                  /* one case per column: CLEAR PAT, INIT, DELETE ROW, CLEAR SONG */
         return !chain_busy() && (c == 0u ? !seq_is_empty(TSEL) || motion_count(TSEL) : c == 1u ? 1 :
-                                 c == 2u ? ui.song_row < chain_config.count : chain_config.count != 0u);
+                                 c == 2u ? trk_count() > 1u : chain_config.count != 0u);
     if (cur_page()->graph == GR_SONG)
         return song.playing || chain_busy() || chain_config.count;
     if (cur_page()->graph == GR_PATS)
@@ -1921,8 +1961,10 @@ static int act_ready(void)
     if (cur_page()->graph == GR_SLICES)
         return slice_act_ready(c);
 #endif
-    if (cur_page()->graph == GR_FILE)                   /* (HA HA HE HU) NEW always, DELETE / OPEN a project there, SAVE */
-        return c == 1u ? !ui.fl_del || arch_used(ui.fsel) : c == 2u ? arch_used(ui.fsel) : 1;
+    if (cur_page()->graph == GR_PATTERN)                /* (HA HA HE HU) OPEN another, COPY / NEW: a number free */
+        return pt_ready(c);
+    if (cur_page()->graph == GR_FILE)                   /* (HA HA HE HU) OPEN another project, COPY, NEW */
+        return c == 1u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : 1;
     if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PATTERN ERASE: a used slot, stopped */
         return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
     id = cur_page()->id[c & 3u];

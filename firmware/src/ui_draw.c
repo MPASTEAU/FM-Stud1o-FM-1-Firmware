@@ -208,8 +208,15 @@ static uint32_t rail_muted(void)
 }
 static void head_rail(void)
 {
-    uint32_t k, snd = rail_sounding(), mu = rail_muted();
-    for (k = 0; k < NTRK; k++) {
+    uint32_t k, snd = rail_sounding(), mu = rail_muted(), n = trk_count();
+    if (n < NTRK) {                                    /* (HA HA HE HU) the project's tracks, then a "+": ALGORITHM on adds one */
+        int32_t x = 3 + (int32_t)n * RAIL_P;
+        cv_rrect(x, 4, RAIL_W, 16, 3, T_LINE, T_BG);
+        cv_rrect(x + 1, 5, RAIL_W - 2, 14, 2, T_BG, T_LINE);
+        GFX_HOOK_ALIGN(x, 4, x + RAIL_W, 20, AL_HV, "rail digit centred");
+        cv_text_in(x, 4 + CAP_IN(S, 16), RAIL_W, &AF_S, "+", T_DIM, T_BG);
+    }
+    for (k = 0; k < n; k++) {
         int32_t x = 3 + (int32_t)k * RAIL_P, y = 4;
         int sel = k == song.sel, arm = (song.rec >> k) & 1u, on = (snd >> k) & 1u, m = (mu >> k) & 1u;
         uint16_t fill = m ? T_RAISE : on ? ux.trk[k] : ux_mix(ux.bg, ux.trk[k], 38);
@@ -332,16 +339,13 @@ static int head_slot(char *b)
 {
     uint32_t k = song.sel % NTRK, s;
     b[1] = b[2] = 0;
-    if (chain.running) {
-        s = chain.lane[k];
-        b[0] = s < 4u ? (char)('A' + s) : '-';
+    s = chain.running ? chain.lane[k] : ps_num(k);   /* (HA HA HE HU) the track's pattern, its number; a song: its lane's */
+    if (s == CHAIN_SILENT) {
+        b[0] = '-';
         return 1;
     }
-    if (!pat_from[k] || pat_from[k] > 4u)
-        return 0;
-    b[0] = (char)('A' + pat_from[k] - 1u);
-    if (pat_from_sig(TSEL) != pat_from_h[k])
-        b[1] = '*';
+    b[0] = (char)(s < 10u ? '0' + s : '0' + s / 10u);
+    b[1] = (char)(s < 10u ? 0 : '0' + s % 10u);
     return 1;
 }
 /* HA HA HE HU: the pattern worked on, at the right while the rail shows: the selected track's slot letter (A..D; a song
@@ -406,7 +410,8 @@ static void draw_head(void)
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
                    (slot ? str_hash(11u, sl) : 0u) + (uint32_t)midi_lit(song.sel) * 15485863u +   /* (1.5.5) */
-                   (head_rail_on() ? (rail_sounding() * 2654435761u) ^ (rail_muted() * 40503u) ^ song.rec * 977u : 0u);   /* (the rail) */
+                   (head_rail_on() ? (rail_sounding() * 2654435761u) ^ (rail_muted() * 40503u) ^ song.rec * 977u : 0u) +   /* (the rail) */
+                   trk_count() * 3141592653u;
     int msg = ui.msg_t || ui.layer;
     int centre = !msg || ui.bpm_t || ui.layer == LAYER_GLO;   /* the BPM being changed: it stays, the message right */
     int32_t rx = HEAD_REC_X;
@@ -1090,8 +1095,8 @@ static void draw_columns_in(void)
             val[2] = 0;
             draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
             sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
-            if (used) { val[0] = sl < 4u ? (char)('A' + sl) : '-'; val[1] = 0; }
-            else str_cpy(val, "--", sizeof val);
+            if (used && sl != CHAIN_SILENT) fmt_int(val, (int32_t)sl);   /* (HA HA HE HU: the pattern's number) */
+            else str_cpy(val, used ? "-" : "--", sizeof val);
             draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
         }
         if (used) fmt_int(val, (int32_t)CHAIN_REP(chain_config.row[row]));
@@ -1189,8 +1194,8 @@ static void draw_columns_in(void)
         return;
     }
     if (cur_page()->graph == GR_TOOLS) {
-        static const char *const labels[] = {"PAT", "SOUND", "SEC", "SONG"};
-        static const uint8_t icons[] = {ICON_AUTO, ICON_AUTO, ICON_X_SONG, ICON_X_SONG};   /* ROW, SONG: the song's */
+        static const char *const labels[] = {"PAT", "SOUND", "TRACK", "SONG"};   /* (HA HA HE HU: TRACK, the last off) */
+        static const uint8_t icons[] = {ICON_AUTO, ICON_AUTO, ICON_AUTO, ICON_X_SONG};
         for (c = 0; c < 4u; c++)                       /* (1.5.5: KNOB 2 on past INIT, CLEAN) */
             draw_act_column(c, c == 1u && ui.tl_clean && act_col() == 2u ? "CLEAN" : labels[c], VAL(c), icons[c]);
         return;
@@ -1439,17 +1444,24 @@ static void draw_columns_in(void)
             draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->graph == GR_FILE) {             /* (HA HA HE HU) FILE: PROJECT, NEW (on: DELETE), OPEN, SAVE */
-            int used = graph_arch_used(ui.fsel);
+        if (cur_page()->graph == GR_PATTERN) {          /* (HA HA HE HU) PATTERN: the one picked, OPEN COPY NEW */
             if (c == 0u) {
-                val[0] = (char)('1' + (ui.fsel & 3u));
-                val[1] = 0;
-                draw_column(0, "SLOT", val, "/4", VAL(0u), (ui.fsel & 3u) * 1000 / 3, ICON_AUTO);
-            } else if (c == 1u) {
-                draw_act_column(1, ui.fl_del && act_col() == 2u ? "DELETE" : "NEW", c == 1u && ui.fl_del && !used ? T_DIM : T_THEME,
-                                ICON_AUTO);
+                uint8_t nums[PS_NUM];
+                char u[6] = "/";
+                fmt_int(val, (int32_t)pt_pick());
+                fmt_int(u + 1, (int32_t)pt_list(nums));
+                draw_column(0, "PATTERN", val, u, VAL(0u), -1, ICON_AUTO);
             } else {
-                draw_act_column(c, c == 2u ? "OPEN" : "SAVE", c == 2u && !used ? T_DIM : T_THEME, ICON_AUTO);
+                draw_act_column(c, act_name(c), pt_ready(c) ? T_THEME : T_DIM, ICON_AUTO);
+            }
+            continue;
+        }
+        if (cur_page()->graph == GR_FILE) {             /* (HA HA HE HU) FILE: the memory, OPEN COPY NEW */
+            if (c == 0u) {
+                fmt_int(val, (int32_t)pfs_mem_pct());
+                draw_column(0, "MEMORY", val, "%", VAL(0u), (int32_t)pfs_mem_pct() * 10, ICON_AUTO);
+            } else {
+                draw_act_column(c, act_name(c), act_ready() || act_col() != c + 1u ? T_THEME : T_DIM, ICON_AUTO);
             }
             continue;
         }
@@ -1613,6 +1625,13 @@ static void confirm_text(char *a, char *b)
     case CF_DEL_ROW:
         str_cpy(a, "DELETE SECTION?", 24);
         break;
+    case CF_DEL_PAT:                                 /* (HA HA HE HU) SAVE > PATTERN, REC */
+        str_cpy(a, "DELETE PATTERN ", 24);
+        fmt_int(a + str_len(a), (int32_t)k);
+        str_cpy(a + str_len(a), "?", 4);
+        str_cpy(b, "TRACK 1", 24);
+        b[6] = (char)('1' + song.sel % NTRK);
+        break;
     case CF_ADD_TRACK:                               /* (HA HA HE HU) ALGORITHM past the last track */
         str_cpy(a, "ADD TRACK 1?", 24);
         a[10] = (char)('1' + k % NTRK);
@@ -1627,15 +1646,11 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "NEW PROJECT?", 24);
         str_cpy(b, "UNSAVED CHANGES LOST", 24);
         break;
-    case CF_OPEN_ARCH:                               /* (HA HA HE HU) SAVE > FILE's OPEN, DELETE, SAVE over another */
+    case CF_OPEN_ARCH:                               /* (HA HA HE HU) SAVE > FILE: REC deletes */
     case CF_DEL_ARCH:
     case CF_OVR_ARCH:
-        str_cpy(a, ui.confirm == CF_OPEN_ARCH ? "OPEN PROJECT 1?" : ui.confirm == CF_DEL_ARCH ? "DELETE PROJECT 1?" :
-                   "OVERWRITE PROJECT 1?", 24);
-        a[str_len(a) - 2u] = (char)('1' + (k & 3u));
-        if (ui.confirm == CF_OPEN_ARCH)
-            str_cpy(b, "UNSAVED CHANGES LOST", 24);
-        else if (!arch_name(k & 3u, b) || !b[0])
+        str_cpy(a, "DELETE PROJECT?", 24);
+        if (!pfs_name(k, b) || !b[0])
             str_cpy(b, "UNTITLED", 24);
         break;
     case CF_CLEAR_SONG:

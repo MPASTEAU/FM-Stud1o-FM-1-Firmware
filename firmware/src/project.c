@@ -1063,6 +1063,9 @@ static void proj_fetch(uint32_t slot)
 }
 #endif
 
+#ifndef PROJ_FUNX
+#define PROJ_FUNX 0                               /* (HA HA HE HU: FUNX / FUNY written no more: projfs.c) */
+#endif
 #if FELUCCA_FLASH
 #define PX_OBJ0 OBJ_PROJX0                       /* the FUNX objects (storage.c) */
 #define PX_AUTO OBJ_AUTOX
@@ -1076,7 +1079,7 @@ static void proj_fetch(uint32_t slot)
  * (st_buf holds it: no other buffer); 0 = none there (q as it was) */
 static int proj_x_apply(project_t *q, uint32_t obj, uint32_t tag)
 {
-#if FELUCCA_FLASH
+#if FELUCCA_FLASH && PROJ_FUNX                       /* (HA HA HE HU: their flash is the PROJECTS' now, projfs.c) */
     st_hdr_t h;
     int r;
     if (!flash_ok)
@@ -1094,7 +1097,7 @@ static int proj_x_apply(project_t *q, uint32_t obj, uint32_t tag)
 /* .. q's tracks 5..8 written as the FUNX of the FUN10 record tagged tag into obj (0 written, 1 failed; no flash: 0) */
 static int proj_x_save(const project_t *q, uint32_t obj, uint32_t tag)
 {
-#if FELUCCA_FLASH
+#if FELUCCA_FLASH && PROJ_FUNX
     if (!flash_ok)
         return 0;
     proj_wire_gen++;
@@ -1542,47 +1545,15 @@ static int project_used(uint32_t slot) { return proj_import(&proj_scratch, &proj
 /* Main loop only: no flash access or copies when the ISR changes rows. */
 static uint32_t chain_prepare(void)
 {
-    uint32_t i, k, j, used = 0;
     if (transport_busy())
         return 2;
     if (!chain_valid(&chain_config) || !chain_config.count)
         return 1;
-    for (i = 0; i < chain_config.count; i++)            /* the slots the lanes play (not the silent ones) */
-        for (k = 0; k < NTRK; k++) {
-            uint32_t s = chain_config.row[i].slot[k];
-            if (s >= 4u || ((used >> s) & 1u))
-                continue;
-            if (!project_used(s))
-                return 3u + s;
-            used |= 1u << s;
-        }
-    chain.config = chain_config;
-    for (i = 0; i < 4u; i++)
-        if ((used >> i) & 1u) {
-            project_t *p = &proj_scratch;
-            if (!proj_import(p, &proj_slot[i], sizeof(project_store_t))) return 3u + i;
-            (void)proj_x_apply(p, PX_OBJ0 + i, proj_tag(&proj_slot[i]));   /* (HA HA HE HU: tracks 5..8) */
-            chain.source[i].motion = p->motion;
-            /* A song keeps its current instruments. Engine-specific motion from
-             * another instrument would change a kit/wave/algorithm unexpectedly. */
-            {
-                motion_store_t *m = &chain.source[i].motion; uint32_t n = 0;
-                for (uint32_t e = 0; e < m->count; e++) {
-                    const motion_event_t *v = &m->event[e]; uint32_t owner = v->place >> 6;
-                    if (MOTION_ID(v) >= P_FM1_ATK && p->t[owner].engine != trk[owner].eng_req) continue;
-                    m->event[n++] = *v;
-                }
-                m->count = (uint8_t)n;
-            }
-            for (k = 0; k < NTRK; k++) {
-                memcpy(chain.source[i].step[k], p->t[k].step, sizeof p->t[k].step);
-                proj_steps(chain.source[i].step[k]);
-                chain.source[i].qnt[k] = (uint8_t)p->t[k].p[P_SQNT];   /* (OFF ON, a strength) */
-                for (j = 0; j < 4u; j++)
-                    chain.source[i].timing[k][j] = (int16_t)clamp(p->t[k].p[P_SLEN + j],
-                        TP[P_SLEN + j].min, TP[P_SLEN + j].max);
-            }
-        }
+    chain.config = chain_config;                        /* (HA HA HE HU: each track's patterns, pstore.c: the first two
+                                                         * sections now, each next one while the one before plays) */
+    chain_fill(0);
+    if (chain.config.count > 1u)
+        chain_fill(1);
     RING_PUBLISH();
     chain.armed = 1;
     transport_req = 1;
@@ -1649,6 +1620,10 @@ static struct {
     uint8_t wrote, err;                          /* a write since power-on (last is valid); the last one failed */
 } as __attribute__((section(".pool")));
 
+static int project_save_cur(void);               /* (HA HA HE HU: projfs.c, below) */
+#if FELUCCA_FLASH
+static int pfs_read(uint32_t id);
+#endif
 static uint32_t as_mix(uint32_t h, const void *p, uint32_t n)   /* FNV-1a, continued */
 {
     const uint8_t *b = p;
@@ -1680,6 +1655,10 @@ static uint32_t autosave_sig(void)
     h = as_mix(h, song.mch, sizeof song.mch);           /* (1.5.5: MIDI IN TRACK's channels, the project's) */
     h = as_mix(h, &motion, sizeof motion);
     h = as_mix(h, &chain_config, sizeof chain_config);
+    h = as_mix(h, trkx, sizeof trkx);                   /* (HA HA HE HU: the extras, the patterns, the tracks) */
+    h = as_mix(h, ps_heap, ps_used);
+    h = as_mix(h, ps_cur, sizeof ps_cur);
+    h = as_mix(h, &song.ntrk, 1);
     return as_mix(h, proj_name, sizeof proj_name);
 }
 
@@ -1719,10 +1698,9 @@ static void autosave_poll(void)
     as.wrote = 1;
     project_capture(&proj_scratch);
     proj_wire_gen++;
-    as.err = !proj_pack(&proj_wire, &proj_scratch) || st_save(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire) != 0 ||
-             proj_x_save(&proj_scratch, PX_AUTO, proj_tag(&proj_wire));   /* (HA HA HE HU: tracks 5..8) */
+    as.err = project_save_cur() != 0;               /* (HA HA HE HU: the project open, saved in place; none: a new one) */
     if (!as.err) {
-        as.saved = sig;
+        as.saved = as.seen = autosave_sig();           /* (HA HA HE HU: a new project's name given meanwhile: saved too) */
         as.writes++;
     }
 #endif
@@ -1735,17 +1713,11 @@ static int autosave_boot(int allowed)
 {
     int rc = 0;
 #if FELUCCA_FLASH
-    if (flash_ok && allowed && !(ui_prefs & PREF_RESTORE_OFF)) {
-        int n;
-        proj_wire_gen++;
-        n = st_load(OBJ_AUTOSAVE, &proj_wire, sizeof proj_wire);
-        if (n > 0 && proj_import(&proj_scratch, &proj_wire, n)) {
-            (void)proj_x_apply(&proj_scratch, PX_AUTO, proj_tag(&proj_wire));   /* (HA HA HE HU: tracks 5..8) */
-            proj_bound(&proj_scratch);
-            if (!project_restore_runtime(&proj_scratch)) {
-                ui_message("RESTORED");
-                rc = 1;
-            }
+    if (flash_ok && allowed && !(ui_prefs & PREF_RESTORE_OFF) && pfs_cur() && pfs_there(pfs_cur())) {
+        ps_reset();                                     /* (HA HA HE HU: the project open last) */
+        if (!pfs_read(pfs_cur())) {
+            ui_message("RESTORED");
+            rc = 1;
         }
     }
 #else
@@ -1757,16 +1729,21 @@ static int autosave_boot(int allowed)
 }
 
 #if FELUCCA_FLASH
-#include "project_arch.c"                         /* HA HA HE HU: PROJECTS, a whole piece of music each (SAVE > FILE) */
+#include "projfs.c"                               /* HA HA HE HU: the PROJECTS, as many as fit (SAVE > FILE) */
 #else
-static int arch_used(uint32_t k) { (void)k; return 0; }
-static int arch_name(uint32_t k, char *b) { (void)k; b[0] = 0; return 0; }
-static int project_arch_save(uint32_t k, const char *name) { (void)k; (void)name; ui_message("NO FLASH"); return 1; }
-static int project_arch_open(uint32_t k) { (void)k; ui_message("NO FLASH"); return 1; }
-static int project_arch_delete(uint32_t k) { (void)k; return 1; }
-static int project_arch_new(void) { uint32_t s; for (s = 0; s < 4u; s++) memset(&proj_slot[s], 0, sizeof proj_slot[s]);
-    chain_defaults(&chain_config); return project_new(); }
-static uint32_t project_arch_cur(void) { return 0xFFu; }
+static uint32_t pfs_count(void) { return 0; }
+static uint32_t pfs_list(uint8_t *ids) { (void)ids; return 0; }
+static int pfs_there(uint32_t id) { (void)id; return 0; }
+static int pfs_name(uint32_t id, char *b) { (void)id; b[0] = 0; return 0; }
+static uint32_t pfs_pct(uint32_t id) { (void)id; return 0; }
+static uint32_t pfs_mem_pct(void) { return 0; }
+static uint32_t pfs_cur(void) { return 0; }
+static int project_save_cur(void) { return 1; }
+static int project_open(uint32_t id) { (void)id; ui_message("NO FLASH"); return 1; }
+static int project_new_file(void) { chain_defaults(&chain_config); ps_reset(); song.ntrk = 1; song.sel = 0; return project_new(); }
+static int project_copy(const char *name) { (void)name; return 1; }
+static int project_rename_cur(const char *name) { str_cpy(proj_name, name, sizeof proj_name); return 0; }
+static int project_delete(uint32_t id) { (void)id; return 1; }
 #endif
 #if FELUCCA_FLASH
 _Static_assert(sizeof(project_store_t) <= ST_PAYLOAD_MAX, "project does not fit one flash sector");

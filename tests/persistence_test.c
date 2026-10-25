@@ -30,12 +30,16 @@ static void panel_setup(void) {}
 
 static uint8_t nor[0x100000], flash_ok = 1;
 static int erase_error, fail_after = -1;
-static uint32_t erases, as_erases;               /* (as_erases: the autosave's two sectors, 0xE5000 / 0xE6000) */
+static uint32_t erases, as_erases;               /* (as_erases: the PROJECTS' sectors, 0xB4000 .. 0xDBFFF: projfs.c) */
+static uint32_t pfs_er[40];                      /* (each of those sectors' erases) */
 static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
 static int st_erase(uint32_t off)
 {
     erases++;
-    as_erases += off >= 0xE5000u && off < 0xE7000u;
+    if (off >= 0xB4000u && off < 0xDC000u) {
+        as_erases++;
+        pfs_er[(off - 0xB4000u) / 4096u]++;
+    }
     if (erase_error) return -8;
     memset(nor + off, 0xFF, 4096);
     return 0;
@@ -97,6 +101,7 @@ static void reset(void)
     erase_error = 0;
     fail_after = -1;
     up_gen = erases = 0;
+    pfs.ok = 0;                                  /* (the flash erased: scanned again) */
     irq_start_race = irq_races = 0;
 }
 
@@ -273,10 +278,15 @@ static int autosave_test(void)
     as_run(9000u);
     ok = !as.writes;
     as_run(1500u);
-    bad += check("autosave: a change: no write within 10 s, one once idle 10 s (one erase)",
-                 ok && as.writes == 1u && as_erases == 1u && st_load(OBJ_AUTOSAVE, &raw, sizeof raw) == (int)sizeof raw);
+    {
+        char nm[16];
+        bad += check("autosave: a change: no write within 10 s, one once idle 10 s (none open: a new project, PROJECT 1)",
+                     ok && as.writes == 1u && as_erases >= 1u && pfs_cur() == 1u && pfs_there(1) && pfs_name(1, nm) &&
+                     str_eq(nm, "PROJECT 1") && pfs_count() == 1u);
+    }
+    b0 = as_erases;
     as_run(600000u);
-    bad += check("autosave: 10 min unchanged after it: no more writes", as.writes == 1u && as_erases == 1u);
+    bad += check("autosave: 10 min unchanged after it: no more writes", as.writes == 1u && as_erases == b0);
     song.g[G_SLOT] = 3;                                  /* (the PROJECT page's pick, the selected track: not the music) */
     song.sel = 2;
     as_run(120000u);
@@ -351,30 +361,45 @@ static int autosave_test(void)
     as_run(300000u);
     bad += check("autosave: RESTORE LAST OFF: none restored, none written", ok && !as.writes && as_erases == b0);
     ui_prefs &= (uint8_t)~PREF_RESTORE_OFF;
-    {   /* a damaged copy: the other one (A/B); both damaged: none */
-        st_hdr_t h;
-        int cur, other;
+    {   /* HA HA HE HU: the project open is the autosave (projfs.c): its payload damaged: ignored; its header: none
+         * there; a record whose bytes check but are no project: ignored */
+        pfs_hdr_t h;
+        uint32_t id, at, i;
         as_power_on();
         autosave_boot(1);
-        song.g[G_BPM] = 111;                             /* a newer copy into the other sector */
+        song.g[G_BPM] = 111;                             /* (written again: the newer record, the older one gone) */
         as_run(11000u);
-        cur = st_current(OBJ_AUTOSAVE, &h);
-        nor[st_sector(OBJ_AUTOSAVE, (uint32_t)cur) + ST_PAYLOAD_OFF + 100u] ^= 0x10u;   /* its payload: the CRC fails */
-        other = st_current(OBJ_AUTOSAVE, &h);
+        id = pfs_cur();
+        ok = id && pfs_there(id) && as.writes == 1u;
+        at = pfs_off(pfs.start[id] - 1u);
+        nor[at + PFS_PAY + 100u] ^= 0x10u;               /* its payload: the hash fails */
+        pfs.ok = 0;
         as_power_on();
-        ok = cur >= 0 && other == !cur && autosave_boot(1) == 1 && song.g[G_BPM] == 97;
-        bad += check("autosave: the newest copy damaged: the copy before it is restored", ok);
-        nor[st_sector(OBJ_AUTOSAVE, (uint32_t)other) + 12u] ^= 0x01u;   /* the other one's header too */
+        ok &= autosave_boot(1) == 0 && song.g[G_BPM] != 111;
+        bad += check("autosave: the project damaged (its payload): ignored, power-on as new", ok);
+        nor[at + PFS_PAY + 100u] ^= 0x10u;
+        nor[at + 12u] ^= 0x01u;                          /* its header */
+        pfs.ok = 0;
         as_power_on();
-        ok = autosave_boot(1) == 0 && song.g[G_BPM] != 97 && song.g[G_BPM] != 111;
-        bad += check("autosave: both copies damaged: ignored, power-on as new", ok);
-        memset(nor + 0xE5000u, 0xFF, 0x2000u);
-        st_save(OBJ_AUTOSAVE, "NOT A PROJECT", 13u);     /* a valid record that is no project */
+        ok = !pfs_there(id) && autosave_boot(1) == 0 && song.g[G_BPM] != 111;
+        bad += check("autosave: its header damaged: no project there, power-on as new", ok);
+        memset(nor + at, 0xFF, 4096u);                   /* a record that checks, its bytes no project's */
+        memset(&h, 0, sizeof h);
+        h.magic = PFS_MAGIC; h.ver = PFS_VER; h.id = (uint8_t)id; h.nsect = 1; h.ntrk = 1; h.gen = 1; h.len = 200;
+        for (i = 0, h.sum = 2166136261u; i < h.len; i++) {
+            nor[at + PFS_PAY + i] = (uint8_t)"NOT A PROJECT "[i % 14u];
+            h.sum = (h.sum ^ nor[at + PFS_PAY + i]) * 16777619u;
+        }
+        h.hsum = pfs_fnv(2166136261u, &h, sizeof h - 4u);
+        memcpy(nor + at, &h, sizeof h);
+        pfs.ok = 0;
         as_power_on();
-        bad += check("autosave: a record that is no project: ignored", autosave_boot(1) == 0 && song.g[G_BPM] != 97);
+        bad += check("autosave: a record that is no project: ignored", pfs_there(id) && autosave_boot(1) == 0 && song.g[G_BPM] != 111);
     }
     /* a power cut in the middle of a write: the copy before stays in charge */
-    memset(nor + 0xE5000u, 0xFF, 0x2000u);
+    memset(nor + 0xB4000u, 0xFF, 0x28000u);
+    pfs.ok = 0;
+    PFS_CUR = 0;
     as_power_on();
     autosave_boot(1);
     as_edit(8);
@@ -391,6 +416,8 @@ static int autosave_test(void)
     as_power_on();
     autosave_boot(1);
     as_erases = 0;
+    memset(pfs_er, 0, sizeof pfs_er);
+    w = as.writes;
     for (minute = 0; minute < 240u; minute++) {
         uint32_t s;
         if (minute >= 180u) {
@@ -406,18 +433,27 @@ static int autosave_test(void)
     }
     song.playing = 0;
     as_run(20000u);
-    printf("persist:   a 4-hour session (3 h editing and playing, 1 h idle): %u autosave writes\n", (unsigned)as_erases);
-    bad += check("autosave wear: a session's writes stay far below one a minute", as_erases > 0u && as_erases <= 60u);
+    for (k = 0, b0 = 0; k < 40u; k++)
+        b0 = pfs_er[k] > b0 ? pfs_er[k] : b0;
+    printf("persist:   a 4-hour session (3 h editing and playing, 1 h idle): %u autosave writes, %u erases, %u at most a sector\n",
+           (unsigned)(as.writes - w), (unsigned)as_erases, (unsigned)b0);
+    bad += check("autosave wear: a session's writes stay far below one a minute (a sector's erases too)",
+                 as.writes > w && as.writes - w <= 60u && b0 <= 30u);
     {   /* worst case: a change, then just enough idle, over and over, for 8 hours */
         uint32_t i;
         as_erases = 0;
+        memset(pfs_er, 0, sizeof pfs_er);
+        w = as.writes;
         for (i = 0; i < 8u * 3600u / 11u; i++) {
             as_edit(i);
             as_run(11000u);
         }
-        printf("persist:   worst case, 8 h of a change every 11 s: %u writes (%u per sector)\n", (unsigned)as_erases,
-               (unsigned)(as_erases / 2u));
-        bad += check("autosave wear, worst case: at most one write a minute (480 in 8 h)", as_erases <= 8u * 60u + 1u);
+        for (k = 0, b0 = 0; k < 40u; k++)
+            b0 = pfs_er[k] > b0 ? pfs_er[k] : b0;
+        printf("persist:   worst case, 8 h of a change every 11 s: %u writes (%u erases a sector at most)\n",
+               (unsigned)(as.writes - w), (unsigned)b0);
+        bad += check("autosave wear, worst case: at most one write a minute (480 in 8 h), a sector erased 240 times at most",
+                     as.writes - w <= 8u * 60u + 1u && b0 <= 8u * 60u / 2u);
     }
     return bad;
 }
@@ -664,9 +700,9 @@ int main(void)
         }
     }
     chain_config.count = 1;
-    chain_config.row[0] = chain_row_of(3, 1);
+    chain_config.row[0] = chain_row_of(ps_num(0), 1);    /* (HA HA HE HU: the pattern track 1 plays, pstore.c) */
     bad += check("SONG sources use the same step bounds", chain_prepare() == 0 &&
-                  !memcmp(&chain.source[3].step[0][0], &trk[0].step[0], sizeof(step_t)));
+                  !memcmp(&chain.source[0].step[0][0], &trk[0].step[0], sizeof(step_t)));
     seq_stop();
     transport_req = 0;
     memset(&r, 0, sizeof r);

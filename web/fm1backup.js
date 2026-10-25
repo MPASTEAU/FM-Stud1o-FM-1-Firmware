@@ -3,13 +3,17 @@
 // Local, complete musical archives. Requests name whitelisted objects, never flash addresses.
 // 8: the FM6 patch bank of 1.0..1.0.2 (listed empty since 1.0.3: a restore of an older archive's bank moves its patches
 // into the user presets restored before it); 9: the user presets' FM6 patches (1.0.3)
-// 10..13 (HA HA HE HU): the PROJECT slots' tracks 5..8 (their FUNX objects), each after its slot; 14..17 their extras (FUNY)
-export const BACKUP_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 32, 33, 34];
-const BACKUP_IDS_X = BACKUP_IDS.filter((id) => id < 14 || id >= 32);    // eight tracks, before the extras
+// 10..13 (HA HA HE HU, retired): the PROJECT slots' tracks 5..8 (their FUNX objects); 14..17 their extras (FUNY).
+// 18 (HA HA HE HU): the PROJECTS, their flash as it is (whole sectors, up to 160 KB)
+export const BACKUP_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 18, 32, 33, 34];
+const BACKUP_IDS_Y = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 32, 33, 34];   // the slots' eight tracks
+const BACKUP_IDS_X = BACKUP_IDS_Y.filter((id) => id < 14 || id >= 32);    // eight tracks, before the extras
 const BACKUP_IDS_V3 = BACKUP_IDS.filter((id) => id < 10 || id >= 32);   // 1.0.3 .. the four-track firmware
+const RETIRED = (id) => id >= 10 && id <= 17;                            // (an older archive's: skipped on restore)
+const sizeMax = (id) => (id === 18 ? 163840 : id >= 32 ? 81920 : 3840);
 const BACKUP_IDS_V2 = BACKUP_IDS_V3.filter((id) => id !== 9);           // 1.0..1.0.2, and their archives
 const BACKUP_IDS_V1 = BACKUP_IDS_V2.filter((id) => id !== 8);           // firmware before FM6, and its archives
-const idsOf = (n) => [BACKUP_IDS, BACKUP_IDS_X, BACKUP_IDS_V3, BACKUP_IDS_V2, BACKUP_IDS_V1].find((ids) => ids.length === n) || null;
+const idsOf = (n) => [BACKUP_IDS, BACKUP_IDS_Y, BACKUP_IDS_X, BACKUP_IDS_V3, BACKUP_IDS_V2, BACKUP_IDS_V1].find((ids) => ids.length === n) || null;
 export const BACKUP_CMD = { LIST: 65, GET: 66, PUT: 67 };
 const BACKUP_CHUNK = 256;
 export const bkU32 = (n) => Array.from({ length: 5 }, (_, i) => (n >>> (i * 7)) & (i === 4 ? 15 : 127));
@@ -58,7 +62,7 @@ export function bkManifest(a) {
     const p = 3 + i * 11;
     if (a[p] !== id) throw new Error("Unexpected archive object");
     const size = bkR32(a, p + 1), crc = bkR32(a, p + 6);
-    if (size > (id >= 32 ? 81920 : 3840) || (!size && crc)) throw new Error("Archive object too large");
+    if (size > sizeMax(id) || (!size && crc)) throw new Error("Archive object too large");
     return { id, size, crc };
   });
 }
@@ -69,7 +73,7 @@ export function readBackup(file) {
   if (!file || file.format !== "felucca-backup" || file.version !== 1 || !ids)
     throw new Error("Not a complete Felucca backup");
   const objects = file.objects.map((o, i) => {
-    if (!o || o.id !== ids[i] || !Number.isInteger(o.size) || o.size < 0 || o.size > (o.id >= 32 ? 81920 : 3840) ||
+    if (!o || o.id !== ids[i] || !Number.isInteger(o.size) || o.size < 0 || o.size > sizeMax(o.id) ||
         !Number.isInteger(o.crc) || o.crc < 0 || o.crc > 0xffffffff || typeof o.data !== "string" ||
         o.data.length !== 4 * Math.ceil(o.size / 3) || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(o.data))
       throw new Error("Invalid backup object");
@@ -118,6 +122,8 @@ export async function restoreBackup(request, file, onProgress = () => {}) {
   const put = async (args) => { const a = await ask([BACKUP_CMD.PUT, args]); bkCheck(a[2]); return a; };
   // Restore live music last. Other objects commit individually; a disconnect can leave a partial restore.
   for (const o of [...archive.objects.slice(2), archive.objects[1], archive.objects[0]]) {
+    if (RETIRED(o.id)) { done += o.size; onProgress(done, total); continue; }   // (their flash: the projects' now)
+    if (o.id > 32 && !o.size) continue;                                  // (USR2, USR3: the projects' flash now)
     if (o.id >= 32) {
       const slot = o.id - 32;
       const check = (a) => { if (a[0] !== slot) throw new Error("Unexpected sample reply"); bkCheck(a.at(-1)); };
@@ -134,7 +140,8 @@ export async function restoreBackup(request, file, onProgress = () => {}) {
         done += 512; onProgress(done, total);
       }
     } else {
-      if (o.id === 9) {                    // firmware before 1.0.3 does not take id 9 (rc 1 at begin, nothing written): skip it
+      if (o.id === 9 || o.id === 18) {    // firmware before 1.0.3 does not take id 9, nor before the projects 18 (rc 1 at begin,
+                                           // nothing written): skip it
         const a = await ask([BACKUP_CMD.PUT, [0, o.id, ...bkU32(o.size), ...bkU32(o.crc)]]);
         if (a[2] === 1) { done += o.size; onProgress(done, total); continue; }
         bkCheck(a[2]);

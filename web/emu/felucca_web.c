@@ -319,6 +319,7 @@ static void web_frame(void)
     ui_input();
     settings_poll();
     autosave_poll();
+    chain_poll();
     ui_leds();
     ui_draw();
 }

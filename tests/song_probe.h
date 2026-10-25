@@ -16,8 +16,14 @@ static chain_row_t probe_row(uint32_t s, uint32_t r)  /* (HA HA HE HU: tracks 5.
         w.slot[k] = CHAIN_SILENT;
     return w;
 }
-#define PROBE_ROW(s, r) probe_row(s, r)
+#define PROBE_ROW(s, r) probe_row((s) + 1u, r)       /* (HA HA HE HU: the slots A, B: patterns 1, 2 (pat_keep)) */
+#define PROBE_START() pat_park()
+#define PROBE_SAVE(s) pat_keep((s) + 1u)
+#define PROBE_POLL() chain_poll()                     /* (the main loop readies the next section) */
 #else
+#define PROBE_START()
+#define PROBE_SAVE(s) project_save(s)
+#define PROBE_POLL()
 #define PROBE_ROW(s, r) ((chain_row_t){s, r})
 #endif
 #define SONG_PROBE_GOLDEN 0x676A420Du              /* the firmware before lanes (bddbbd8), 11026 blocks */
@@ -28,6 +34,7 @@ static uint32_t song_probe(uint32_t *blocks)
     static const int16_t LEN[2][NTRK_V10] = {{16, 12, 7, 5}, {8, 16, 10, 3}}, DIV[2][NTRK_V10] = {{2, 1, 2, 3}, {1, 2, 0, 2}};
     uint32_t s, k, i, h = 2166136261u, n = 0;
     ui_power_on();
+    PROBE_START();
     for (s = 0; s < 2u; s++) {
         for (k = 0; k < NTRK_V10; k++) {
             track_t *t = &trk[k];
@@ -46,7 +53,7 @@ static uint32_t song_probe(uint32_t *blocks)
             motion_set_enabled(t, 1);
             motion_set_event(t, (uint32_t)(2u + s), P_REV, (int16_t)(20 + 30 * (int16_t)s + (int16_t)k));
         }
-        project_save(s);
+        PROBE_SAVE(s);
     }
     chain_config.count = 3;
     chain_config.row[0] = PROBE_ROW(0, 2);
@@ -56,6 +63,7 @@ static uint32_t song_probe(uint32_t *blocks)
         return 0;
     while (n < 40000u && (n < 4u || chain.running)) {
         events_block(32);
+        PROBE_POLL();
         n++;
         h = song_probe_mix(h, (uint32_t)chain.running | (uint32_t)chain.row << 1 | (uint32_t)chain.remaining << 8);
         for (k = 0; k < NTRK_V10; k++) {

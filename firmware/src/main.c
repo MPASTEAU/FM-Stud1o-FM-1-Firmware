@@ -220,6 +220,7 @@ static void felucca_init(void)
         song.g[i] = GP[i].def;
     undo_depth++;                             /* (no undo copy of the power-on loads) */
     fm6_init();                               /* every track's FM6 patch: the init voice */
+    ps_reset();                               /* (HA HA HE HU: each track on its pattern 1, no other) */
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         trkx_defaults(&trkx[i]);              /* (HA HA HE HU: LFO DRAW's points, CURVE STEP) */
@@ -426,6 +427,7 @@ static void fm1_main(void)
         ui_input();
         settings_poll();                              /* queued settings save: only while stopped */
         autosave_poll();                              /* (1.2) the music, stopped and idle: project.c */
+        chain_poll();                                 /* (HA HA HE HU) a SONG's next section ready: pstore.c */
         felucca_dbg.stage = 2;
         ui_leds();
         ui_draw();

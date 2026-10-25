@@ -538,7 +538,14 @@ static void song_add(void)
     uint32_t n = chain_config.count;
     if (n >= CHAIN_ROWS)
         return;
-    chain_config.row[n] = n ? chain_config.row[n - 1u] : chain_row_of(0, 1);
+    if (n)
+        chain_config.row[n] = chain_config.row[n - 1u];
+    else {                                              /* (HA HA HE HU: the first: each track on the pattern it plays) */
+        uint32_t k;
+        chain_config.row[0] = chain_row_of(CHAIN_SILENT, 1);
+        for (k = 0; k < trk_count(); k++)
+            chain_config.row[0].slot[k] = (uint8_t)ps_num(k);
+    }
     chain_config.count = (uint8_t)(n + 1u);
     ui.song_row = (uint8_t)n;
 }
@@ -557,14 +564,14 @@ static void song_keys(uint32_t notes)
                 return;
             song_add();
             if (chain_config.count == 1u)
-                chain_config.row[0] = chain_row_of((uint32_t)s, 1);
+                chain_config.row[0] = chain_row_of((uint32_t)s + 1u, 1);   /* (HA HA HE HU: A..D's keys, patterns 1..4) */
         }
         if (ui.song_trk >= NTRK) {                    /* SEC: the key puts the slot on every track of the section */
             uint32_t k;
             for (k = 0; k < NTRK; k++)
-                chain_config.row[ui.song_row].slot[k] = (uint8_t)s;
+                chain_config.row[ui.song_row].slot[k] = (uint8_t)(s + 1);
         } else {
-            chain_config.row[ui.song_row].slot[ui.song_trk] = (uint8_t)s;
+            chain_config.row[ui.song_row].slot[ui.song_trk] = (uint8_t)(s + 1);
         }
         ui.force = 1;
     }
@@ -573,10 +580,10 @@ static void song_keys(uint32_t notes)
 static uint32_t song_leds(void)
 {
     uint32_t k, s;
-    if (ui.song_row >= chain_config.count || (s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) >= 4u)
+    if (ui.song_row >= chain_config.count || !(s = chain_config.row[ui.song_row].slot[ui.song_trk % NTRK]) || s > 4u)
         return 0;
     for (k = 0; k < 27u; k++)
-        if (song_key(k) == (int32_t)s)
+        if (song_key(k) == (int32_t)s - 1)
             return 1u << k;
     return 0;
 }
@@ -588,6 +595,28 @@ static uint32_t song_leds(void)
 static int rec_tap(void)                                /* 1: the arming changed */
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
+    uint32_t g = ui.home || ui.menu || ui.confirm || name_on() ? GR_NONE : cur_page()->graph;
+    if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
+        confirm_open(CF_DEL_PAT, pt_pick());
+        return 0;
+    }
+    if (g == GR_FILE) {
+        if (pfs_there(ui.fsel)) confirm_open(CF_DEL_ARCH, ui.fsel);
+        else ui_message("NO PROJECT");
+        return 0;
+    }
+    if (g == GR_USER) {                                 /* USER: the preset picked */
+        if (!up_used(ui.uslot)) ui_message("EMPTY SLOT");
+        else if (transport_busy()) ui_message("STOP TO ERASE");
+        else confirm_open(CF_ERASE_USER, ui.uslot);
+        return 0;
+    }
+    if (g == GR_SONG) {                                 /* SONG: the section picked */
+        if (chain_busy()) ui_message("STOP TO EDIT");
+        else if (ui.song_row < chain_config.count) confirm_open(CF_DEL_ROW, ui.song_row);
+        else ui_message("NO SECTION THERE");
+        return 0;
+    }
     if (chain_busy()) {
         ui_message("STOP TO RECORD");
         return 0;
@@ -962,7 +991,10 @@ static void edit_param(uint32_t slot, int32_t steps)
             return;
         }
         if (slot == 1u) {
-            ui.song_trk = (uint8_t)clamp((int32_t)ui.song_trk + steps, 0, NTRK);   /* (NTRK: SEC, HA HA HE HU) */
+            int32_t l = ui.song_trk >= trk_count() ? (int32_t)trk_count() : ui.song_trk;   /* (HA HA HE HU: the project's
+                                                       * tracks, then SEC: NTRK) */
+            l = clamp(l + steps, 0, (int32_t)trk_count());
+            ui.song_trk = (uint8_t)(l >= (int32_t)trk_count() ? NTRK : l);
             return;
         }
         if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
@@ -973,8 +1005,15 @@ static void edit_param(uint32_t slot, int32_t steps)
         r = &chain_config.row[ui.song_row];
         if (slot == 2u && ui.song_trk >= NTRK)            /* SEC: KNOB 3 the section's CUT (right ON, left OFF) */
             r->repeat = (uint8_t)(steps > 0 ? r->repeat | CHAIN_CUT : r->repeat & ~CHAIN_CUT);
-        else if (slot == 2u)
-            r->slot[ui.song_trk % NTRK] = (uint8_t)clamp((int32_t)r->slot[ui.song_trk % NTRK] + steps, 0, CHAIN_SILENT);
+        else if (slot == 2u) {                            /* (HA HA HE HU) "-", then the track's patterns */
+            uint8_t nums[PS_NUM];
+            uint32_t k = ui.song_trk % NTRK, n = ps_list(k, nums), i;
+            int32_t at = -1;
+            for (i = 0; i < n; i++)
+                if (nums[i] == r->slot[k]) at = (int32_t)i;
+            at = clamp(at + steps, -1, (int32_t)n - 1);
+            r->slot[k] = at < 0 ? (uint8_t)CHAIN_SILENT : nums[at];
+        }
         else
             r->repeat = (uint8_t)((r->repeat & CHAIN_CUT) | (uint32_t)clamp((int32_t)CHAIN_REP(*r) + steps, 1, 16));
         return;
@@ -1015,19 +1054,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
-    if (pg->graph == GR_FILE && slot == 0u) {            /* (HA HA HE HU) FILE's KNOB 1: the project */
-        ui.fsel = (uint8_t)clamp((int32_t)ui.fsel + steps, 0, 3);
+    if (pg->graph == GR_PATTERN && slot == 0u) {         /* (HA HA HE HU) PATTERN's KNOB 1: the pattern */
+        pt_move(steps);
         return;
     }
-    if (pg->graph == GR_FILE && slot == 1u) {            /* (HA HA HE HU) FILE's KNOB 2: right NEW, on DELETE; left back */
-        if (steps > 0) {
-            ui.fl_del = ui.act == 2u;
-            ui.act = 2;
-        } else if (ui.act == 2u && ui.fl_del) {
-            ui.fl_del = 0;
-        } else if (ui.act == 2u) {
-            ui.act = 0;
-        }
+    if (pg->graph == GR_FILE && slot == 0u) {            /* (HA HA HE HU) FILE's KNOB 1: the project */
+        file_move(steps);
         return;
     }
     if (pg->graph == GR_TOOLS && slot == 1u) {           /* TOOLS' KNOB 2 (1.5.5, #190): right INIT, on CLEAN INIT; */
@@ -1097,11 +1129,11 @@ static void act_do(void)
     if (cur_page()->graph == GR_TOOLS) {
         if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
         if (!act_ready()) {                               /* nothing there to clear or delete */
-            ui_message(c == 2u ? "NOTHING TO DELETE" : "NOTHING TO CLEAR");
+            ui_message(c == 2u ? "ONE TRACK AT LEAST" : "NOTHING TO CLEAR");
             return;
         }
         confirm_open(c == 0u ? CF_CLEAR_SEQ : c == 1u ? (ui.tl_clean ? CF_CLEAN_SOUND : CF_INIT_SOUND) :
-                     c == 2u ? CF_DEL_ROW : CF_CLEAR_SONG, c == 2u ? ui.song_row : song.sel);
+                     c == 2u ? CF_DEL_TRACK : CF_CLEAR_SONG, c == 2u ? trk_count() - 1u : song.sel);
         return;
     }
     if (cur_page()->graph == GR_SONG) {
@@ -1139,23 +1171,22 @@ static void act_do(void)
             name_open(NK_USER_SAVE, ui.uslot);
         return;
     }
-    if (cur_page()->graph == GR_FILE) {                 /* (HA HA HE HU) FILE: NEW / DELETE, OPEN, SAVE (the dialogs) */
-        uint32_t k = ui.fsel & 3u;
-        if (c != 3u)
-            ui.act = 0;
+    if (cur_page()->graph == GR_PATTERN) {              /* (HA HA HE HU) PATTERN: OPEN, COPY, NEW */
+        ui.act = 0;
+        pt_do(c);
+        return;
+    }
+    if (cur_page()->graph == GR_FILE) {                 /* (HA HA HE HU) FILE: OPEN, COPY (its name), NEW; the one open is
+                                                         * saved first, so nothing is lost: no dialog */
+        ui.act = 0;
         if (transport_busy() || chain_busy())
             ui_message("STOP FIRST");
-        else if (c == 1u && !ui.fl_del)
-            confirm_open(CF_NEW_PROJ, 0);
         else if (c == 1u)
-            arch_used(k) ? confirm_open(CF_DEL_ARCH, k) : ui_message("EMPTY PROJECT");
+            (void)project_open(ui.fsel);
         else if (c == 2u)
-            arch_used(k) ? confirm_open(CF_OPEN_ARCH, k) : ui_message("EMPTY PROJECT");
-        else if (arch_used(k) && k != project_arch_cur())
-            confirm_open(CF_OVR_ARCH, k);
-        else
-            name_open(NK_ARCH_SAVE, k);
-        ui.fl_del = 0;
+            name_open(NK_ARCH_SAVE, 0);
+        else if (!project_new_file())
+            file_enter();
         return;
     }
     if (cur_page()->graph == GR_SLOTS && c == 1u) {     /* PATTERN ERASE (1.5.5, #199): the dialog first */
@@ -1333,12 +1364,14 @@ static void presets_turn(int32_t s)
     }
     if (ui.home || g == GR_BROWSE) {
         preset_step(s);
-    } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATS || g == GR_SONG || g == GR_EVENTS) {
+    } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG ||
+               g == GR_EVENTS) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
-    } else if (g != GR_TOOLS && g != GR_SLICES) {
-        preset_step(s);
+    } else if (g != GR_TOOLS && g != GR_SLICES) {     /* (HA HA HE HU: a sound loads on HOME and PRESETS only; a stray
+                                                         * turn on a sound's page no longer replaces it) */
+        ui_message("PRESETS: ON HOME");
     }
 }
 
@@ -1348,7 +1381,7 @@ static void presets_turn(int32_t s)
 static void sel_list(int32_t s)
 {
     uint32_t g = cur_page()->graph;
-    if (g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATS ||
+    if (g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS ||
                g == GR_SONG || g == GR_EVENTS) {
         presets_turn(s);
     }
@@ -1356,7 +1389,7 @@ static void sel_list(int32_t s)
 
 /* HOME / REC / SAVE: tap on release, hold 0.7 s fires once. t0 = press time | 1,
  * bit 1 = fired (or swallowed: then the release is no tap either) */
-enum { BT_NONE, BT_TAP, BT_HOLD };
+enum { BT_NONE, BT_TAP, BT_HOLD, BT_UNDO };
 static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok)
 {
     uint32_t tap;
@@ -1422,6 +1455,13 @@ static int page_tap(uint32_t b)
     }
     if (b == B_EDIT && !ui.home && cur_page()->graph == GR_EVENTS) {   /* AUTOMATION: EDIT deletes the row's record */
         ev_delete();
+        return 1;
+    }
+    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_FILE) {   /* (HA HA HE HU) FILE: EDIT renames the project open */
+        if (ui.fsel && ui.fsel != pfs_cur())
+            ui_message("OPEN IT TO RENAME");
+        else
+            name_open(NK_FILE_RENAME, 0);
         return 1;
     }
     if (b == B_EDIT && !ui.home && (cur_page()->graph == GR_USER || cur_page()->graph == GR_SLOTS)) {
@@ -1569,7 +1609,13 @@ static void ui_input(void)
     }
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
-    save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: UNDO (ui.c undo_swap) */
+    save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: how to UNDO */
+    if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && !ui.menu && !ui.confirm &&
+        !name_on()) {                                   /* (HA HA HE HU) SAVE + OCT-: UNDO (ui.c undo_swap); SAVE let go */
+        ui.save_t0 |= 2u;                               /* after: no tap, and OCT- no octave */
+        pressed &= ~(1u << panel.btn[B_OCTDN]);
+        save = BT_UNDO;
+    }
     layer_lock_input(pressed);                          /* (#83: a button closes a locked layer) */
     layer_arm(pressed, now);
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
@@ -1665,10 +1711,12 @@ static void ui_input(void)
         name_input(notes, oct);
         return;
     }
-    if (save == BT_HOLD && chain_busy())
+    if (save == BT_UNDO && chain_busy())
         ui_message("STOP TO UNDO");
-    else if (save == BT_HOLD)                                /* SAVE held: undo the last sound load */
+    else if (save == BT_UNDO)                                /* SAVE + OCT-: undo the last load or edit */
         undo_swap();
+    else if (save == BT_HOLD)                                /* SAVE held alone: how (a hold no longer undoes) */
+        ui_message("SAVE + OCT-: UNDO");
     else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
         open_family(FAM_SAVE);
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
@@ -1683,17 +1731,19 @@ static void ui_input(void)
             } else if (kind == CF_ERASE_USER) {
                 up_ui(1u, ui.confirm_trk);
             } else if (kind == CF_NEW_PROJ) {      /* (HA HA HE HU) a new, empty project: the power-on sounds */
-                (void)project_arch_new();
+                (void)project_new_file();
+            } else if (kind == CF_DEL_PAT) {       /* (HA HA HE HU) SAVE > PATTERN, REC */
+                pt_delete();
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
             } else if (kind == CF_DEL_TRACK) {
                 track_remove_last();
             } else if (kind == CF_OPEN_ARCH) {
-                (void)project_arch_open(ui.confirm_trk & 3u);
+                (void)project_open(ui.confirm_trk);
             } else if (kind == CF_DEL_ARCH) {
-                (void)project_arch_delete(ui.confirm_trk & 3u);
+                if (!project_delete(ui.confirm_trk)) file_enter();
             } else if (kind == CF_OVR_ARCH) {
-                name_open(NK_ARCH_SAVE, ui.confirm_trk & 3u);
+                name_open(NK_ARCH_SAVE, 0);
             } else if (kind == CF_ERASE_PROJ) {
                 (void)project_erase(ui.confirm_trk & 3u);
             } else if (kind == CF_LOAD_PAT) {

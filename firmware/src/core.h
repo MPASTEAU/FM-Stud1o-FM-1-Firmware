@@ -262,7 +262,7 @@ _Static_assert(sizeof(motion_store_v10_t) == 388u, "motion disk layout (FUN10)")
 /* A song section (1.2, FUN10): the PROJECT slot each track plays (0..3, A..D; CHAIN_SILENT "-": that track plays
  * nothing there) and its repeats (1..16). Up to 1.1 a row was {slot, repeat}, all four tracks on that slot
  * (chain_v9_t, FUN6..FUN9): it loads as a section with the four on it (song_chain.c chain_from_v9) */
-#define CHAIN_SILENT 4u
+#define CHAIN_SILENT 0u                /* (HA HA HE HU: a section names a pattern number per track, 1..PS_NUM; 0 "-") */
 /* HA HA HE HU: a section's repeat byte, bit 7 CUT: as it starts the FX tails go (the reverb and delay buses cleared,
  * every sounding voice faded out at once): the drop dry and alone (song_chain.c chain_cut). Bits 0..6 the repeats */
 #define CHAIN_CUT 0x80u

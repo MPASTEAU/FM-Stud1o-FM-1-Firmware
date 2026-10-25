@@ -170,7 +170,7 @@ static int preferences(void)
     int bad = 0;
     uint8_t a[4] = {0, 7, 0, 0};
     reset();
-    uint32_t nx = request(ED_INFO, a, 0), n = nx - 3u;   /* (HA HA HE HU: 58 01 1 last; the rest as before it) */
+    uint32_t nx = request(ED_INFO, a, 0), n = nx - 6u;   /* (HA HA HE HU: 58 01 1, 59 01 32 last; the rest as before them) */
     uint32_t e = n - 6u;                                  /* (1.5.5: 4B 01 NCOND, 1.6: 45 01 5, below) */
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
@@ -195,8 +195,9 @@ static int preferences(void)
         host_wire[n - 7] == 0x4B && host_wire[n - 6] == 1 && host_wire[n - 5] == NCOND);
     bad += check("INFO 1.6: 45 01 5, CUSTOM's colours",
         host_wire[n - 4] == 0x45 && host_wire[n - 3] == 1 && host_wire[n - 2] == 5);
-    bad += check("INFO HA HA HE HU: 58 01 1, a section's CUT (bit 6 of its repeat byte), last",
-        host_wire[nx - 4] == 0x58 && host_wire[nx - 3] == 1 && host_wire[nx - 2] == 1);
+    bad += check("INFO HA HA HE HU: 58 01 1, a section's CUT (bit 6 of its repeat byte); 59 01 32, the patterns 1..32, last",
+        host_wire[nx - 7] == 0x58 && host_wire[nx - 6] == 1 && host_wire[nx - 5] == 1 &&
+        host_wire[nx - 4] == 0x59 && host_wire[nx - 3] == 1 && host_wire[nx - 2] == 32);
     request(ED_UI_SET, a, 2);
     bad += check("UI_SET updates the actual palette and reports RAM-only saving",
         host_wire[5] == 3 && settings.palette == 7 && T_BG == UI_PALETTES[7].bg);
@@ -458,9 +459,10 @@ static int song_protocol(void)
     chain.armed = 0; a[0] = 2;
     bad += check("SONG PLAY refuses extra argument bytes", !request(ED_SONG, a, 2) && !transport_req);
     {   /* 1.2 (`57 01 04`): sections with a slot per track, ops 4..7; the v6 ops see each section's clock lane */
-        static const uint8_t set[] = {5, 2, 0, 1, CHAIN_SILENT, 0, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 3,   /* (HA HA HE HU: eight lanes) */
+        static const uint8_t set[] = {5, 2, 1, 2, CHAIN_SILENT, 1, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 3,   /* (HA HA HE HU: eight lanes,
+                                       * pattern numbers: 1 2 - 1) */
                                        CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 1};
-        static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 0, 0, 5, 0, 0, 0, 0, 0, 1}, old4[] = {1, 1, CHAIN_SILENT, 1};
+        static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 1, 1, 33, 1, 0, 0, 0, 0, 1}, old4[] = {1, 1, 4, 1};
         static const uint8_t info[] = {0};
         uint32_t n, i, tag = 0;
         reset();
@@ -468,7 +470,7 @@ static int song_protocol(void)
         bad += check("SONG op 5 sets sections (T1 A, T2 B, T3 -, T4 A x3; all - x1), the reply in lanes",
                      n == 5u + 6u + 2u * (NTRK + 1u) + 1u && host_wire[5] == 5 && !host_wire[6] && host_wire[7] == 2 &&
                      !memcmp(host_wire + 11, set + 2, 2u * (NTRK + 1u)) && chain_config.count == 2 &&
-                     !memcmp(&chain_config.row[0], &(chain_row_t){{0, 1, CHAIN_SILENT, 0, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT}, 3}, sizeof(chain_row_t)) &&
+                     !memcmp(&chain_config.row[0], &(chain_row_t){{1, 2, CHAIN_SILENT, 1, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT}, 3}, sizeof(chain_row_t)) &&
                      chain_config.row[1].slot[0] == CHAIN_SILENT && chain_config.row[1].repeat == 1);
         n = request(ED_SONG, q4, 1);
         bad += check("SONG op 4 queries them as set", n == 12u + 2u * (NTRK + 1u) && host_wire[5] == 4 && !memcmp(host_wire + 11, set + 2, 2u * (NTRK + 1u)));
@@ -485,9 +487,9 @@ static int song_protocol(void)
         n = request(ED_SONG, q0, 1);
         bad += check("SONG op 0 (v6 editors): a row per section, its clock lane's slot (T1 A; all - : A)",
                      n == 16u && host_wire[11] == 0 && host_wire[12] == 3 && host_wire[13] == 0 && host_wire[14] == 1);
-        bad += check("SONG op 5: a slot past - (5) refused, the sections kept",
+        bad += check("SONG op 5: a pattern past the 32 refused, the sections kept",
                      request(ED_SONG, bad5, sizeof bad5) == 12u + 2u * (NTRK + 1u) && host_wire[6] == 1 && chain_config.count == 2);
-        bad += check("SONG op 1 (v6): no - in a row of one slot", request(ED_SONG, old4, sizeof old4) == 16u &&
+        bad += check("SONG op 1 (v6): no - (4) in a row of one slot", request(ED_SONG, old4, sizeof old4) == 16u &&
                      host_wire[6] == 1 && chain_config.count == 2);
         chain.armed = 1;
         bad += check("SONG op 5 waits for a pending start (rc 2)", request(ED_SONG, set, sizeof set) == 12u + 2u * (NTRK + 1u) && host_wire[6] == 2);

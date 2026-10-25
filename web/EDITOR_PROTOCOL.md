@@ -836,7 +836,19 @@ they are in RAM or flash. Then `BACKUP_GET` reads an object in pieces: `id, offs
 (count 1..256, LSB first 7 bit pair) answers `id, rc, offset u32, count lo, count hi` and the data as pack7. Check each object's CRC
 against the list; if it differs the device changed, so start again.
 
-HA HA HE HU: `BACKUP_LIST` lists 21 objects: ids 10..13 are the PROJECT slots' tracks 5..8 (each slot's FUNX object,
+HA HA HE HU (the PROJECTS): `BACKUP_LIST` lists 14 objects: ids 0..9, 18, 32, 33, 34. Id 18 is the projects' flash
+(projfs, USR2 and USR3) as it is, whole 4096-byte sectors up to the last one used (0 bytes: no project; at most
+163840). Its chunks are read from the flash; restored, each chunk is written straight into it (a sector erased when its
+first chunk comes; chunks of exactly 256 bytes), the sectors after the image erased at the commit, then the image's CRC
+read back (rc 2: it differs) and the projects scanned again. It restores before the settings (id 1: the project open)
+and the live music (id 0: the project open is opened again, all its tracks). Ids 33 and 34 (USR2, USR3: the projects'
+flash) are listed empty; `SMP_BEGIN` / `SMP_ERASE` of slots 1, 2 answer rc 1. Ids 10..17 are retired: a `BACKUP_PUT`
+of them answers rc 1 and the page skips them, so an archive of 21 objects (below) restores without them.
+
+HA HA HE HU, `59 01 32`: SONG ops 4..7 name each track's pattern by number, 1..32, 0 = "-" (silent), in place of the
+slots A..D (0..3) and 4 = "-". Ops 0..3 keep their slots: A..D are patterns 1..4.
+
+HA HA HE HU (before the PROJECTS): `BACKUP_LIST` listed 21 objects: ids 10..13 are the PROJECT slots' tracks 5..8 (each slot's FUNX object,
 3840 bytes; length 0 when the slot is empty or has none), ids 14..17 their extras (FUNY: LFO DRAW's points, CURVE),
 restored after their slot: the firmware checks the object's own
 hash, tags it with the slot's record as restored and writes it. An archive of 13 objects (four-track firmware) still

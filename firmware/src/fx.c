@@ -1064,7 +1064,7 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
     mixsum_t *sm = &mx[1];
     for (i = 0; i < n; i++)
         sm->l[i] = sm->r[i] = sm->c[i] = sm->d[i] = sm->v[i] = 0;
-    for (i = 0; i < NPART; i++)
+    for (i = 0; i < trk_count(); i++)                   /* (HA HA HE HU: the project's tracks) */
         if (arg >> i & 1u)
             mix_part(&trk[i], n, sm);
 }
@@ -1075,6 +1075,8 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
 static uint32_t mix_split(void)
 {
     uint32_t m, i, best = 0, all = 0, lo, a = 0, g = 0;
+    for (i = trk_count(); i < NPART; i++)
+        part_cost[i] = 0;                               /* (HA HA HE HU: past the project's tracks: nothing to render) */
     for (i = 0; i < NPART; i++)
         all += part_cost[i];
     lo = all;
@@ -1112,7 +1114,7 @@ static void mix_block(int32_t *out, uint32_t n)
     if (m && !C1_RUN(c1_parts, m | n << 8))
         m = 0;
     c1_blocks += m != 0;
-    for (i = 0; i < NPART; i++)
+    for (i = 0; i < trk_count(); i++)                   /* (HA HA HE HU: the project's tracks only) */
         if (!(m >> i & 1u))
             mix_part(&trk[i], n, &mx[0]);
     if (m) {
@@ -1130,7 +1132,7 @@ static void mix_block(int32_t *out, uint32_t n)
     for (i = 0; i < NPART; i++)                         /* the LFOs' blocks, part by part (voice.c) */
         track_lfo_end(&trk[i]);
 #else
-    for (i = 0; i < NPART; i++)                         /* (one core: as 1.6) */
+    for (i = 0; i < trk_count(); i++)                   /* (one core: as 1.6; HA HA HE HU: the project's tracks) */
         mix_part(&trk[i], n);
 #endif
     duck_hit = 0;                                       /* (HA HA HE HU: this block's DUCK triggers taken) */

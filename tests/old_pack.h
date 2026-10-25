@@ -47,10 +47,10 @@ static uint32_t old_pack(uint8_t *b, const project_t *q, uint32_t magic, uint32_
         c9.count = q->chain.count;
         for (i = 0; i < CHAIN_ROWS; i++) {
             const chain_row_t *r = &q->chain.row[i];
-            if (i < q->chain.count && (r->slot[0] > 3u || r->slot[1] != r->slot[0] || r->slot[2] != r->slot[0] ||
-                                       r->slot[3] != r->slot[0]))
-                return 0;
-            c9.row[i].slot = r->slot[0] & 3u;
+            if (i < q->chain.count && (r->slot[0] < 1u || r->slot[0] > 4u || r->slot[1] != r->slot[0] ||
+                                       r->slot[2] != r->slot[0] || r->slot[3] != r->slot[0]))
+                return 0;                                  /* (HA HA HE HU: patterns 1..4 are the slots A..D) */
+            c9.row[i].slot = i < q->chain.count ? (uint8_t)(r->slot[0] - 1u) : 0u;
             c9.row[i].repeat = r->repeat;
         }
         memcpy(b + pos, &c9, sizeof c9);

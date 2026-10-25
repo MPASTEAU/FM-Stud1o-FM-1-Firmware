@@ -191,10 +191,10 @@ static int cond_song(void)
     t->p[P_SLEN] = 12;
     for (i = 1; i < NTRK; i++)
         track_defaults_steps(&trk[i]);
-    project_save(0);
+    pat_keep(2);                                       /* (HA HA HE HU: the patterns kept as 2, pstore.c) */
     chain_config.count = 2;
-    chain_config.row[0] = (chain_row_t){{0, 0, 0, 0}, 4};
-    chain_config.row[1] = (chain_row_t){{0, 0, 0, 0}, 2};
+    chain_config.row[0] = (chain_row_t){{2, 2, 2, 2}, 4};
+    chain_config.row[1] = (chain_row_t){{2, 2, 2, 2}, 2};
     ok = chain_prepare() == 0;
     while (n < 256u && i++ < 40000u && (chain.running || chain.armed)) {
         uint32_t v0 = vage, k;

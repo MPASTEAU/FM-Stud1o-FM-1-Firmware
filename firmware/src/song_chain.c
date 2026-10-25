@@ -22,12 +22,14 @@ typedef struct {
 } chain_pattern_t;
 static chain_config_t chain_config;
 static struct {
-    chain_pattern_t source[4];
+    chain_pattern_t source[2];               /* (HA HA HE HU) the section playing's patterns, the next one's: row & 1 */
+    uint8_t src_row[2], src_ok[2];
     chain_config_t config;
     int16_t timing[NTRK][4];                 /* the editable LEN DIV SWING GATE and QUANTIZE, back on STOP */
     uint8_t qnt[NTRK];
     volatile uint8_t armed, running, row, remaining;
-    uint8_t lane[NTRK];                      /* the slot each track plays in this section, CHAIN_SILENT none */
+    uint8_t lane[NTRK];                      /* the pattern each track plays in this section, CHAIN_SILENT none */
+    uint8_t cur;                             /* (the buffer of the section playing) */
     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
     uint8_t rec;
     uint32_t carry;
@@ -64,7 +66,7 @@ static int chain_valid(const chain_config_t *c)
         return 0;
     for (i = 0; i < c->count; i++) {
         for (k = 0; k < NTRK; k++)
-            if (c->row[i].slot[k] > CHAIN_SILENT)
+            if (c->row[i].slot[k] > 32u)       /* (HA HA HE HU: a pattern number, pstore.c PS_NUM; 0 silent) */
                 return 0;
         if (!CHAIN_REP(c->row[i]) || CHAIN_REP(c->row[i]) > 16u)
             return 0;
@@ -82,7 +84,7 @@ static int chain_from_v9(chain_config_t *c, const chain_v9_t *o)
     for (i = 0; i < o->count; i++) {
         if (o->row[i].slot >= 4u || !o->row[i].repeat || o->row[i].repeat > 16u)
             return 0;
-        c->row[i] = chain_row_of(o->row[i].slot, o->row[i].repeat);
+        c->row[i] = chain_row_of(o->row[i].slot + 1u, o->row[i].repeat);   /* (A..D: patterns 1..4) */
     }
     c->count = o->count;
     return 1;
@@ -96,8 +98,8 @@ static int chain_from_v10(chain_config_t *c, const chain_v10_t *o)
     if (o->count > CHAIN_ROWS)
         return 0;
     for (i = 0; i < CHAIN_ROWS; i++) {
-        for (k = 0; k < NTRK; k++)
-            c->row[i].slot[k] = k < NTRK_V10 ? o->row[i].slot[k] : (uint8_t)CHAIN_SILENT;
+        for (k = 0; k < NTRK; k++)                     /* (A..D: patterns 1..4; "-" (4): silent) */
+            c->row[i].slot[k] = k < NTRK_V10 && o->row[i].slot[k] < 4u ? (uint8_t)(o->row[i].slot[k] + 1u) : (uint8_t)CHAIN_SILENT;
         c->row[i].repeat = o->row[i].repeat;
     }
     c->count = o->count;
@@ -109,8 +111,8 @@ static void chain_to_v10(chain_v10_t *o, const chain_config_t *c, uint32_t base)
     memset(o, 0, sizeof *o);
     o->count = c->count;
     for (i = 0; i < CHAIN_ROWS; i++) {
-        for (k = 0; k < NTRK_V10; k++)
-            o->row[i].slot[k] = c->row[i].slot[base + k];
+        for (k = 0; k < NTRK_V10; k++)                 /* (patterns 1..4: A..D; others "-") */
+            o->row[i].slot[k] = c->row[i].slot[base + k] && c->row[i].slot[base + k] <= 4u ? (uint8_t)(c->row[i].slot[base + k] - 1u) : 4u;
         o->row[i].repeat = c->row[i].repeat;
     }
 }
@@ -118,8 +120,8 @@ static void chain_to_v10(chain_v10_t *o, const chain_config_t *c, uint32_t base)
 static uint32_t chain_clock(const chain_row_t *r)
 {
     uint32_t k;
-    for (k = 0; k < NTRK; k++)
-        if (r->slot[k] < CHAIN_SILENT)
+    for (k = 0; k < trk_count(); k++)
+        if (r->slot[k] != CHAIN_SILENT)
             return k;
     return 0;
 }
@@ -131,7 +133,7 @@ static const step_t *seq_steps(const track_t *t)
     if (!chain.running)
         return t->step;
     s = chain.lane[k];
-    return s < 4u ? chain.source[s].step[k] : chain_silent;
+    return s != CHAIN_SILENT ? chain.source[chain.cur].step[k] : chain_silent;
 }
 static void motion_restore(track_t *t);
 /* a section starts (chain_start, chain_tick: once a section, not per block; not inlined: off the audio ISR's loop) */
@@ -139,16 +141,18 @@ static __attribute__((noinline)) void chain_apply(void)
 {
     uint32_t i;
     const chain_row_t *r = &chain.config.row[chain.row];
+    uint32_t b = chain.row & 1u, ok = chain.src_ok[b] && chain.src_row[b] == chain.row;
+    chain.cur = (uint8_t)b;
     chain.clk = (uint8_t)chain_clock(r);
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
-        uint32_t s = r->slot[i];
-        chain.lane[i] = (uint8_t)(s < 4u ? s : CHAIN_SILENT);
+        uint32_t s = ok && i < trk_count() ? r->slot[i] : CHAIN_SILENT;   /* (the buffer not ready: silent) */
+        chain.lane[i] = (uint8_t)s;
         seq_release(t);
         motion_restore(t);
-        if (s < 4u) {
-            memcpy(&t->p[P_SLEN], chain.source[s].timing[i], sizeof chain.timing[i]);
-            t->p[P_SQNT] = chain.source[s].qnt[i];
+        if (s != CHAIN_SILENT) {
+            memcpy(&t->p[P_SLEN], chain.source[b].timing[i], sizeof chain.timing[i]);
+            t->p[P_SQNT] = chain.source[b].qnt[i];
         } else {
             t->p[P_SLEN] = CHAIN_SIL_LEN;
             t->p[P_SDIV] = CHAIN_SIL_DIV;
@@ -223,8 +227,10 @@ static void chain_tick(uint32_t n)
         return;
     }
     chain.carry = t->seq_pos + n - length;
+    chain.src_ok[chain.row & 1u] = 0;               /* (HA HA HE HU: free for the one after, chain_poll) */
     chain.row++;
     chain.remaining = CHAIN_REP(chain.config.row[chain.row]);
     chain_cut(chain.row);
     chain_apply();
 }
+

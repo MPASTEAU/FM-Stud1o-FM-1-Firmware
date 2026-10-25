@@ -559,12 +559,15 @@ static int formats(void)
                                             (uint8_t)((i * 3u) % 5u)}, (uint8_t)(1u + i)};
         c.sum = proj_sum(&c);
         ok = proj_pack(&st, &c) && proj_import(&d, &st, sizeof st) && proj_same(&c, &d) && st.raw[at] == CHAIN_ROWS &&
-             st.raw[at + 4u] == 0 && st.raw[at + 5u] == 1 && st.raw[at + 6u] == 2 && st.raw[at + 7u] == 0 && st.raw[at + 8u] == 1 &&
-             st.raw[at + 4u + 5u * 15u + 4u] == 16;
-        c.chain.row[3].slot[2] = 5;                   /* past "-": refused (pack and load) */
+             st.raw[at + 4u] == 4 && st.raw[at + 5u] == 0 && st.raw[at + 6u] == 1 && st.raw[at + 7u] == 4 && st.raw[at + 8u] == 1 &&
+             st.raw[at + 4u + 5u * 15u + 4u] == 16;   /* (HA HA HE HU: patterns 1..4 are A..D (0..3), silent 0 is "-" (4)) */
+        c.chain.row[3].slot[2] = 5;                   /* (pattern 5: no letter, "-" in a FUN10) */
+        c.sum = proj_sum(&c);
+        ok &= proj_pack(&st, &c) && st.raw[at + 4u + 5u * 3u + 2u] == 4;
+        c.chain.row[3].slot[2] = 33;                  /* past the 32 patterns: refused */
         c.sum = proj_sum(&c);
         ok &= !proj_pack(&st, &c);
-        bad += check("FUN10 round trip: 16 sections, a slot per track (A..D, -), the bytes in place", ok);
+        bad += check("FUN10 round trip: 16 sections, a pattern per track (1..4 as A..D, silent as -), the bytes in place", ok);
     }
     project_save(2);
     motion_clear(t); t->p[P_SQNT] = 1; step_set_nudge(&t->step[1], 0);
@@ -589,14 +592,14 @@ static int formats(void)
     memcpy(a.name, "OLD SONG", 9);
     chain_defaults(&a.chain);                         /* a song of rows {slot, repeat} (36 bytes then) */
     a.chain.count = 3;
-    a.chain.row[0] = chain_row_of(0, 4); a.chain.row[1] = chain_row_of(3, 16); a.chain.row[2] = chain_row_of(1, 1);
+    a.chain.row[0] = chain_row_of(1, 4); a.chain.row[1] = chain_row_of(4, 16); a.chain.row[2] = chain_row_of(2, 1);   /* (A D B) */
     a.sum = proj_sum(&a);
     ok = old_pack(v9, &a, OLD_FUN9, 99u) == sizeof v9 && proj_import(&b, v9, sizeof v9) && proj_same(&a, &b);
     bad += check("FUN9 (1.1, 64 records of 4 bytes): exactly the project (LFO 2 / QUANTIZE defaults, nudges 0)", ok);
     {
         uint8_t c9[3648];
         uint32_t sum, at = 68u + NTRK_V10 * (99u + 2u + NSTEP * 9u);
-        ok = b.chain.count == 3u && !memcmp(b.chain.row[1].slot, "\3\3\3\3", NTRK_V10) && b.chain.row[1].repeat == 16 &&
+        ok = b.chain.count == 3u && !memcmp(b.chain.row[1].slot, "\4\4\4\4", NTRK_V10) && b.chain.row[1].repeat == 16 &&
              v9[at] == 3 && v9[at + 4u] == 0 && v9[at + 5u] == 4 && v9[at + 6u] == 3 && v9[at + 7u] == 16;
         memcpy(c9, v9, sizeof c9);
         c9[at + 6u] = 4;                              /* a row on slot 4: never in a FUN9 */

@@ -89,6 +89,7 @@ static void reset(void)
     erase_error = 0;
     erases = 0;
     ed_bk_valid = ed_bk_put = 0;
+    pfs.ok = 0;                                     /* (the flash erased: the projects scanned again) */
 }
 
 static uint32_t call(uint32_t cmd, const uint8_t *a, uint32_t n)
@@ -178,8 +179,8 @@ int main(void)
 
     reset();
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 96, 0, 0};
-    bad += check("LIST captures the runtime: 21 objects (id 8 empty, id 9 the FM6 patches, 10..13 tracks 5..8, 14..17 the extras), runtime 3840 B (FUN10)",
-                 list(0, &len, &crc) == 0 && rep[2] == 21u && len == sizeof(project_store_t) && len == 3840u &&
+    bad += check("LIST captures the runtime: 14 objects (id 8 empty, id 9 the FM6 patches, 18 the PROJECTS), runtime 3840 B (FUN10)",
+                 list(0, &len, &crc) == 0 && rep[2] == 14u && len == sizeof(project_store_t) && len == 3840u &&
                  crc == st_crc32(ED_BK_RAW, len));
     bad += check("an empty project slot lists as length 0", list(2, &len, &crc) == 0 && len == 0);
     bad += check("GET of the runtime copy", get(0, 0, 64) == 0);
@@ -187,24 +188,43 @@ int main(void)
     bad += check("a project save after LIST reused the staging RAM: GET of the runtime is stale (5)",
                  get(0, 0, 64) == 5u);
     bad += check("a new LIST makes it readable again", list(0, &len, &crc) == 0 && get(0, 0, 64) == 0);
-    {   /* HA HA HE HU: SAVE > FILE's projects (project_arch.c): a whole piece of music each (the slots A..D, the tracks,
-         * the SONG); NEW clears it, OPEN brings it back; DELETE; an empty one does not open */
+    {   /* HA HA HE HU: SAVE > FILE's projects (projfs.c): a whole piece of music each (the tracks and their patterns,
+         * the SONG, the extras), the size it takes; NEW: one empty track; OPEN brings it back; DELETE; an empty one
+         * does not open */
         int ok;
         char nm[16];
-        project_save_as(0, "PAT A");
+        uint32_t a;
+        song.ntrk = 8;
         trk[1].step[3].n = 1; trk[1].step[3].time = ST_NOTE; trk[1].step[3].note[0] = 67;
         trk[6].p[P_LEVEL] = 77; trkx[3].draw[2] = 33;
-        chain_config.count = 1; chain_config.row[0] = chain_row_of(0, 2);
-        ok = project_arch_save(2, "MY SONG") == 0 && arch_used(2) && arch_name(2, nm) && str_eq(nm, "MY SONG") &&
-             project_arch_cur() == 2u && !arch_used(1);
-        ok &= project_arch_new() == 0 && !project_used(0) && trk[1].step[3].n == 0 && !chain_config.count && project_arch_cur() == 0xFFu;
-        ok &= project_arch_open(2) == 0 && project_used(0) && trk[1].step[3].n == 1 && trk[1].step[3].note[0] == 67 &&
-              trk[6].p[P_LEVEL] == 77 && trkx[3].draw[2] == 33 && chain_config.count == 1 && project_arch_cur() == 2u;
-        project_name(0, nm);
-        ok &= str_eq(nm, "PAT A");
-        ok &= project_arch_open(1) != 0 && project_arch_delete(2) == 0 && !arch_used(2) && project_arch_cur() == 0xFFu;
-        bad += check("FILE projects: SAVE (the slots, the tracks, the SONG, its extras) / NEW / OPEN back / DELETE; an empty one refused", ok);
+        ok = pattern_new(1, 1) == 0 && ps_num(1) == 2u;          /* (track 2: pattern 1 and its copy 2, a note more) */
+        trk[1].step[5].n = 1; trk[1].step[5].time = ST_NOTE; trk[1].step[5].note[0] = 70;
+        chain_config.count = 1; chain_config.row[0] = chain_row_of(1, 2);
+        str_cpy(proj_name, "MY SONG", sizeof proj_name);
+        ok &= project_save_cur() == 0 && (a = pfs_cur()) != 0u && pfs_there(a) && pfs_name(a, nm) && str_eq(nm, "MY SONG") &&
+              pfs_count() == 1u && pfs_pct(a) > 0u;
+        ok &= project_new_file() == 0 && pfs_cur() != a && pfs_count() == 2u && trk_count() == 1u &&
+              trk[1].step[3].n == 0 && !chain_config.count;
+        ok &= project_open(a) == 0 && pfs_cur() == a && trk_count() == 8u && ps_num(1) == 2u &&
+              trk[1].step[3].n == 1 && trk[1].step[3].note[0] == 67 && trk[1].step[5].n == 1 &&
+              trk[6].p[P_LEVEL] == 77 && trkx[3].draw[2] == 33 && chain_config.count == 1 && chain_config.row[0].slot[1] == 1u;
+        ok &= pattern_go(1, 1) == 0 && trk[1].step[3].n == 1 && trk[1].step[5].n == 0;
+        ok &= project_open(31) != 0 && project_delete(a) == 0 && !pfs_there(a) && pfs_cur() == 0u && pfs_count() == 1u;
+        bad += check("FILE projects: SAVE (the tracks, their patterns, the SONG, the extras) / NEW / OPEN back / DELETE; an empty one refused", ok);
     }
+    {   /* HA HA HE HU: id 18, the PROJECTS' flash up to its last used sector: listed, read back, restored after a delete */
+        static uint8_t img[0x28000];
+        uint32_t a, ok;
+        str_cpy(proj_name, "BACKED UP", sizeof proj_name);
+        ok = project_save_cur() == 0 && (a = pfs_cur()) != 0u && list(18, &len, &crc) == 0 && len && !(len % 4096u) &&
+             len <= sizeof img && crc == st_crc32(nor + 0xB4000u, len);
+        memcpy(img, nor + 0xB4000u, len);
+        ok &= get(18, 0, 64) == 0;
+        ok &= project_delete(a) == 0 && !pfs_there(a);
+        ok &= put_all(18, img, len, crc) == 0 && pfs_there(a);
+        bad += check("id 18: the PROJECTS listed (whole sectors), read, restored after a delete", ok);
+    }
+#if PROJ_FUNX                                        /* (HA HA HE HU: the slots' FUNX / FUNY retired: projfs.c holds them) */
     {   /* HA HA HE HU: the tracks' extras (LFO DRAW, CURVE) travel with a project in its FUNY */
         int ok;
         trkx[2].draw[5] = -40; trkx[2].smooth = 0; trkx[6].curve = 1;
@@ -229,6 +249,7 @@ int main(void)
         ok &= put_all(10, x, sizeof x, st_crc32(x, sizeof x)) == 2u;              /* (its hash: refused) */
         bad += check("ids 10..13: a slot's tracks 5..8 listed (none for an empty slot), restored; a broken one refused (2)", ok);
     }
+#endif
     usb.resets++;
     bad += check("a USB reset after LIST: GET is stale (5)", get(2, 0, 16) == 5u);
 
@@ -419,7 +440,7 @@ int main(void)
         bad += check("an id 9 of another layout is refused (2), the patches kept",
                      put_all(9, &got, sizeof got, st_crc32(&got, sizeof got)) == 2u && !upf_get(0, pk));
         bad += check("an id 9 of the wrong size is refused at begin (1)", put_begin(9, sizeof got - 4u, 0) == 1u);
-        bad += check("an id 18 is refused (1)", put_begin(18, 0, 0) == 1u);
+        bad += check("an id 19 is refused (1), a retired 10 too", put_begin(19, 0, 0) == 1u && put_begin(10, 0, 0) == 1u);
     }
     memcpy(&st, &proj_slot[2], sizeof st);
     erase_error = 1;

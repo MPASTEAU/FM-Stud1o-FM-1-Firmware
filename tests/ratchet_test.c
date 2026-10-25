@@ -165,6 +165,9 @@ static int projects(void)
     }
     trk[3].step[5].hit = 0x81; trk[3].step[5].acc = 0x80; trk[3].step[5].time = ST_NOTE;
     step_set_ratchet(&trk[3].step[5], 4);
+    for (i = 0; i < CHAIN_ROWS; i++)                 /* (HA HA HE HU: the sections past the song on pattern 1, A: their FUN10
+                                                      * bytes 0, as 1.x wrote them; the FUN7 image below reads them) */
+        memset(chain_config.row[i].slot, 1, sizeof chain_config.row[i].slot);
     project_capture(&before);
     ok = proj_pack(&packed, &before) && proj_import(&after, &packed, sizeof packed) && proj_same(&before, &after);
     for (i = 0; ok && i < 8u; i++)

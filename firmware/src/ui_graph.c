@@ -13,11 +13,11 @@
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
 static uint32_t graph_arch_sig(void);              /* (HA HA HE HU: SAVE > FILE's projects, below) */
-static int graph_arch_used(uint32_t k);
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
 #include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2, SYN TONE .. SYN METAL: DRUM's lanes
                                                      * (the list below) */
 #include "ui_lfodraw.c"                              /* (HA HA HE HU) LFO DRAW, CURVE: the track's extras */
+#include "ui_pattern.c"                              /* (HA HA HE HU) SAVE > PATTERN: a track's patterns */
 
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
@@ -1048,10 +1048,43 @@ static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
     while (b && a > 0xFFFFFFFFu / b) { a >>= 1; c >>= 1; }
     return c ? a * b / c : 0u;
 }
+/* HA HA HE HU: track k's pattern s as SONG draws it (pstore.c ps_info): its length (1/48 quarters), its picture, its
+ * cells; 0 = none there. Read again when a pattern changed (the heap, a track's steps or timing) */
+static struct { uint32_t gen; uint8_t ok[NTRK][33], nc[NTRK][33]; uint16_t len[NTRK][33]; uint32_t den[NTRK][33]; } sgc
+    __attribute__((section(".pool")));
+static uint32_t sg_gen(void)
+{
+    uint32_t k, h = ps_gen * 2654435761u + trk_count();
+    for (k = 0; k < trk_count(); k++)
+        h = fnv(h ^ steps_sig(&trk[k]), &trk[k].p[P_SLEN], 4u * sizeof(int16_t)) + ps_num(k);
+    return h;
+}
+static int sg_pat(uint32_t k, uint32_t s, uint32_t *len, uint32_t *den, uint32_t *nc)
+{
+    uint32_t g = sg_gen();
+    uint8_t c;
+    k %= NTRK;
+    *len = *den = *nc = 0;
+    if (!s || s > 32u || !ps_exists(k, s))
+        return 0;
+    if (g != sgc.gen) {
+        memset(sgc.ok, 0, sizeof sgc.ok);
+        sgc.gen = g;
+    }
+    if (!sgc.ok[k][s]) {
+        sgc.len[k][s] = (uint16_t)ps_info(k, s, &sgc.den[k][s], &c);
+        sgc.nc[k][s] = c;
+        sgc.ok[k][s] = 1;
+    }
+    *len = sgc.len[k][s];
+    *den = sgc.den[k][s];
+    *nc = sgc.nc[k][s];
+    return 1;
+}
 static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section: its clock track's (1/48 quarters) */
 {
-    uint32_t k = chain_clock(r), s = r->slot[k];
-    return s < 4u && graph_project_used(s) && graph_plen[s][k] ? graph_plen[s][k] : SG_BARU;
+    uint32_t k = chain_clock(r), len, den, nc;
+    return sg_pat(k, r->slot[k], &len, &den, &nc) && len ? len : SG_BARU;
 }
 static void song_layout(song_lay_t *L)
 {
@@ -1239,8 +1272,7 @@ static uint32_t graph_signature(void)
         h ^= ui.song_row * 40503u + chain_config.count * 7919u + ui.song_trk * 3571u;
         h = fnv(h, chain_config.row, sizeof chain_config.row);
         h ^= chain.running ? (chain.row + 1u) * 104729u + chain.remaining * 1299709u : 0u;
-        for (i = 0; i < 4u; i++) h ^= (uint32_t)graph_project_used(i) << (24u + i);
-        h += graph_pname_sig;
+        h ^= sg_gen();                               /* (HA HA HE HU: the patterns) */
         {                                            /* the timeline: its view (following, ui_graph.c song_follow), the playhead */
             song_lay_t L;
             song_layout(&L);
@@ -1253,8 +1285,10 @@ static uint32_t graph_signature(void)
         h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
+    if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
+        h ^= (ps_used + 1u) * 2654435761u + (pt_sel + 1u) * 7919u + (ps_num(song.sel) + 1u) * 104729u + steps_sig(t) * 31u;
     if (pg->graph == GR_FILE)                        /* (HA HA HE HU) the projects (graph_arch_*), the one picked */
-        h ^= graph_arch_sig() * 31u + (ui.fsel + 1u) * 7919u + project_arch_cur() * 104729u;
+        h ^= graph_arch_sig() * 31u + (ui.fsel + 1u) * 7919u + pfs_cur() * 104729u;
     if (pg->graph == GR_SLOTS) {                     /* (a checksum over each slot) */
         for (i = 0; i < 4u; i++)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
@@ -1616,38 +1650,76 @@ static void graph_events(void)
         }
     }
 }
-/* HA HA HE HU: SAVE > FILE's projects (project_arch.c), read again when one changed (proj_wire_gen: a save, an open, a
- * delete): their names; the one open "(OPEN)", its number in the accent */
-static struct { uint8_t ok, gen, used; char name[4][13]; } garch;
-static void graph_arch_read(void)
+/* SAVE > PATTERN: the track's patterns, four rows round the one picked: its number (the one played in the track's colour),
+ * its notes and size; the memory the patterns take, on the last line */
+static void graph_pattern(void)
 {
-    uint32_t k;
-    if (garch.ok && garch.gen == proj_wire_gen_ui())
-        return;
-    garch.ok = 1;
-    garch.gen = proj_wire_gen_ui();
-    garch.used = 0;
-    for (k = 0; k < 4u; k++)
-        garch.used |= (uint8_t)(arch_name(k, garch.name[k]) << k);
+    uint8_t nums[PS_NUM];
+    uint32_t n = pt_list(nums), cur = pt_pick(), i, at = 0, first;
+    char b[4], nm[28];
+    for (i = 0; i < n; i++)
+        if (nums[i] == cur) at = i;
+    first = n <= 4u ? 0u : at < 2u ? 0u : at + 2u > n ? n - 4u : at - 1u;
+    for (i = 0; i < 4u && first + i < n; i++) {
+        uint32_t num = nums[first + i];
+        int32_t y = 12 + (int32_t)i * 26;
+        fmt_int(b, (int32_t)num);
+        fmt_int(nm, (int32_t)pt_steps(num));
+        str_cpy(nm + str_len(nm), " NOTES  ", 9);
+        fmt_int(nm + str_len(nm), (int32_t)ps_size(song.sel, num));
+        str_cpy(nm + str_len(nm), " B", 4);
+        list_row(y, num == cur, b, num == ps_num(song.sel) ? ux.trk[song.sel % NTRK] : T_MID, nm, T_TEXT, 232);
+    }
+    {
+        char m[24] = "MEMORY ";
+        fmt_int(m + 7, (int32_t)pt_mem_pct());
+        str_cpy(m + str_len(m), " %", 4);
+        GFX_HOOK_ALIGN(0, 112, 0, 122, AL_V, "pattern memory line");
+        cv_text_on(14, 112 - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
+    }
 }
-static int graph_arch_used(uint32_t k) { graph_arch_read(); return (garch.used >> (k & 3u)) & 1u; }
+/* HA HA HE HU: SAVE > FILE's projects (projfs.c), read again when one changed (proj_wire_gen: a save, an open, a delete):
+ * four rows round the one picked: the open one's id in the accent and "OPEN", each one's name and share of the memory */
+static struct { uint8_t ok, gen, n, ids[32], pct[32]; char name[32][13]; } gfile;
+static void graph_file_read(void)
+{
+    uint32_t i;
+    if (gfile.ok && gfile.gen == proj_wire_gen_ui())
+        return;
+    gfile.ok = 1;
+    gfile.gen = (uint8_t)proj_wire_gen_ui();
+    gfile.n = (uint8_t)pfs_list(gfile.ids);
+    for (i = 0; i < gfile.n; i++) {
+        pfs_name(gfile.ids[i], gfile.name[i]);
+        gfile.pct[i] = (uint8_t)pfs_pct(gfile.ids[i]);
+    }
+}
 static uint32_t graph_arch_sig(void)
 {
-    graph_arch_read();
-    return fnv(garch.used + 1u, garch.name, sizeof garch.name);
+    graph_file_read();
+    return fnv(gfile.n + 1u, gfile.name, sizeof gfile.name) + fnv(7u, gfile.pct, sizeof gfile.pct);
 }
 static void graph_file(void)
 {
-    uint32_t i, cur = project_arch_cur();
-    graph_arch_read();
-    for (i = 0; i < 4u; i++) {
+    uint32_t i, at = 0, first, cur = pfs_cur();
+    graph_file_read();
+    if (!gfile.n) {
+        list_row(12, 0, "", T_MID, "NO PROJECT YET", T_DIM, 232);
+        return;
+    }
+    for (i = 0; i < gfile.n; i++)
+        if (gfile.ids[i] == ui.fsel) at = i;
+    first = gfile.n <= 4u ? 0u : at < 2u ? 0u : at + 2u > gfile.n ? gfile.n - 4u : at - 1u;
+    for (i = 0; i < 4u && first + i < gfile.n; i++) {
+        uint32_t k = first + i;
         int32_t y = 12 + (int32_t)i * 26;
-        char b[2] = {(char)('1' + i), 0}, nm[24];
-        int used = (garch.used >> i) & 1u;
-        str_cpy(nm, !used ? "EMPTY" : garch.name[i][0] ? garch.name[i] : "UNTITLED", 14);
-        if (used && i == cur)
-            str_cpy(nm + str_len(nm), "  (OPEN)", 9);
-        list_row(y, i == ui.fsel, b, i == cur && used ? T_ACCENT : T_MID, nm, used ? T_TEXT : T_DIM, 232);
+        char b[4], nm[28];
+        fmt_int(b, (int32_t)gfile.ids[k]);
+        str_cpy(nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
+        str_cpy(nm + str_len(nm), "  ", 3);
+        fmt_int(nm + str_len(nm), gfile.pct[k]);
+        str_cpy(nm + str_len(nm), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
+        list_row(y, gfile.ids[k] == ui.fsel, b, gfile.ids[k] == cur ? T_ACCENT : T_MID, nm, T_TEXT, 232);
     }
 }
 /* project slots: the name (none: USED) / EMPTY, the selected one filled; (HA HA HE HU) the one the music is from: its
@@ -1865,8 +1937,11 @@ static void draw_tracks(void)
                 ts.meter[c] = 0;
             }
         }
-        for (c = 0; c < NTRK; c++)
+        for (c = 0; c < trk_count(); c++)
             mixer_strip(c);
+        if (ui.force)                                  /* (HA HA HE HU) past the project's tracks: nothing */
+            for (c = trk_count(); c < NTRK; c++)
+                lcd_fill((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH, MX_W, H_GRAPH, T_BG);
         return;
     }
     if (ui.force) {                                  /* the BG beside the columns only, they cover the rest (#181: */
@@ -2177,8 +2252,19 @@ static void draw_home_tracks(void)
             ts.meter[c] = 0;
         }
     }
-    for (c = 0; c < NTRK; c++)
+    for (c = 0; c < trk_count(); c++)
         rack_row(c);
+    if (ui.force && trk_count() < NTRK) {              /* (HA HA HE HU) the row after the project's tracks: how to add one */
+        int32_t y = Y_GRAPH + 1 + (int32_t)trk_count() * RK_PITCH;
+        cv_begin(TR_W, RK_H, T_BG);
+        cv_rrect(0, 0, TR_W, RK_H, 3, T_LINE, T_BG);
+        cv_rrect(1, 1, TR_W - 2, RK_H - 2, 2, T_BG, T_LINE);
+        GFX_HOOK_ALIGN(0, 0, 0, RK_H, AL_V, "rack add row on its line");
+        cv_free_text(18, CAP_IN(S, RK_H), &AF_S, "+ TRACK  (ALGORITHM)", T_DIM, T_BG, TR_W - 24);
+        cv_blit(3, (uint32_t)y);
+        for (c = trk_count() + 1u; c < NTRK; c++)
+            lcd_fill(3, (uint32_t)(Y_GRAPH + 1 + (int32_t)c * RK_PITCH), TR_W, RK_H, T_BG);
+    }
 }
 static void draw_home_tracks_old(void)
 {
@@ -2282,11 +2368,12 @@ static uint16_t sg_fill_at(const sg_fill_t *F, int32_t x)   /* the block's fill 
 {
     return x >= F->c0 && x < F->c1 ? T_THEME : x >= F->p0 && x < F->p1 ? F->pf : T_RAISE;
 }
-/* the slot's letter at x (MENU > LARGE: M), its capitals SG_PAD under the lane's top; 0: no room before x1 */
+/* the pattern's number at x, its capitals from the lane's top; 0: no room before x1 */
 static int32_t sg_letter(int32_t x, int32_t x1, int32_t y, uint32_t s, uint16_t ink, uint16_t bg)
 {
-    const aafont_t *f = &AF_S;                         /* (HA HA HE HU: S, the lanes are thin) */
-    char a[2] = {(char)('A' + s), 0};
+    const aafont_t *f = &AF_S;                         /* (HA HA HE HU: S, the lanes are thin; a number now) */
+    char a[4];
+    fmt_int(a, (int32_t)s);
     int32_t w = text_w(f, a);
     if (x + w + SG_PAD > x1)
         return 0;
@@ -2299,7 +2386,8 @@ static void sg_picture(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i,
                        int32_t x1, const sg_fill_t *F, const int32_t *skip)
 {
     int32_t y = SG_LY(k), yb = y + SG_PAD + SG_PH, x;
-    uint32_t q, plen = graph_plen[s & 3u][k], n = graph_pcell[s & 3u][k], den = graph_pden[s & 3u][k];
+    uint32_t q, plen, n, den;
+    (void)sg_pat(k, s, &plen, &den, &n);
     if (!plen || !n)
         return;
     for (q = i; q < j; q++) {
@@ -2346,7 +2434,8 @@ static void sg_block(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i, u
 {
     int32_t hi = SG_X0 + SG_W, y = SG_LY(k), bx = SG_X0 + L->x[i] - off, bw = L->x[j] - L->x[i] - SG_GAP, lx, w;
     int32_t x0 = bx > SG_X0 ? bx : SG_X0, x1 = bx + bw < hi ? bx + bw : hi, skip[4] = {0, 0, 0, 0};
-    int saved = graph_project_used(s), cur = c >= i && c < j;
+    uint32_t ql, qd, qn;
+    int saved = sg_pat(k, s, &ql, &qd, &qn), cur = c >= i && c < j;
     sg_fill_t F = {0, 0, 0, 0, 0};
     uint32_t p = chain.running && chain.row >= i && chain.row < j ? chain.row : 0xFFu;
     if (x1 <= x0)
@@ -2409,7 +2498,7 @@ static void graph_song(void)
     sp = px >= 0 ? SG_X0 + px - off : -100;
     total = L.u0[L.n];
     bars = (total + SG_BARU - 1u) / SG_BARU;
-    for (k = 0; k < NTRK; k++) {                       /* the lanes' numbers in their colours (the lane picked: a cushion) */
+    for (k = 0; k < trk_count(); k++) {                       /* the lanes' numbers in their colours (the lane picked: a cushion) */
         char d[2] = {(char)('1' + k), 0};
         uint16_t tc = ux.trk[k];
         if (k == lane)
@@ -2427,12 +2516,12 @@ static void graph_song(void)
         if ((chain_config.row[i].repeat & CHAIN_CUT) && x >= SG_X0 && x + 2 <= hi)
             cv_rect(x, SG_Y, 2, SG_H, T_ACCENT);
     }
-    for (k = 0; k < NTRK; k++)                    /* the lanes: a block per run of one slot, "-" a faint line */
+    for (k = 0; k < trk_count(); k++)                    /* the lanes: a block per run of one slot, "-" a faint line */
         for (ux_tint(ux.trk[k]), i = 0; i < L.n; i = j) {   /* (HA HA HE HU: each lane in its track's colour) */
             uint32_t s = chain_config.row[i].slot[k];
             for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
                 ;
-            if (s < 4u) {
+            if (s != CHAIN_SILENT) {
                 sg_block(&L, off, k, i, j, s, k == lane || lane >= NTRK ? c : CHAIN_ROWS, sp);
             } else {
                 int32_t sx = SG_X0 + L.x[i] - off, ex = SG_X0 + L.x[j] - off - SG_GAP;
@@ -2466,11 +2555,12 @@ static void graph_song(void)
         r1 = r1 < hi ? r1 : hi;
         if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
-            for (k = 0; k < NTRK; k++) {
+            for (k = 0; k < trk_count(); k++) {
                 uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
-                int on = k == lane && s < 4u && graph_project_used(s) && sp >= SG_X0 + L.x[c] - off &&
+                uint32_t ql, qd, qn;
+                int on = k == lane && s != CHAIN_SILENT && sg_pat(k, s, &ql, &qd, &qn) && sp >= SG_X0 + L.x[c] - off &&
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
-                cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < NTRK ? SG_LG : 0), on ? T_INK : T_ACCENT);
+                cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < trk_count() ? SG_LG : 0), on ? T_INK : T_ACCENT);
             }
             cv_rect(sp, SG_Y + SG_H, 2, SG_RY - SG_Y - SG_H + 6, T_ACCENT);
         }
@@ -2516,17 +2606,19 @@ static void graph_song(void)
     }
     if (c < L.n) {
         uint32_t s = chain_config.row[c].slot[lane < NTRK ? lane : 0u];   /* (SEC: the first track's) */
-        if (s >= 4u)
+        uint32_t ql, qd, qn;
+        if (s == CHAIN_SILENT)
             cv_free_text(SG_X0, ly, fl, "SILENT", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (!graph_project_used(s))
-            cv_free_text(SG_X0, ly, fl, "NOT SAVED", T_DIM, T_SURF, x0 - 10 - SG_X0);
-        else if (graph_project_name(s)[0])
-            cv_free_text(SG_X0, ly, fl, graph_project_name(s), T_MID, T_SURF, x0 - 10 - SG_X0);
+        else if (!sg_pat(lane < NTRK ? lane : 0u, s, &ql, &qd, &qn))
+            cv_free_text(SG_X0, ly, fl, "NO PATTERN", T_DIM, T_SURF, x0 - 10 - SG_X0);
+        else {
+            char m[16] = "PATTERN ";
+            fmt_int(m + 8, (int32_t)s);
+            cv_free_text(SG_X0, ly, fl, m, T_MID, T_SURF, x0 - 10 - SG_X0);
+        }
     } else {                                           /* + ADD: how */
-        for (i = 0; i < 4u && !graph_project_used(i); i++)
-            ;
         cv_free_hint(SG_X0, ly + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H,   /* (a key hint: S) */
-                     i < 4u ? "[K3] ADD SECTION" : "[SAVE] PROJECT A-D", T_MID, T_SURF, x0 - 10 - SG_X0);
+                     "[K3] ADD SECTION", T_MID, T_SURF, x0 - 10 - SG_X0);
     }
 }
 static void draw_graph_in(void);
@@ -2623,6 +2715,10 @@ static void draw_graph_in(void)
         case GR_FILE:
             cv_oy = 0;
             graph_file();
+            break;
+        case GR_PATTERN:
+            cv_oy = 0;
+            graph_pattern();
             break;
         case GR_USER:
             cv_oy = 0;

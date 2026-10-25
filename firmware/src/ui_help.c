@@ -12,7 +12,7 @@
 
 static const char H_EDIT[] = "[K1-4]SOUND[EDIT]HOLD: ENGINES";
 static const char H_LANES[] = "[K1-4]LANE LEVELS[EDIT]HOLD: MUTES";
-static const char H_FMOP[] = "[K1]OPERATOR[SAVE]HOLD: UNDO";
+static const char H_FMOP[] = "[K1]OPERATOR[SAVE]+ OCT-: UNDO";
 static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ENV", "[K1-4]A D S R[ENV]ENV DEST"},
     {"ENV DEST", "[K1-4]ENV AMOUNTS[ENV]ENV"},
@@ -25,10 +25,10 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"SLICER", "[K1]ON[K2]PATTERN[FX]INSERT"},
     {"INSERT", "[K1]TYPE[FX]DRY / WET"},
     {"INSERT 2", "[K1]DRY / WET[K2]FX ORDER"},
-    {"DUCK", "[K1]SOURCE[K2]DEPTH[K3]RELEASE"},
-    {"DLY", "[K1-4]ALL TRACKS[FX]REVERB"},
-    {"REVERB", "[K1]ROOM SPRING HALL[FX]CHORUS"},
-    {"CHORUS", "[K1-4]ALL TRACKS[FX]FX"},
+    {"DUCK", "[K1]SOURCE[K2]DEPTH[FX]FX"},
+    {"DLY", "[K1-4]ALL TRACKS[GLO]REVERB"},
+    {"REVERB", "[K1]ROOM SPRING HALL[GLO]CHORUS"},
+    {"CHORUS", "[K1-4]ALL TRACKS[GLO]SONG"},
     {"SCL", "[K2]SCALE[K3]QUANTIZE[SCL]CHORDS"},
     {"CHORD", "[K1]CHORD[KEYS]ONE FINGER[SCL]SCL"},
     {"EDIT 1", H_EDIT},
@@ -50,13 +50,13 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"VOICE", "[K1]POLY, MONO[K2]GLIDE"},
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
-    {"SONG", "[K1]SECTION[K2]ALL: CUT[PLAY]SONG"},
-    {"USER", "[K1]SLOT[OCT+]SAVE[SAVE]PRESETS"},
+    {"SONG", "[K1]SECTION[K3]PATTERN[REC]DELETE"},
+    {"USER", "[K2]LOAD[K4]SAVE[REC]ERASE"},
     {"PRESETS", "[K2]ENGINE[K3]FAV[K4]LIST"},
     {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
-    {"FILE", "[K2]NEW[K3]OPEN[K4]SAVE"},   /* (HA HA HE HU: the projects) */
-    {"PATTERN", "[K2]ERASE[K4]SAVE[EDIT]NAME"},   /* (was PROJECT; 1.5.5, #199: ERASE) */
-    {"TOOLS", "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
+    {"FILE", "[K2]OPEN[K4]NEW[REC]DELETE"},   /* (HA HA HE HU: the projects; REC deletes, EDIT renames) */
+    {"PATTERN", "[K2]OPEN[K3]COPY[REC]DELETE"},   /* (HA HA HE HU: a track's patterns; REC deletes) */
+    {"TOOLS", "[K2]INIT, CLEAN[K3]DEL TRK[OCT+]DO"},   /* (1.5.5, #190: KNOB 2 on, CLEAN INIT) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
     {"STEP", "[KEYS]WRITE[K1]STEP[SEQ]RATCH"},   /* (1.5.1: SEQ to DETAIL) */
@@ -65,8 +65,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},
     {"CLOCK", "[SELECT]TEMPO[GLO]HOLD: TAP"},
 };
-#define H_HOME "[PRESETS]SOUND[HOME]HOLD: MENU"
-#define H_LEVELS "[K1-4]T1-T4 LEVEL[HOME]MIXER"
+#define H_HOME "[ALGO]+ TRACK[HOME]HOLD: MENU"
+#define H_LEVELS "[K1-4]LEVELS[HOME]MIXER"
 #define H_GRID "[KEYS]STEPS[K2]LANE[SEQ]RATCH"
 /* a layer's (LAYER_*): what its footer row (LAYERS[].foot) does not say */
 static const char *const HELP_LAYER[LAYER_N] = {

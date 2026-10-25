@@ -157,14 +157,16 @@ static int select_page(void)
     go_title("ENV"); frame();
     turn(EN_SELECT, 2);
     ok = title_is("ENV") && song.g[G_BPM] == b0;        /* (no list: nothing) */
+    song.sel = 0;                                       /* (track 1: patterns 1 2 3, it plays 3) */
+    pattern_new(0, 0); pattern_new(0, 0);
     go_title("PATTERN"); frame();
-    song.g[G_SLOT] = 1;
-    turn(EN_SELECT, 2);
-    ok &= title_is("PATTERN") && song.g[G_SLOT] == 3;
+    turn(EN_SELECT, -2);
+    ok &= title_is("PATTERN") && pt_sel == 1u && ps_num(0) == 3u;
+    ps_reset();
     go_title("FILE"); frame();
     ui.fsel = 0;
     turn(EN_SELECT, 1);
-    ok &= title_is("FILE") && ui.fsel == 1u;
+    ok &= title_is("FILE") && ui.fsel == (pfs_count() > 1u ? 1u : 0u);   /* (no project saved here: none to move to) */
     go_title("SONG"); frame();
     chain_config.count = 3;
     chain_config.row[0] = chain_config.row[1] = chain_config.row[2] = chain_row_of(0, 1);
@@ -258,50 +260,49 @@ static int oct_press(void)
     return bad;
 }
 
-/* ------------------------------------------------- SAVE > PROJECT ERASE --- */
+/* ------------------------------------------- SAVE > PATTERN (HA HA HE HU) --- */
+/* the track's patterns (pstore.c): KNOB 2 OPEN, 3 COPY, 4 NEW, OCT+ does it; REC deletes the one picked (the dialog) */
 static int project_erase_ui(void)
 {
     int bad = 0, ok;
     char a[24], b[24];
     ui_power_on();
     song.playing = 0;
-    project_save_as(1, "DUB SKETCH");
-    project_save_as(2, "KEEP ME");
-    go_page(GR_SLOTS); frame();                         /* (HA HA HE HU: on the pattern on the tracks, C) */
-    song.g[G_SLOT] = 2;                                 /* B */
-    ok = act_cols() == 14u && str_eq(act_name(1), "ERASE") && str_eq(act_name(2), "LOAD") && str_eq(act_name(3), "SAVE");
-    turn(EN_K2, 1);
-    ok &= ui.act == 2u && act_ready();
-    press(B_OCTUP);
-    ok &= ui.confirm == CF_ERASE_PROJ && ui.confirm_trk == 1u;
-    confirm_text(a, b);
-    ok &= str_eq(a, "ERASE PATTERN B?") && str_eq(b, "DUB SKETCH");
-    press(B_OCTDN);
-    ok &= !ui.confirm && project_used(1);
-    bad += check("SAVE > PROJECT (#199): KNOB 2 ERASE, OCT+ asks \"ERASE PATTERN B?\" with its name, OCT- keeps it", ok);
-
-    turn(EN_K2, 1);
-    press(B_OCTUP);
-    press(B_OCTUP);
-    ok = !ui.confirm && !project_used(1) && project_used(2) && str_eq(ui.msg, "ERASED (RAM)") && cur_page()->graph == GR_SLOTS;
-    turn(EN_K2, 1);
-    ok &= !act_ready();
-    press(B_OCTUP);
-    ok &= !ui.confirm && str_eq(ui.msg, "EMPTY SLOT");
-    bad += check("  OCT+ again: the slot empty, the others kept; an empty slot: nothing to erase", ok);
-
-    song.g[G_SLOT] = 3;
-    song.playing = 1;
-    turn(EN_K2, 1);
-    ok = !act_ready();
-    press(B_OCTUP);
-    ok &= !ui.confirm && str_eq(ui.msg, "STOP TO ERASE") && project_used(2);
-    song.playing = 0;
+    song.sel = 0;
+    trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 100};
+    go_page(GR_PATTERN); frame();
+    ok = act_cols() == 14u && str_eq(act_name(1), "OPEN") && str_eq(act_name(2), "COPY") && str_eq(act_name(3), "NEW");
     turn(EN_K3, 1);
-    ok &= ui.act == 3u && str_eq(act_name(2), "LOAD");
-    go_page(GR_SLOTS);
-    ok &= help_page() && str_eq(help_page(), "[K2]ERASE[K4]SAVE[EDIT]NAME") && help_fits(help_page());
-    bad += check("  not while playing (STOP TO ERASE); LOAD and SAVE where they were; its HELP hint", ok);
+    ok &= ui.act == 3u && act_ready();
+    press(B_OCTUP);
+    ok &= ps_num(0) == 2u && ps_exists(0, 1) && trk[0].step[0].n == 1u && trk[0].step[0].note[0] == 60u && pt_sel == 2u;
+    turn(EN_K4, 1);
+    press(B_OCTUP);
+    ok &= ps_num(0) == 3u && trk[0].step[0].time != ST_NOTE && ps_exists(0, 2);
+    bad += check("SAVE > PATTERN: KNOB 2 OPEN, 3 COPY (the one played, played now), 4 NEW (empty), OCT+ does it", ok);
+
+    press(B_REC);
+    ok = ui.confirm == CF_DEL_PAT && !song.rec;
+    confirm_text(a, b);
+    ok &= str_eq(a, "DELETE PATTERN 3?");
+    press(B_OCTDN);
+    ok &= !ui.confirm && ps_exists(0, 3);
+    bad += check("  REC asks \"DELETE PATTERN 3?\" (no recording armed), OCT- keeps it", ok);
+
+    press(B_REC);
+    press(B_OCTUP);
+    ok = !ui.confirm && !ps_exists(0, 3) && ps_num(0) != 3u && str_eq(ui.msg, "PATTERN DELETED");
+    pattern_go(0, 2);
+    ok &= trk[0].step[0].n == 1u && trk[0].step[0].note[0] == 60u;
+    pattern_del(0, 1);
+    pattern_del(0, 2);
+    ok &= ps_num(0) == 1u && trk[0].step[0].time != ST_NOTE && !ps_exists(0, 2);
+    bad += check("  OCT+ deletes it, the track on another; the last one: emptied", ok);
+
+    turn(EN_K2, 1);
+    ok = !act_ready();                                  /* (OPEN: the one played already) */
+    ok &= help_page() && str_eq(help_page(), "[K2]OPEN[K3]COPY[REC]DELETE") && help_fits(help_page());
+    bad += check("  OPEN on the one played: nothing to do; its HELP hint", ok);
     return bad;
 }
 
@@ -439,7 +440,7 @@ static int clean_init(void)
     press(B_OCTUP);
     ok &= msg_is("CLEAN INIT") && clean_is(TSEL, TSEL->eng_req, 77, -30);
     go_page(GR_TOOLS);
-    ok &= str_eq(help_page(), "[K1]CLEAR[K2]INIT, CLEAN[OCT+]DO") && help_fits(help_page());
+    ok &= str_eq(help_page(), "[K2]INIT, CLEAN[K3]DEL TRK[OCT+]DO") && help_fits(help_page());
     bad += check("  EDIT + the key after INIT (F5): the dialog \"CLEAN INIT SOUND?\"; TOOLS' HELP hint", ok);
     return bad;
 }

@@ -726,12 +726,26 @@ static void song_steps(uint32_t k)
         }
 }
 /* SONG's sources: project slot k saved with track 1's LEN steps of DIV (N_DIV's order), the patterns song_steps(k) */
+/* HA HA HE HU: SONG's sources are each track's patterns (pstore.c): a scene's slot k (A..D) saved is kept as pattern k + 1
+ * too (the tracks play 32, rs_park), a section's slot k names pattern k + 1, 4 ("-") none */
+static int rs_save_as(uint32_t k, const char *name) { int r = project_save_as(k, name); pat_keep(k + 1u); return r; }
+static int rs_save(uint32_t k) { return rs_save_as(k, 0); }
+static uint8_t rs_n(uint32_t s) { return s < 4u ? (uint8_t)(s + 1u) : (uint8_t)CHAIN_SILENT; }
+static chain_row_t rs_row_of(uint32_t s, uint32_t r) { return chain_row_of(rs_n(s), r); }
+static chain_row_t rs_row4(const uint8_t *R)
+{
+    chain_row_t w = chain_row_of(CHAIN_SILENT, R[4]);
+    uint32_t k;
+    for (k = 0; k < 4u; k++)
+        w.slot[k] = rs_n(R[k]);
+    return w;
+}
 static void song_src(uint32_t k, int16_t len, int16_t div, const char *name)
 {
     song_steps(k);
     trk[0].p[P_SLEN] = len;
     trk[0].p[P_SDIV] = div;
-    project_save_as(k, name);
+    rs_save_as(k, name);
 }
 /* SONG drawn as on entering it: the slots read again (ui_graph.c graph_project_used: twice a second) and the
  * timeline's view new */
@@ -982,6 +996,7 @@ static void setup(int s)
 {
     memset(kb_chn, 0, sizeof kb_chn);               /* no key held (roll_playing holds one) */
     state();
+    pat_park();                                      /* (HA HA HE HU: the tracks on 32, patterns 1..4 the slots A..D) */
     memset(drum_mute, 0, sizeof drum_mute);          /* (1.4.1: no DRUM lane muted) */
     switch (s) {
     case S_HOME: song.octave = 2; song.rec = 1; usb.config = 1; break;
@@ -994,13 +1009,13 @@ static void setup(int s)
     case S_PRESETS_NOFAV: favorites.filter = 1; go_page(GR_BROWSE); break;
     case S_USER: song.playing = 0; up_store(3, "MY LONG BASS NAME"); up_store(4, "PAD"); ui.uslot = 3; go_page(GR_USER); break;
     case S_PHRASES: go_page(GR_PATS); break;
-    case S_PROJECT: song.playing = 0; project_save(1); song.g[G_SLOT] = 2; go_page(GR_SLOTS); ui.act = 4; break;
+    case S_PROJECT: song.playing = 0; pattern_new(0, 1); pattern_new(0, 0); go_page(GR_PATTERN); ui.act = 3; break;   /* (HA HA HE HU: PATTERN) */
     case S_TOOLS: go_page(GR_TOOLS); ui.act = 1; break;
     case S_SONG_EMPTY: song.playing = 0; go_page(GR_SONG); break;
     case S_SONG:
-        song.playing = 0; project_save(0); project_save(1);
+        song.playing = 0; rs_save(0); rs_save(1);
         chain_config.count = 3;
-        chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 4); chain_config.row[2] = chain_row_of(2, 1);
+        chain_config.row[0] = rs_row_of(0, 2); chain_config.row[1] = rs_row_of(1, 4); chain_config.row[2] = rs_row_of(2, 1);
         ui.song_row = 1; go_page(GR_SONG); sg_fresh(); chain_prepare(); events_block(32);
         break;
     case S_STEP: song.rec = 1; go_page(GR_ROLL); ui.cursor = 6; break;
@@ -1050,7 +1065,7 @@ static void setup(int s)
         song.playing = 0;
         song_src(0, 16, 2, "VERSE"); song_src(1, 32, 2, "CHORUS"); song_src(2, 16, 2, "DRUMS"); song_src(3, 8, 2, "FILL");
         chain_config.count = 5;
-        for (k = 0; k < 5u; k++) chain_config.row[k] = (chain_row_t){{R[k][0], R[k][1], R[k][2], R[k][3]}, R[k][4]};
+        for (k = 0; k < 5u; k++) chain_config.row[k] = rs_row4(R[k]);
         ui.song_row = s == S_SONG_LANES_SILENT ? 1 : 2; ui.song_trk = s == S_SONG_LANES_SILENT ? 0 : 1;
         go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
         if (s == S_SONG_LANES_PLAYING) {
@@ -1071,9 +1086,9 @@ static void setup(int s)
         trk[0].p[P_SLEN] = 64; trk[0].p[P_SDIV] = 2;
         for (k = 16; k < 64u; k++) trk[0].step[k] = trk[0].step[k % 16u];
         for (k = 32; k < 64u; k += 2u) trk[0].step[k].time = ST_REST;   /* (thinner in its second half) */
-        project_save_as(1, "CHORUS");
+        rs_save_as(1, "CHORUS");
         chain_config.count = 4;
-        for (k = 0; k < 4u; k++) chain_config.row[k] = (chain_row_t){{R[k][0], R[k][1], R[k][2], R[k][3]}, R[k][4]};
+        for (k = 0; k < 4u; k++) chain_config.row[k] = rs_row4(R[k]);
         ui.song_row = 1; ui.song_trk = 3;
         go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
         break;
@@ -1081,13 +1096,13 @@ static void setup(int s)
     /* 1.2: the header's slot letter (ui_draw.c head_slot): "1 A" (PROJECT A loaded; another track armed: the REC mark
      * outlined after it); "1 A*" edited since, armed (the REC mark after it); a song playing, track 2 silent in its
      * section: "2 -" */
-    case S_HEAD_SLOT: song.playing = 0; project_save(0); project_load(0); song.rec = 1u << ((song.sel + 2u) % NTRK); go_home(); ui.msg_t = 0; break;
+    case S_HEAD_SLOT: song.playing = 0; rs_save(0); project_load(0); song.rec = 1u << ((song.sel + 2u) % NTRK); go_home(); ui.msg_t = 0; break;
     case S_HEAD_SLOT_EDITED:
-        song.playing = 0; project_save(0); project_load(0); TSEL->step[3].note[0] = 70; TSEL->step[3].n = 1;
+        song.playing = 0; rs_save(0); project_load(0); TSEL->step[3].note[0] = 70; TSEL->step[3].n = 1;
         song.rec = 1u << song.sel; go_home(); ui.msg_t = 0; break;
     case S_HEAD_SLOT_SONG:
-        song.playing = 0; project_save(0);
-        chain_config.count = 1; chain_config.row[0] = (chain_row_t){{0, CHAIN_SILENT, 0, 0}, 4};
+        song.playing = 0; rs_save(0);
+        chain_config.count = 1; chain_config.row[0] = (chain_row_t){{1, CHAIN_SILENT, 1, 1}, 4};
         chain_prepare(); events_block(32); song.sel = 1; go_home(); ui.msg_t = 0; break;
     case S_DRUM: drum(0); go_page(GR_ROLL); ui.cursor = 4; ui.lane = 1; trk[3].seq_idx = 9; break;
     case S_DRUM_HAND: drum(1); go_page(GR_ROLL); ui.lane = 5; ui.cursor = 7; break;
@@ -1288,9 +1303,9 @@ static void setup(int s)
         break;
     }
     case S_SONG_HOME:                            /* the song playing: the disc and its row in the header */
-        song.playing = 0; project_save(0); project_save(1);
+        song.playing = 0; rs_save(0); rs_save(1);
         chain_config.count = 2;
-        chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 4);
+        chain_config.row[0] = rs_row_of(0, 2); chain_config.row[1] = rs_row_of(1, 4);
         go_page(GR_SONG); chain_prepare(); events_block(32); go_home(); ui.msg_t = 0;
         break;
     /* the FX layer's map: held alone; REPEAT 1/16 + LPF + a mute playing with the macros turned;
@@ -1391,18 +1406,18 @@ static void setup(int s)
         str_cpy(nm.s, "SUB BAS", sizeof nm.s); nm.len = 7; nm.cur = 6; nm.key = 9; nm.tap = 1; nm.t = fm1_ms;
         break;
     case S_NAME_123:
-        song.playing = 0; go_page(GR_SLOTS); name_open(NK_PROJ_SAVE, 1);
+        song.playing = 0; go_page(GR_FILE); name_open(NK_ARCH_SAVE, 0);   /* (HA HA HE HU: FILE's COPY) */
         str_cpy(nm.s, "LIVE 2026", sizeof nm.s); nm.len = 9; nm.cur = 5; nm.num = 1;
         break;
-    case S_NAME_EMPTY: song.playing = 0; go_page(GR_SLOTS); proj_name[0] = 0; name_open(NK_PROJ_SAVE, 2); break;
+    case S_NAME_EMPTY: song.playing = 0; go_page(GR_FILE); proj_name[0] = 0; name_open(NK_FILE_RENAME, 0); break;
     case S_NAME_FULL:
         song.playing = 0; up_store(4, "PAD"); go_page(GR_USER); name_open(NK_USER_RENAME, 4);
         str_cpy(nm.s, "MWMWMWMWMWMW", sizeof nm.s); nm.len = nm.cur = 12;
         break;
     case S_NAME_PLAYING: go_page(GR_USER); name_open(NK_USER_SAVE, 6); ui_message("STOP TO SAVE"); break;
     case S_PROJECT_NAMED:
-        song.playing = 0; project_save_as(0, "LOFI JAM"); project_save_as(1, "MWMWMWMWMWMW"); project_save_as(2, "");
-        song.g[G_SLOT] = 2; go_page(GR_SLOTS); ui.act = 4; ui.msg_t = 0;
+        song.playing = 0; rs_save_as(0, "LOFI JAM"); rs_save_as(1, "MWMWMWMWMWMW"); rs_save_as(2, "");
+        go_page(GR_FILE); ui.act = 4; ui.msg_t = 0;   /* (HA HA HE HU: FILE, NEW picked) */
         break;
     /* 1.2 (Discussion #90): PRESETS > LIST BASS (factory basses and a user one); OTHER with none; NAME's category
      * (the widest, PLUCK) on a rename of a long name; PROJECT's random name */
@@ -1414,11 +1429,11 @@ static void setup(int s)
     case S_NAME_CAT:
         song.playing = 0; up_store_cat(4, "MWMWMWMWMWMW", CAT_PLUCK); go_page(GR_USER); name_open(NK_USER_RENAME, 4);
         break;
-    case S_NAME_RANDOM: song.playing = 0; go_page(GR_SLOTS); name_open(NK_PROJ_SAVE, 1); nm.rnd = 12345u; nm_random(); break;
+    case S_NAME_RANDOM: song.playing = 0; go_page(GR_FILE); name_open(NK_ARCH_SAVE, 0); nm.rnd = 12345u; nm_random(); break;
     case S_SONG_NAMED:
-        song.playing = 0; project_save_as(0, "LOFI JAM"); project_save_as(1, "MWMWMWMWMWMW");
+        song.playing = 0; rs_save_as(0, "LOFI JAM"); rs_save_as(1, "MWMWMWMWMWMW");
         chain_config.count = 3;
-        chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 4); chain_config.row[2] = chain_row_of(2, 1);
+        chain_config.row[0] = rs_row_of(0, 2); chain_config.row[1] = rs_row_of(1, 4); chain_config.row[2] = rs_row_of(2, 1);
         ui.song_row = 0; go_page(GR_SONG); sg_fresh(); ui.msg_t = 0;
         break;
     /* SONG's timeline (ui_graph.c graph_song): a long song scrolled to the cursor (row 10; D not saved: one bar,
@@ -1432,7 +1447,7 @@ static void setup(int s)
         song_src(0, 16, 2, "VERSE"); song_src(1, 32, 2, "CHORUS"); song_src(2, 16, 6, "BRIDGE");   /* 1, 2, 8 bars */
         if (s == S_SONG_LONG_PLAYING) song_src(3, 8, 2, "FILL");
         chain_config.count = 15;
-        for (k = 0; k < 15u; k++) chain_config.row[k] = chain_row_of(R[k][0], R[k][1]);
+        for (k = 0; k < 15u; k++) chain_config.row[k] = rs_row_of(R[k][0], R[k][1]);
         ui.song_row = s == S_SONG_LONG ? 9 : 0; go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
         if (s == S_SONG_LONG_PLAYING) {
             chain_prepare(); events_block(32);
@@ -1446,8 +1461,8 @@ static void setup(int s)
         song.playing = 0;
         song_src(0, 16, 2, "VERSE"); song_src(1, 8, 2, "FILL"); song_src(2, 32, 2, "CHORUS");
         chain_config.count = 4;
-        chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 4);
-        chain_config.row[2] = chain_row_of(2, 2); chain_config.row[3] = chain_row_of(0, 1);
+        chain_config.row[0] = rs_row_of(0, 2); chain_config.row[1] = rs_row_of(1, 4);
+        chain_config.row[2] = rs_row_of(2, 2); chain_config.row[3] = rs_row_of(0, 1);
         ui.song_row = 2; go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
         chain_prepare(); events_block(32);
         for (k = 0; k < 600u && chain.running && !(chain.row == 1u && chain.remaining == 2u); k++) events_block(div_samples(2));
@@ -1455,9 +1470,9 @@ static void setup(int s)
         break;
     }
     case S_SONG_UNSAVED: case S_SONG_ADD:
-        song.playing = 0; project_save_as(0, "LOFI JAM"); project_save(1);
+        song.playing = 0; rs_save_as(0, "LOFI JAM"); rs_save(1);
         chain_config.count = 3;
-        chain_config.row[0] = chain_row_of(0, 2); chain_config.row[1] = chain_row_of(1, 4); chain_config.row[2] = chain_row_of(2, 1);
+        chain_config.row[0] = rs_row_of(0, 2); chain_config.row[1] = rs_row_of(1, 4); chain_config.row[2] = rs_row_of(2, 1);
         ui.song_row = s == S_SONG_UNSAVED ? 2 : 3; go_page(GR_SONG); ui.msg_t = 0; sg_fresh();
         break;
     case S_ROLL_EMPTY: case S_ROLL_ACID: case S_ROLL_CHORDS: case S_ROLL_TIES: case S_ROLL_LEN32: case S_ROLL_HIGH:
@@ -1540,8 +1555,9 @@ static void setup(int s)
     /* 1.5.5 (#188): MENU > CONTROL > SELECT PAGE (the tab's eighth row) */
     case S_MENU_SELECT: ui_prefs2 |= PREF_SEL_PAGE >> 16; ui.menu = 1; ui.menu_sel = MI_SELECT; break;
     /* 1.5.5 (#199): SAVE > PROJECT with KNOB 2 ERASE picked on a used slot; its dialog with the project's name */
-    case S_PROJECT_ERASE: song.playing = 0; project_save_as(1, "DUB SKETCH"); song.g[G_SLOT] = 2; go_page(GR_SLOTS); ui.act = 2; break;
-    case S_CONFIRM_ERASE_PROJ: song.playing = 0; project_save_as(1, "A VERY LONG NAME"); ui.confirm = CF_ERASE_PROJ; ui.confirm_trk = 1; break;
+    case S_PROJECT_ERASE:                            /* (HA HA HE HU: PATTERN, another picked, OPEN; REC's DELETE dialog) */
+        song.playing = 0; pattern_new(0, 1); go_page(GR_PATTERN); pt_sel = 1; ui.act = 2; break;
+    case S_CONFIRM_ERASE_PROJ: song.playing = 0; pattern_new(0, 1); ui.confirm = CF_DEL_PAT; ui.confirm_trk = 2; break;
     /* 1.5.5 (#190): SAVE > TOOLS with KNOB 2 turned on past INIT (CLEAN INIT picked); its dialog */
     case S_TOOLS_CLEAN: go_page(GR_TOOLS); ui.act = 2; ui.tl_clean = 1; break;
     case S_CONFIRM_CLEAN: ui.confirm = CF_CLEAN_SOUND; ui.confirm_trk = 0; break;
