@@ -950,7 +950,7 @@ static void draw_foot_in(void)
         sig += str_hash(str_hash(act_ready() ? 7u : 3u, ha), hb) + foot_rename() * 7717u + foot_del() * 31u;
     }
     if (grid_on())
-        sig += 0x51EDu + (uint32_t)black_held(GK_ACC) * 977u;
+        sig += 0x51EDu + (uint32_t)black_held(GK_ACC) * 977u + grid_write() * 131u;
     help = ui.help_t && !ui.ml.on ? help_page() : 0;   /* 1.5, HELP ON: the page's hint for ~2 s after it was entered
                                                        * (not while MIDI LEARN shows its line) */
     if (help)
@@ -999,7 +999,8 @@ static void draw_foot_in(void)
         if (black_held(GK_ACC))
             cv_text_r(232, 2, &AF_S, "ACCENT", T_ACCENT, T_BG);
         else
-            cv_key_hint(232 - kh_w(KC_KEYS, "STEPS"), 2, KC_KEYS, "STEPS", 1, T_BG);   /* the keys are the steps */
+            cv_key_hint(232 - kh_w(KC_KEYS, grid_write() ? "STEPS" : "PLAY"), 2, KC_KEYS, grid_write() ? "STEPS" : "PLAY", 1,
+                        T_BG);                        /* the keys are the steps (Dah: armed; else they play) */
     } else {
         uint32_t i;
         if ((ui.bank + 1u) * 16u <= (uint32_t)t->p[P_SLEN])

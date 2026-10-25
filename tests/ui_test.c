@@ -1186,8 +1186,11 @@ static int test_grid(void)
     t->engine = t->eng_req;
     open_family(FAM_SEQ);
     frame();
-    bad += check("SEQ > STEP on a DRUM track is the grid (keys to the UI), GRID in the footer", grid_on() && song.grid == 1u &&
-                 cur_page()->scope == SC_STEP);
+    ok = grid_on() && song.grid == 0u;                  /* (Dah: not armed, the keys play the drums) */
+    song.rec = (uint8_t)(1u << song.sel);               /* (armed: the keys are the steps) */
+    frame();
+    bad += check("SEQ > STEP on a DRUM track is the grid; not armed the keys play, armed they are the steps (Dah)",
+                 ok && grid_on() && song.grid == 1u && cur_page()->scope == SC_STEP);
     bad += check("the lanes: KICK SNARE CLAP HATCL HATOP TOM RIM BELL on GM 36 38 39 42 46 45 37 56",
                  str_eq(drum_lane_name(t, 0), "KICK") && str_eq(drum_lane_name(t, 7), "BELL") && DRUM_LANE_NOTE[3] == 42 &&
                  DRUM_LANE_NOTE[6] == 37 && drum_lane(41) == DV_TOM && drum_lane(49) == DV_BELL && drum_lane(35) == DV_KICK);
@@ -1360,6 +1363,7 @@ static int test_grid(void)
                  !t->step[0].hit && t->p[P_SLEN] == 32);
     /* the menu: the keys play again */
     go_page(GR_ROLL);
+    song.rec = (uint8_t)(1u << song.sel);               /* (Dah: armed, the grid's) */
     frame();
     k = song.grid;
     hold(B_HOME);
@@ -4683,15 +4687,16 @@ static int test_step_rec(void)
     t->engine = t->eng_req;
     go_page(GR_ROLL);
     frame();
+    memcpy(before, t->step, sizeof before);
     tap_key(key_at(0, 4));
-    ok = grid_on() && t->step[4].hit != 0u;
+    ok = grid_on() && !memcmp(before, t->step, sizeof before);       /* (Dah: not armed, the key plays, writes nothing) */
     press(B_REC);
-    ok &= song.rec == 1u && transport_req == 1u && msg_is("LANE KEYS RECORD");
-    transport_req = 0;                                                /* (armed, still stopped) */
+    ok &= song.rec == 1u && transport_req == 0u && msg_is("KEYS WRITE STEPS");   /* (armed, stopped: step entry) */
+    tap_key(key_at(0, 4));
     tap_key(key_at(0, 6));
     tap_key(key_at(0, 4));
-    ok &= t->step[6].hit != 0u && !t->step[4].hit && ui.cursor == 4u;
-    bad += check("#133 the DRUM grid unchanged: white keys toggle steps armed or not, REC from stop starts PLAY", ok);
+    ok &= t->step[6].hit != 0u && !t->step[4].hit;
+    bad += check("#133 the DRUM grid (Dah): not armed the keys play; REC from stop: the white keys toggle steps", ok);
     song.rec = 0;
     return bad;
 }
@@ -4787,6 +4792,7 @@ static int test_step_preview_chord_entry(void)
     set_engine_of(t, ENGI_DRUM);
     t->engine = t->eng_req;
     go_page(GR_ROLL);
+    song.rec = (uint8_t)(1u << song.sel);               /* (Dah: armed, the keys are the steps) */
     frame();
     tap_key(key_at(0, 2));                              /* a hit at step 3 (the selected lane) */
     blocks(div_samples(2) / CTL + 2u);

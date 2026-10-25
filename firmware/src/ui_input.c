@@ -636,6 +636,10 @@ static int rec_tap(void)                                /* 1: the arming changed
     }
     song.rec ^= bit;
     ui.force = 1;                                     /* also refresh the status on MENU / ABOUT */
+    if ((song.rec & bit) && !song.playing && !seq_counting() && grid_on()) {
+        ui_message("KEYS WRITE STEPS");               /* (Dah: the DRUM grid: armed, the keys are the steps) */
+        return 1;
+    }
     if ((song.rec & bit) && !song.playing && !seq_counting() && roll_on()) {
         ui_message(ui_prefs2 & (PREF_CHORD_ADD >> 16) ? "KEYS ADD TO STEP" : "KEYS WRITE STEPS");   /* step recording:
                                                          * stopped, at the cursor (CHORD ENTRY ADD: adding) */
