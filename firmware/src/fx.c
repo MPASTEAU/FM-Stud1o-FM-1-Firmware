@@ -94,7 +94,7 @@ static struct {                          /* HALL's state (in the pool: no .bss) 
  * make-up gain (straight into tanh over the full band, it would sound like a
  * broken digital fuzz). State per part (track_t dist_*). */
 static int32_t eq_gain_q12(int32_t g);                  /* fx_eq.c */
-static void track_dist(track_t *t, int32_t *b, uint32_t n)
+static void dist_run(const track_t *t, int32_t *st, int32_t *b, uint32_t n)   /* st: the low cut's, the two poles' */
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
     if (!d)
@@ -108,13 +108,21 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
     b0 = softclip(bias);
     for (i = 0; i < (int32_t)n; i++) {
         int32_t x = b[i], y;
-        t->dist_hp += (x - t->dist_hp + 64) >> 7;           /* ~55 Hz low cut: keep the bass out of the clipper */
-        x = clamp(x - t->dist_hp, -230000, 230000);         /* (x >> 2) * g fits 32 bits; the clip is flat out there */
+        st[0] += (x - st[0] + 64) >> 7;                    /* ~55 Hz low cut: keep the bass out of the clipper */
+        x = clamp(x - st[0], -230000, 230000);              /* (x >> 2) * g fits 32 bits; the clip is flat out there */
         y = softclip((((x >> 2) * g) >> 10) + bias) - b0;   /* >> 2 first: no overflow for loud poly */
-        t->dist_lp1 += mulq15(y - t->dist_lp1, k);         /* two poles: tames the fizz */
-        t->dist_lp2 += mulq15(t->dist_lp1 - t->dist_lp2, k);
-        b[i] = mulq15(t->dist_lp2, mk);
+        st[1] += mulq15(y - st[1], k);                      /* two poles: tames the fizz */
+        st[2] += mulq15(st[1] - st[2], k);
+        b[i] = mulq15(st[2], mk);
     }
+}
+static void track_dist(track_t *t, int32_t *b, uint32_t n)
+{
+    int32_t st[3] = {t->dist_hp, t->dist_lp1, t->dist_lp2};
+    if (!t->p[P_DIST])
+        return;
+    dist_run(t, st, b, n);
+    t->dist_hp = st[0]; t->dist_lp1 = st[1]; t->dist_lp2 = st[2];
 }
 
 /* master: peak limiter in front of the soft clipper. Fast attack (~0.1 ms),
@@ -827,6 +835,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
 /* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)
  * -> dist -> INSERT -> SLICER -> level / pan / sends -> buses -> master; out: stereo Q15 */
 static void events_block(uint32_t n);                    /* seq.c */
+static volatile int32_t master_pk;                       /* (Dah) the output's peak since MIXER last read it */
 #if FELUCCA_CPU2
 static int32_t wet[CTL];                                 /* (the dry mix and the sends: mx[0], above) */
 #else
@@ -856,6 +865,65 @@ static const uint16_t FX_ORDER[120] = {
     0x111A, 0x031A, 0x181A, 0x085A, 0x310A, 0x070A, 0x380A, 0x08CA};
 static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t->p[P_FXORD] < 120u ? (uint32_t)t->p[P_FXORD] : 0u]; }
 #include "fx_eq.c"                                      /* (Dah) the EQ, the chain's fourth unit */
+#include "fx_comp.c"                                    /* (Dah) the COMPRESSOR, after the chain; the MASTER's */
+/* (Dah) the MASTER's chain (MIXER: the MASTER picked, FX): DIST and EQ in its ORDER, a track's parameters in mtrk's p[]
+ * (MST_ID, the ones the project keeps: projfs.c), then its COMPRESSOR (G_MCOMP); the mix and the returns, left and
+ * right each (a voice's scale: a quarter) */
+static track_t mtrk __attribute__((section(".pool")));
+static int32_t mdist[2][3];
+#define MST_N 12u
+static const uint8_t MST_ID[MST_N] = {P_FXORD, P_DIST, P_DOUT, P_DCOL, P_EQLO, P_EQHI, P_EQ1F, P_EQ1G,
+                                      P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G};
+static uint8_t mst_ok;                                  /* (mtrk set: its defaults at least) */
+static void mst_defaults(void)
+{
+    uint32_t i;
+    mst_ok = 1;
+    memset(&mtrk, 0, sizeof mtrk);
+    for (i = 0; i < MST_N; i++)
+        mtrk.p[MST_ID[i]] = TP[MST_ID[i]].def;
+    mtrk.p[P_DIST] = 0;
+    mtrk.p[P_EQLO] = 0;
+    mtrk.p[P_EQHI] = EQ_TOP;
+    mtrk.p[P_EQ1G] = mtrk.p[P_EQ2G] = mtrk.p[P_EQ3G] = 0;
+    memset(mdist, 0, sizeof mdist);
+}
+static int mst_on(void)
+{
+    if (!mst_ok)
+        mst_defaults();
+    return song.g[G_MCOMP] > 0 || mtrk.p[P_DIST] || eq_units(&mtrk);
+}
+static __attribute__((noinline)) void mst_chain(int32_t *l, int32_t *r, uint32_t n)
+{
+    uint32_t o = fx_order(&mtrk), k, i;
+    for (k = 0; k < 5u; k++) {
+        uint32_t u = (o >> (3u * k)) & 7u;
+        if (u == 0u && mtrk.p[P_DIST]) {
+            for (i = 0; i < n; i++) {
+                l[i] >>= 2;
+                r[i] >>= 2;
+            }
+            dist_run(&mtrk, mdist[0], l, n);
+            dist_run(&mtrk, mdist[1], r, n);
+            for (i = 0; i < n; i++) {
+                l[i] <<= 2;
+                r[i] <<= 2;
+            }
+        } else if (u == 3u) {
+            eq_run(&eq_m[0], &mtrk, l, n);
+            eq_run(&eq_m[1], &mtrk, r, n);
+        }
+    }
+}
+static __attribute__((noinline)) void mst_tap(const int32_t *l, const int32_t *r, const int32_t *w, uint32_t n)
+{
+    uint32_t i, p = eq_wp;
+    for (i = 0; i < n; i++, p = (p + 1u) & (EQ_RN - 1u))
+        eq_ring[p] = (int16_t)clamp((((l[i] + r[i]) >> 1) + w[i]) >> 5, -32767, 32767);   /* (EQ page: the MASTER's) */
+    eq_wp = (uint16_t)p;
+    eq_wn++;
+}
 static int32_t duck_att[NPART];
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n);
 static void duck_part(track_t *t, int32_t *b, uint32_t n);
@@ -909,8 +977,12 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
             else if ((o & 7u) == 3u) {
                 if (eq_units(t) | eq[(uint32_t)(t - trk) % NTRK].on)
                     track_eq(t, b, n);                  /* (the mono sum: the side passes it by) */
-            } else if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
-                duck_part_sd(t, b, d, n);               /* (Dah: the SIDECHAIN, where ORDER puts it; the side too) */
+            } else {
+                if (trkx[(uint32_t)(t - trk) % NTRK].rsv0 | cmp_trk[(uint32_t)(t - trk) % NTRK].gr)
+                    comp_track(t, b, d, n);             /* (Dah) the COMPRESSOR: just before the SIDECHAIN */
+                if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
+                    duck_part_sd(t, b, d, n);           /* (Dah: the SIDECHAIN, where ORDER puts it; the side too) */
+            }
         }
         if (tp & 1u) c = 0;                             /* (taken already) */
         if (tp & 2u) dl = 0;
@@ -978,6 +1050,8 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
                 track_eq(t, b, n);                      /* (Dah) the EQ: flat, nothing */
             break;
         default:
+            if (trkx[(uint32_t)(t - trk) % NTRK].rsv0 | cmp_trk[(uint32_t)(t - trk) % NTRK].gr)
+                comp_track(t, b, 0, n);                 /* (Dah) the COMPRESSOR: just before the SIDECHAIN */
             if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
                 duck_part(t, b, n);                     /* (Dah) the SIDECHAIN, where ORDER puts it */
             break;
@@ -1128,6 +1202,8 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
  * size does not follow the volume. The click is in neither */
 #define SCOPE_N 512u
 static int16_t scope_buf[SCOPE_N];
+static int16_t ui_tmp[SCOPE_N] __attribute__((section(".pool")));   /* (Dah) the main loop's scratch, a frame's: HOME's
+                                                         * scope (ui_graph.c), the EQ's spectrum (ui_graph_eq.c) */
 static uint32_t scope_w;
 static volatile uint8_t scope_mix;
 static __attribute__((noinline)) void scope_take_mix(uint32_t n)
@@ -1152,6 +1228,10 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
         master_out(&l, &r);
         out[2u * i] = l;
         out[2u * i + 1u] = r;
+        l = l < 0 ? -l : l;
+        r = r < 0 ? -r : r;
+        if ((l > r ? l : r) > master_pk)
+            master_pk = l > r ? l : r;              /* (Dah) MIXER's MASTER meter */
     }
 }
 
@@ -1259,6 +1339,21 @@ static void mix_block(int32_t *out, uint32_t n)
     fx_buses(send_c, send_d, send_r, wet, n);
     if (hl.side)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
+    if (mst_on()) {                                     /* (Dah) the MASTER's chain: the whole mix, its returns too */
+        for (i = 0; i < n; i++) {
+            mix_l[i] += wet[i];
+            mix_r[i] += wet[i];
+            wet[i] = 0;
+        }
+        mst_chain(mix_l, mix_r, n);
+        if (song.g[G_MCOMP] > 0)
+            comp_master(mix_l, mix_r, n, (uint32_t)song.g[G_MCOMP], (uint32_t)clamp(song.g[G_MREL], 0, 127));
+        else
+            cmp_master.gr = 0;
+    } else
+        cmp_master.gr = 0;
+    if (eq_watch == NTRK + 1u)
+        mst_tap(mix_l, mix_r, wet, n);
     if (scope_mix)
         scope_take_mix(n);
     if (perf) {
@@ -1271,5 +1366,9 @@ static void mix_block(int32_t *out, uint32_t n)
         master_out(&l, &r);
         out[2u * i] = l;
         out[2u * i + 1u] = r;
+        l = l < 0 ? -l : l;
+        r = r < 0 ? -r : r;
+        if ((l > r ? l : r) > master_pk)
+            master_pk = l > r ? l : r;              /* (Dah) MIXER's MASTER meter */
     }
 }

@@ -26,6 +26,7 @@ typedef struct {
     uint8_t on;                                         /* the filters running (a bit each: LOW HIGH BAND 1 2 3) */
 } eq_t;
 static eq_t eq[NTRK] __attribute__((section(".pool")));
+static eq_t eq_m[2];                                    /* (the MASTER's: left, right) */
 
 /* GAIN -64 .. 63 -> the linear gain, Q12 (-15 .. +15 dB) */
 static int32_t eq_gain_q12(int32_t g)
@@ -58,9 +59,8 @@ static inline void eq_svf(eq_t *s, uint32_t f, int32_t x, uint32_t kh, int32_t *
     s->s2[f] = l + v;
     *hp = h; *bp = b; *lp = l;
 }
-static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t n)
+static void eq_run(eq_t *s, const track_t *t, int32_t *b, uint32_t n)
 {
-    eq_t *s = &eq[(uint32_t)(t - trk) % NTRK];
     uint32_t on = eq_units(t), i, f;
     if (!on) {
         if (s->on)
@@ -89,6 +89,10 @@ static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t 
             }
         b[i] = x;
     }
+}
+static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t n)
+{
+    eq_run(&eq[(uint32_t)(t - trk) % NTRK], t, b, n);
 }
 
 /* the EQ page's spectrum: the watched track's output after its chain (fx.c mix_part / mix_spread), its last EQ_RN

@@ -1112,9 +1112,9 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
  * playing one. + ADD's slot (count < CHAIN_ROWS) at the end. Content px: 0 .. the width. Four lanes, T1 at the top */
 #define SG_X0 24                                       /* the strip: x 24 .. 234 (the lanes' cushions left of it) */
 #define SG_W 210
-#define SG_Y 3                                         /* the lanes: y 3 .. 88 */
+#define SG_Y 3                                         /* the lanes: y 3 .. 104 */
 #define SG_LH 11                                       /* a lane's height (its letter, the pattern's picture), SG_LG between two */
-#define SG_LG 1
+#define SG_LG 2                                        /* (Dah: airier) */
 #define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)         /* (HA HA HE HU: the eight lanes at once, thin) */
 #define SG_LY(k) (SG_Y + (int32_t)(k) * (SG_LH + SG_LG))   /* lane k's top */
 #define SG_GAP 2                                       /* between two blocks (in a block's width) */
@@ -1125,7 +1125,7 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
 #define SG_FITBAR SG_BAR                               /* fitted: at least this many px a bar (Dah: never smaller than
                                                          * scrolled: no song squeezed) */
 #define SG_BARU 192u                                   /* a 4/4 bar in 1/48 quarters */
-#define SG_RY (SG_Y + SG_H + 3)                        /* the ruler's line (92); its ticks and numbers under it */
+#define SG_RY (SG_Y + SG_H + 2)                        /* the ruler's line (107); its ticks and numbers under it (Dah: thin) */
 typedef struct {
     uint32_t n, add, fit;                              /* the rows, + ADD shown, fitted (no scrolling) */
     uint32_t u0[CHAIN_ROWS + 1u];                      /* each row's start in 1/48 quarters; u0[n]: the song's length */
@@ -1243,6 +1243,18 @@ static int32_t song_playx(const song_lay_t *L)
     return L->x[r] + (int32_t)sg_muldiv((reps - (chain.remaining <= reps ? chain.remaining : reps)) * len + idx,
                                         (uint32_t)(L->x[r + 1u] - L->x[r] - SG_GAP), reps * len);
 }
+static int32_t song_playu(const song_lay_t *L)   /* (Dah) the playhead in 1/48 quarters (-1: none) */
+{
+    uint32_t r = chain.row, len, idx, reps;
+    const track_t *t = &trk[chain.clk % NTRK];
+    if (!chain.running || r >= L->n)
+        return -1;
+    len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u;
+    idx = t->seq_pos >= 0x7FFFFFFFu ? 0u : t->seq_idx % len;
+    reps = CHAIN_REP(chain.config.row[r]) ? CHAIN_REP(chain.config.row[r]) : 1u;
+    return (int32_t)(L->u0[r] + sg_muldiv((reps - (chain.remaining <= reps ? chain.remaining : reps)) * len + idx,
+                                          L->u0[r + 1u] - L->u0[r], reps * len));
+}
 /* once a frame: the view toward the cursor's block and the playing one (both when they fit, else the one that moved
  * last), a block's margin round them; halving the way with MENU > ANIM ON, at once on a redraw forced, a gap in
  * the frames or ANIM OFF. Returns the view's left edge */
@@ -1258,6 +1270,12 @@ static int32_t song_follow(const song_lay_t *L)
         sgw.touch = ui.frame - 1000u;
     }
     sgw.run = chain.running;
+    if (chain.running) {                              /* (Dah) the GRID along with the song (the bar playing) */
+        int32_t pu = song_playu(L);
+        if (pu >= 0 && !chain_seek_req)
+            sgw.gu = (uint32_t)pu - (uint32_t)pu % SG_BARU;
+    } else if (chain_from_row < L->n)                 /* .. stopped: where PLAY goes on */
+        sgw.gu = L->u0[chain_from_row] + chain_from_u;
     if (fresh) {                                     /* the page (re)entered: the playing row first */
         sgv.off = 0;
         sgv.last = p != 0xFFu;
@@ -1386,6 +1404,7 @@ static uint32_t graph_signature(void)
             song_layout(&L);
             h = (h ^ (uint32_t)song_follow(&L)) * 16777619u;
             h = (h ^ (uint32_t)(song_playx(&L) + 1)) * 16777619u;
+            h = (h ^ sgw.gu) * 16777619u;              /* (Dah: the GRID) */
             h ^= (ui_prefs & PREF_LARGE) ? 0x2545F491u : 0u;
         }
     }
@@ -2012,8 +2031,8 @@ static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int 
  * the output meter (green to red), under them the PAN a dot on a line and the REV send a bar. No name, no dB: the
  * footer names the track, the cards above give the selected one's values. The selected strip RAISE, ringed in its
  * colour; the value just turned TEXT. Each strip redrawn only when it changed (ts.col) */
-#define MX_PITCH ((int32_t)(232u / (trk_count() > 4u ? trk_count() : 4u)))   /* (Dah: the project's tracks share the width:
-                                                        * 8 x 29 .. 4 x 58) */
+#define MX_PITCH ((int32_t)(232u / (trk_count() + 1u > 5u ? trk_count() + 1u : 5u)))   /* (Dah: the project's tracks and
+                                                        * the MASTER share the width: 9 x 25 .. 5 x 46) */
 #define MX_W (MX_PITCH - 1)
 #define MX_FX (MX_W / 2 - 9)                           /* the fader's left; the meter at MX_FX + 11 */
 #define MX_X0 4
@@ -2022,7 +2041,7 @@ static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int 
 static void mixer_strip(uint32_t c)
 {
     track_t *t = &trk[c];
-    uint32_t sel = c == song.sel, lvl = trk_level(c), arm = (song.rec >> c) & 1u, sig;
+    uint32_t sel = c == song.sel && !mx_master, lvl = trk_level(c), arm = (song.rec >> c) & 1u, sig;
     uint32_t mute = t->p[P_MUTE] != 0 || (perf_solo && !((perf_solo >> c) & 1u));   /* (Dah: another one SOLO: grey) */
     uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u, lit = (uint32_t)midi_lit(c);
     int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127), f, mh, x;   /* (rv: WIDTH) */
@@ -2074,6 +2093,38 @@ static void mixer_strip(uint32_t c)
     }
     cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH);
 }
+/* (Dah) the MASTER's strip after the tracks: M, the output's meter, its COMPRESSOR's reduction (ACCENT, from the top) */
+static int32_t mx_mpk;
+static void mixer_master(uint32_t c)
+{
+    int32_t pk = master_pk, m = meter_px(pk), mh, gh;
+    uint16_t bg = mx_master ? T_RAISE : T_SURF;
+    static uint32_t last;
+    uint32_t sig;
+    master_pk = 0;
+    if (m < mx_mpk - 1)
+        m = mx_mpk - 1;
+    mx_mpk = m < 0 ? 0 : m;
+    gh = clamp(cmp_master.gr * MX_FH / (18 * 8), 0, MX_FH);
+    sig = (uint32_t)mx_mpk * 131u + (uint32_t)gh * 7919u + mx_master * 3u + (uint32_t)song.g[G_MCOMP] * 104729u;
+    if (!ui.force && sig == last)
+        return;
+    last = sig;
+    cv_begin(MX_W, (int32_t)graph_h(), T_BG);
+    if (mx_master) {
+        cv_rrect(0, 0, MX_W, (int32_t)graph_h(), 4, T_TEXT, T_BG);
+        cv_rrect(1, 1, MX_W - 2, (int32_t)graph_h() - 2, 3, bg, T_TEXT);
+    } else
+        cv_rrect(0, 0, MX_W, (int32_t)graph_h(), 4, bg, T_BG);
+    cv_rrect(MX_W / 2 - 7, 4, 14, 13, 3, T_TEXT, bg);
+    cv_text_in(MX_W / 2 - 7, 4 + CAP_IN(S, 13), 14, &AF_S, "M", T_INK, T_TEXT);
+    mh = mx_mpk * MX_FH / (TS_MH - 2);
+    meter_up(MX_FX + 2, MX_FY, 7, MX_FH, mh, 0, bg);   /* the output */
+    cv_rrect(MX_FX + 13, MX_FY, 7, MX_FH, 2, T_LINE, bg);   /* the reduction, from the top */
+    if (gh > 1)
+        cv_rect(MX_FX + 14, MX_FY + 1, 5, gh, T_ACCENT);
+    cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH);
+}
 static void draw_tracks(void)
 {
     uint32_t c, sk = strip_kind() == SK_TRK;
@@ -2082,14 +2133,15 @@ static void draw_tracks(void)
             lcd_fill(0, Y_GRAPH, MX_X0, (int32_t)graph_h(), T_BG);
             for (c = 0; c < NTRK; c++)
                 ts.meter[c] = 0;
-            for (c = 0; c < trk_count(); c++) {        /* (Dah: the strips share the width; after the last, to the edge) */
+            for (c = 0; c <= trk_count(); c++) {       /* (Dah: the strips share the width; after the last, to the edge) */
                 uint32_t x = (uint32_t)(MX_X0 + (int32_t)c * MX_PITCH + MX_W);
                 if (x < 240u)
-                    lcd_fill(x, Y_GRAPH, c + 1u < trk_count() ? (uint32_t)(MX_PITCH - MX_W) : 240u - x, (int32_t)graph_h(), T_BG);
+                    lcd_fill(x, Y_GRAPH, c < trk_count() ? (uint32_t)(MX_PITCH - MX_W) : 240u - x, (int32_t)graph_h(), T_BG);
             }
         }
         for (c = 0; c < trk_count(); c++)
             mixer_strip(c);
+        mixer_master(trk_count());                     /* (Dah) the MASTER */
         return;
     }
     if (ui.force) {                                  /* the BG beside the columns only, they cover the rest (#181: */
@@ -2462,7 +2514,7 @@ static void draw_home_tracks_old(void)
  * a flat line on it; MENU > SCREEN OFF keeps it from staying on the panel for hours) */
 static void graph_scope(uint16_t c)
 {
-    static int16_t snap[SCOPE_N] __attribute__((section(".pool")));
+    int16_t *snap = ui_tmp;                          /* (Dah: fx.c's scratch) */
     uint32_t w = scope_w, i, trig = 0;
     int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
     for (i = 0; i < SCOPE_N; i++) {
@@ -2706,6 +2758,14 @@ static void graph_song(void)
             }
         }
     ux_tint(ux.trk[song.sel % NTRK]);
+    if (sgw.gu && sgw.gu < L.u0[L.n]) {                /* (Dah) the GRID: where PLAY starts, a line and a mark on top */
+        int32_t gx = SG_X0 + song_ux(&L, sgw.gu) - off;
+        if (gx >= SG_X0 && gx < hi) {
+            for (k = 0; k < (uint32_t)SG_H; k += 3u)
+                cv_rect(gx, SG_Y + (int32_t)k, 1, 2, T_TEXT);
+            cv_rect(gx - 2, SG_Y, 5, 2, T_TEXT);
+        }
+    }
     if (L.add) {                                       /* + ADD */
         bx = SG_X0 + L.x[L.n] - off;
         x0 = bx > SG_X0 ? bx : SG_X0;
@@ -2734,7 +2794,7 @@ static void graph_song(void)
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
                 cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < trk_count() ? SG_LG : 0), on ? T_INK : T_ACCENT);
             }
-            cv_rect(sp, SG_Y + SG_H, 2, SG_RY - SG_Y - SG_H + 6, T_ACCENT);
+            cv_rect(sp, SG_Y + SG_H, 2, SG_RY - SG_Y - SG_H + 4, T_ACCENT);
         }
         for (i = 0; i < L.n; i++) {
             uint32_t u1 = L.u0[i + 1u], w = (uint32_t)(L.x[i + 1u] - L.x[i]);
@@ -2753,7 +2813,7 @@ static void graph_song(void)
                     break;
                 if (x < SG_X0)
                     continue;
-                cv_rect(x, SG_RY + 1, 1, lg ? 5 : 2, lg ? T_MID : T_DIM);
+                cv_rect(x, SG_RY + 1, 1, lg ? 3 : 1, lg ? T_MID : T_DIM);
                 if (lg && bar * SG_BARU < total && nl < 24u) {
                     lx[nl] = x;
                     lb[nl++] = bar + 1u;
@@ -2765,7 +2825,7 @@ static void graph_song(void)
             fmt_int(a, (int32_t)lb[k]);
             w = text_w(&AF_S, a);
             if (lx[k] + 3 > last + 4 && lx[k] + 3 + w <= hi && (sp + 2 <= lx[k] + 2 || sp > lx[k] + 4 + w))
-                last = cv_text_on(lx[k] + 3, SG_RY + 4 - AF_S_CAP_Y, &AF_S, a, T_DIM, T_SURF);
+                last = cv_text_on(lx[k] + 3, SG_RY + 2 - AF_S_CAP_Y, &AF_S, a, T_DIM, T_SURF);
         }
     }
     /* (Dah: no line of the cell's pattern nor the song's length: the PAT card and the ruler say them) */
@@ -2820,7 +2880,9 @@ static void draw_graph_in(void)
         cv_oy = 0;
         graph_scope(c);
     } else {
-        eq_watch = pg->fam == FAM_FX && pg->scope == SC_TRACK ? (uint8_t)(trk_index(t) % NTRK + 1u) : 0u;   /* (Dah: the
+        if (pg->fam == FAM_FX)
+            t = fx_tsel();                           /* (Dah: the MASTER's chain, MIXER's MASTER picked) */
+        eq_watch = pg->fam == FAM_FX && pg->scope == SC_TRACK ? (uint8_t)(fx_mst(t) ? NTRK + 1u : trk_index(t) % NTRK + 1u) : 0u;   /* (Dah: the
                                                          * FX pages' sound live, fx_eq.c) */
         switch (pg->graph) {
         case GR_ADSR:

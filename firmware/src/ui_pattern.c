@@ -30,12 +30,11 @@ static void pt_move(int32_t steps)                      /* KNOB 1: up and down t
 }
 static uint32_t pt_steps(uint32_t num)                  /* its steps that strike (notes, hits; not the ties) */
 {
-    static step_t st[NSTEP];
     uint32_t i, c = 0, n, pos = 10u;
-    const step_t *s = st;
+    const step_t *s = ps_st;
     if (num == ps_num(song.sel))
         s = TSEL->step;
-    else if (!ps_exists(song.sel % NTRK, num) || !(n = ps_fetch(song.sel % NTRK, num)) || !ps_steps_get(ps_buf, n, &pos, st))
+    else if (!ps_exists(song.sel % NTRK, num) || !(n = ps_fetch(song.sel % NTRK, num)) || !ps_steps_get(ps_buf, n, &pos, ps_st))
         return 0;                                       /* (Dah: the heap's, read as the decoder reads them) */
     for (i = 0; i < NSTEP; i++)
         c += s[i].time == ST_NOTE && (s[i].n || s[i].hit);

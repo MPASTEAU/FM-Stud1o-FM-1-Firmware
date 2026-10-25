@@ -504,6 +504,13 @@ static void tracks_edit(uint32_t slot, int32_t steps)
     track_t *t = TSEL;
     int16_t *vp;
     const param_desc_t *d;
+    if (mx_master) {                                    /* (Dah) the MASTER: its COMPRESSOR, AMOUNT and RELEASE */
+        if (slot < 2u) {
+            uint32_t g = slot ? G_MREL : G_MCOMP;
+            song.g[g] = (int16_t)clamp(song.g[g] + accel(EN_K1 + slot, steps, 127), 0, 127);
+        }
+        return;
+    }
     switch (slot) {
     case 3: {                                           /* (Dah) STATE: NORMAL, MUTE, SOLO (the others grey, their own MUTE
                                                          * kept: SOLO off, they are as they were) */
@@ -693,8 +700,8 @@ static int rec_tap(void)                                /* 1: the arming changed
     if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
                                                          * CHAIN: the effect picked out of the chain */
         uint8_t u[FXU_N_ALL];
-        if (ch_cur < fx_list(TSEL, u)) {
-            fx_chain_remove(TSEL);
+        if (ch_cur < fx_list(fx_tsel(), u)) {
+            fx_chain_remove(fx_tsel());
             ui_message("EFFECT REMOVED");
             ui.force = 1;
         } else
@@ -1114,9 +1121,28 @@ static void edit_param(uint32_t slot, int32_t steps)
         ev_knob(slot, steps);
         return;
     }
-    if (pg->graph == GR_SONG && sgw.on) {             /* (Dah) VIEW: MOVE (FOLLOW off), ZOOM, FOLLOW */
-        if (slot == 0u) {
-            sgw.at = (sgw.nofollow ? sgw.at : sgv.off) + steps * (int32_t)sg_zoom();   /* (a bar a detent) */
+    if (pg->graph == GR_SONG && sgw.on) {             /* (Dah) VIEW: GRID (where PLAY starts), ZOOM, WINDOW, FOLLOW */
+        if (slot == 0u) {                               /* GRID: a bar a detent; the view on it */
+            song_lay_t L;
+            uint32_t r = 0;
+            int32_t g = (int32_t)sgw.gu + steps * (int32_t)SG_BARU;
+            song_layout(&L);
+            g = clamp(g, 0, L.u0[L.n] ? (int32_t)L.u0[L.n] - 1 : 0);
+            sgw.gu = (uint32_t)(g - g % (int32_t)SG_BARU);
+            while (r + 1u < L.n && sgw.gu >= L.u0[r + 1u])
+                r++;
+            chain_from_row = (uint8_t)r;                /* (song_chain.c: PLAY from there) */
+            chain_from_u = sgw.gu - L.u0[r];
+            sgw.at = song_ux(&L, sgw.gu) - SG_W / 2;
+            if (sgw.at < 0)
+                sgw.at = 0;
+            sgw.nofollow = !chain.running;              /* (stopped: the view on the GRID) */
+            if (chain.running && !chain_seek_req) {     /* (Dah) playing: the song jumps there (stopped, from it) */
+                chain_seek_req = 1;
+                transport_req = 2;
+            }
+        } else if (slot == 2u) {                        /* WINDOW: the view, a bar a detent (FOLLOW off) */
+            sgw.at = (sgw.nofollow ? sgw.at : sgv.off) + steps * (int32_t)sg_zoom();
             if (sgw.at < 0)
                 sgw.at = 0;
             sgw.nofollow = 1;
@@ -1127,8 +1153,8 @@ static void edit_param(uint32_t slot, int32_t steps)
             sgw.at = bar * (int32_t)sg_zoom() - SG_W / 2;
             if (sgw.at < 0)
                 sgw.at = 0;
-        } else if (slot == 2u)
-            sgw.nofollow = steps < 0;
+        } else
+            sgw.nofollow = steps < 0;                   /* FOLLOW */
         ui.force = 1;
         return;
     }
@@ -1254,21 +1280,34 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
+    if (pg->fam == FAM_FX && str_eq(pg->title, "COMP")) {   /* (Dah) COMP: KNOB 1 AMOUNT, 2 RELEASE (trkx; the MASTER's: GLO) */
+        const track_t *ft = fx_tsel();
+        if (slot == 0u)
+            fx_cset(ft, clamp((int32_t)fx_camt(ft) + accel(EN_K1, steps, 126), 1, 127), -1);   /* (1: it stays in) */
+        else if (slot == 1u)
+            fx_cset(ft, -1, clamp((int32_t)fx_crel(ft) + accel(EN_K2, steps, 127), 0, 127));
+        ui.force = 1;
+        return;
+    }
     if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 its effect, 3 moves it */
         uint8_t u[FXU_N_ALL];
-        uint32_t n = fx_list(TSEL, u), rows = n < FXU_N_ALL ? n + 1u : FXU_N_ALL;
+        track_t *ft = fx_tsel();
+        uint32_t n = fx_list(ft, u), rows = n < fx_max(ft) ? n + 1u : n;
         if (slot == 0u)
             ch_cur = (uint8_t)clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, (int32_t)rows - 1);
         else if (slot == 1u)
-            fx_chain_type(TSEL, steps);
+            fx_chain_type(ft, steps);
         else if (slot == 2u)
-            fx_chain_move(TSEL, steps);
+            fx_chain_move(ft, steps);
+        else if (ch_cur < n && u[ch_cur] == FXU_COMP)   /* (COMP's MIX: its AMOUNT) */
+            fx_cset(ft, clamp((int32_t)fx_camt(ft) + steps, 1, 127), -1);
         else if (ch_cur < n && FXU_MIX[u[ch_cur]] != 0xFFu) {   /* MIX: the effect's presence (it stays in) */
             uint32_t id = FXU_MIX[u[ch_cur]];
-            const param_desc_t *md = track_desc(TSEL, id);
-            int32_t w = param_turn(md, TSEL->p[id], accel(EN_K4, steps, md->max - md->min));
-            TSEL->p[id] = (int16_t)(w < 1 && id != P_DOUT ? 1 : w);
-            motion_capture(TSEL, id, TSEL->p[id]);
+            const param_desc_t *md = track_desc(ft, id);
+            int32_t w = param_turn(md, ft->p[id], accel(EN_K4, steps, md->max - md->min));
+            ft->p[id] = (int16_t)(w < 1 && id != P_DOUT ? 1 : w);
+            if (!fx_mst(ft))
+                motion_capture(ft, id, ft->p[id]);
         }
         ui.force = 1;
         return;
@@ -1278,8 +1317,9 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
     if (pg->fam == FAM_FX && pg->graph != GR_FX && v <= 0 &&
-        (vp == &TSEL->p[P_SLCR] || vp == &TSEL->p[P_ITYPE] || vp == &TSEL->p[P_DIST] || vp == &TSEL->p[P_DKSRC] ||
-         vp == &TSEL->p[P_IMIX] || vp == &TSEL->p[P_CHOR] || vp == &TSEL->p[P_DLY] || vp == &TSEL->p[P_REV])) {                     /* (Dah) an effect's own page: it stays in the chain (CHAIN's
+        (vp == &fx_tsel()->p[P_SLCR] || vp == &fx_tsel()->p[P_ITYPE] || vp == &fx_tsel()->p[P_DIST] ||
+         vp == &fx_tsel()->p[P_DKSRC] || vp == &fx_tsel()->p[P_IMIX] || vp == &fx_tsel()->p[P_CHOR] ||
+         vp == &fx_tsel()->p[P_DLY] || vp == &fx_tsel()->p[P_REV])) {                     /* (Dah) an effect's own page: it stays in the chain (CHAIN's
                                                          * REC takes it out), its type or amount at its least */
         v = 1;
         ui_message("REMOVE IT IN CHAIN");
@@ -1577,20 +1617,21 @@ static void presets_turn(int32_t s)
 static void chain_open(void)
 {
     static const uint8_t ID[FXU_N_ALL] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO, P_DKSRC, PS_TRK | P_CHOR, PS_TRK | P_DLY,
-                                          PS_TRK | P_REV};
+                                          PS_TRK | P_REV, 0xFF};   /* (COMP: by its title) */
     uint8_t l[FXU_N_ALL];
-    uint32_t n = fx_list(TSEL, l), u, i;
+    uint32_t n = fx_list(fx_tsel(), l), u, i;
     if (ch_cur >= n) {
-        if (n >= FXU_N_ALL)
+        if (n >= fx_max(fx_tsel()))
             return;
-        fx_chain_add(TSEL);
+        fx_chain_add(fx_tsel());
         ui_message("EFFECT ADDED");
         ui.force = 1;
         return;
     }
     u = l[ch_cur];
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == FAM_FX && PAGES[i].id[0] == ID[u] && PAGES[i].graph != GR_FX) {
+        if (PAGES[i].fam == FAM_FX && PAGES[i].graph != GR_FX &&
+            (u == FXU_COMP ? str_eq(PAGES[i].title, "COMP") : PAGES[i].id[0] == ID[u])) {
             ui.page = (uint8_t)i;
             ui.fam_last[FAM_FX] = ui.page;
             page_entered();
@@ -1605,10 +1646,21 @@ static int sel_is_list(void)                           /* (Dah) the page shown h
 {
     uint32_t g = cur_page()->graph;
     return g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN ||
-           g == GR_PATS || g == GR_SONG || g == GR_EVENTS || (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX);
+           g == GR_PATS || g == GR_SONG || g == GR_EVENTS || g == GR_TRK ||
+           (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX);   /* (Dah: MIXER, its strips and the MASTER) */
 }
 static void sel_list(int32_t s)
 {
+    if (!ui.home && cur_page()->graph == GR_TRK) {      /* (Dah) MIXER: SELECT along the tracks, then the MASTER */
+        if (s > 0 && !mx_master && song.sel + 1u >= trk_count())
+            mx_master = 1;
+        else if (s < 0 && mx_master)
+            mx_master = 0;
+        else if (!mx_master)
+            track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
+        ui.force = 1;
+        return;
+    }
     if (sel_is_list())
         presets_turn(s);
 }
@@ -2109,13 +2161,25 @@ static void ui_input(void)
      * pass runs, so one landing after the layer's read went to the page as well: KNOB 1..4 edited the layer's control
      * and the page under it (HOME's sound, motion recorded), PRESETS could load a sound. They stay for the next pass */
     kq |= lay;
+    if (chain_seek_req && !transport_busy()) {          /* (Dah) SONG's GRID turned while it played: on from there */
+        chain_play_ui();
+        chain_seek_req = 0;
+    }
     if (!lay && (s = panel_enc(EN_PRESET)) != 0)
         presets_turn(s);
     if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page; (HA HA HE HU) past the
                                                       * project's last: ADD TRACK? (the dialog) */
-        if (s > 0 && song.sel + 1u >= trk_count() && trk_count() < NTRK && !ui.confirm && !name_on() && !ui.menu)
+        int mix = !ui.home && cur_page()->graph == GR_TRK;   /* (Dah) MIXER: past the last track the MASTER, then ADD */
+        if (s < 0 && mx_master) {
+            mx_master = 0;
+            ui.force = 1;
+        } else if (s > 0 && mix && !mx_master && song.sel + 1u >= trk_count()) {
+            mx_master = 1;
+            ui.force = 1;
+        } else if (s > 0 && song.sel + 1u >= trk_count() && trk_count() < NTRK && !ui.confirm && !name_on() && !ui.menu &&
+                   (!mix || mx_master))
             confirm_open(CF_ADD_TRACK, trk_count());
-        else
+        else if (!mx_master)
             track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
     }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */

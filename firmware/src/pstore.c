@@ -231,38 +231,39 @@ static uint32_t ps_encode(const track_t *t, uint8_t *b)
     return pos;
 }
 /* b[0..n-1] onto track t (steps, timing, automation); 0 = not a pattern (the track as it was, empty) */
+static step_t ps_st[NSTEP];                            /* (Dah) the main loop's: a pattern decoded (ps_decode, ps_info,
+                                                         * ui_pattern.c pt_steps; none calls another) */
+static motion_store_t ps_m;
 static int ps_decode(track_t *t, const uint8_t *b, uint32_t n)
 {
-    static motion_store_t m;
-    static step_t st[NSTEP];
     int16_t tv[5];
     uint32_t k = trk_index(t), pos = 10u, i, c, f;
     if (n < 12u)
         return 0;
     for (i = 0; i < 5u; i++)
         tv[i] = (int16_t)((uint16_t)b[2u * i] | (uint16_t)b[2u * i + 1u] << 8);
-    if (!ps_steps_get(b, n, &pos, st) || pos >= n)
+    if (!ps_steps_get(b, n, &pos, ps_st) || pos >= n)
         return 0;
-    memset(&m, 0, sizeof m);
+    memset(&ps_m, 0, sizeof ps_m);
     for (c = b[pos++]; c--;) {
         motion_event_t *e;
-        if (pos + 3u > n || m.count >= MOTION_MAX)
+        if (pos + 3u > n || ps_m.count >= MOTION_MAX)
             return 0;
-        e = &m.event[m.count++];
+        e = &ps_m.event[ps_m.count++];
         e->place = (uint16_t)(k << 6 | (b[pos] & 63u));
         e->param = b[pos + 1u];
         e->value = (int8_t)b[pos + 2u];
         pos += 3u;
     }
-    m.on = (uint8_t)((pos < n ? b[pos] & 1u : m.count != 0u) << k);   /* (its automation PLAY) */
+    ps_m.on = (uint8_t)((pos < n ? b[pos] & 1u : ps_m.count != 0u) << k);   /* (its automation PLAY) */
     f = motion_guard();
-    memcpy(t->step, st, sizeof st);
+    memcpy(t->step, ps_st, sizeof ps_st);
     for (i = 0; i < 5u; i++) {
         const param_desc_t *d = &TP[PS_TIMING[i]];
         t->p[PS_TIMING[i]] = (int16_t)clamp(tv[i], d->min, d->max);
     }
     motion_unguard(f);
-    if (motion_replace_track(t, &m))                   /* (no room in the shared store: the pattern without its automation) */
+    if (motion_replace_track(t, &ps_m))                   /* (no room in the shared store: the pattern without its automation) */
         motion_clear(t);
     return 1;
 }
@@ -447,22 +448,20 @@ static int ps_decode_to(uint32_t k, const uint8_t *b, uint32_t n, step_t *st, in
 static uint32_t len48_of(int32_t len, int32_t div);
 static uint32_t ps_info(uint32_t k, uint32_t num, uint32_t *den, uint8_t *ncell)
 {
-    static step_t st[NSTEP];
-    static motion_store_t m;
     int16_t tm[4];
     uint8_t q;
     uint32_t n = ps_exists(k, num) ? ps_fetch(k, num) : 0u, len, nc, c, i, d = 0;
     *den = 0;
     *ncell = 0;
-    m.count = 0;
-    if (!n || !ps_decode_to(k, ps_buf, n, st, tm, &q, &m))
+    ps_m.count = 0;
+    if (!n || !ps_decode_to(k, ps_buf, n, ps_st, tm, &q, &ps_m))
         return 0;
     len = (uint32_t)clamp(tm[0], 1, NSTEP);
     nc = len < 16u ? len : 16u;
     for (c = 0; c < nc; c++) {
         uint32_t i0 = c * len / nc, i1 = (c + 1u) * len / nc, w = 0;
         for (i = i0; i < i1; i++) {
-            const step_t *s = &st[i];
+            const step_t *s = &ps_st[i];
             if (s->time == ST_TIE)
                 w += 1u;
             else if (s->time == ST_NOTE && (s->n || s->hit) && step_chance(s))

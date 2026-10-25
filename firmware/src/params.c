@@ -256,8 +256,8 @@ static const param_desc_t GP[G_COUNT] = {
     /* inert: they set the GM drum part (level, reverb send), which is gone (drums are the DRUM engine
      * on any part). On no page; kept so the ids and G_COUNT, which the project format and the
      * editor protocol depend on, do not move */
-    [G_DRLVL] = PD("-", F_INT, 0, 0, 0),
-    [G_DRREV] = PD("-", F_INT, 0, 0, 0),
+    [G_DRLVL] = PD("COMP", F_PCT, 0, 127, 0),       /* (Dah) the MASTER's COMPRESSOR: AMOUNT (0 off), RELEASE */
+    [G_DRREV] = PD("REL", F_PCT, 0, 127, 50),
 };
 
 static const param_desc_t *track_desc(const track_t *t, uint32_t id)
@@ -516,6 +516,7 @@ static const page_t PAGES[] = {
     {"EQ", FAM_FX, SC_TRACK, GR_NONE, {P_EQLO, P_EQHI, P_EQ1F, P_EQ1G}},   /* (Dah) the EQ (fx_eq.c): its spectrum */
     {"EQ 2", FAM_FX, SC_TRACK, GR_NONE, {P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G}},   /* BAND 2, BAND 3 */
     {"SIDECHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (HA HA HE HU, fx.c duck_part) */
+    {"COMP", FAM_FX, SC_TRACK, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (Dah) the COMPRESSOR: AMOUNT RELEASE (trkx, fx_comp.c) */
     /* (Dah) the send effects, as the others: the track's SEND (PS_TRK: a track parameter on a global page) and the
      * buses' own settings, shared by every track (were GLO's) */
     {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {PS_TRK | P_CHOR, G_CRATE, G_CDEPTH, 0xFF}},
@@ -588,9 +589,11 @@ static uint32_t page_id(const page_t *pg, uint32_t c)
 }
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
+static track_t *fx_tsel(void);                         /* (Dah) ui.c: FX's track, or the MASTER (fx.c mtrk) */
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
+    track_t *ft = pg->fam == FAM_FX ? fx_tsel() : TSEL;
     if (id == 0xFFu) {
         *valp = 0;
         return 0;
@@ -600,8 +603,8 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         return 0;
     }
     if (pg->scope == SC_GLOBAL && (id & PS_TRK)) {   /* (Dah) a send effect's SEND: the track's */
-        *valp = &TSEL->p[id & ~PS_TRK];
-        return track_desc(TSEL, id & ~PS_TRK);
+        *valp = &ft->p[id & ~PS_TRK];
+        return track_desc(ft, id & ~PS_TRK);
     }
     if (pg->scope == SC_GLOBAL) {
         *valp = &song.g[id];
@@ -611,6 +614,6 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         id += 3u * mod_ui_slot;
     if (pg->graph == GR_FX)                           /* (Dah) FX: what its knobs drive */
         id = fx_knob_id(TSEL, slot);
-    *valp = &TSEL->p[id];
-    return track_desc(TSEL, id);
+    *valp = &ft->p[id];
+    return track_desc(ft, id);
 }

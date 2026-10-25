@@ -609,7 +609,7 @@ static void span_fxu(const card_span_t *sp, int32_t v, char *val)       /* (Dah)
 static void span_fxmv(const card_span_t *sp, int32_t v, char *val)      /* (Dah) CHAIN's MOVE: the place, of 4 */
 {
     (void)sp;
-    val[0] = (char)('1' + v % 9); val[1] = '/'; val[2] = '8'; val[3] = 0;
+    val[0] = (char)('1' + v % 9); val[1] = '/'; val[2] = '9'; val[3] = 0;
 }
 static void span_mcol(const card_span_t *sp, int32_t v, char *val)      /* (Dah) MATCH's COLOR */
 {
@@ -625,11 +625,11 @@ static void span_mnot(const card_span_t *sp, int32_t v, char *val)      /* (Dah)
 static void span_fxrow(const card_span_t *sp, int32_t v, char *val)     /* (Dah) CHAIN's EFFECT: a row, or ADD */
 {
     (void)sp;
-    if (v >= 8) {
+    if (v >= 9) {
         str_cpy(val, "ADD", 4);
         return;
     }
-    val[0] = (char)('1' + v); val[1] = '/'; val[2] = '8'; val[3] = 0;
+    val[0] = (char)('1' + v); val[1] = '/'; val[2] = '9'; val[3] = 0;
 }
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
@@ -1176,13 +1176,14 @@ static void draw_columns_in(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_SONG && sgw.on) {   /* (Dah) VIEW: MOVE (the bar at the middle), ZOOM, FOLLOW */
-        fmt_int(val, (sgv.off + SG_W / 2) / (int32_t)sg_zoom() + 1);
-        draw_column(0, "BAR", val, "", VAL(0u), -1, ICON_AUTO);
+    if (cur_page()->graph == GR_SONG && sgw.on) {   /* (Dah) VIEW: GRID (PLAY's start), ZOOM, WINDOW, FOLLOW */
+        fmt_int(val, (int32_t)(sgw.gu / SG_BARU) + 1);
+        draw_column(0, "GRID", val, "", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)(SG_W / sg_zoom()));
         draw_column(1, "ZOOM", val, "BARS", VAL(1u), -1, ICON_AUTO);
-        draw_column(2, "FOLLOW", sgw.nofollow ? "OFF" : "ON", "", sgw.nofollow ? T_DIM : VAL(2u), -1, ICON_AUTO);
-        draw_column(3, "", "", "", T_THEME, -1, ICON_AUTO);
+        fmt_int(val, sgv.off / (int32_t)sg_zoom() + 1);
+        draw_column(2, "WINDOW", val, "", VAL(2u), -1, ICON_AUTO);
+        draw_column(3, "FOLLOW", sgw.nofollow ? "OFF" : "ON", "", sgw.nofollow ? T_DIM : VAL(3u), -1, ICON_AUTO);
         return;
     }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
@@ -1304,6 +1305,16 @@ static void draw_columns_in(void)
         static const uint8_t icons[] = {ICON_AUTO, ICON_AUTO, ICON_AUTO, ICON_X_SONG};
         for (c = 0; c < 4u; c++)                       /* (1.5.5: KNOB 2 on past INIT, CLEAN) */
             draw_act_column(c, c == 1u && ui.tl_clean && act_col() == 2u ? "CLEAN" : labels[c], VAL(c), icons[c]);
+        return;
+    }
+    if (cur_page()->scope == SC_TRK && mx_master) {   /* (Dah) the MASTER: its COMPRESSOR */
+        fmt_int(val, song.g[G_MCOMP] * 100 / 127);
+        draw_column(0, "COMP", song.g[G_MCOMP] ? val : "OFF", song.g[G_MCOMP] ? "%" : "", song.g[G_MCOMP] ? VAL(0u) : T_DIM,
+                    song.g[G_MCOMP] * 1000 / 127, ICON_AUTO);
+        fmt_int(val, 20 + song.g[G_MREL] * 360 / 127);
+        draw_column(1, "RELEASE", val, "ms", VAL(1u), song.g[G_MREL] * 1000 / 127, ICON_AUTO);
+        draw_column(2, "", "", "", T_THEME, -1, ICON_AUTO);
+        draw_column(3, "", "", "", T_THEME, -1, ICON_AUTO);
         return;
     }
     if (cur_page()->scope == SC_TRK) {                 /* LEVEL PAN REV MUTE of the selected track */
@@ -1579,13 +1590,26 @@ static void draw_columns_in(void)
             }
             continue;
         }
+        if (cur_page()->fam == FAM_FX && str_eq(cur_page()->title, "COMP")) {   /* (Dah) COMP: AMOUNT RELEASE, the GR */
+            int32_t ca = (int32_t)fx_camt(fx_tsel()), cr = (int32_t)fx_crel(fx_tsel());
+            if (c == 0u) {
+                fmt_int(val, ca * 100 / 127);
+                draw_column(0, "AMOUNT", val, "%", VAL(0u), ca * 1000 / 127, ICON_AUTO);
+            } else if (c == 1u) {
+                fmt_int(val, 20 + cr * 360 / 127);
+                draw_column(1, "RELEASE", val, "ms", VAL(1u), cr * 1000 / 127, ICON_AUTO);
+            } else                                      /* (the reduction: the panel's, live) */
+                draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
+            continue;
+        }
         if (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah) CHAIN: EFFECT, TYPE, MOVE */
             uint8_t u[FXU_N_ALL];
-            uint32_t n = fx_list(TSEL, u);
+            track_t *ft = fx_tsel();
+            uint32_t n = fx_list(ft, u);
             char pl[6] = {(char)('1' + ch_cur % 9u), '/', (char)('0' + n), 0};
             int on = ch_cur < n;
             if (c == 0u) {
-                card_span_by(span_fxrow, 0, 0, 8, 1);
+                card_span_by(span_fxrow, 0, 0, 9, 1);
                 draw_column(0, "EFFECT", on ? pl : "ADD", "", VAL(0u), -1, ICON_AUTO);
             } else if (c == 1u && on) {
                 card_span_by(span_fxu, 0, 0, FXU_N_ALL - 1, 0);
@@ -1595,10 +1619,10 @@ static void draw_columns_in(void)
                 draw_column(2, "MOVE", pl, "", VAL(2u), n > 1u ? (int32_t)ch_cur * 1000 / (int32_t)(n - 1u) : -1, ICON_AUTO);
             } else if (c == 3u && on && FXU_MIX[u[ch_cur % FXU_N_ALL]] != 0xFFu) {   /* MIX */
                 uint32_t mid = FXU_MIX[u[ch_cur % FXU_N_ALL]];
-                const param_desc_t *md = track_desc(TSEL, mid);
-                param_format(md, TSEL->p[mid], val, &unit);
+                const param_desc_t *md = track_desc(ft, mid);
+                param_format(md, ft->p[mid], val, &unit);
                 card_span_of(md);
-                draw_column(3, "MIX", val, unit, VAL(3u), RATIO(md, TSEL->p[mid]), ICON_AUTO);
+                draw_column(3, "MIX", val, unit, VAL(3u), RATIO(md, ft->p[mid]), ICON_AUTO);
             } else
                 draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
             continue;
@@ -1653,18 +1677,36 @@ static void draw_columns_in(void)
 #define SPL_VER_Y (SPL_NAME_Y + 22)
 #define SPL_BASED_Y (SPL_VER_Y + 26)
 static const char *const SPLASH_LINES[] = {FW_NAME, FELUCCA_VERSION, "based on Felucca"};
+static uint32_t splash_ix(uint32_t i)              /* (Dah) pixel i's colour, the runs from the start (the tests') */
+{
+    uint32_t k = 0;
+    for (; k < sizeof SPLASH_RLE; k++) {
+        uint32_t n = (SPLASH_RLE[k] & 15u) + 1u;
+        if (i < n)
+            return SPLASH_RLE[k] >> 4;
+        i -= n;
+    }
+    return 0;
+}
 static void draw_splash(void)
 {
-    uint32_t s, x, y, px0 = (240u - SPLASH_W) / 2u;
+    uint32_t s, x, y = 0, px0 = (240u - SPLASH_W) / 2u, k = 0, left = 0, col = 0;
     for (s = 0; s < 240u / SPL_STRIP; s++) {
         int32_t y0 = (int32_t)(s * SPL_STRIP);
         cv_begin(240, SPL_STRIP, T_BG);
-        for (y = 0; y < SPLASH_H; y++) {            /* the picture's rows in this strip */
+        for (; y < SPLASH_H && SPL_PY + (int32_t)y - y0 < SPL_STRIP; y++) {   /* the picture's rows in this strip, its runs
+                                                     * on (Dah: ui_splash.h's SPLASH_RLE) */
             int32_t r = SPL_PY + (int32_t)y - y0;
-            if (r < 0 || r >= SPL_STRIP)
-                continue;
-            for (x = 0; x < SPLASH_W; x++)
-                cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PAL[(SPLASH_IX[(y * SPLASH_W + x) >> 1] >> ((x & 1u) * 4u)) & 15u];
+            for (x = 0; x < SPLASH_W; x++) {
+                if (!left && k < sizeof SPLASH_RLE) {
+                    col = SPLASH_RLE[k] >> 4;
+                    left = (SPLASH_RLE[k++] & 15u) + 1u;
+                }
+                if (left)
+                    left--;
+                if (r >= 0)
+                    cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PAL[col];
+            }
         }
         if (SPL_NAME_Y >= y0 && SPL_BASED_Y + AF_S.h <= y0 + SPL_STRIP) {
             GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(3), "splash lines centred");

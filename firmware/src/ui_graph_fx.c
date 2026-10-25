@@ -10,12 +10,32 @@ static uint8_t ch_cur;                                  /* CHAIN: the row picked
 /* the effects: 0..4 in series in ORDER (DIST INSERT SLICER EQ SIDECHAIN), 5..7 the sends to GLO's buses (CHORUS DELAY
  * REVERB, after them: fixed). In the chain: doing something (a send above 0); none by default */
 #define FXU_SER 5u
-#define FXU_N_ALL 8u
-static const char *const FXU_N[FXU_N_ALL] = {"DIST", "INSERT", "SLICER", "EQ", "SIDECHAIN", "CHORUS", "DELAY", "REVERB"};
-static const char *const FXU_S[FXU_N_ALL] = {"DST", "INS", "SLC", "EQ", "SC", "CHO", "DLY", "REV"};   /* (FX's strip) */
+#define FXU_COMP 8u                                     /* (Dah) the COMPRESSOR: just before SIDECHAIN, fixed (fx_comp.c) */
+#define FXU_N_ALL 9u
+static const char *const FXU_N[FXU_N_ALL] = {"DIST", "INSERT", "SLICER", "EQ", "SIDECHAIN", "CHORUS", "DELAY", "REVERB",
+                                             "COMP"};
+static const char *const FXU_S[FXU_N_ALL] = {"DST", "INS", "SLC", "EQ", "SC", "CHO", "DLY", "REV", "CMP"};   /* (FX's strip) */
 /* (Dah) CHAIN's KNOB 4, MIX: each effect's presence in the mix (DIST its OUT, INSERT its MIX, SLICER its DEPTH,
  * SIDECHAIN its DEPTH, a send its level; the EQ none) */
-static const uint8_t FXU_MIX[FXU_N_ALL] = {P_DOUT, P_IMIX, P_SLDEPTH, 0xFF, P_DKAMT, P_CHOR, P_DLY, P_REV};
+static const uint8_t FXU_MIX[FXU_N_ALL] = {P_DOUT, P_IMIX, P_SLDEPTH, 0xFF, P_DKAMT, P_CHOR, P_DLY, P_REV, 0xFF};
+/* (Dah) the MASTER's chain (fx.c mtrk): DIST, EQ, COMP only; its COMPRESSOR GLO's G_MCOMP G_MREL, no sends (mst_x) */
+static trkx_t mst_x;
+static int fx_mst(const track_t *t) { return t == &mtrk; }
+static trkx_t *fx_x(const track_t *t) { return fx_mst(t) ? &mst_x : &trkx[trk_index(t) % NTRK]; }
+static int fx_unit_ok(const track_t *t, uint32_t u) { return !fx_mst(t) || u == 0u || u == 3u || u == FXU_COMP; }
+static uint32_t fx_camt(const track_t *t) { return fx_mst(t) ? (uint32_t)song.g[G_MCOMP] : trkx[trk_index(t) % NTRK].rsv0; }
+static void fx_cset(const track_t *t, int32_t amt, int32_t rel)   /* the COMPRESSOR's AMOUNT, RELEASE (-1: as it is) */
+{
+    if (fx_mst(t)) {
+        if (amt >= 0) song.g[G_MCOMP] = (int16_t)amt;
+        if (rel >= 0) song.g[G_MREL] = (int16_t)rel;
+    } else {
+        if (amt >= 0) trkx[trk_index(t) % NTRK].rsv0 = (uint8_t)amt;
+        if (rel >= 0) trkx[trk_index(t) % NTRK].rsv1 = (uint8_t)rel;
+    }
+}
+static uint32_t fx_max(const track_t *t) { return fx_mst(t) ? 3u : FXU_N_ALL; }   /* (the effects it takes) */
+static uint32_t fx_crel(const track_t *t) { return fx_mst(t) ? (uint32_t)song.g[G_MREL] : trkx[trk_index(t) % NTRK].rsv1; }
 static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (3u * (i % FXU_SER))) & 7u; }
 static int fx_unit_on(const track_t *t, uint32_t u)
 {
@@ -27,29 +47,36 @@ static int fx_unit_on(const track_t *t, uint32_t u)
     case 4: return t->p[P_DKSRC] != 0;
     case 5: return t->p[P_CHOR] != 0;
     case 6: return t->p[P_DLY] != 0;
-    default: return t->p[P_REV] != 0;
+    case 7: return t->p[P_REV] != 0;
+    default: return fx_camt(t) != 0u;
     }
 }
 /* the effects in the chain as its list shows them: those in series in ORDER, each send where it takes the sound
  * (trkx tap: before the series one at place tap - 1; 0 after them all); into u, the number */
 static uint32_t fx_list(const track_t *t, uint8_t *u)
 {
-    const trkx_t *x = &trkx[trk_index(t) % NTRK];
+    const trkx_t *x = fx_x(t);
     uint32_t i, j, n = 0, ns = 0;
     for (i = 0; i < FXU_SER; i++) {
         for (j = 0; j < 3u; j++)
             if (x->tap[j] == i + 1u && fx_unit_on(t, FXU_SER + j))
                 u[n++] = (uint8_t)(FXU_SER + j);
+        if (fx_unit_at(t, i) == 4u && fx_unit_on(t, FXU_COMP) && !fx_mst(t))
+            u[n++] = FXU_COMP;                          /* (the COMPRESSOR: just before SIDECHAIN) */
         if (fx_unit_on(t, fx_unit_at(t, i)))
             u[n++] = (uint8_t)fx_unit_at(t, i), ns++;
     }
     for (j = 0; j < 3u; j++) {                          /* the sends after them all (or placed past the last) */
+        if (n > FXU_N_ALL - 1u)
+            break;
         uint32_t in = 0, k;
         for (k = 0; k < n; k++)
             in |= u[k] == FXU_SER + j;
         if (!in && fx_unit_on(t, FXU_SER + j))
             u[n++] = (uint8_t)(FXU_SER + j);
     }
+    if (fx_mst(t) && fx_unit_on(t, FXU_COMP))
+        u[n++] = FXU_COMP;                              /* (the MASTER's: last) */
     (void)ns;
     return n;
 }
@@ -57,13 +84,13 @@ static uint32_t fx_list(const track_t *t, uint8_t *u)
  * send placed before the series one after it in the list (none after it: after them all) */
 static void fx_set_list(track_t *t, const uint8_t *u, uint32_t n)
 {
-    trkx_t *x = &trkx[trk_index(t) % NTRK];
+    trkx_t *x = fx_x(t);
     uint32_t o = 0, m = 0, i, j, k;
     for (i = 0; i < n; i++)
         if (u[i] < FXU_SER)
             o |= (uint32_t)u[i] << (3u * m++);
     for (i = 0; i < n; i++)
-        if (u[i] >= FXU_SER) {
+        if (u[i] >= FXU_SER && u[i] < FXU_COMP) {
             uint32_t before = 0, after = 0;
             for (j = 0; j < i; j++)
                 before += u[j] < FXU_SER;
@@ -114,8 +141,11 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
     case 6:
         t->p[P_DLY] = (int16_t)(on ? 40 : 0);
         break;
-    default:
+    case 7:
         t->p[P_REV] = (int16_t)(on ? 50 : 0);
+        break;
+    default:
+        fx_cset(t, on ? 64 : 0, on ? 50 : -1);
         break;
     }
 }
@@ -125,7 +155,7 @@ static void fx_chain_add(track_t *t)
 {
     uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(t, u), x, i;
-    for (x = 0; x < FXU_N_ALL && fx_unit_on(t, x); x++)
+    for (x = 0; x < FXU_N_ALL && (fx_unit_on(t, x) || !fx_unit_ok(t, x)); x++)
         ;
     if (x >= FXU_N_ALL)
         return;
@@ -169,7 +199,7 @@ static void fx_chain_type(track_t *t, int32_t dir)
         return;
     for (old = x = u[ch_cur], k = 0; k < FXU_N_ALL; k++) {   /* the next free one that way */
         x = (x + (dir > 0 ? 1u : FXU_N_ALL - 1u)) % FXU_N_ALL;
-        if (!fx_unit_on(t, x))
+        if (!fx_unit_on(t, x) && fx_unit_ok(t, x))
             break;
     }
     if (k == FXU_N_ALL || x == old)
@@ -188,8 +218,8 @@ static void fx_chain_move(track_t *t, int32_t dir)
     uint8_t u[FXU_N_ALL], a;
     uint32_t n = fx_list(t, u);
     int32_t j = (int32_t)ch_cur + (dir > 0 ? 1 : -1);
-    if (ch_cur >= n || j < 0 || j >= (int32_t)n)
-        return;
+    if (ch_cur >= n || j < 0 || j >= (int32_t)n || u[ch_cur] == FXU_COMP || u[j] == FXU_COMP)
+        return;                                         /* (the COMPRESSOR stays before SIDECHAIN) */
     a = u[ch_cur]; u[ch_cur] = u[j]; u[j] = a;
     fx_set_list(t, u, n);
     ch_cur = (uint8_t)j;
@@ -207,6 +237,10 @@ static void fx_unit_info(const track_t *t, uint32_t u, char *b)
         fmt_int(b, (int32_t)c); str_cpy(b + str_len(b), c > 1u ? " PARTS" : " PART", 7);
         break;
     }
+    case FXU_COMP:
+        fmt_int(b, (int32_t)fx_camt(t) * 100 / 127);
+        str_cpy(b + str_len(b), " %", 3);
+        break;
     case 4: {                                           /* FROM and the source's sound */
         char nm[16];
         sound_name(&trk[clamp(t->p[P_DKSRC], 1, NTRK) - 1], nm);
@@ -217,6 +251,8 @@ static void fx_unit_info(const track_t *t, uint32_t u, char *b)
     }
     default: {
         static const uint8_t ID[3] = {P_CHOR, P_DLY, P_REV};
+        if (u >= FXU_COMP)
+            break;
         str_cpy(b, "SEND ", 6);
         fmt_int(b + 5, t->p[ID[u - 5u]] * 100 / 127);
         str_cpy(b + str_len(b), " %", 3);
@@ -276,7 +312,7 @@ static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, 
 static void graph_chain(const track_t *t, uint16_t c)
 {
     uint8_t u[FXU_N_ALL];
-    uint32_t n = fx_list(t, u), i, rows = n < FXU_N_ALL ? n + 1u : FXU_N_ALL;
+    uint32_t n = fx_list(t, u), i, rows = n < fx_max(t) ? n + 1u : n;
     int32_t rh = (graph_ht - 16) / (int32_t)(rows > 5u ? rows : 5u), y0 = 2, x0 = PANEL_X0 + 14, bw = 150;
     if (ch_cur >= rows)
         ch_cur = (uint8_t)(rows - 1u);
@@ -308,7 +344,7 @@ static void graph_chain(const track_t *t, uint16_t c)
         cv_text_in(wx, y0 + 2, ww, &AF_S, "OUT", T_MID, T_SURF);
         fx_wave(wx, ww, y0 + 50, 30, ux_mix(c, T_SURF, 70));
     }
-    cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : n < FXU_N_ALL ? "[OCT+] ADD AN EFFECT" : "",
+    cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : n < fx_max(t) ? "[OCT+] ADD AN EFFECT" : "",
                T_MID, T_SURF);
 }
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */
@@ -357,6 +393,32 @@ static void graph_sends(const track_t *t, uint16_t c)
         cv_text_in(PANEL_X0 + i * cw, bot + 4, cw, &AF_S, NM[i], v ? T_TEXT : T_MID, T_SURF);
     }
 }
+/* COMP: its curve (in across, out up, -36 .. 0 dB; the threshold marked), the reduction now (a bar falling from the
+ * top, ACCENT), the sound out under it */
+static void graph_comp(uint32_t amt, int32_t gr, uint16_t c)
+{
+    int32_t x0 = PANEL_X0, w = 150, top = 4, bot = graph_ht - 8, x, py = 0, h = bot - top;
+    int32_t thr = -(int32_t)amt * 240 / 127, keep = 32 * 256 / (32 + (int32_t)amt);   /* (dB x 8) */
+    cv_rect(x0, bot, w, 1, T_GRID);
+    cv_line_t(x0, bot, x0 + w, top, T_RAISE, 1);       /* (clean) */
+    for (x = 0; x <= w; x++) {
+        int32_t in = -288 + x * 288 / w, out = in > thr ? thr + ((in - thr) * keep >> 8) : in;
+        int32_t mk = ((-thr) * (256 - keep)) >> 9, y;
+        out += mk;
+        y = bot - clamp((out + 288) * h / 288, 0, h);
+        if (x)
+            cv_line_t(x0 + x - 1, py, x0 + x, y, c, 2);
+        py = y;
+    }
+    cv_rect(x0 + (thr + 288) * w / 288, top, 1, h, T_MID);   /* the threshold */
+    {                                                   /* the reduction now: 0 .. 18 dB */
+        int32_t gx = x0 + w + 20, gh = clamp(gr * h / (18 * 8), 0, h);
+        cv_rrect(gx, top, 14, h, 3, T_RAISE, T_SURF);
+        if (gh > 1)
+            cv_rect(gx + 2, top, 10, gh, T_ACCENT);
+        cv_text_in(gx - 8, bot + 1 - AF_S_CAP_Y, 30, &AF_S, "GR", T_MID, T_SURF);
+    }
+}
 #include "ui_graph_eq.c"
 /* the FX family's own pages (1), else 0; the sound watched while one shows */
 static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
@@ -364,6 +426,10 @@ static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
     uint32_t id = pg->id[0];
     if (pg->fam != FAM_FX || pg->scope != SC_TRACK)
         return 0;
+    if (str_eq(pg->title, "COMP")) {
+        graph_comp(fx_camt(t), fx_mst(t) ? cmp_master.gr : cmp_trk[trk_index(t) % NTRK].gr, c);
+        return 1;
+    }
     if (id == P_FXORD) graph_chain(t, c);
     else if (id == P_DIST && pg->graph == GR_NONE) graph_dist(t, c);
     else if (id == P_EQLO || id == P_EQ2F) graph_eq(t, c);

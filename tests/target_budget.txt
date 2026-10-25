@@ -50,7 +50,7 @@ perf_begin 28
 perf_mute 18
 perf_pre 26
 perf_block 847
-perf_master 30
+perf_master 38
 perf_flanger 368
 perf_phaser 448
 perf_throw 50

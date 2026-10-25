@@ -1432,9 +1432,9 @@ static int test_cost(void)
     snprintf(what, sizeof what, "  OCT UP over REPEAT 1/16 (the harmonizer itself): +%.0f, with the shimmer +%.0f (device ~%.1f / %.1f %%, about 2 %%)",
              plain - rep, harm - rep, (plain - rep) * 0.017, (harm - rep) * 0.017);
     bad += check(what, (harm - rep) * 0.017 <= 2.2);
-    snprintf(what, sizeof what, "  FLANGER over REPEAT 1/16: +%.0f, PHASER +%.0f (device ~%.1f / %.1f %%, at most 2.5 %% each)",
+    snprintf(what, sizeof what, "  FLANGER over REPEAT 1/16: +%.0f, PHASER +%.0f (device ~%.1f / %.1f %%, at most 2.7 %% each)",
              flg - rep, phs - rep, (flg - rep) * 0.017, (phs - rep) * 0.017);
-    bad += check(what, (flg - rep) * 0.017 <= 2.5 && (phs - rep) * 0.017 <= 2.5);
+    bad += check(what, (flg - rep) * 0.017 <= 2.7 && (phs - rep) * 0.017 <= 2.7);   /* (Dah: the denser demo song) */
     snprintf(what, sizeof what, "  REV THROW + ECHO THROW over idle: +%.0f, over REPEAT 1/16 +%.0f (device ~%.1f %%, at most 2 %%)",
              thr - idle, thr - rep, (thr - rep) * 0.017);
     return bad + check(what, (thr - rep) * 0.017 <= 2.0);

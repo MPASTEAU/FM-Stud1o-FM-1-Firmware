@@ -177,10 +177,15 @@ static void demo_var(uint32_t k, uint32_t v)
     const uint8_t (*h)[4] = k == 2u && v == 2u ? DM_B : DM_A;
     switch (k) {
     case 0: {                                                               /* T1 the drone: A and E, the whole section */
-        static const uint8_t D[2] = {33, 40};
+        static const uint8_t D[2] = {45, 52};
         dm_chord(t, 0, 64, D, 2, 100);
-        demo_auto(t, P_E4, 0, 56, DR_CUT[v - 1u], DR_CUT[v]);              /* its filter: one curve over the song */
-        (void)motion_set_event(t, 63, P_E4, DR_CUT[v]);
+        if (v == 1u) {                                                      /* (the song's first: out of silence) */
+            demo_auto(t, P_LEVEL, 0, 56, 10, 90);
+            (void)motion_set_event(t, 63, P_LEVEL, 96);
+        }
+        demo_auto(t, P_EQHI, 0, 56, 66 + DR_CUT[v - 1u] / 2, 66 + DR_CUT[v] / 2);   /* its brightness: one curve
+                                                                             * over the song (the EQ's HIGH CUT) */
+        (void)motion_set_event(t, 63, P_EQHI, 66 + DR_CUT[v] / 2);
         demo_auto(t, P_IB, 0, 56, 30 + v * 4u, 34 + v * 4u);                /* the phaser deeper and deeper */
         trkx[0].curve = 1;
         return;
@@ -248,48 +253,46 @@ static void demo_var(uint32_t k, uint32_t v)
                     demo_hit(t, s0 + i, b == 3u && i >= 8u ? 1u << 1 : 1u << 5, 50 + (b - 2u) * 30u + i * 3u);
             }
             break;
-        default:                                                            /* T8 the noise: held */
-            if (!b) {
-                demo_note(&t->step[0], 57, 90);
-                demo_hold(t, 0, 64);
+        default: {                                                          /* T8 the kalimba: notes in space, echoing */
+            static const uint8_t M[4][4][2] = {{{0, 57}, {3, 60}, {6, 64}, {10, 62}}, {{0, 57}, {3, 60}, {6, 64}, {10, 60}},
+                                               {{0, 55}, {3, 60}, {6, 65}, {10, 64}}, {{0, 55}, {3, 59}, {6, 64}, {11, 62}}};
+            if (v == 1u) {                                                  /* a note now and then */
+                if (b == 0u) demo_note(&t->step[0], 57, 84);
+                if (b == 1u) demo_note(&t->step[s0 + 8u], 64, 72);
+                if (b == 2u) demo_note(&t->step[s0 + 4u], 62, 76);
+                if (b == 3u) demo_note(&t->step[s0 + 10u], 60, 66);
+            } else {                                                        /* the motif, its answer an octave down */
+                for (i = 0; i < 4u; i++)
+                    demo_note(&t->step[s0 + M[b][i][0]], M[b][i][1], i ? 70 : 88);
+                if (v == 3u) {
+                    demo_note(&t->step[s0 + 8u], (uint32_t)M[b][2][1] - 12u, 64);
+                    demo_note(&t->step[s0 + 14u], (uint32_t)M[b][3][1] - 12u, 58);
+                }
             }
             break;
+        }
         }
     }
     if (k == 3u) {                                                          /* the voice: its high cut opening a little */
         demo_auto(t, P_EQHI, 0, 56, 70, 92);
         trkx[3].curve = 1;
-    } else if (k == 7u) {                                                   /* the noise: wind, metal, a rise */
-        if (v == 1u) {
-            demo_auto(t, P_E2, 0, 56, 30, 60);
-            (void)motion_set_event(t, 0, P_LEVEL, 40);
-        } else if (v == 2u) {
-            demo_auto(t, P_E2, 0, 56, 30, 70);                              /* the wind, darker, drifting */
-            (void)motion_set_event(t, 0, P_LEVEL, 48);
-        } else {
-            demo_auto(t, P_E2, 0, 56, 30, 96);                              /* the rise (no hiss at its top) */
-            demo_auto(t, P_EQHI, 0, 56, 40, 96);
-            demo_auto(t, P_LEVEL, 0, 56, 20, 110);
-            (void)motion_set_event(t, 63, P_LEVEL, 0);
-        }
-        trkx[7].curve = 1;
     }
 }
 static void felucca_demo(void)
 {
     /* the song: each section's variant per track (0: silent there); the drone and the cloud one a section */
     static const uint8_t SEC[14][8] = {
-        {1, 0, 0, 0, 0, 0, 0, 1},             /* the drone alone, wind */
+        {1, 0, 0, 0, 0, 0, 0, 1},             /* out of silence: the drone, a note now and then */
         {2, 2, 0, 0, 0, 0, 0, 1},             /* the cloud */
-        {3, 3, 1, 0, 0, 0, 0, 2},             /* the pad; the noise turns metal */
-        {4, 4, 1, 0, 0, 0, 0, 2},
-        {5, 5, 1, 1, 0, 0, 4, 3},             /* the vowel; toms, a roll, the rise */
-        {6, 6, 1, 0, 1, 1, 1, 0},             /* the boom: the sub with the kick */
+        {3, 3, 1, 0, 0, 0, 0, 2},             /* the pad; the kalimba's motif */
+        {4, 4, 1, 1, 0, 0, 0, 2},             /* the voice */
+        {5, 5, 1, 1, 0, 0, 4, 3},             /* the motif answered; toms, a roll */
+        {6, 6, 1, 0, 1, 1, 1, 2},             /* the boom: the sub with the kick */
         {7, 7, 1, 1, 1, 2, 2, 2},
         {8, 8, 2, 2, 1, 1, 1, 0},             /* the other chords */
-        {9, 9, 1, 0, 0, 0, 0, 2},             /* the break */
-        {10, 10, 1, 0, 0, 0, 3, 3},           /* the build on toms, the rise */
-        {11, 11, 1, 2, 1, 2, 2, 2},           /* the climax */
+        {9, 9, 1, 0, 0, 0, 0, 1},             /* the break */
+        {10, 10, 1, 0, 0, 0, 3, 3},           /* the build on toms */
+        {11, 11, 1, 2, 1, 2, 2, 3},           /* the climax */
         {12, 12, 2, 1, 1, 1, 2, 0},
         {13, 13, 1, 0, 0, 0, 0, 1},           /* the outro, closing */
         {14, 14, 0, 0, 0, 0, 0, 1},           /* the drone alone again */
@@ -305,6 +308,8 @@ static void felucca_demo(void)
     song.g[G_DTIME] = 10;                     /* 1/8D */
     song.g[G_CRATE] = 12;
     song.g[G_CDEPTH] = 100;
+    song.g[G_MCOMP] = 70;                     /* the MASTER glued, louder */
+    song.g[G_MREL] = 64;
     song.ntrk = 8;
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
@@ -312,30 +317,26 @@ static void felucca_demo(void)
         trk[i].p[P_SDIV] = 2;                 /* 1/16 */
     }
     t = &trk[0];
-    demo_sound(t, 0, 1);                      /* ANALOG: the drone, two saws detuned wide, spread, phased */
-    t->p[P_E0] = 2; t->p[P_E0 + 1] = 70; t->p[P_E0 + 2] = 90; t->p[P_E0 + 3] = 10; t->p[P_E0 + 5] = 64; t->p[P_E0 + 6] = 40;
-    t->p[P_ATK] = 110; t->p[P_REL] = 110; t->p[P_SUS] = 127;
-    t->p[P_SPRD] = 127; t->p[P_DETUNE] = 90;
-    t->p[P_LRATE] = 18; t->p[P_LD_FLT] = 18;   /* (a slow breath on the filter) */
-    t->p[P_ITYPE] = 6; t->p[P_IA] = 8; t->p[P_IB] = 50; t->p[P_IC] = 60; t->p[P_IMIX] = 80;   /* PHASR, slow */
-    t->p[P_LEVEL] = 96; t->p[P_REV] = 70; t->p[P_CHOR] = 40;
+    demo_sound(t, ENGI_PHYS, 7);              /* PHYS DRONE STRING: the drone, bowed, spread, phased */
+    t->p[P_ATK] = 60; t->p[P_REL] = 110; t->p[P_SUS] = 127;
+    t->p[P_SPRD] = 110;
+    t->p[P_ITYPE] = 6; t->p[P_IA] = 8; t->p[P_IB] = 34; t->p[P_IC] = 60; t->p[P_IMIX] = 80;   /* PHASR, slow */
+    t->p[P_LEVEL] = 96; t->p[P_REV] = 80; t->p[P_CHOR] = 40;
     t = &trk[1];
-    demo_sound(t, 8, 0);                      /* GRAIN CLOUD PAD: the cloud */
+    demo_sound(t, 8, 2);                      /* GRAIN FROZEN: the cloud */
     t->p[P_E0 + 1] = 100; t->p[P_E0 + 4] = 110; t->p[P_E0 + 5] = 50; t->p[P_E0 + 6] = 70;   /* (TONE: dark) */
     t->p[P_ATK] = 100; t->p[P_REL] = 110; t->p[P_LEVEL] = 82; t->p[P_REV] = 100; t->p[P_DLY] = 30;
     t = &trk[2];
-    demo_sound(t, 0, 3);                      /* ANALOG PWM STR: the pad, flanged */
+    demo_sound(t, ENGI_FM6, 4);               /* FM6 PAD, flanged */
     t->p[P_ATK] = 80; t->p[P_REL] = 100; t->p[P_SPRD] = 100;
-    t->p[P_LRATE] = 30; t->p[P_LD_SHP] = 40;   /* (the pulse width breathing) */
     t->p[P_ITYPE] = 7; t->p[P_IA] = 6; t->p[P_IB] = 70; t->p[P_IC] = 40; t->p[P_IMIX] = 45;   /* FLANG, slow, soft */
-    t->p[P_LEVEL] = 82; t->p[P_REV] = 80; t->p[P_CHOR] = 50;
+    t->p[P_LEVEL] = 84; t->p[P_REV] = 80; t->p[P_CHOR] = 50;
     t = &trk[3];
-    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH: a voice, low, sliding */
-    t->p[P_E0 + 4] = 72; t->p[P_E0 + 6] = 100;
+    demo_sound(t, 2, 3);                      /* PHASE RESO: the lead, low, sliding */
     t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 90;
-    t->p[P_ATK] = 80; t->p[P_REL] = 100; t->p[P_LEVEL] = 76; t->p[P_REV] = 100; t->p[P_DLY] = 40;
+    t->p[P_ATK] = 70; t->p[P_REL] = 100; t->p[P_LEVEL] = 74; t->p[P_REV] = 100; t->p[P_DLY] = 40;
     t = &trk[4];
-    demo_sound(t, 0, 7);                      /* ANALOG SUB BASS: held */
+    demo_sound(t, 6, 0);                      /* TRIO FAT BASS: the sub, held */
     t->p[P_VOICE] = V_MONO; t->p[P_ATK] = 20; t->p[P_SUS] = 127;
     t->p[P_LEVEL] = 104; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     t = &trk[5];
@@ -346,25 +347,32 @@ static void felucca_demo(void)
     demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: clap, hat, toms */
     t->p[P_LEVEL] = 76; t->p[P_REV] = 80; t->p[P_DLY] = 20; t->p[P_CHOR] = 0;
     t = &trk[7];
-    demo_sound(t, 11, 0);                     /* NOISE: wind, metal, a rise */
-    t->p[P_E0 + 6] = 80;                      /* (DRFT) */
-    t->p[P_ATK] = 90; t->p[P_LEVEL] = 44; t->p[P_REV] = 90; t->p[P_DLY] = 20;
+    demo_sound(t, ENGI_FM6, 0);               /* FM6 TINE EP: notes in space, through the delay */
+    t->p[P_LEVEL] = 80; t->p[P_REV] = 90; t->p[P_DLY] = 70; t->p[P_PAN] = -18;
     {                                         /* the bands (EQ: LOW CUT, HIGH CUT, a bell): each one clear */
         static const int8_t EQ[8][4] = {
-            {14, 96, 40, -10},                /* drone: 60 Hz .. 4.6 kHz, its 230 Hz down */
+            {14, 50, 40, -10},                /* drone: from 60 Hz, its HIGH CUT automated */
             {40, 92, 60, -6},                 /* cloud: 230 Hz .. 3.8 kHz */
             {47, 96, 60, -12},                /* pad: 300 Hz .. 4.6 kHz */
             {44, 88, 70, 4},                  /* voice: .. 3 kHz */
             {0, 34, 18, 8},                   /* sub: under 130 Hz */
             {0, 96, 22, 6},                   /* kick */
             {40, 100, 60, 4},                 /* kit: no sizzle (5.4 kHz at most) */
-            {50, 88, 70, 0},                  /* noise: no hiss */
+            {48, 90, 70, 4},                  /* kalimba: 270 Hz .. 3 kHz, round */
         };
         for (i = 0; i < NTRK; i++) {
             trk[i].p[P_EQLO] = EQ[i][0];
             trk[i].p[P_EQHI] = EQ[i][1];
             trk[i].p[P_EQ1F] = EQ[i][2];
             trk[i].p[P_EQ1G] = EQ[i][3];
+        }
+    }
+    {                                         /* the COMPRESSOR on the quiet ones: held together, their level up */
+        static const uint8_t CQ[5][2] = {{0, 110}, {2, 100}, {3, 100}, {7, 96}, {1, 70}};   /* track, AMOUNT */
+        for (i = 0; i < 5u; i++) {
+            trkx[CQ[i][0]].rsv0 = CQ[i][1];
+            trkx[CQ[i][0]].rsv1 = 60;
+            trk[CQ[i][0]].p[P_LEVEL] = 118;
         }
     }
     for (k = 0; k < 8u; k++)                  /* each track's variants: 1 on it, the others new patterns */
@@ -394,6 +402,9 @@ static void felucca_init(void)
     chain_defaults(&chain_config);
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
+    mst_defaults();                           /* (Dah: the MASTER's chain, empty) */
+    chain_from_row = 0;                       /* (Dah: SONG's GRID at the top) */
+    chain_from_u = 0;
     undo_depth++;                             /* (no undo copy of the power-on loads) */
     mix_solo = 0;                             /* (Dah: MIXER's SOLO, none) */
     fm6_init();                               /* every track's FM6 patch: the init voice */

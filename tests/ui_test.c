@@ -187,6 +187,8 @@ static void ui_power_on(void)
 {
     uint32_t i;
     ka.st = 0;                                    /* (Dah: no ASSIGN going on) */
+    chain_from_row = 0;                           /* (Dah: SONG's GRID at the top) */
+    chain_from_u = 0;
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
     for (i = 0; i < NTRK; i++)                    /* (HA HA HE HU: the tracks' extras as at power-on) */

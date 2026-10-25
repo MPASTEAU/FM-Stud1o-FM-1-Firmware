@@ -15,7 +15,7 @@
 #define PFS_IDS 32u
 #define PFS_PAY 64u                                /* the payload's offset in the first sector */
 #define PFS_MAGIC 0x4A525048u                      /* "HPRJ" */
-#define PFS_VER 3u                                 /* (3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
+#define PFS_VER 4u                                 /* (4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
                                                     * parameters; before 3 the extras were TRKX_V2 bytes) */
 #define PFS_CUR DAH_CUR                           /* the project open, its id (0 none): kept with the settings (favorites.c) */
 _Static_assert(PFS_BASE + PFS_NSECT * ST_SECTOR <= 0xDC000u, "the projects in USR2 and USR3");
@@ -169,6 +169,8 @@ static void pfs_stream(void)
     pw_put(song.g, sizeof song.g);
     pw_b(song.sel < nt ? song.sel : 0u);
     pw_put(&chain_config, sizeof chain_config);
+    for (i = 0; i < MST_N; i++)                         /* (4) the MASTER's chain */
+        pw_b((uint32_t)(mtrk.p[MST_ID[i]] + 64));
     for (k = 0; k < nt; k++) {
         const track_t *t = &trk[k];
         uint8_t fm[FM6_PACKED], n2[2];
@@ -292,8 +294,8 @@ static int pfs_read_in(uint32_t id)
 {
     pfs_hdr_t h;
     project_t *q = &proj_scratch;
-    uint32_t k, i, nt, n, np, xw;
-    uint8_t cur[NTRK];
+    uint32_t k, i, nt, n, np, xw, ver;
+    uint8_t cur[NTRK], mst[MST_N];
     uint32_t cur_at[NTRK], cur_n[NTRK];              /* (Dah: each track's pattern, where in the payload: read again
                                                       * after the sounds, straight onto the track, not through the heap,
                                                       * so a project whose heap is full opens) */
@@ -321,7 +323,7 @@ static int pfs_read_in(uint32_t id)
         for (i = 0; i < P_COUNT; i++)
             q->t[k].p[i] = param_desc_of(trk_def_engine(k), i)->def;
     {
-        uint32_t v = pr_b();
+        uint32_t v = ver = pr_b();
         np = v == 1u ? PROJ_NP_W : v <= PFS_VER ? pr_b() : 0u;
         xw = v >= 3u ? pr_b() : TRKX_V2;                /* (the extras' size it wrote) */
         if (xw < TRKX_V2 || xw > 64u) return 2;
@@ -329,6 +331,7 @@ static int pfs_read_in(uint32_t id)
     }
     q->sel = (uint8_t)pr_b();
     if (!pr_get(&q->chain, sizeof q->chain) || !chain_valid(&q->chain)) return 2;
+    if (ver >= 4u && !pr_get(mst, MST_N)) return 2;
     for (k = 0; k < nt; k++) {
         int16_t v[P_COUNT], def[P_COUNT];
         for (i = 0; i < np; i++)
@@ -360,6 +363,8 @@ static int pfs_read_in(uint32_t id)
     q->sum = proj_sum(q);
     proj_bound(q);
     if (project_restore_runtime(q)) return 2;
+    for (i = 0; ver >= 4u && i < MST_N; i++)            /* (the MASTER's chain: restore_runtime emptied it) */
+        mtrk.p[MST_ID[i]] = (int16_t)clamp((int32_t)mst[i] - 64, TP[MST_ID[i]].min, TP[MST_ID[i]].max);
     song.ntrk = (uint8_t)nt;
     for (k = 0; k < NTRK; k++) {                        /* each track's pattern, read again, its number back */
         ps_cur[k] = k < nt ? (cur[k] && cur[k] <= PS_NUM ? cur[k] : 1u) : 1u;

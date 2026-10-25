@@ -1714,7 +1714,7 @@ function makeMockDevice(opt = {}) {
       "GRAIN", "PHYS", "DRUM", "NOISE", "FM6", "SLICE", "GROWL"], 0), E("SET", NGO, 0),
     E("CLRSQ", NGO, 0), E("INIT", NGO, 0),
     E("TYPE", ["ROOM", "SPRING", "HALL"], 2),       /* G_RTYPE (id 24, was G_DRCH): the reverb's model (HALL: 1.2) */
-    D("-", F.INT, 0, 0, 0), D("-", F.INT, 0, 0, 0),   /* G_DRLVL, G_DRREV: inert since 1.0 */
+    D("COMP", F.PCT, 0, 127, 0), D("REL", F.PCT, 0, 127, 50),   /* G_DRLVL, G_DRREV: (Dah) the MASTER's COMPRESSOR */
   ];
   const NONE = D("-", F.INT, 0, 0, 0);
   const RATIO = [".5", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "14", "16"];

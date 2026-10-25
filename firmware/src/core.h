@@ -115,11 +115,13 @@ enum {                          /* global parameters */
     G_RTYPE,                    /* REVERB TYPE: 0 ROOM, 1 SPRING, 2 HALL (1.2, the power-on default) (fx.c). Was
                                  * G_DRCH, the GM drum part's MIDI channel (inert since 1.0, never read); projects
                                  * of formats before FUN7 load it as ROOM (project.c proj_rtype_room) */
-    G_DRLVL, G_DRREV,           /* inert (label "-", on no page): the GM drum part they set is gone; kept
+    G_DRLVL, G_DRREV,           /* (Dah) the MASTER's COMPRESSOR, AMOUNT and RELEASE (G_MCOMP G_MREL); were inert (label "-", on no page): the GM drum part they set is gone; kept
                                  * because the ids and G_COUNT are fixed by the formats and the protocol (only
                                  * the import of an old project reads them: proj_drums_to_part) */
     G_COUNT
 };
+#define G_MCOMP G_DRLVL                  /* (Dah) the MASTER's COMPRESSOR (fx_comp.c), in the ids the GM drums left */
+#define G_MREL G_DRREV
 
 /* stored parameters of an older layout -> today's P_* order. A store keeps np = the P_COUNT it was
  * written with; common parameters are only ever added just before P_E0, so the first np - 8 are
@@ -413,8 +415,10 @@ static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ?
 #define LDRAW_N 16u
 typedef struct {
     int8_t draw[LDRAW_N];
-    uint8_t smooth, curve, rsv0, rsv;   /* (Dah: rsv0 unused (was DUCK's group); rsv MATCH's COLOR and NOTES, chord.c) */
-    uint8_t tap[3], rsv1;        /* (Dah) where CHORUS DELAY REVERB take the sound: 0 after the chain, k before its k-th */
+    uint8_t smooth, curve, rsv0, rsv;   /* (Dah: rsv0 the COMPRESSOR's AMOUNT, 0 none (fx_comp.c); rsv MATCH's COLOR and
+                                        * NOTES, chord.c) */
+    uint8_t tap[3], rsv1;        /* (Dah) where CHORUS DELAY REVERB take the sound: 0 after the chain, k before its k-th;
+                                  * rsv1 the COMPRESSOR's RELEASE */
     uint8_t home[4];             /* (Dah) HOME's knobs: a parameter id + 1 each (0: the engine's, as before; ui.c) */
 } trkx_t;
 #define TRKX_V2 20u                      /* (Dah) the extras' size before tap and home */

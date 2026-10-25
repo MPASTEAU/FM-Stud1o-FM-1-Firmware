@@ -291,6 +291,8 @@ static void proj_drums_to_part(project_t *q)
     d->preset = PROJ_DEF_KEEP;
     d->p[P_LEVEL] = (int16_t)clamp(q->g[G_DRLVL], 0, 127);   /* the drum part's level and reverb send */
     d->p[P_REV] = (int16_t)clamp(q->g[G_DRREV], 0, 127);
+    q->g[G_MCOMP] = 0;                          /* (Dah: those ids the MASTER's COMPRESSOR now: off) */
+    q->g[G_MREL] = 50;
     q->parts = NPART;
     q->sum = proj_sum(q);
 }
@@ -1378,6 +1380,9 @@ static int project_restore_runtime(const project_t *input)
     mom_back(0);                                  /* (ui_input.c MOMENTARY: the values as they were, then the load) */
     memset(drum_mute, 0, sizeof drum_mute);       /* (1.4.1: the DRUM lanes' mutes, performance state) */
     if (p != input) memcpy(p, input, sizeof *p);
+    mst_defaults();                                     /* (Dah: the MASTER's chain: projfs.c puts a project's back) */
+    chain_from_row = 0;                                 /* (SONG's GRID at the top) */
+    chain_from_u = 0;
     proj_drums_to_part(p);                              /* a RAM slot of firmware before 1.0 */
     proj_phys(p);                                       /* .. before PHYS lost DUST and DRUM */
     proj_fm4(p);                                        /* .. that had DIGITAL tracks */
@@ -1566,8 +1571,10 @@ static uint32_t chain_prepare(void)
         return 1;
     chain.config = chain_config;                        /* (HA HA HE HU: each track's patterns, pstore.c: the first two
                                                          * sections now, each next one while the one before plays) */
-    chain_fill(0, 0);
-    chain_fill(chain.config.count > 1u ? 1u : 0u, 1);   /* (Dah: one section: itself again, round) */
+    if (chain_from_row >= chain.config.count)
+        chain_from_row = 0, chain_from_u = 0;
+    chain_fill(chain_from_row, 0);                      /* (Dah: from the GRID's section) */
+    chain_fill(chain_from_row + 1u < chain.config.count ? chain_from_row + 1u : 0u, 1);   /* (one section: itself again) */
     RING_PUBLISH();
     chain.armed = 1;
     transport_req = 1;

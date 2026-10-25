@@ -893,6 +893,7 @@ static void seq_start(void)
         if (t->p[P_LTRIG] && t->p[P_LSYNC])        /* LFO 2 FREE + SYNC: in time with the bars from PLAY */
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
     }
+    chain_seek();                                  /* (Dah: a song from its GRID: into its section) */
     song.tick = 0;
     beat_pos = 0; beat_n = 0;                      /* the ARP LED's beat from the top too */
     clk_pos = CLK_START;                           /* the metronome's first beat with step 0 */
@@ -1090,7 +1091,8 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
                                                      * into: its voices glide over, not started again */
     if (!slide_in)
         seq_release(t);
-    else                                            /* (Dah) held over: the notes sounding already go on, no attack */
+    else if (!over)                                 /* (Dah) held over: the notes sounding already go on, no attack
+                                                     * (a TIE into another step: they strike again, the gap only gone) */
         for (i = 0; i < m; i++)
             for (j = 0; j < t->seq_n; j++)
                 if (nn[i] == t->seq_notes[j] && trk_vmode(t) == V_POLY && !t->p[P_AMODE])

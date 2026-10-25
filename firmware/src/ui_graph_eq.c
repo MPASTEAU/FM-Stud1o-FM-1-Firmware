@@ -7,8 +7,10 @@
  * The spectrum: a 256-point FFT (Hann) of eq_ring, a frame at a time. Integers only. Included by ui_graph_more.c */
 #define EQS_N 256u
 #define EQS_LOG 8u
-static int16_t eqs_re[EQS_N] __attribute__((section(".pool"))), eqs_im[EQS_N] __attribute__((section(".pool")));   /* (out of RAM's .bss) */
-static int16_t eqs_bar[PANEL_W] __attribute__((section(".pool")));                        /* each column's level shown, dB x 8 (0 .. -480) */
+#define eqs_re ui_tmp                                   /* (Dah: fx.c's scratch, the frame's) */
+#define eqs_im (ui_tmp + EQS_N)
+_Static_assert(2u * EQS_N <= SCOPE_N, "the FFT in ui_tmp");
+static int8_t eqs_bar[PANEL_W] __attribute__((section(".pool")));                         /* each column's level shown, dB x 2 (0 .. -120) */
 static uint32_t eqs_wn;                                 /* eq_wn when last taken */
 static uint8_t eqs_init;
 
@@ -109,8 +111,8 @@ static void eqs_take(void)
         }
         db = best ? (eq_log2q8((uint64_t)best) - 26 * 256) * 771 / 256 * 8 / 256 : -480;   /* (a full-scale sine
                                                          * of the ring: ~ 2^26 a bin's power: 0 dB) */
-        db = clamp(db, -480, 0);
-        eqs_bar[x] = (int16_t)(db > eqs_bar[x] - 12 ? db : eqs_bar[x] - 12);
+        db = clamp(db, -480, 0) / 4;
+        eqs_bar[x] = (int8_t)(db > eqs_bar[x] - 3 ? db : eqs_bar[x] - 3);
     }
 }
 static void graph_eq(const track_t *t, uint16_t c)
@@ -119,7 +121,7 @@ static void graph_eq(const track_t *t, uint16_t c)
     uint32_t hot = ui.hot_t ? page_id(cur_page(), ui.hot_col) : 0xFFu;
     if (!eqs_init) {                                    /* (silence to start with) */
         for (x = 0; x < PANEL_W; x++)
-            eqs_bar[x] = -480;
+            eqs_bar[x] = -120;
         eqs_init = 1;
     }
     if (eq_wn != eqs_wn) {
@@ -127,9 +129,9 @@ static void graph_eq(const track_t *t, uint16_t c)
         eqs_take();
     } else
         for (x = 0; x < PANEL_W; x++)                   /* silent: the bars fall */
-            eqs_bar[x] = (int16_t)(eqs_bar[x] > -480 + 12 ? eqs_bar[x] - 12 : -480);
+            eqs_bar[x] = (int8_t)(eqs_bar[x] > -120 + 3 ? eqs_bar[x] - 3 : -120);
     for (x = 0; x < PANEL_W; x++) {                     /* the spectrum */
-        int32_t h = (480 + eqs_bar[x]) * (bot - top) / 480;
+        int32_t h = (120 + eqs_bar[x]) * (bot - top) / 120;
         if (h > 0)
             cv_rect(PANEL_X0 + x, bot - h, 1, h, ux_mix(c, T_SURF, 30));
     }

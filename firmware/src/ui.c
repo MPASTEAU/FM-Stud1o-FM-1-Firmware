@@ -456,15 +456,16 @@ static int page_visible(uint32_t i)
     if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_TRACK && PAGES[i].graph != GR_FX) {   /* (Dah) an effect's page:
                                                          * while it is in the chain (CHAIN adds it) */
         uint32_t id = PAGES[i].id[0];
-        if (id == P_DIST) return fx_unit_on(TSEL, 0);
-        if (id == P_ITYPE || id == P_IMIX) return fx_unit_on(TSEL, 1);
-        if (id == P_SLCR) return fx_unit_on(TSEL, 2);
-        if (id == P_EQLO || id == P_EQ2F) return fx_unit_on(TSEL, 3);
-        if (id == P_DKSRC) return fx_unit_on(TSEL, 4);
+        if (id == P_DIST) return fx_unit_on(fx_tsel(), 0);
+        if (id == P_ITYPE || id == P_IMIX) return fx_unit_on(fx_tsel(), 1);
+        if (id == P_SLCR) return fx_unit_on(fx_tsel(), 2);
+        if (id == P_EQLO || id == P_EQ2F) return fx_unit_on(fx_tsel(), 3);
+        if (id == P_DKSRC) return fx_unit_on(fx_tsel(), 4);
+        if (str_eq(PAGES[i].title, "COMP")) return fx_unit_on(fx_tsel(), 8);
     }
     if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_GLOBAL) {   /* (Dah) CHORUS DELAY REVERB: the same */
         uint32_t id = PAGES[i].id[0];
-        return fx_unit_on(TSEL, id == (PS_TRK | P_CHOR) ? 5u : id == (PS_TRK | P_REV) ? 7u : 6u);
+        return fx_unit_on(fx_tsel(), id == (PS_TRK | P_CHOR) ? 5u : id == (PS_TRK | P_REV) ? 7u : 6u);
     }
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
@@ -519,7 +520,10 @@ static int chain_busy(void) { return chain.running || chain.armed; }
  * following (content px), FOLLOW (playing: the playhead held in the middle; on by default), the frame a section was
  * picked last (its block shown a while, then the playhead again) */
 #define SG_ZOOM0 24u
-static struct { uint8_t on, nofollow, zoom, run; int32_t at; uint32_t touch; } sgw;   /* (run: the song playing last frame) */
+static uint8_t mx_master;                               /* (Dah) MIXER: the MASTER picked (SELECT past the last track) */
+static track_t *fx_tsel(void) { return mx_master ? &mtrk : TSEL; }   /* (Dah) FX's pages: the track's chain, the MASTER's */
+static struct { uint8_t on, nofollow, zoom, run; int32_t at; uint32_t touch, gu; } sgw;   /* (run: the song playing last
+                                                         * frame; gu: the GRID, where PLAY starts, 1/48 quarters) */
 static uint32_t sg_zoom(void) { return sgw.zoom ? sgw.zoom : SG_ZOOM0; }
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */
@@ -1869,6 +1873,10 @@ static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 /* select track i (KNOB 1 on TRACKS, the editor): its sound, pages and pattern from now on */
 static void track_select(uint32_t i)
 {
+    if (i < trk_count() && mx_master) {
+        mx_master = 0;                          /* (Dah: a track picked: the MASTER no more) */
+        ui.force = 1;
+    }
     if (i >= trk_count() || i == song.sel)
         return;
     song.sel = (uint8_t)i;

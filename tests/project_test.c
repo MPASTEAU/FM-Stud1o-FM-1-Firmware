@@ -175,7 +175,7 @@ int main(void)
     bad += check("layout: SLICER after DETUNE, then the matrix just before P_E0",
                  P_SLCR == P_DETUNE + 1 && P_SLDEPTH + 1 == P_M1SRC && P_M4AMT + 1 == P_FM1_ATK && P_FM4_LEVEL + 1 == P_CHRD && P_VOIC + 1 == P_LN0 &&
                  P_LN7 + 1 == P_LSYNC && P_LSYNC + 3 == P_SQNT && P_SQNT + 1 == P_SPRD && P_SPRD + 1 == P_ITYPE &&
-                 P_ITYPE + 4 == P_IMIX && P_IMIX + 1 == P_FTYPE && P_FTYPE + 1 == P_ESYNC && P_ESYNC + 1 == P_FXORD && P_DKAMT + 1 == P_EQLO && P_XRSV1 + 1 == P_E0 && P_E0 == 116 &&
+                 P_ITYPE + 4 == P_IMIX && P_IMIX + 1 == P_FTYPE && P_FTYPE + 1 == P_ESYNC && P_ESYNC + 1 == P_FXORD && P_DKAMT + 1 == P_EQLO && P_DCOL + 1 == P_E0 && P_E0 == 116 &&
                  P_COUNT == PROJ_NP_V3 + 67u && PROJ_NP_V3 == PROJ_NP_V2 + 4u);
     bad += check("FUN10 fits one flash object, the retained cache in NOINIT", sizeof(project_store_t) <= 4096u - 256u &&
                  sizeof(project_store_t) == 3840u && 0xC8u + 4u * sizeof(project_store_t) <= 0x3D50u);
@@ -196,7 +196,8 @@ int main(void)
     bad += check("FUN2 -> FUN6: converted, valid format 5 slot", ok && proj_ok(&q) && q.magic == PROJ_MAGIC);
     ok = q.sel == 2;
     for (i = 0; i < G_COUNT; i++)
-        ok &= q.g[i] == (i == G_RTYPE ? 0 : (int16_t)(500 + i));
+        ok &= q.g[i] == (i == G_RTYPE ? 0 : i == G_MCOMP ? 0 : i == G_MREL ? 50 : (int16_t)(500 + i));   /* (Dah: the
+                                                     * MASTER's COMPRESSOR there now, off) */
     bad += check("FUN2 -> FUN6: globals (id 24, the old drum channel: ROOM) and selected track", ok);
     ok = 1;
     for (t = 0; t < NTRK_V10; t++)

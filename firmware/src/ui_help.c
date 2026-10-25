@@ -29,6 +29,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"EQ", "[K1]LOW CUT[K2]HIGH CUT[K3]BAND 1"},
     {"EQ 2", "[K1]BAND 2[K3]BAND 3[FX]NEXT"},
     {"SIDECHAIN", "[K1]SOURCE[K2]DEPTH[K3]RELEASE"},
+    {"COMP", "[K1]AMOUNT[K2]RELEASE[FX]NEXT"},
     {"DELAY", "[K1]SEND[K2]TIME[K3]FEEDBACK"},
     {"DELAY 2", "[K1]LEVEL[FX]NEXT"},
     {"REVERB", "[K1]SEND[K2]ROOM SPRING HALL"},
