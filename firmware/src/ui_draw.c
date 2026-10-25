@@ -936,7 +936,7 @@ static void draw_lane(const track_t *t)
     uint32_t i, id = lane_id(t), len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
     const param_desc_t *d;
     if (id == 0xFFu) {
-        cv_free_text(8, 2, &AF_S, "TURN A SOUND KNOB: ITS LANE HERE", T_DIM, T_BG, 224);
+        cv_free_hint(8, 2, "[FX] TO RECORD AN AUTOMATION", T_DIM, T_BG, 224);   /* (Dah: where it is made) */
         return;
     }
     d = track_desc(t, id);
