@@ -61,6 +61,7 @@ static int32_t sine_run(double secs, int turn, int32_t *in_step, int64_t *closed
             }
             pin = b[i];
         }
+        slicer_claim();                         /* (Dah: the buffers taken before the parts render, as events_block) */
         slicer_track(t, b, CTL);
         for (i = 0; i < CTL; i++) {
             if (f + i) {
@@ -141,6 +142,7 @@ static int test_timing(void)
         uint32_t i;
         for (i = 0; i < CTL; i++)
             out[f + i] = 16384;
+        slicer_claim();                         /* (Dah: the buffers taken before the parts render, as events_block) */
         slicer_track(t, out + f, CTL);
         f += CTL;
     }
@@ -250,6 +252,7 @@ static int test_off_stut(void)
         int32_t b[CTL], c[CTL];
         for (i = 0; i < CTL; i++)
             b[i] = c[i] = (int32_t)((f + i) * 2654435761u >> 17) - 16384;
+        slicer_claim();                         /* (Dah: the buffers taken before the parts render, as events_block) */
         slicer_track(t, b, CTL);
         same &= !memcmp(b, c, sizeof b);
     }
@@ -262,8 +265,10 @@ static int test_off_stut(void)
         uint32_t len = (uint32_t)FS * 60u / 120u / 4u;
         for (f = 0; f < sizeof in / sizeof in[0]; f++)
             in[f] = out[f] = (int32_t)(12000.0 * sin(2 * M_PI * 150.0 * f / FS));   /* 18.75 periods a step */
-        for (f = 0; f + CTL <= sizeof in / sizeof in[0]; f += CTL)
+        for (f = 0; f + CTL <= sizeof in / sizeof in[0]; f += CTL) {
+            slicer_claim();                     /* (Dah: the buffers taken before the parts render, as events_block) */
             slicer_track(t, out + f, CTL);
+        }
         for (f = 0; f + 4u * len < sizeof in / sizeof in[0]; f += 4u * len)   /* steps 1..3 of every 4 = step 0 */
             for (i = 1; i < 4u; i++) {
                 uint32_t a = f + i * len + len / 2u, b = f + len / 2u;

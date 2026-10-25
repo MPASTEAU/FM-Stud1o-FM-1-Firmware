@@ -1305,17 +1305,23 @@ static int32_t click_beat_now(void)
 }
 
 /* everything that happens between two rendered blocks */
-static void events_block(uint32_t n)
+/* (Dah) each block before the parts: the tracks past the project's keep no voice (not rendered, they would never end
+ * and hold the budget); the slicer's buffers taken and given back (slicer.c). Out of line: a few loops, once a block */
+static __attribute__((noinline)) void parts_prepare(void)
 {
-    uint32_t i, pr, seq_n = n;
-    uint32_t clock_mode = (uint32_t)song.g[G_CLOCK];
-    for (i = trk_count() * NVOICE; i < NTRK * NVOICE; i++) {   /* (Dah) the tracks past the project's: no voice left (not
-                                                         * rendered, they would never end and hold the budget) */
+    uint32_t i;
+    for (i = trk_count() * NVOICE; i < NTRK * NVOICE; i++) {
         voice_t *v = &trk[i / NVOICE].v[i % NVOICE];
         if (v->active)
             v->active = v->gate = 0, v->stage = 0;
     }
     slicer_claim();
+}
+static void events_block(uint32_t n)
+{
+    uint32_t i, pr, seq_n = n;
+    uint32_t clock_mode = (uint32_t)song.g[G_CLOCK];
+    parts_prepare();
     if (midi_clock.mode != clock_mode) {
         seq_stop();
         memset(&midi_clock, 0, sizeof midi_clock);

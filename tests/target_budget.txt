@@ -40,7 +40,7 @@ dv_synth_run 246
 slicer_track 556
 slice_render 440
 slc_rev 120
-fm1_alnk0_irq 10943
+fm1_alnk0_irq 8545
 fm1_timer5_irq 33711
 click_render 30
 mod_begin 167
