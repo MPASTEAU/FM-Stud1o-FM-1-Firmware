@@ -629,8 +629,9 @@ static uint32_t note_set_len(track_t *t, uint32_t i, uint32_t want)
  * steps: the grid shows a step's notes on their lanes (eng_drum.c step_lanes) and an edit makes the lane its
  * own (grid_own). Live recording on a DRUM track writes hits (seq.c rec_note) */
 static int grid_on(void) { return !ui.home && !ui.menu && !ui.confirm && cur_page()->graph == GR_ROLL && drum_track(TSEL); }
+static int detail_on(void);
 /* (Dah) the DRUM grid's keys are its steps while the track is armed (REC); else they play the drums */
-static uint32_t grid_write(void) { return grid_on() && ((song.rec >> song.sel) & 1u); }
+static uint32_t grid_write(void) { return grid_on() && (((song.rec >> song.sel) & 1u) || detail_on()); }   /* (DETAIL: they pick the step) */
 /* SEQ > DETAIL (1.5.1, Discussion #199; params.c, between STEP and AUTOMATION): a step page as STEP (the cursor, the
  * roll's keys, the grid's lane and page keys), its knobs the cursor step's CHANCE RATCH NUDGE VEL (ui_input.c sd_turn),
  * its panel their lanes (ui_graph.c graph_detail). No state of its own: the page is what says so */

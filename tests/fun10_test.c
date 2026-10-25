@@ -446,6 +446,7 @@ static int nudge(void)
         t->p[P_SQNT] = 0;
         go_home();
         open_family(FAM_SEQ);
+        song.rec = (uint8_t)(1u << song.sel);           /* (Dah: armed, the grid's keys are its steps) */
         frame();
         grid_hit(t, 4, 0, 1);
         k4 = key_at(0, 4);

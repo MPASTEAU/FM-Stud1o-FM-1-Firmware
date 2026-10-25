@@ -14,7 +14,7 @@ wheel_block 86
 grain_render 1708
 grain_block 133
 phys_render 61
-drum_render 566
+drum_render 632
 noise_render 259
 fm6_render 364
 fm6_op_run 72

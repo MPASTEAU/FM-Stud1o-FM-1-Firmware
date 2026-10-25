@@ -562,6 +562,7 @@ static int follow_test(void)
         t4->p[P_SLEN] = 16;
         go_home();
         open_family(FAM_SEQ);
+        song.rec = (uint8_t)(1u << song.sel);           /* (Dah: armed, the grid's keys are its steps) */
         frames(300);
         k4 = key_at(0, 4);
         fm1_in.notes |= 1u << k4; host_notes |= 1u << k4; frame();
