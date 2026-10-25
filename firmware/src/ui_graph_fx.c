@@ -13,6 +13,9 @@ static uint8_t ch_cur;                                  /* CHAIN: the row picked
 #define FXU_N_ALL 8u
 static const char *const FXU_N[FXU_N_ALL] = {"DIST", "INSERT", "SLICER", "EQ", "SIDECHAIN", "CHORUS", "DELAY", "REVERB"};
 static const char *const FXU_S[FXU_N_ALL] = {"DST", "INS", "SLC", "EQ", "SC", "CHO", "DLY", "REV"};   /* (FX's strip) */
+/* (Dah) CHAIN's KNOB 4, MIX: each effect's presence in the mix (DIST its OUT, INSERT its MIX, SLICER its DEPTH,
+ * SIDECHAIN its DEPTH, a send its level; the EQ none) */
+static const uint8_t FXU_MIX[FXU_N_ALL] = {P_DOUT, P_IMIX, P_SLDEPTH, 0xFF, P_DKAMT, P_CHOR, P_DLY, P_REV};
 static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (3u * (i % FXU_SER))) & 7u; }
 static int fx_unit_on(const track_t *t, uint32_t u)
 {
@@ -364,7 +367,6 @@ static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
     if (id == P_FXORD) graph_chain(t, c);
     else if (id == P_DIST && pg->graph == GR_NONE) graph_dist(t, c);
     else if (id == P_EQLO || id == P_EQ2F) graph_eq(t, c);
-    else if (id == P_CHOR) graph_sends(t, c);
     else return 0;
     return 1;
 }

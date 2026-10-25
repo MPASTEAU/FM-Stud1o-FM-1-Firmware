@@ -186,6 +186,7 @@ static int check(const char *what, int ok)
 static void ui_power_on(void)
 {
     uint32_t i;
+    ka.st = 0;                                    /* (Dah: no ASSIGN going on) */
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
     for (i = 0; i < NTRK; i++)                    /* (HA HA HE HU: the tracks' extras as at power-on) */
@@ -1081,7 +1082,10 @@ static int test_actions(void)
     frame();
     fm1_in.buttons &= ~(1u << panel.btn[B_OCTDN]);
     frame();
-    bad += check("OCT- + OCT+ together: no load, no HOME, no octave change", steps_are(t, 0) && !ui.home && song.octave == 1);
+    bad += check("OCT- + OCT+ together: no load, no HOME, no octave change (Dah: ASSIGN, a HOME knob)",
+                 steps_are(t, 0) && !ui.home && song.octave == 1 && ka.st == 1u);
+    press(B_OCTDN);
+    bad += check("  OCT-: ASSIGN off", !ka.st && song.octave == 1);
     go_home();
     fm1_in.buttons |= 1u << panel.btn[B_OCTUP];   /* pressed on HOME, let go on PATTERNS: no load */
     host_pressed |= 1u << panel.btn[B_OCTUP];
@@ -2569,6 +2573,7 @@ static int test_chain(void)
     host_pressed |= fm1_in.buttons; frame();
     fm1_in.buttons = 0; frame();
     bad += check("SONG OCT chord does not start playback or leave the page", !transport_req && !ui.home);
+    press(B_OCTDN);                                     /* (Dah: the chord was ASSIGN: OCT- leaves it) */
     press(B_OCTUP);
     bad += check("SONG OCT+ on release starts, pending start blocks SAVE", chain.armed && transport_req == 1);
     project_save(3);
@@ -2842,8 +2847,8 @@ static int test_page_cycles(void)
     open_family(FAM_SEQ); ok &= cur_page()->graph == GR_ROLL;
     open_family(FAM_ENV); ok &= str_eq(cur_page()->title, "ENV");
     open_family(FAM_SAVE); ok &= str_eq(cur_page()->title, "FILE");
-    open_family(FAM_GLO); open_family(FAM_GLO);          /* (HA HA HE HU: SONG, again DLY) */
-    ok &= str_eq(cur_page()->title, "DLY");
+    open_family(FAM_GLO); open_family(FAM_GLO);          /* (Dah: SONG, again SONG) */
+    ok &= str_eq(cur_page()->title, "SONG");
     go_home(); open_family(FAM_GLO); ok &= str_eq(cur_page()->title, "SONG");
     for (i = 0; i < 256u; i++) {                         /* any remembered index (the old GLOBAL 25, SYSTEM 27, ..) */
         go_home(); ui.fam_last[FAM_GLO] = (uint8_t)i; open_family(FAM_GLO);
@@ -3003,12 +3008,9 @@ static int test_product_ux(void)
     ui_power_on();
     frames(320);                                       /* (taps further apart than a double tap: #83) */
     press(B_GLO); frames(320); ok = cur_page()->fam == FAM_GLO && str_eq(cur_page()->title, "SONG");
-    press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "DLY") && cur_page()->fam == FAM_GLO && !ui.home;
-    press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "REVERB");
-    press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "CHORUS");
-    press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "SONG");
+    press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "SONG") && cur_page()->fam == FAM_GLO && !ui.home;
     go_title("CLOCK"); press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "SONG");
-    bad += check("GLO opens SONG directly, again DLY REVERB CHORUS SONG (HA HA HE HU: the global FX); from elsewhere SONG", ok);
+    bad += check("GLO opens SONG directly, again SONG (Dah: DELAY REVERB CHORUS are FX's); from elsewhere SONG", ok);
     go_home(); btn_down(B_SEQ); frames(500);
     ok = ui.layer == LAYER_SEQ && ui.home;
     btn_up(B_SEQ); frame();
@@ -3350,27 +3352,30 @@ static int test_layer(void)
     /* REVERB > TYPE (FX family, global): ROOM / SPRING / HALL on KNOB 1 (HALL at power-on since 1.2), kept by a
      * project */
     ui_power_on();
+    TSEL->p[P_REV] = 40;                                 /* (Dah: REVERB in the chain: its page, FX's) */
     go_title("REVERB");
-    ok = cur_page()->fam == FAM_GLO && cur_page()->id[0] == G_RTYPE && cur_page()->id[1] == G_RSIZE &&
-         cur_page()->id[2] == G_RDAMP && song.g[G_RTYPE] == 2 && str_eq(GP[G_RTYPE].names[2], "HALL");
-    turn(EN_K1, -2);
+    ok = cur_page()->fam == FAM_FX && cur_page()->id[0] == (PS_TRK | P_REV) && cur_page()->id[1] == G_RTYPE &&
+         cur_page()->id[2] == G_RSIZE && cur_page()->id[3] == G_RDAMP && song.g[G_RTYPE] == 2 &&
+         str_eq(GP[G_RTYPE].names[2], "HALL");
+    turn(EN_K2, -2);
     ok &= song.g[G_RTYPE] == 0 && str_eq(GP[G_RTYPE].names[song.g[G_RTYPE]], "ROOM");
-    turn(EN_K1, 1);
+    turn(EN_K2, 1);
     ok &= song.g[G_RTYPE] == 1 && str_eq(GP[G_RTYPE].names[song.g[G_RTYPE]], "SPRING");
-    turn(EN_K1, 5);
+    turn(EN_K2, 5);
     ok &= song.g[G_RTYPE] == 2;
-    turn(EN_K1, -1);
+    turn(EN_K2, -1);
     ok &= song.g[G_RTYPE] == 1;
     song.playing = 0;
     project_save(2);
-    turn(EN_K1, -1);
+    turn(EN_K2, -1);
     ok &= song.g[G_RTYPE] == 0;
     project_load(2);
-    bad += check("REVERB page: TYPE HALL (power-on) / ROOM / SPRING on KNOB 1 (SIZE, DAMP beside it); a project keeps SPRING",
+    bad += check("REVERB page (Dah: FX's, SEND first): TYPE HALL (power-on) / ROOM / SPRING on KNOB 2 (SIZE, DAMP after it); a project keeps SPRING",
                  ok && song.g[G_RTYPE] == 1);
+    TSEL->p[P_CHOR] = 30;
     go_title("CHORUS");
-    bad += check("  CHORUS page: CRT CDP", cur_page()->fam == FAM_GLO && cur_page()->id[0] == G_CRATE &&
-                 cur_page()->id[1] == G_CDEPTH && cur_page()->id[2] == 0xFFu);
+    bad += check("  CHORUS page: SEND CRT CDP", cur_page()->fam == FAM_FX && cur_page()->id[0] == (PS_TRK | P_CHOR) &&
+                 cur_page()->id[1] == G_CRATE && cur_page()->id[2] == G_CDEPTH && cur_page()->id[3] == 0xFFu);
     /* chording: a key held before FX stays a note, its note-off arrives */
     ui_power_on();
     mo = mo_w;
@@ -5997,11 +6002,11 @@ static int test_momentary(void)
     bad += check("  OCT+ with LFO held keeps them (no octave shift), LFO let go then changes nothing",
                  ok && TSEL->p[id0] != v0 && ui.home);
     /* an FX page (a global) and an engine page */
-    open_family(FAM_GLO); frame();
-    for (k = 0; k < NPAGES && cur_page()->id[0] != G_RSIZE && cur_page()->id[1] != G_RSIZE; k++) { open_family(FAM_GLO); frame(); }
+    TSEL->p[P_REV] = 40;                                 /* (Dah: REVERB, FX's: SEND TYPE SIZE DAMP) */
+    go_title("REVERB"); frame();
     g0 = song.g[G_RSIZE];
     btn_down(B_LFO); frame();
-    turn(cur_page()->id[0] == G_RSIZE ? EN_K1 : EN_K2, 9);
+    turn(EN_K3, 9);
     ok = song.g[G_RSIZE] != g0;
     btn_up(B_LFO); frame();
     bad += check("  a global FX value (REVERB SIZE) too: back on release", ok && song.g[G_RSIZE] == g0 && cur_page()->scope == SC_GLOBAL);
@@ -7373,7 +7378,7 @@ static int test_layer_lock(void)
     btn_down(B_GLO); frames(500);
     ok &= ui.layer == LAYER_GLO && !ui.lock;
     btn_up(B_GLO); frame();
-    ok &= !ui.layer && !ui.lock && str_eq(cur_page()->title, "DLY");
+    ok &= !ui.layer && !ui.lock && str_eq(cur_page()->title, "SONG");
     press(B_SCL);
     lay_combo(B_SCL, white(2));
     key_up(white(2)); btn_up(B_SCL); frame(); frames(400);

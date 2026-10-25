@@ -461,7 +461,10 @@ static int page_visible(uint32_t i)
         if (id == P_SLCR) return fx_unit_on(TSEL, 2);
         if (id == P_EQLO || id == P_EQ2F) return fx_unit_on(TSEL, 3);
         if (id == P_DKSRC) return fx_unit_on(TSEL, 4);
-        if (id == P_CHOR) return fx_unit_on(TSEL, 5) || fx_unit_on(TSEL, 6) || fx_unit_on(TSEL, 7);
+    }
+    if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_GLOBAL) {   /* (Dah) CHORUS DELAY REVERB: the same */
+        uint32_t id = PAGES[i].id[0];
+        return fx_unit_on(TSEL, id == (PS_TRK | P_CHOR) ? 5u : id == (PS_TRK | P_REV) ? 7u : 6u);
     }
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
@@ -1851,7 +1854,8 @@ static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 static track_t *home_trk(uint32_t k) { return home_levels() && trk_bank() + (k & 3u) < trk_count() ? &trk[trk_bank() + (k & 3u)] : TSEL; }   /* (Dah: past the project's tracks, the selected one) */
 static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 {
-    uint32_t id = home_levels() ? (uint32_t)P_LEVEL : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
+    uint32_t a = trkx[song.sel % NTRK].home[k & 3u];   /* (Dah) ASSIGN's: the parameter given it, else the engine's */
+    uint32_t id = home_levels() ? (uint32_t)P_LEVEL : a && a <= P_COUNT ? a - 1u : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
     *vp = &home_trk(k)->p[id];
     return track_desc(home_trk(k), id);
 }

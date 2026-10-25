@@ -1583,6 +1583,12 @@ static void draw_columns_in(void)
             } else if (c == 2u && on) {
                 card_span_by(span_fxmv, 0, 0, FXU_N_ALL - 1, 1);
                 draw_column(2, "MOVE", pl, "", VAL(2u), n > 1u ? (int32_t)ch_cur * 1000 / (int32_t)(n - 1u) : -1, ICON_AUTO);
+            } else if (c == 3u && on && FXU_MIX[u[ch_cur % FXU_N_ALL]] != 0xFFu) {   /* MIX */
+                uint32_t mid = FXU_MIX[u[ch_cur % FXU_N_ALL]];
+                const param_desc_t *md = track_desc(TSEL, mid);
+                param_format(md, TSEL->p[mid], val, &unit);
+                card_span_of(md);
+                draw_column(3, "MIX", val, unit, VAL(3u), RATIO(md, TSEL->p[mid]), ICON_AUTO);
             } else
                 draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
             continue;

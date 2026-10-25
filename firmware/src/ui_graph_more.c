@@ -334,9 +334,9 @@ static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
     else if (pg->scope == SC_TRACK && (id == P_VOICE || id == P_ALLOC || id == P_SPRD)) graph_voice(t, c);
     else if (pg->scope == SC_TRACK && (id == P_AMODE || id == P_ASWING)) graph_arp(t, c);
     else if (pg->scope == SC_TRACK && id == P_DKSRC) graph_duck(t, c);
-    else if (pg->scope == SC_GLOBAL && id == G_DTIME) graph_dly(c);
-    else if (pg->scope == SC_GLOBAL && id == G_RTYPE) graph_reverb(c);
-    else if (pg->scope == SC_GLOBAL && id == G_CRATE) graph_chorus(c);
+    else if (pg->scope == SC_GLOBAL && (id == (PS_TRK | P_DLY) || id == G_DMIX)) graph_dly(c);   /* (Dah: FX's) */
+    else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_REV)) graph_reverb(c);
+    else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_CHOR)) graph_chorus(c);
     else if (pg->scope == SC_GLOBAL && id == G_BPM) graph_clock(c);
     else return 0;
     return 1;

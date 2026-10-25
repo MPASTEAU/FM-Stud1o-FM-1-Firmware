@@ -660,13 +660,13 @@ static int lock_ui(void)
         !motion_lock_get(t, 4, P_E1, &v) && motion_lock_get(t, 0, P_E4, &v) && (t->step[4].hit & 1u) &&
         str_eq(ui.msg, "LOCKS CLEARED"));
     bad += check("the steps with a lock (the grid marks them): step 1", motion_lock_steps(3) == 1u);
-    t->p[P_REV] = 20;                                   /* (Dah: FX's SENDS page, the REVERB in the chain) */
-    go_title("SENDS");                                   /* the lock's knobs: the sound page shown last */
+    t->p[P_DIST] = 20;                                  /* (Dah: FX's DIST page, the DIST in the chain) */
+    go_title("DIST");                                    /* the lock's knobs: the sound page shown last */
     open_family(FAM_SEQ);
     frame();
-    bad += check("from SENDS: the knobs lock CHO DLY REV", lock_id(0) == P_CHOR && lock_id(2) == P_REV);
-    lk_down(k4); turn(EN_K3, 5); lk_up(k4);
-    bad += check("  step 5 gets a REV lock", motion_lock_get(t, 4, P_REV, &v) && v == t->p[P_REV] + 5);
+    bad += check("from DIST: the knobs lock IN OUT COLOR", lock_id(0) == P_DIST && lock_id(2) == P_DCOL);
+    lk_down(k4); turn(EN_K1, 5); lk_up(k4);
+    bad += check("  step 5 gets an IN lock", motion_lock_get(t, 4, P_DIST, &v) && v == t->p[P_DIST] + 5);
     go_auto_top();
     frame();
     bad += check("AUTOMATION: EVENT 0, LOCK 3", motion_count(t) - motion_lock_count(t) == 0u && motion_lock_count(t) == 3u);

@@ -1133,7 +1133,7 @@ static void setup(int s)
         TSEL->p[P_M2DST] = 14; TSEL->p[P_M2AMT] = -64; mod_ui_slot = 1; go_title("MOD"); break;
     case S_FX: go_title("CHAIN"); break;
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
-    case S_DLY: go_title("DLY"); break;
+    case S_DLY: TSEL->p[P_DLY] = 50; go_title("DELAY"); break;
     case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_EQLO] = 30; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; TSEL->p[P_REV] = 60; TSEL->p[P_DLY] = 30; trkx[song.sel].tap[2] = 2; go_title("CHAIN"); break;
     case S_FX_DIST: TSEL->p[P_DIST] = 70; TSEL->p[P_DOUT] = -20; TSEL->p[P_DCOL] = 30; go_title("DIST"); break;
     case S_FX_SC: TSEL->p[P_DKSRC] = 2; TSEL->p[P_DKAMT] = 110; TSEL->p[P_DIST] = 30; go_title("SIDECHAIN"); break;
@@ -1145,7 +1145,7 @@ static void setup(int s)
     }
         TSEL->p[P_EQLO] = 30; TSEL->p[P_EQHI] = 100; TSEL->p[P_EQ1G] = 40; go_title("EQ"); break;
     case S_FX_EQ2: TSEL->p[P_EQ2F] = 70; TSEL->p[P_EQ2G] = -50; TSEL->p[P_EQ3F] = 104; TSEL->p[P_EQ3G] = 30; go_title("EQ 2"); ui.hot_col = 1; ui.hot_t = 30; break;
-    case S_FX_SENDS: TSEL->p[P_CHOR] = 30; TSEL->p[P_DLY] = 90; TSEL->p[P_REV] = 60; go_title("SENDS"); break;
+    case S_FX_SENDS: TSEL->p[P_CHOR] = 30; TSEL->p[P_DLY] = 90; TSEL->p[P_REV] = 60; go_title("CHORUS"); break;
     case S_SCL: TSEL->p[P_SCALE] = 2; go_title("SCL"); break;
     case S_CHORD:                                    /* A minor DIA7, the last chord on B: Bm7b5 */
     case S_CHORD_WIDE: {                             /* A harmonic minor DIA7 +OCT on G#: G#dim7 over three octaves */
@@ -1232,8 +1232,8 @@ static void setup(int s)
         break;
     /* 1.5.1: the DLY page with TIME 1/8D (KNOB 1 turned: its gauge) and 1/16D (the widest name); the FX layer's map
      * with REV THROW (D5, VERB) and ECHO THROW (E5, ECHO) held */
-    case S_DLY_DOT: song.g[G_DTIME] = 10; go_title("DLY"); ui.hot_col = 0; ui.hot_t = 30; break;
-    case S_DLY_DOT16: song.g[G_DTIME] = 11; go_title("DLY"); break;
+    case S_DLY_DOT: song.g[G_DTIME] = 10; TSEL->p[P_DLY] = 50; go_title("DELAY"); ui.hot_col = 1; ui.hot_t = 30; break;
+    case S_DLY_DOT16: song.g[G_DTIME] = 11; TSEL->p[P_DLY] = 50; go_title("DELAY"); break;
     case S_FX_THROW:
         song.playing = 1; ui.layer = LAYER_FX;
         perf_held = perf_act = PF_BIT(PF_RTHR) | PF_BIT(PF_ETHR);
@@ -1355,7 +1355,7 @@ static void setup(int s)
         perf_held = perf_act = PF_BIT(PF_PHS);
         fx_say(key_at(0, 1), PF_PHS, "");
         break;
-    case S_REVERB: go_title("REVERB"); song.g[G_RTYPE] = 1; ui.hot_col = 0; ui.hot_t = 30; break;   /* TYPE: SPRING */
+    case S_REVERB: TSEL->p[P_REV] = 60; go_title("REVERB"); song.g[G_RTYPE] = 1; ui.hot_col = 1; ui.hot_t = 30; break;   /* TYPE: SPRING */
     case S_MENU_HOLD: ui.menu = 1; ui.menu_sel = MI_HOLD; settings_hold = 2; break;
     case S_MENU_LEDS: ui.menu = 1; ui.menu_sel = MI_LEDS; settings_leds = LEDS_INV; break;
     case S_MENU_ANIM_IDLE: ui.menu = 1; ui.menu_sel = MI_ANIM; menu_put(MI_ANIM, 2); break;   /* (1.2: ANIM IDLE, #135) */

@@ -222,21 +222,22 @@ static int oct_press(void)
     go_title("ENV"); frame();
     song.octave = 0;
     btn_down(B_OCTDN); frame();
-    ok = song.octave == -1;                             /* (on the press) */
+    ok = song.octave == 0;                              /* (Dah: nothing on the press) */
     btn_up(B_OCTDN); frame();
-    ok &= song.octave == -1;                            /* (nothing more when let go) */
+    ok &= song.octave == -1;                            /* (on the release) */
     press(B_OCTDN);
     ok &= song.octave == -2;
     press(B_OCTUP);
     ok &= song.octave == -1;
     btn_down(B_OCTDN); frame();
-    ok &= song.octave == -2;
     btn_down(B_OCTUP); frame(); btn_up(B_OCTUP); btn_up(B_OCTDN); frame(); frame();
-    ok &= song.octave == 0;                             /* (both: 0) */
+    ok &= song.octave == -1 && ka.st == 1u;             /* (both: ASSIGN, the octave as it was) */
+    press(B_OCTDN);
+    ok &= !ka.st && song.octave == -1;                  /* (OCT-: ASSIGN off) */
     for (v = 0; v < 5; v++) press(B_OCTDN);
     ok &= song.octave == -3;                            /* (stops at -3) */
     song.octave = 0;
-    bad += check("OCT- (1.5.6, #205 taken out): the octave down on the press as in 1.5.1, OCT+ up, both 0, -3 the floor", ok);
+    bad += check("OCT- (Dah): the octave down on its release, OCT+ up, both together ASSIGN (OCT- leaves it), -3 the floor", ok);
 
     t->p[P_ATK] = 50;
     btn_down(B_OCTDN); frame();

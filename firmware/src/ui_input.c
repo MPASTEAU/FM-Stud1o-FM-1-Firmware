@@ -598,6 +598,80 @@ static uint32_t song_leds(void)
  * starts the transport too (live recording), except on STEP's piano roll (1.2, Discussion #133): there it arms step
  * recording and the transport stays stopped: the keys write the cursor step (seq_entry), PLAY then records live.
  * Armed and playing, STEP's keys record live (at the play head) instead of writing the cursor step */
+/* (Dah) ASSIGN, HOME's four knobs: OCT- and OCT+ together, then a knob turned on any page (its parameter: the source),
+ * OCT+ (OK), then one of the four (HOME's knob that drives it from now on: the track's, trkx home). OCT+ before a
+ * source: a HOME knob back to its engine's. OCT- leaves. The header says what is asked */
+static struct { uint8_t st, src; } ka;                  /* st: 0 off, 1 the source, 2 OK?, 3 the knob, 4 the knob reset */
+static const char *ka_say(void)
+{
+    static char m[24];
+    switch (ka.st) {
+    case 1: return "TURN THE SOURCE";
+    case 2:
+        str_cpy(m, track_desc(TSEL, ka.src)->label, 8);
+        str_cpy(m + str_len(m), ": OCT+ OK", 10);
+        return m;
+    case 3: return "TURN A HOME KNOB";
+    default: return "KNOB TO RESET";
+    }
+}
+static int ka_chain_page(void) { return !ui.home && !ui.menu && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX; }
+static void ka_start(void)
+{
+    ka.st = 1;
+    ui_message(ka_say());
+}
+static void ka_oct(uint32_t oct)
+{
+    if (oct & 1u) {
+        ka.st = 0;
+        ui_message("ASSIGN OFF");
+    } else if (ka.st == 1)
+        ka.st = 4;                                      /* (no source: a knob back to its engine's) */
+    else if (ka.st == 2)
+        ka.st = 3;
+    if (ka.st)
+        ui_message(ka_say());
+}
+/* the parameter knob k edits here (HOME: its own), 0xFF none (an action, a list, a global value, the MIXER) */
+static uint32_t ka_id_of(uint32_t k)
+{
+    int16_t *vp = 0;
+    const param_desc_t *d;
+    if (ui.home)
+        d = home_param(k, &vp);
+    else if (cur_page()->scope == SC_TRACK || cur_page()->scope == SC_ENGINE || cur_page()->scope == SC_GLOBAL)
+        d = page_desc(cur_page(), k, &vp);              /* (a global page: its SEND only, below) */
+    else
+        return 0xFFu;
+    return d && vp && vp >= TSEL->p && vp < TSEL->p + P_COUNT ? (uint32_t)(vp - TSEL->p) : 0xFFu;
+}
+static void ka_knob(uint32_t k)
+{
+    char m[24] = "HOME K";
+    if (ka.st == 1 || ka.st == 2) {
+        uint32_t id = ka_id_of(k);
+        if (id == 0xFFu) {
+            ui_message("NOT A SOUND KNOB");
+            return;
+        }
+        ka.src = (uint8_t)id;
+        ka.st = 2;
+        ui_message(ka_say());
+        return;
+    }
+    trkx[song.sel % NTRK].home[k & 3u] = (uint8_t)(ka.st == 3 ? ka.src + 1u : 0u);
+    m[6] = (char)('1' + (k & 3u));
+    m[7] = ':'; m[8] = ' ';
+    if (ka.st == 3)
+        str_cpy(m + 9, track_desc(TSEL, ka.src)->label, 8);
+    else
+        str_cpy(m + 9, "RESET", 6);
+    ka.st = 0;
+    ui_message(m);
+    ui.force = 1;
+}
+
 static int rec_tap(void)                                /* 1: the arming changed */
 {
     uint8_t bit = (uint8_t)(1u << song.sel);
@@ -1168,6 +1242,13 @@ static void edit_param(uint32_t slot, int32_t steps)
             fx_chain_type(TSEL, steps);
         else if (slot == 2u)
             fx_chain_move(TSEL, steps);
+        else if (ch_cur < n && FXU_MIX[u[ch_cur]] != 0xFFu) {   /* MIX: the effect's presence (it stays in) */
+            uint32_t id = FXU_MIX[u[ch_cur]];
+            const param_desc_t *md = track_desc(TSEL, id);
+            int32_t w = param_turn(md, TSEL->p[id], accel(EN_K4, steps, md->max - md->min));
+            TSEL->p[id] = (int16_t)(w < 1 && id != P_DOUT ? 1 : w);
+            motion_capture(TSEL, id, TSEL->p[id]);
+        }
         ui.force = 1;
         return;
     }
@@ -1175,15 +1256,15 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (!d || !vp || d->max == d->min)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
-    if (pg->fam == FAM_FX && pg->scope == SC_TRACK && pg->graph != GR_FX && v <= 0 &&
+    if (pg->fam == FAM_FX && pg->graph != GR_FX && v <= 0 &&
         (vp == &TSEL->p[P_SLCR] || vp == &TSEL->p[P_ITYPE] || vp == &TSEL->p[P_DIST] || vp == &TSEL->p[P_DKSRC] ||
-         vp == &TSEL->p[P_IMIX])) {                     /* (Dah) an effect's own page: it stays in the chain (CHAIN's
+         vp == &TSEL->p[P_IMIX] || vp == &TSEL->p[P_CHOR] || vp == &TSEL->p[P_DLY] || vp == &TSEL->p[P_REV])) {                     /* (Dah) an effect's own page: it stays in the chain (CHAIN's
                                                          * REC takes it out), its type or amount at its least */
         v = 1;
         ui_message("REMOVE IT IN CHAIN");
     }
     *vp = (int16_t)v;
-    if (pg->scope != SC_GLOBAL) {
+    if (vp >= TSEL->p && vp < TSEL->p + P_COUNT) {      /* (Dah: a track's value, a send on a global page too) */
         if (motion_param((uint32_t)(vp - TSEL->p))) {   /* (Dah: STEP's automation lane shows the last one turned) */
             ui.auto_id = (uint8_t)((uint32_t)(vp - TSEL->p) + 1u);
             ui.auto_trk = (uint8_t)song.sel;
@@ -1315,20 +1396,25 @@ static void act_do(void)
  * that began there; both down together (UPDATE MODE, main.c) is no tap. Bit 0 OCT-, bit 1 OCT+ */
 static uint32_t oct_taps(uint32_t pressed, int here)
 {
-    static uint8_t down, chord;
+    static uint8_t down, chord, where;                  /* (Dah) where: pressed where they answer, a bit each */
     uint32_t dn = panel.btn[B_OCTDN], up = panel.btn[B_OCTUP];
-    uint32_t now = ((fm1_in.buttons >> dn) & 1u) | ((fm1_in.buttons >> up) & 1u) << 1, tap;
-    if (here)
-        down |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
+    uint32_t now = ((fm1_in.buttons >> dn) & 1u) | ((fm1_in.buttons >> up) & 1u) << 1, tap, ch = 0;
+    uint32_t p = ((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1;
+    down |= (uint8_t)p;
+    where = (uint8_t)(here ? where | p : where & ~p);
+    if (now == 3u && !chord)
+        ch = 4u;                                        /* (Dah) both down: once, the knob ASSIGN */
     if (now == 3u)
         chord = 1;
-    tap = down & ~now;
+    tap = down & ~now & 3u;
     down &= (uint8_t)now;
     if (chord) {
         tap = 0;
         chord = now != 0u;
     }
-    return tap;
+    /* bits 0, 1: a tap pressed where they answer (and let go there: here); bits 4, 5: pressed elsewhere (Dah: the
+     * octave, on its release); bit 2: ASSIGN */
+    return ((tap & where) & (here ? 3u : 0u)) | (tap & ~where & 3u) << 4 | ch;
 }
 
 /* MENU > CONTROL > CHORD ENTRY ADD (1.2, #155: chords with one hand): a key's notes go into the cursor step beside what
@@ -1467,7 +1553,8 @@ static void presets_turn(int32_t s)
 /* (Dah) CHAIN: OCT+ opens the page of the effect picked; on + ADD, adds one */
 static void chain_open(void)
 {
-    static const uint8_t ID[FXU_N_ALL] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO, P_DKSRC, P_CHOR, P_CHOR, P_CHOR};
+    static const uint8_t ID[FXU_N_ALL] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO, P_DKSRC, PS_TRK | P_CHOR, PS_TRK | P_DLY,
+                                          PS_TRK | P_REV};
     uint8_t l[FXU_N_ALL];
     uint32_t n = fx_list(TSEL, l), u, i;
     if (ch_cur >= n) {
@@ -1691,7 +1778,7 @@ static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
     uint32_t home, rec, save;
-    uint32_t oct;
+    uint32_t oct, oct_plain;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
@@ -1739,7 +1826,9 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_REC]) & 1u) && ui.ly == LAYER_REC)
         ui.rec_t0 |= 2u;                                /* (REC is its layer's button now: its tap is layer_tap's) */
     layer_oct_open(pressed);                            /* (OCT± with a SET layer's button down: it opens now) */
-    oct = oct_taps(pressed, ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on);
+    oct_plain = !(ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || ka_chain_page() ||
+                  ka.st);                               /* (Dah: the octave, where nothing else takes OCT- / OCT+) */
+    oct = oct_taps(pressed, !oct_plain);                /* (on their release; a tap where its press began) */
     oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();
@@ -1939,16 +2028,7 @@ static void ui_input(void)
         case B_OCTDN:
         case B_OCTUP: {
             uint32_t both = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]);
-            if (b == B_OCTUP && !ui.home && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {
-                chain_open();                           /* (Dah) CHAIN: the unit picked, its page */
-                break;
-            }
-            if (act_cols() || layer_set_open() || ui.ml.on)   /* action pages: enter / back (below); SET layers: OCT-; */
-                break;                                  /* MIDI LEARN: clear / done (below) */
-            if ((fm1_in.buttons & both) == both)
-                song.octave = 0;
-            else
-                song.octave += b == B_OCTDN ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
+            (void)both;                                 /* (Dah: on release, below: OCT- and OCT+ together are ASSIGN) */
             break;
         }
         default:                                        /* page buttons (GLO SCL ENV LFO EDIT ARP): when let go */
@@ -1962,7 +2042,18 @@ static void ui_input(void)
     for (id = 0; b; id++, b >>= 1)
         if (b & 1u)
             page_tap(panel_btn_of(id));
-    if (act_cols() && (oct & 2u)) {                     /* action pages: OCT+ does the picked action, */
+    if (ka.st && ui.msg_t < 4u)
+        ui_message(ka_say());                           /* (Dah) ASSIGN: what it asks, held in the header */
+    if (oct & 4u && !ui.menu && !ui.confirm && !name_on()) {   /* (Dah) OCT- and OCT+ together: ASSIGN a HOME knob */
+        ka_start();
+    } else if (ka.st && (oct & 0x33u)) {
+        ka_oct(oct | oct >> 4);
+    } else if (oct & 0x30u) {                           /* (Dah) the octave, on release (pressed where nothing else
+                                                         * takes OCT- / OCT+) */
+        song.octave += oct & 0x10u ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
+    } else if (ka_chain_page() && (oct & 2u)) {
+        chain_open();                                   /* (Dah) CHAIN: the effect picked, its page (or + ADD) */
+    } else if (act_cols() && (oct & 2u)) {              /* action pages: OCT+ does the picked action, */
         act_do();
     } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it, or (none picked) goes HOME */
         if (cur_page()->graph != GR_PATS && ui.act)
@@ -2034,6 +2125,10 @@ static void ui_input(void)
         uint64_t held;
         if ((s = panel_enc(EN_K1 + k)) == 0)
             continue;
+        if (ka.st) {                                    /* (Dah) ASSIGN: the knob names, it edits nothing */
+            ka_knob(k);
+            continue;
+        }
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */
             ui.pg_down &= (uint16_t)~(1u << panel.btn[B_LFO]);
         if ((held = lock_held()) != 0u) {               /* a step held on STEP: KNOB k locks (parameter locks) */

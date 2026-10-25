@@ -489,6 +489,7 @@ enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_
        GR_LDRAW, GR_FILE, GR_PATTERN };   /* (GR_PATTERN: a track's patterns, ui_pattern.c) */   /* (HA HA HE HU: LFO DRAW, ui_lfodraw.c; FILE, the projects: projfs.c) */   /* (GR_DLANE..: DRUM's lane
                                  * pages, ui_drumlane.c; GR_DSYN..: a SYN lane's layer set) */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
 
+#define PS_TRK 0x80u                     /* (Dah) on a global page: this id is a track parameter (the selected track's) */
 typedef struct {
     const char *title;
     uint8_t fam, scope, graph;
@@ -515,12 +516,14 @@ static const page_t PAGES[] = {
     {"EQ", FAM_FX, SC_TRACK, GR_NONE, {P_EQLO, P_EQHI, P_EQ1F, P_EQ1G}},   /* (Dah) the EQ (fx_eq.c): its spectrum */
     {"EQ 2", FAM_FX, SC_TRACK, GR_NONE, {P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G}},   /* BAND 2, BAND 3 */
     {"SIDECHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (HA HA HE HU, fx.c duck_part) */
-    {"SENDS", FAM_FX, SC_TRACK, GR_NONE, {P_CHOR, P_DLY, P_REV, 0xFF}},   /* (Dah) to GLO's CHORUS, DLY, REVERB */
+    /* (Dah) the send effects, as the others: the track's SEND (PS_TRK: a track parameter on a global page) and the
+     * buses' own settings, shared by every track (were GLO's) */
+    {"CHORUS", FAM_FX, SC_GLOBAL, GR_NONE, {PS_TRK | P_CHOR, G_CRATE, G_CDEPTH, 0xFF}},
+    {"DELAY", FAM_FX, SC_GLOBAL, GR_NONE, {PS_TRK | P_DLY, G_DTIME, G_DFDBK, G_DCOLOR}},
+    {"DELAY 2", FAM_FX, SC_GLOBAL, GR_NONE, {G_DMIX, 0xFF, 0xFF, 0xFF}},
+    {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {PS_TRK | P_REV, G_RTYPE, G_RSIZE, G_RDAMP}},   /* TYPE: ROOM / SPRING / HALL */
     {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's first (1.2; up to 1.1.5 SEQ's); HA HA HE HU: then
                                                                                * the global FX, DLY REVERB CHORUS (FX: the track's) */
-    {"DLY", FAM_GLO, SC_GLOBAL, GR_NONE, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX}},
-    {"REVERB", FAM_GLO, SC_GLOBAL, GR_NONE, {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}},   /* TYPE: ROOM / SPRING / HALL */
-    {"CHORUS", FAM_GLO, SC_GLOBAL, GR_NONE, {G_CRATE, G_CDEPTH, 0xFF, 0xFF}},
     {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, 0xFF, 0xFF}},   /* SCL again: the chord keys (chord.c) */
     {"EDIT 1", FAM_EDIT, SC_ENGINE, GR_NONE, {P_E0, P_E1, P_E2, P_E3}},
@@ -595,6 +598,10 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     if (pg->scope == SC_STEP || pg->scope == SC_TRK) {
         *valp = 0;
         return 0;
+    }
+    if (pg->scope == SC_GLOBAL && (id & PS_TRK)) {   /* (Dah) a send effect's SEND: the track's */
+        *valp = &TSEL->p[id & ~PS_TRK];
+        return track_desc(TSEL, id & ~PS_TRK);
     }
     if (pg->scope == SC_GLOBAL) {
         *valp = &song.g[id];
