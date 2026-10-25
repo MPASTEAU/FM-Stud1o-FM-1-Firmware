@@ -9702,10 +9702,11 @@ static int test_home_tracks(void)
     t->step[8] = (step_t){{64}, 1, ST_NOTE, SF_ACCENT, 100};
     t->step[10] = (step_t){{0}, 0, ST_TIE, 0, 100};     /* (a TIE after an empty step: nothing to carry) */
     go_home(); frame();
-    ok = rk_px(0, 0, 6) == T_THEME && rk_px(1, 0, 9) == T_LINE && rk_px(1, 0, 5) == T_SURF &&   /* a note, empty */
+    ok = rk_px(0, 0, 10) == T_THEME && rk_px(1, 0, 12) == T_LINE && rk_px(1, 0, 5) == T_SURF &&   /* a note (Dah: at its
+                                                         * height, 60 the page's lowest), empty */
          rk_px(5, 0, 6) == ux_mix(T_SURF, T_THEME, 55) && rk_px(6, 0, 6) == ux_mix(T_SURF, T_THEME, 55) &&   /* tied */
-         rk_px(8, 0, 6) == T_TEXT &&                                                        /* accented */
-         rk_px(10, 0, 9) == T_LINE && rk_px(10, 0, 6) == T_SURF &&                          /* a lone TIE */
+         rk_px(8, 0, 2) == T_TEXT &&                                                        /* accented (64: the top) */
+         rk_px(10, 0, 12) == T_LINE && rk_px(10, 0, 6) == T_SURF &&                          /* a lone TIE */
          rk_bg(0) == T_SURF && rk_bg(1) == T_RAISE && home_tracks() && large_kind() == LK_OFF;   /* T2 selected */
     bad += check("HOME > TRACKS (the rack): a row's steps: notes, empty stubs, TIEs carried on (half), accents, a lone TIE", ok);
     song.playing = 1;                                   /* the play head on step 3 (empty), then on the note 4 */
@@ -9721,17 +9722,17 @@ static int test_home_tracks(void)
     t->step[20] = (step_t){{65}, 1, ST_NOTE, 0, 100};
     t->seq_idx = 21;
     frame();
-    ok = rk_px(4, 0, 6) == T_THEME && rk_px(0, 0, 9) == T_LINE && rk_ring(5, 0);   /* playing 21 = its 6th */
+    ok = rk_px(4, 0, 6) == T_THEME && rk_px(0, 0, 12) == T_LINE && rk_ring(5, 0);   /* playing 21 = its 6th */
     t->seq_idx = 36;                                   /* the last page: 8 steps, the rest blank */
     frame();
-    ok &= rk_px(7, 0, 9) == T_LINE && rk_px(8, 0, 9) == T_SURF;
+    ok &= rk_px(7, 0, 12) == T_LINE && rk_px(8, 0, 12) == T_SURF;
     song.playing = 0;                                   /* stopped: T1 not selected, its first page */
     frame();
-    ok &= rk_px(0, 0, 6) == T_THEME && rk_px(4, 0, 6) == T_THEME;
+    ok &= rk_px(0, 0, 10) == T_THEME && rk_px(4, 0, 6) == T_THEME;
     song.sel = 0;                                       /* .. selected: its cursor's page */
     ui.cursor = 20; ui.bank = 1;
     frame();
-    ok &= rk_px(4, 0, 6) == T_THEME && rk_px(0, 0, 9) == T_LINE && rk_bg(0) == T_RAISE;
+    ok &= rk_px(4, 0, 6) == T_THEME && rk_px(0, 0, 12) == T_LINE && rk_bg(0) == T_RAISE;
     bad += check("HOME > TRACKS: LEN > 16: the play head's page (stopped: the cursor's, selected), past LEN blank", ok);
 
     song.sel = 1;
@@ -9743,7 +9744,7 @@ static int test_home_tracks(void)
     t->step[0].hit = 1; t->step[2].hit = 1 | 8; t->step[4].hit = 2; t->step[4].acc = 2;
     t->p[P_MUTE] = 0;
     frame();
-    ok &= rk_px(0, 3, 6) == T_THEME && rk_px(2, 3, 6) == T_THEME && rk_px(4, 3, 6) == T_TEXT && rk_px(1, 3, 9) == T_LINE;
+    ok &= rk_px(0, 3, 6) == T_THEME && rk_px(2, 3, 6) == T_THEME && rk_px(4, 3, 6) == T_TEXT && rk_px(1, 3, 12) == T_LINE;
     bad += check("HOME > TRACKS: DRUM hits as notes, an accented hit TEXT", ok);
 
     t = &trk[2];                                        /* T3 muted: its cushion and steps DIM, no meter */

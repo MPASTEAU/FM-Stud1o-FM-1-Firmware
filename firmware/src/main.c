@@ -99,16 +99,13 @@ static void fm1_fault(const fm1_crash_t *c)
 }
 
 #if FELUCCA_DEMO
-/* Dah's power-on sound (FELUCCA_DEMO): slow and dark, 62 BPM, seven tracks (song.ntrk), no project written, no SONG.
- * PLAY plays it, a loop of four bars (64 x 1/16) over a D pedal, from tension to its resolution: Dm9, Eb/D (the minor
- * second against the pedal), Gm(add9)/D (a cluster), A7b9 (the dominant, its flat ninth), back home on Dm:
- *   track 1  PHYS HARP: low arpeggios of the chords in 1/8, dull, ringing long
- *   track 2  PHYS PLUCK: a low, sparse tune over it, three notes a bar (the b9 and the C# leading home in bar 4)
- *   track 3  ANALOG SUB BASS: D1 for three bars, A1 for the dominant, loud and held
- *   track 4  DRUM DEEP KIT: a slow heartbeat, a dull round kick twice a bar (lub-dub: a 1/16 apart), dry
- *   track 5  DRUM KIT: a dark snare on the third beat of bars 2 and 4, drowned in the hall reverb
- *   track 6  VOICE CHOIR AAH: a short sung stab on each chord, far behind
- *   track 7  FM6 ORGAN: the chords held, the bed under everything */
+/* Dah's power-on sound (FELUCCA_DEMO): slow and dark, D minor at 58 BPM, seven tracks (song.ntrk), two patterns each
+ * (four bars, 64 x 1/16) and a SONG that plays them (pattern 1 twice, pattern 2 twice); no project written:
+ *   pattern 1, the dread: a D drone, Dm(add9) and Gm/D on the organ, a sub on D, the heartbeat, a bowed metal far off
+ *   pattern 2, the turn: Eb/D (the minor second on the pedal), Gm(add9)/D, Bb/D, A7b9 back home; the sub moves with it,
+ *            the heartbeat quicker, the choir on each chord, the snare deep in the hall
+ *   track 1  PHYS DRONE STRING   track 2  PHYS BOWED METAL   track 3  ANALOG SUB BASS   track 4  DRUM DEEP KIT
+ *   track 5  DRUM KIT (a snare)  track 6  VOICE CHOIR AAH (stabs, the VP-330 ensemble)    track 7  FM6 ORGAN */
 static void demo_note(step_t *s, uint32_t note, uint32_t vel)
 {
     s->note[s->n < 4u ? s->n : 3u] = (uint8_t)note;
@@ -146,21 +143,53 @@ static void dm_chord(track_t *t, uint32_t at, uint32_t len, const uint8_t *n, ui
         demo_note(&t->step[at], n[i], vel);
     demo_hold(t, at, len);
 }
+/* one bar's chord, held, on track t from bar b (16 steps) */
+static void dm_bar(track_t *t, uint32_t b, const uint8_t *n, uint32_t k, uint32_t vel) { dm_chord(t, b * 16u, 16, n, k, vel); }
+/* pattern p (1 or 2) of the demo onto the tracks' steps (all empty) */
+static void demo_pattern(uint32_t p)
+{
+    static const uint8_t ORG1[4][4] = {{50, 53, 57, 64}, {50, 53, 57, 64}, {50, 55, 58, 62}, {50, 55, 58, 62}};   /* Dm9 Gm/D */
+    static const uint8_t ORG2[4][4] = {{50, 51, 55, 58}, {50, 55, 57, 58}, {50, 53, 58, 62}, {49, 55, 58, 64}};   /* Eb/D
+                                                     * Gm(add9)/D Bb/D A7b9 */
+    static const uint8_t CHO2[4][3] = {{63, 67, 70}, {62, 67, 70}, {62, 65, 70}, {61, 67, 70}};
+    static const uint8_t SUB2[4] = {26, 26, 22, 21};   /* D1 D1 Bb0 A0 */
+    uint32_t i;
+    track_t *t = &trk[0];                               /* the drone: D, held, an octave under it in pattern 2 */
+    dm_chord(t, 0, 64, p == 1u ? (const uint8_t[]){38} : (const uint8_t[]){26, 38}, p == 1u ? 1u : 2u, 84);
+    t = &trk[1];                                        /* the bowed metal: far off, rare */
+    demo_note(&t->step[p == 1u ? 8u : 0u], p == 1u ? 74 : 75, 58);
+    demo_hold(t, p == 1u ? 8u : 0u, 12);
+    demo_note(&t->step[40], p == 1u ? 69 : 73, 52);
+    demo_hold(t, 40, 12);
+    t = &trk[2];                                        /* the sub */
+    for (i = 0; i < 4u; i++)
+        dm_bar(t, i, p == 1u ? (const uint8_t[]){26} : &SUB2[i], 1, 100);
+    t = &trk[3];                                        /* the heartbeat: twice a bar, then four times */
+    for (i = 0; i < 64u; i += p == 1u ? 8u : 4u) {
+        demo_hit(t, i, 1u << 0, 120);                   /* lub (lane 0: KICK) */
+        demo_hit(t, i + 1u, 1u << 0, 80);               /* dub */
+    }
+    t = &trk[4];                                        /* the snare, far in the hall: pattern 2 only */
+    if (p == 2u) {
+        demo_hit(t, 24, 1u << 1, 58);
+        demo_hit(t, 56, 1u << 1, 54);
+    }
+    t = &trk[5];                                        /* the choir: a stab on each chord of pattern 2, two in pattern 1 */
+    for (i = 0; i < 4u; i++)
+        if (p == 2u || !(i & 1u))
+            dm_chord(t, i * 16u, 3, p == 2u ? CHO2[i] : (const uint8_t[]){62, 65, 69}, 3, 76);
+    t = &trk[6];                                        /* the organ, the bed */
+    for (i = 0; i < 4u; i++)
+        dm_bar(t, i, p == 1u ? ORG1[i] : ORG2[i], 4, 64);
+}
 static void felucca_demo(void)
 {
-    static const uint8_t HARP[4][4] = {{38, 45, 50, 53}, {38, 46, 51, 55}, {38, 46, 50, 55}, {33, 40, 43, 46}};   /* Dm
-                                                     * Eb/D Gm/D A7b9, low */
-    static const uint8_t ARP[8] = {0, 1, 2, 3, 2, 1, 2, 3};
-    static const uint8_t MEL[4][3] = {{69, 65, 64}, {70, 67, 63}, {69, 67, 62}, {70, 67, 61}};   /* the pluck's, steps 0 6 12 */
-    static const uint8_t ORGAN[4][4] = {{50, 53, 57, 64}, {50, 51, 55, 58}, {50, 55, 57, 58}, {49, 55, 58, 64}};
-    static const uint8_t CHOIR[4][3] = {{62, 65, 69}, {63, 67, 70}, {62, 67, 70}, {61, 67, 70}};
-    static const uint8_t SUB[4] = {26, 26, 26, 33};    /* D1 D1 D1 A1 */
-    uint32_t i;
+    uint32_t i, k;
     track_t *t;
-    song.g[G_BPM] = 62;
+    song.g[G_BPM] = 58;
     song.g[G_RTYPE] = 2;                      /* HALL, big and dark */
     song.g[G_RSIZE] = 124;
-    song.g[G_RDAMP] = 104;
+    song.g[G_RDAMP] = 108;
     song.g[G_DFDBK] = 70;
     song.ntrk = 7;                            /* (the last: its power-on sound, hidden) */
     for (i = 0; i < NTRK; i++) {
@@ -168,57 +197,54 @@ static void felucca_demo(void)
         trk[i].p[P_SLEN] = 64;
         trk[i].p[P_SDIV] = 2;                 /* 1/16 */
     }
-    t = &trk[0];                              /* the harp, low and dull */
-    demo_sound(t, ENGI_PHYS, 8);              /* PHYS HARP */
-    t->p[P_E0 + 2] = 34;                      /* BRIT down */
-    t->p[P_E0 + 3] = 96;                      /* DAMP: rings long */
-    t->p[P_LEVEL] = 90; t->p[P_REV] = 84; t->p[P_DLY] = 20;
-    for (i = 0; i < 32u; i++)
-        demo_note(&t->step[i * 2u], HARP[i / 8u][ARP[i % 8u]], i % 8u ? 56 : 72);
-    t = &trk[1];                              /* the pluck, the tune, low */
-    demo_sound(t, ENGI_PHYS, 2);              /* PHYS PLUCK */
-    t->p[P_E0 + 2] = 44;                      /* BRIT down */
-    t->p[P_LEVEL] = 88; t->p[P_REV] = 76; t->p[P_DLY] = 44;
-    for (i = 0; i < 12u; i++)
-        demo_note(&t->step[(i / 3u) * 16u + (i % 3u) * 6u], MEL[i / 3u][i % 3u], 66);
-    t = &trk[2];                              /* the floor: a loud sub */
+    t = &trk[0];
+    demo_sound(t, ENGI_PHYS, 7);              /* PHYS DRONE STRING */
+    t->p[P_E0 + 2] = 40;                      /* BRIT down: dark */
+    t->p[P_LEVEL] = 92; t->p[P_REV] = 70;
+    t = &trk[1];
+    demo_sound(t, ENGI_PHYS, 3);              /* PHYS BOWED METAL */
+    t->p[P_E0 + 2] = 46;
+    t->p[P_LEVEL] = 80; t->p[P_REV] = 110; t->p[P_DLY] = 50;
+    t = &trk[2];
     demo_sound(t, 0, 7);                      /* ANALOG SUB BASS */
     t->p[P_ATK] = 60; t->p[P_REL] = 90; t->p[P_LEVEL] = 96; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
-    for (i = 0; i < 4u; i++)
-        dm_chord(t, i * 16u, 16, &SUB[i], 1, 100);
-    t = &trk[3];                              /* the heartbeat: dull, slow, dry */
-    demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT */
+    t = &trk[3];
+    demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT: the heartbeat, dull and dry */
     t->p[P_E0 + 1] = 46;                      /* TUNE down */
     t->p[P_E0 + 2] = 18;                      /* TONE dark: muffled */
     t->p[P_E0 + 3] = 84;                      /* DECY a little longer */
     t->p[P_E0 + 4] = 6;                       /* SNAP: no click */
     t->p[P_E0 + 6] = 1;                       /* KICK ROUND */
     t->p[P_LEVEL] = 100; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
-    for (i = 0; i < 64u; i += 8u) {
-        demo_hit(t, i, 1u << 0, 120);             /* lub (lane 0: KICK) */
-        demo_hit(t, i + 1u, 1u << 0, 80);         /* dub */
-    }
-    t = &trk[4];                              /* the snare, far away in the hall */
-    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT */
+    t = &trk[4];
+    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: the snare */
     t->p[P_E0 + 2] = 30;                      /* TONE dark */
     t->p[P_LEVEL] = 72; t->p[P_REV] = 127; t->p[P_DLY] = 22;
-    demo_hit(t, 24, 1u << 1, 58);             /* (lane 1: SNARE) bar 2's third beat */
-    demo_hit(t, 56, 1u << 1, 54);             /* .. bar 4's */
-    t = &trk[5];                              /* the choir: a short stab on each chord, behind */
-    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH */
+    t = &trk[5];
+    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH: stabs */
     t->p[P_E0 + 4] = 72;                      /* BUZZ up: a voiced throat */
     t->p[P_E0 + 5] = 12;                      /* BRTH down */
     t->p[P_E0 + 6] = 100;                     /* Q: the formants sharper, more vocal */
     t->p[P_E0 + 7] = 24;                      /* RAND: the voices apart */
     t->p[P_ATK] = 18; t->p[P_DEC] = 70; t->p[P_SUS] = 0; t->p[P_REL] = 80;   /* one shot: up and gone */
     t->p[P_LEVEL] = 84; t->p[P_REV] = 110; t->p[P_DLY] = 30;
-    for (i = 0; i < 4u; i++)
-        dm_chord(t, i * 16u, 3, CHOIR[i], 3, 76);
-    t = &trk[6];                              /* the organ, the bed */
+    t = &trk[6];
     demo_sound(t, ENGI_FM6, 6);               /* FM6 ORGAN */
     t->p[P_ATK] = 40; t->p[P_REL] = 70; t->p[P_LEVEL] = 62; t->p[P_REV] = 70; t->p[P_CHOR] = 40;
-    for (i = 0; i < 4u; i++)
-        dm_chord(t, i * 16u, 16, ORGAN[i], 4, 64);
+    demo_pattern(1);
+    for (k = 0; k < 7u; k++)                  /* pattern 1 kept, 2 written, 1 back on the tracks */
+        (void)pattern_new(k, 0);
+    demo_pattern(2);
+    for (k = 0; k < 7u; k++)
+        (void)pattern_go(k, 1);
+    chain_defaults(&chain_config);            /* the SONG: 1 twice, 2 twice (GLO > SONG; PLAY there plays it) */
+    chain_config.count = 2;
+    for (k = 0; k < NTRK; k++) {
+        chain_config.row[0].slot[k] = k < 7u ? 1u : (uint8_t)CHAIN_SILENT;
+        chain_config.row[1].slot[k] = k < 7u ? 2u : (uint8_t)CHAIN_SILENT;
+    }
+    chain_config.row[0].repeat = 2;
+    chain_config.row[1].repeat = 2;
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }

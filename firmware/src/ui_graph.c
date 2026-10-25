@@ -2226,25 +2226,42 @@ static void rack_row(uint32_t c)
             carry = s[i].time == ST_NOTE && (s[i].n || s[i].hit);
             break;
         }
-    for (i = 0; i < 16u && p0 + i < len; i++) {
-        const step_t *st = &s[p0 + i];
-        int32_t bx = RK_SX + (int32_t)i * RK_SP;
-        uint16_t under = bg;
-        if (i == ph) {                                 /* the step playing: ringed */
-            cv_rrect(bx - 1, 1, 8, 12, 2, T_TEXT, bg);
-            cv_rrect(bx, 2, 6, 10, 2, bg, T_TEXT);
+    {   /* (Dah) a melodic track: a mini piano roll, each note at its height between the page's lowest and highest
+         * (a chord: its notes), a TIE on at the height carried; DRUM: its hits as before */
+        int32_t lo = 127, hi = 0, cy = 7, j;
+        int roll = !drum_track(&trk[c % NTRK]);
+        for (i = 0; roll && i < 16u && p0 + i < len; i++)
+            for (j = 0; j < s[p0 + i].n && j < 4; j++) {
+                lo = s[p0 + i].note[j] < lo ? s[p0 + i].note[j] : lo;
+                hi = s[p0 + i].note[j] > hi ? s[p0 + i].note[j] : hi;
+            }
+        for (i = 0; i < 16u && p0 + i < len; i++) {
+            const step_t *st = &s[p0 + i];
+            int32_t bx = RK_SX + (int32_t)i * RK_SP;
+            uint16_t under = bg;
+            if (i == ph) {                             /* the step playing: ringed */
+                cv_rrect(bx - 1, 1, 8, 12, 2, T_TEXT, bg);
+                cv_rrect(bx, 2, 6, 10, 2, bg, T_TEXT);
+            }
+            if (st->time == ST_NOTE && (st->n || st->hit)) {
+                int acc = (st->flags & SF_ACCENT) || (st->acc & st->hit);
+                if (roll && st->n && hi >= lo) {
+                    for (j = 0; j < st->n && j < 4; j++) {
+                        int32_t ny = hi > lo ? 10 - (st->note[j] - lo) * 8 / (hi - lo) : 6;
+                        cv_rect(bx, ny, 6, 2, acc && !mute ? T_TEXT : tc);
+                        if (!j) cy = ny;
+                    }
+                } else
+                    cv_rrect(bx, 3, 6, 8, 2, acc && !mute ? T_TEXT : tc, under);
+                carry = 1;
+                continue;
+            }
+            if (st->time == ST_TIE && carry)           /* carried on: half the colour (the roll: at its height) */
+                cv_rect(bx - 1, roll ? cy : 6, 8, 2, ux_mix(bg, tc, 55));
+            else
+                cv_rect(bx, 12, 6, 1, T_LINE);
+            carry = st->time == ST_TIE && carry;
         }
-        if (st->time == ST_NOTE && (st->n || st->hit)) {
-            int acc = (st->flags & SF_ACCENT) || (st->acc & st->hit);
-            cv_rrect(bx, 3, 6, 8, 2, acc && !mute ? T_TEXT : tc, under);
-            carry = 1;
-            continue;
-        }
-        if (st->time == ST_TIE && carry)               /* carried on: half the colour */
-            cv_rrect(bx, 5, 6, 4, 1, ux_mix(bg, tc, 55), under);
-        else
-            cv_rect(bx, 9, 6, 2, T_LINE);
-        carry = st->time == ST_TIE && carry;
     }
     rack_meter(c, bg);
     cv_blit(3, (uint32_t)y);

@@ -11,7 +11,7 @@
 #define FW_NAME "DAH"    /* this fork's name: the splash, ABOUT, the crash screen (Felucca's credits stay) */
 #endif
 #ifndef FW_SPLASH_MS
-#define FW_SPLASH_MS 2500u       /* the power-on splash's time on the screen (main.c; Felucca's: 400) */
+#define FW_SPLASH_MS 700u        /* the power-on splash's time on the screen (main.c; Felucca's: 400; Dah: as long as the LED sweep, ~0.7 s) */
 #endif
 #ifndef FELUCCA_DEMO
 #define FELUCCA_DEMO 0           /* power-on with the dubstep demo (main.c felucca_demo): src/felucca.c and the browser

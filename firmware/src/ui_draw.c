@@ -936,14 +936,29 @@ static void draw_lane(const track_t *t)
     }
     d = track_desc(t, id);
     cv_text_fit(4, 2, &AF_S, d->label, T_THEME, T_BG, 28);
-    for (i = 0; i < 16u && base + i < len; i++) {
-        int pt;
-        int32_t v = lane_value(t, base + i, id, &pt), x = 35 + (int32_t)i * 12 + 2;
-        int32_t h = d->max > d->min ? 1 + (v - d->min) * 12 / (d->max - d->min) : 1;
-        h = clamp(h, 1, 13);
-        cv_rect(x, 14 - h, 9, h, pt ? T_ACCENT : T_RAISE);
-        if (song.seq_mode && base + i == ui.cursor)
-            cv_rect(x, 15, 9, 2, T_TEXT);             /* the step SELECT edits */
+    {                                                   /* a curve: STEP held flat then up / down, RAMP straight on */
+        int32_t px = -1, py = 0, ramp = trkx[trk_index(t) % NTRK].curve != 0u;
+        for (i = 0; i < 16u && base + i < len; i++) {
+            int pt;
+            int32_t v = lane_value(t, base + i, id, &pt), x = 35 + (int32_t)i * 12 + 6;
+            int32_t y = d->max > d->min ? 14 - (v - d->min) * 12 / (d->max - d->min) : 14;
+            y = clamp(y, 2, 14);
+            if (px >= 0) {
+                if (ramp && pt)
+                    cv_line(px, py, x, y, T_THEME);
+                else {
+                    cv_line(px, py, x, py, T_THEME);
+                    if (y != py)
+                        cv_line(x, py, x, y, T_THEME);
+                }
+            }
+            if (pt)
+                cv_rect(x - 1, y - 1, 3, 3, T_ACCENT);   /* a point: a lock or an event */
+            if (song.seq_mode && base + i == ui.cursor)
+                cv_rect(x - 4, 16, 9, 1, T_TEXT);       /* the step SELECT edits */
+            px = x;
+            py = y;
+        }
     }
 }
 static void draw_foot_in(void)
@@ -1037,26 +1052,7 @@ static void draw_foot_in(void)
                         T_BG);                        /* the keys are the steps (Dah: armed; else they play) */
     } else if (lane_shown(t)) {
         draw_lane(t);
-    } else {
-        uint32_t i;
-        if ((ui.bank + 1u) * 16u <= (uint32_t)t->p[P_SLEN])
-            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS | AL_N(16), "footer step bars centred");
-        for (i = 0; i < 16u; i++) {                   /* row 1: the cursor's bank, 16 bars in 4 groups */
-            uint32_t si = ui.bank * 16u + i;
-            int32_t sx = bar_x(i);                    /* (centred: x 12 .. 228) */
-            const step_t *st = &seq_steps(t)[si];
-            if (si >= (uint32_t)t->p[P_SLEN])
-                continue;
-            if (step_on(st))                          /* a note: a bar (accented: the accent) */
-                cv_rrect(sx, 1, 9, 11, 2, (st->flags & SF_ACCENT) ? T_ACCENT : T_THEME, T_BG);
-            else                                      /* empty: a stub (a tie: brighter) */
-                cv_rrect(sx, 9, 9, 3, 1, st->time == ST_TIE ? T_MID : T_RAISE, T_BG);
-            if (song.seq_mode && si == ui.cursor)
-                cv_rect(sx, 14, 9, 2, T_ACCENT);        /* the step edited */
-            else if (song.playing && si == t->seq_idx)
-                cv_rect(sx, 14, 9, 2, T_TEXT);          /* the step sounding */
-        }
-    }
+    }                                                 /* (Dah: no step strip elsewhere: the pages show the steps) */
     {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, PHRASES, SONG,
          * AUTOMATION); icons: their ink on the names' capitals */
         uint32_t pi = ui.home ? ICON_NONE : page_icon(pg), ei = FELUCCA_ICONS ? engine_icon(ename) : ICON_NONE;
