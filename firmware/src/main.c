@@ -157,128 +157,157 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
         (void)motion_set_event(t, s, id, (int16_t)(v0 + (v1 - v0) * (int32_t)(s - s0) / (int32_t)(s1 > s0 ? s1 - s0 : 1u)));
     motion_set_enabled(t, 1);
 }
-/* Floating, slow and long (84 BPM in 1/16, E dorian): an organ alone, then the strings swelling, an echoing guitar's
- * arpeggio, a choir, a lead's long sliding notes; the bass and the kick land together (section 6), the full band; a
- * break, a build on toms, the climax, the outro back to the organ alone. Each track's patterns are its variants
- * (demo_var), the SONG's fourteen sections name one per track (or none): a song of 2 min 40 for a few patterns each */
-static const uint8_t DM_A[4][4] = {{55, 59, 62, 66}, {55, 59, 62, 66}, {55, 61, 64, 66}, {55, 61, 64, 66}};   /* Em9 Em9 A13 A13 */
-static const uint8_t DM_B[4][4] = {{55, 59, 64, 67}, {54, 57, 62, 66}, {55, 59, 62, 66}, {55, 59, 62, 66}};   /* Cmaj7 D6 Em9 Em9 */
-static const uint8_t DM_RA[4] = {28, 28, 33, 33}, DM_RB[4] = {36, 38, 28, 28};   /* the roots: E E A A / C D E E */
+/* Sound design, slow and long (84 BPM in 1/16, over an A pedal): a huge detuned drone (ANALOG, two oscillators, spread,
+ * a phaser) whose filter opens and closes over the whole song, a grain cloud scanning its sample (its POS, DENS, RAND
+ * moving), a flanged pad whose voices slide a semitone at a time, a vowel lead (GROWL's FM and cutoff opening), a noise
+ * that drifts, turns metal, rises; the sub (held) and the kick land together (section 6). Each track's patterns are its
+ * variants (demo_var: the drone and the cloud one a section, their curves going on from one into the next), the SONG's
+ * fourteen sections name one per track: 2 min 40 for a few kilobytes */
+static const uint8_t DM_A[4][4] = {{57, 60, 64, 71}, {57, 60, 65, 71}, {55, 60, 65, 71}, {55, 59, 64, 71}};   /* Am9 Fmaj7#11/A Gsus G6 */
+static const uint8_t DM_B[4][4] = {{57, 62, 65, 72}, {57, 62, 64, 71}, {56, 60, 64, 71}, {57, 60, 64, 71}};   /* Dm7/A Asus E/G# Am9 */
+/* the drone's cutoff at each section's start (and the song's end); the cloud's POS and DENS likewise */
+static const uint8_t DR_CUT[15] = {14, 24, 40, 52, 64, 76, 84, 90, 72, 58, 88, 96, 70, 34, 14};
+static const uint8_t CL_POS[15] = {0, 10, 24, 40, 56, 70, 82, 96, 108, 118, 127, 100, 70, 40, 0};
+static const uint8_t CL_DEN[15] = {20, 30, 44, 56, 70, 76, 84, 96, 110, 120, 127, 104, 80, 50, 20};
 /* track k's variant v (1..) onto its steps (empty) */
 static void demo_var(uint32_t k, uint32_t v)
 {
     uint32_t b, i;
     track_t *t = &trk[k];
-    int hb = (k == 0u || k == 1u || k == 2u || k == 4u || k == 7u) && v == 2u;   /* (harmony B: these tracks' v 2) */
-    const uint8_t (*h)[4] = hb || (k == 1u && v == 4u) ? DM_B : DM_A;
-    const uint8_t *rt = hb ? DM_RB : DM_RA;
+    const uint8_t (*h)[4] = k == 2u && v == 2u ? DM_B : DM_A;
+    switch (k) {
+    case 0: {                                                               /* T1 the drone: A and E, the whole section */
+        static const uint8_t D[2] = {33, 40};
+        dm_chord(t, 0, 64, D, 2, 100);
+        demo_auto(t, P_E4, 0, 56, DR_CUT[v - 1u], DR_CUT[v]);              /* its filter: one curve over the song */
+        (void)motion_set_event(t, 63, P_E4, DR_CUT[v]);
+        demo_auto(t, P_IB, 0, 56, 40 + v * 5u, 50 + v * 5u);                /* the phaser deeper and deeper */
+        trkx[0].curve = 1;
+        return;
+    }
+    case 1:                                                                 /* T2 the grain cloud: scanning */
+        for (b = 0; b < 4u; b++) {
+            static const uint8_t D[2] = {0, 0};
+            uint8_t c[2] = {DM_A[b][2], DM_A[b][3]};
+            (void)D;
+            dm_bar(t, b, c, 2, 80);
+            t->step[b * 16u + 15u].flags |= SF_SLIDE;
+        }
+        demo_auto(t, P_E0, 0, 56, CL_POS[v - 1u], CL_POS[v]);              /* POS: through the sample */
+        (void)motion_set_event(t, 63, P_E0, CL_POS[v]);
+        demo_auto(t, P_E2, 0, 56, CL_DEN[v - 1u], CL_DEN[v]);              /* DENS: thicker */
+        (void)motion_set_event(t, 63, P_E2, CL_DEN[v]);
+        trkx[1].curve = 1;
+        return;
+    default:
+        break;
+    }
     for (b = 0; b < 4u; b++) {
         uint32_t s0 = b * 16u;
-        uint8_t c[4];
         switch (k) {
-        case 0:                                                             /* T1 the organ: the chords low */
-            for (i = 0; i < 4u; i++) c[i] = (uint8_t)(h[b][i] - 12u);
-            dm_bar(t, b, c, 4, 76);
+        case 2:                                                             /* T3 the flanged pad, sliding */
+            dm_bar(t, b, h[b], 4, 84);
             t->step[s0 + 15u].flags |= SF_SLIDE;
             break;
-        case 1:                                                             /* T2 the strings */
-            dm_bar(t, b, h[b], 4, 82);
-            t->step[s0 + 15u].flags |= SF_SLIDE;
-            break;
-        case 2:                                                             /* T3 the guitar: eighths, the delay's echo */
-            for (i = 0; i < 8u; i++)
-                demo_note(&t->step[s0 + i * 2u], (uint32_t)h[b][(i < 4u ? i : 7u - i) & 3u] + 12u, i ? 76 : 92);
-            break;
-        case 3: {                                                           /* T4 the lead: long notes, sliding */
-            static const uint8_t L[3][4][2] = {{{71, 12}, {69, 4}, {66, 16}, {64, 12}},
-                                               {{71, 6}, {74, 6}, {76, 16}, {74, 12}},
-                                               {{83, 8}, {81, 8}, {79, 16}, {78, 16}}};
+        case 3: {                                                           /* T4 the vowel lead: long, sliding */
+            static const uint8_t L[2][4][2] = {{{64, 16}, {62, 16}, {60, 16}, {59, 16}},
+                                               {{69, 16}, {67, 8}, {64, 24}, {0, 0}}};
+            if (!L[v - 1u][b][1])
+                break;
             demo_note(&t->step[s0], L[v - 1u][b][0], 96);
             demo_hold(t, s0, L[v - 1u][b][1]);
-            if (L[v - 1u][b][1] == 16u)
-                t->step[s0 + 15u].flags |= SF_SLIDE;
-            else if (b < 3u && v == 2u)
-                t->step[s0 + L[v - 1u][b][1] - 1u].flags |= SF_SLIDE;
+            t->step[(s0 + L[v - 1u][b][1] - 1u) % 64u].flags |= SF_SLIDE;
             break;
         }
-        case 4:                                                             /* T5 the bass: root, fifth, the octave */
-            demo_note(&t->step[s0], rt[b], 112);
-            demo_hold(t, s0, 6);
-            demo_note(&t->step[s0 + 6u], rt[b] + 7u, 96);
-            demo_hold(t, s0 + 6u, 2);
-            demo_note(&t->step[s0 + 8u], rt[b] + 12u, 104);
-            demo_hold(t, s0 + 8u, 4);
-            demo_note(&t->step[s0 + 14u], (uint32_t)rt[(b + 1u) % 4u] - 1u, 90);   /* (a step into the next) */
-            demo_hold(t, s0 + 14u, 2);
-            t->step[s0 + 15u].flags |= SF_SLIDE;
+        case 4:                                                             /* T5 the sub: A, held */
+            if (!b) {
+                demo_note(&t->step[0], 33, 110);
+                demo_hold(t, 0, 64);
+            }
             break;
-        case 5:                                                             /* T6 the kick: 1 and the and of 3 */
-            demo_hit(t, s0, 1u << 0, 120);
-            demo_hit(t, s0 + 10u, 1u << 0, 100);
-            if (v == 2u && (b & 1u))
-                demo_hit(t, s0 + 7u, 1u << 0, 84);
+        case 5:                                                             /* T6 the kick: four on the floor */
+            for (i = 0; i < 16u; i += 4u)
+                demo_hit(t, s0 + i, 1u << 0, i ? 100 : 114);
+            if (v == 2u && b == 3u)
+                demo_hit(t, s0 + 14u, 1u << 0, 76);
             break;
         case 6:                                                             /* T7 the kit */
             if (v <= 2u) {
-                demo_hit(t, s0 + 4u, 1u << 1, 112);                         /* the snare on 2 and 4 */
-                demo_hit(t, s0 + 12u, 1u << 1, 116);
-                for (i = 0; i < 16u; i += 2u)
-                    demo_hit(t, s0 + i, 1u << 3, i % 4u ? 40 : 56);         /* eighths on the hat */
+                demo_hit(t, s0 + 4u, 1u << 2, 92);                          /* the clap on 2 and 4 */
+                demo_hit(t, s0 + 12u, 1u << 2, 96);
+                for (i = 2; i < 16u; i += 4u)
+                    demo_hit(t, s0 + i, 1u << 3, 44);                       /* a hat off the beat */
                 if (v == 2u && b == 3u)
                     for (i = 8; i < 16u; i++)
-                        demo_hit(t, s0 + i, 1u << 5, 116 - (i - 8u) * 6u);  /* a tom fill down */
+                        demo_hit(t, s0 + i, 1u << 5, 112 - (i - 8u) * 5u);  /* a tom fill down */
             } else if (v == 3u) {
                 for (i = 0; i < 16u; i += 2u)                               /* the build: toms, louder */
-                    demo_hit(t, s0 + i, 1u << 5, 50 + b * 14u + i * 2u);
-            } else if (b >= 2u) {                                           /* v 4: into the boom, toms then snare */
+                    demo_hit(t, s0 + i, 1u << 5, 46 + b * 16u + i * 2u);
+            } else if (b >= 2u) {                                           /* into the boom, toms then snare */
                 for (i = 0; i < 16u; i += b == 3u && i >= 8u ? 1u : 2u)
                     demo_hit(t, s0 + i, b == 3u && i >= 8u ? 1u << 1 : 1u << 5, 50 + (b - 2u) * 30u + i * 3u);
             }
             break;
-        default:                                                            /* T8 the choir: a voice held */
-            demo_note(&t->step[s0], (uint32_t)h[b][2] + 12u, 74);
-            demo_hold(t, s0, 16);
-            t->step[s0 + 15u].flags |= SF_SLIDE;
+        default:                                                            /* T8 the noise: held */
+            if (!b) {
+                demo_note(&t->step[0], 57, 90);
+                demo_hold(t, 0, 64);
+            }
             break;
         }
     }
-    if (k == 1u) {                                                          /* the strings: one long opening */
-        static const int8_t F[6][2] = {{0, 0}, {24, 56}, {56, 88}, {96, 104}, {100, 104}, {100, 30}};
-        demo_auto(t, P_E4, 0, 56, F[v][0], F[v][1]);
-        (void)motion_set_event(t, 63, P_E4, F[v][1]);
-        trkx[1].curve = 1;
+    if (k == 3u) {                                                          /* the vowel: FM and cutoff opening */
+        demo_auto(t, P_E2, 0, 56, 10, 96);
+        demo_auto(t, P_E4, 0, 56, 40, 100);
+        trkx[3].curve = 1;
+    } else if (k == 7u) {                                                   /* the noise: wind, metal, a rise */
+        if (v == 1u) {
+            demo_auto(t, P_E2, 0, 56, 30, 60);
+            (void)motion_set_event(t, 0, P_LEVEL, 40);
+        } else if (v == 2u) {
+            (void)motion_set_event(t, 0, P_E0, 3);                          /* METAL */
+            demo_auto(t, P_E2, 0, 56, 40, 100);
+            demo_auto(t, P_E7, 0, 56, 0, 70);                               /* crushed, more and more */
+            (void)motion_set_event(t, 0, P_LEVEL, 56);
+        } else {
+            demo_auto(t, P_E2, 0, 56, 30, 127);                             /* the rise */
+            demo_auto(t, P_EQHI, 0, 56, 40, 118);
+            demo_auto(t, P_LEVEL, 0, 56, 20, 110);
+            (void)motion_set_event(t, 63, P_LEVEL, 0);
+        }
+        trkx[7].curve = 1;
     }
 }
 static void felucca_demo(void)
 {
-    /* the song: each section's variant per track (0: silent there) */
+    /* the song: each section's variant per track (0: silent there); the drone and the cloud one a section */
     static const uint8_t SEC[14][8] = {
-        {1, 0, 0, 0, 0, 0, 0, 0},             /* the organ alone */
-        {1, 1, 0, 0, 0, 0, 0, 0},             /* the strings swelling */
-        {1, 2, 1, 0, 0, 0, 0, 0},             /* the guitar's echoes */
-        {1, 2, 1, 0, 0, 0, 0, 1},             /* the choir */
-        {1, 3, 1, 1, 0, 0, 4, 1},             /* the lead; toms then a roll */
-        {1, 3, 1, 0, 1, 1, 1, 1},             /* the boom: the bass with the kick */
-        {1, 3, 1, 2, 1, 2, 2, 1},             /* the lead sings */
-        {2, 4, 2, 0, 2, 1, 1, 2},             /* C D E */
-        {1, 3, 1, 0, 0, 0, 0, 1},             /* the break */
-        {1, 3, 1, 0, 0, 0, 3, 1},             /* the build on toms */
-        {1, 3, 1, 3, 1, 2, 2, 1},             /* the climax */
-        {2, 4, 2, 2, 2, 1, 2, 2},
-        {1, 5, 1, 0, 0, 0, 0, 1},             /* the outro, closing */
-        {1, 0, 0, 0, 0, 0, 0, 0},             /* the organ alone again */
+        {1, 0, 0, 0, 0, 0, 0, 1},             /* the drone alone, wind */
+        {2, 2, 0, 0, 0, 0, 0, 1},             /* the cloud */
+        {3, 3, 1, 0, 0, 0, 0, 2},             /* the pad; the noise turns metal */
+        {4, 4, 1, 0, 0, 0, 0, 2},
+        {5, 5, 1, 1, 0, 0, 4, 3},             /* the vowel; toms, a roll, the rise */
+        {6, 6, 1, 0, 1, 1, 1, 0},             /* the boom: the sub with the kick */
+        {7, 7, 1, 1, 1, 2, 2, 2},
+        {8, 8, 2, 2, 1, 1, 1, 0},             /* the other chords */
+        {9, 9, 1, 0, 0, 0, 0, 2},             /* the break */
+        {10, 10, 1, 0, 0, 0, 3, 3},           /* the build on toms, the rise */
+        {11, 11, 1, 2, 1, 2, 2, 2},           /* the climax */
+        {12, 12, 2, 1, 1, 1, 2, 0},
+        {13, 13, 1, 0, 0, 0, 0, 1},           /* the outro, closing */
+        {14, 14, 0, 0, 0, 0, 0, 1},           /* the drone alone again */
     };
-    static const uint8_t NV[8] = {2, 5, 2, 3, 2, 2, 4, 2};   /* each track's variants */
+    static const uint8_t NV[8] = {14, 14, 2, 2, 1, 2, 4, 3};   /* each track's variants */
     uint32_t i, k, v;
     track_t *t;
     song.g[G_BPM] = 84;
-    song.g[G_RTYPE] = 2;                      /* HALL */
-    song.g[G_RSIZE] = 116;
-    song.g[G_RDAMP] = 84;
-    song.g[G_DFDBK] = 64;
-    song.g[G_DTIME] = 10;                     /* 1/8D: the guitar's echo */
-    song.g[G_CRATE] = 16;
-    song.g[G_CDEPTH] = 80;
+    song.g[G_RTYPE] = 2;                      /* HALL, vast */
+    song.g[G_RSIZE] = 124;
+    song.g[G_RDAMP] = 70;
+    song.g[G_DFDBK] = 70;
+    song.g[G_DTIME] = 10;                     /* 1/8D */
+    song.g[G_CRATE] = 12;
+    song.g[G_CDEPTH] = 100;
     song.ntrk = 8;
     for (i = 0; i < NTRK; i++) {
         track_defaults_steps(&trk[i]);
@@ -286,44 +315,53 @@ static void felucca_demo(void)
         trk[i].p[P_SDIV] = 2;                 /* 1/16 */
     }
     t = &trk[0];
-    demo_sound(t, 7, 0);                      /* WHEEL FULL ORGAN */
-    t->p[P_LEVEL] = 96; t->p[P_REV] = 70; t->p[P_CHOR] = 50;
+    demo_sound(t, 0, 1);                      /* ANALOG: the drone, two saws detuned wide, spread, phased */
+    t->p[P_E0] = 2; t->p[P_E0 + 1] = 70; t->p[P_E0 + 2] = 90; t->p[P_E0 + 3] = 10; t->p[P_E0 + 5] = 64; t->p[P_E0 + 6] = 40;
+    t->p[P_ATK] = 110; t->p[P_REL] = 110; t->p[P_SUS] = 127;
+    t->p[P_SPRD] = 127; t->p[P_DETUNE] = 90;
+    t->p[P_LRATE] = 18; t->p[P_LD_FLT] = 18;   /* (a slow breath on the filter) */
+    t->p[P_ITYPE] = 6; t->p[P_IA] = 8; t->p[P_IB] = 60; t->p[P_IC] = 90; t->p[P_IMIX] = 100;   /* PHASR, slow, deep */
+    t->p[P_LEVEL] = 96; t->p[P_REV] = 70; t->p[P_CHOR] = 40;
     t = &trk[1];
-    demo_sound(t, 0, 11);                     /* ANALOG STRINGS, wide */
-    t->p[P_ATK] = 90; t->p[P_REL] = 100; t->p[P_LEVEL] = 86; t->p[P_REV] = 80; t->p[P_CHOR] = 50; t->p[P_SPRD] = 90;
+    demo_sound(t, 8, 0);                      /* GRAIN CLOUD PAD: the cloud */
+    t->p[P_E0 + 1] = 100; t->p[P_E0 + 4] = 110; t->p[P_E0 + 5] = 50;
+    t->p[P_ATK] = 100; t->p[P_REL] = 110; t->p[P_LEVEL] = 82; t->p[P_REV] = 100; t->p[P_DLY] = 30;
     t = &trk[2];
-    demo_sound(t, 0, 8);                      /* ANALOG PLUCK: the echoing guitar */
-    t->p[P_REL] = 60; t->p[P_LEVEL] = 70; t->p[P_REV] = 60; t->p[P_DLY] = 70; t->p[P_PAN] = -22;
+    demo_sound(t, 0, 3);                      /* ANALOG PWM STR: the pad, flanged */
+    t->p[P_ATK] = 80; t->p[P_REL] = 100; t->p[P_SPRD] = 100;
+    t->p[P_LRATE] = 30; t->p[P_LD_SHP] = 40;   /* (the pulse width breathing) */
+    t->p[P_ITYPE] = 7; t->p[P_IA] = 6; t->p[P_IB] = 90; t->p[P_IC] = 70; t->p[P_IMIX] = 70;   /* FLANG, slow */
+    t->p[P_LEVEL] = 82; t->p[P_REV] = 80; t->p[P_CHOR] = 50;
     t = &trk[3];
-    demo_sound(t, 0, 0);                      /* ANALOG SAW LEAD: long, sliding, far */
-    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 80;
-    t->p[P_ATK] = 40; t->p[P_LEVEL] = 72; t->p[P_REV] = 90; t->p[P_DLY] = 50; t->p[P_PAN] = 18;
+    demo_sound(t, ENGI_GROWL, 2);             /* GROWL VOWEL: the lead, talking */
+    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 90;
+    t->p[P_ATK] = 60; t->p[P_REL] = 90; t->p[P_LEVEL] = 70; t->p[P_REV] = 100; t->p[P_DLY] = 60;
     t = &trk[4];
-    demo_sound(t, 0, 2);                      /* ANALOG SQR BASS: round */
-    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 30;
+    demo_sound(t, 0, 7);                      /* ANALOG SUB BASS: held */
+    t->p[P_VOICE] = V_MONO; t->p[P_ATK] = 20; t->p[P_SUS] = 127;
     t->p[P_LEVEL] = 104; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     t = &trk[5];
     demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT: the kick */
     t->p[P_E0 + 1] = 40; t->p[P_E0 + 2] = 30;
-    t->p[P_LEVEL] = 104; t->p[P_REV] = 10; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    t->p[P_LEVEL] = 102; t->p[P_REV] = 8; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     t = &trk[6];
-    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: snare, hat, toms */
-    t->p[P_LEVEL] = 82; t->p[P_REV] = 70; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT: clap, hat, toms */
+    t->p[P_LEVEL] = 76; t->p[P_REV] = 80; t->p[P_DLY] = 20; t->p[P_CHOR] = 0;
     t = &trk[7];
-    demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH */
-    t->p[P_E0 + 4] = 72; t->p[P_E0 + 6] = 100;
-    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 80;
-    t->p[P_ATK] = 100; t->p[P_REL] = 110; t->p[P_LEVEL] = 68; t->p[P_REV] = 110;
+    demo_sound(t, 11, 0);                     /* NOISE: wind, metal, a rise */
+    t->p[P_E0 + 6] = 80;                      /* (DRFT) */
+    t->p[P_ITYPE] = 3; t->p[P_IA] = 30; t->p[P_IMIX] = 50;   /* FOLD: its grit */
+    t->p[P_ATK] = 90; t->p[P_LEVEL] = 50; t->p[P_REV] = 90; t->p[P_DLY] = 40;
     {                                         /* the bands (EQ: LOW CUT, HIGH CUT, a bell): each one clear */
         static const int8_t EQ[8][4] = {
-            {34, 92, 50, -12},                /* organ: 150 Hz .. 3 kHz, its mud down */
-            {47, 104, 60, -10},               /* strings: 300 Hz .. 5 kHz */
-            {60, 118, 94, 10},                /* guitar: 600 Hz up, its presence */
-            {56, 110, 88, 8},                 /* lead */
-            {0, 72, 24, 8},                   /* bass: its body, its top kept to 1 kHz */
+            {14, 118, 40, -10},               /* drone: from 60 Hz, its 230 Hz down */
+            {56, 118, 100, 8},                /* cloud: 500 Hz up, air */
+            {47, 106, 60, -12},               /* pad: 300 Hz .. 6 kHz */
+            {52, 112, 84, 6},                 /* vowel */
+            {0, 34, 18, 8},                   /* sub: under 130 Hz */
             {0, 96, 22, 6},                   /* kick */
-            {30, 118, 100, 8},                /* kit */
-            {61, 103, 80, 6},                 /* choir */
+            {40, 118, 104, 8},                /* kit */
+            {60, 118, 110, 6},                /* noise */
         };
         for (i = 0; i < NTRK; i++) {
             trk[i].p[P_EQLO] = EQ[i][0];

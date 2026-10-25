@@ -1060,13 +1060,13 @@ static int test_actions(void)
     press(B_OCTUP);
     bad += check("HOME: OCT+ shifts the octave (lit)", song.octave == 1 && oct_leds() == 2u);
     go_page(GR_PATS);
-    bad += check("PATTERNS: OCT+ breathes (a pattern to load), OCT- lit", oct_leds_seen(0) == (1u | OCT_BREATH) &&
-                 oct_leds_seen(1) == (1u | OCT_BREATH));
+    bad += check("PATTERNS: OCT+ breathes (a pattern to load), OCT- dark (Dah: no BACK)", oct_leds_seen(0) == OCT_BREATH &&
+                 oct_leds_seen(1) == OCT_BREATH);
     press(B_OCTUP);
     bad += check("..OCT+ loads it, the octave stays", steps_are(t, 0) && song.octave == 1 && !ui.home);
-    bad += check("..the same pattern again would change nothing: OCT+ dark", oct_leds_seen(0) == 1u);
+    bad += check("..the same pattern again would change nothing: OCT+ dark", oct_leds_seen(0) == 0u);
     turn(EN_K1, 1);
-    bad += check("..another one picked: OCT+ breathes again", oct_leds_seen(0) == (1u | OCT_BREATH));
+    bad += check("..another one picked: OCT+ breathes again", oct_leds_seen(0) == OCT_BREATH);
     {
         char a[16], b[16];
         foot_hint(a, b);
@@ -1099,7 +1099,7 @@ static int test_actions(void)
     /* TOOLS: CLRSQ and INIT are picked, not done, by their knobs */
     my_steps(t);
     go_title("TOOLS");
-    bad += check("TOOLS: nothing picked, OCT+ dark", act_cols() == 15u && act_col() == 0u && oct_leds_seen(0) == 1u);
+    bad += check("TOOLS: nothing picked, OCT+ dark", act_cols() == 15u && act_col() == 0u && oct_leds_seen(0) == 0u);
     turn(EN_K1, 3);
     bad += check("KNOB 1 picks CLEAR, the steps stay; OCT+ breathes", ui.act == 1u && !seq_is_empty(t) &&
                  oct_leds_seen(0) == (1u | OCT_BREATH));

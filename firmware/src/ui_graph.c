@@ -1147,7 +1147,9 @@ static uint32_t sg_gen(void)
 {
     uint32_t k, h = ps_gen * 2654435761u + trk_count();
     for (k = 0; k < trk_count(); k++)
-        h = fnv(h ^ steps_sig(&trk[k]), &trk[k].p[P_SLEN], 4u * sizeof(int16_t)) + ps_num(k);
+        h = fnv(h ^ steps_sig(&trk[k]), chain.running ? chain.timing[k] : &trk[k].p[P_SLEN], 4u * sizeof(int16_t)) +
+            ps_num(k);                                  /* (Dah: a song playing sets the tracks' timing section by
+                                                         * section: their own, not that, or every picture read again) */
     return h;
 }
 static int sg_pat(uint32_t k, uint32_t s, uint32_t *len, uint32_t *den, uint32_t *nc)

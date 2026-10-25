@@ -142,8 +142,10 @@ static uint32_t oct_leds(void)
                ui.menu_sel >= MI_VALUES ? OCT_BREATH :  /* CALIBRATION / INFO / ABOUT: OCT+ opens */
                (menu_step(ui.menu_sel, -1) != menu_get(ui.menu_sel) ? OCT_BREATH_DN : 0u) |   /* a value: each */
                (menu_step(ui.menu_sel, 1) != menu_get(ui.menu_sel) ? OCT_BREATH : 0u);         /* way it can go */
-    if (ui.confirm || act_cols())
-        return 1u | (ui.confirm || act_ready() ? OCT_BREATH : 0u);
+    if (ui.confirm)
+        return 1u | OCT_BREATH;
+    if (act_cols())                                     /* (Dah) OCT- lit only when it cancels (no BACK) */
+        return (ui.act && cur_page()->graph != GR_PATS ? 1u : 0u) | (act_ready() ? OCT_BREATH : 0u);
     if (mom.n && mom_down())                            /* MOMENTARY: OCT+ keeps the changes */
         return (song.octave < 0 ? 1u : 0u) | OCT_BREATH;
     return (song.octave < 0 ? 1u : 0u) | (song.octave > 0 ? 2u : 0u);
