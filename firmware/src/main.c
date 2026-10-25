@@ -152,6 +152,10 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
         (void)motion_set_event(t, s, id, (int16_t)(v0 + (v1 - v0) * (int32_t)(s - s0) / (int32_t)(s1 > s0 ? s1 - s0 : 1u)));
     motion_set_enabled(t, 1);
 }
+#ifndef DAH_DEMO_SONG
+#define DAH_DEMO_SONG 0                         /* (Dah) 1: the trip-hop song at power-on, not the FX test */
+#endif
+#if DAH_DEMO_SONG
 /* the progressions (A, B): each bar's root (the bass, octave 2) and its chord (four notes, from E3) */
 static const uint8_t DM_ROOT[2][4] = {{40, 40, 36, 35}, {33, 40, 36, 35}};
 static const uint8_t DM_CH[2][4][4] = {{{52, 55, 59, 62}, {52, 55, 59, 66}, {52, 55, 59, 60}, {51, 54, 57, 59}},
@@ -252,7 +256,7 @@ static void demo_var(uint32_t k, uint32_t v)
         }
     }
 }
-static void demo_song(void)                   /* (Dah: the trip-hop song, kept; felucca_demo plays the FX test for now) */
+static void felucca_demo(void)                /* (Dah: the trip-hop song, kept: DAH_DEMO_SONG 1) */
 {
     /* the song: each section's variant per track (0: silent there) */
     static const uint8_t SEC[16][8] = {
@@ -365,9 +369,11 @@ static void demo_song(void)                   /* (Dah: the trip-hop song, kept; 
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
+#else
 /* (Dah) the FX test, the power-on sound for now: four tracks, one pattern of four bars looping (86 BPM, E minor), every
- * effect on them: the kit (DIST, EQ, COMP; the reverb), the bass (DIST, INSERT SOFT, EQ, COMP, SIDECHAIN), the pad
- * (INSERT PHASER, SLICER, EQ, SIDECHAIN; CHORUS, REVERB), the lead (INSERT FLANGER, DIST, EQ, COMP; DELAY, REVERB);
+ * effect on them: the kit (LAYER KIT: DIST, EQ, COMP; the reverb), the bass (ANALOG ACID: DIST, INSERT SOFT, EQ, COMP,
+ * SIDECHAIN), the pad (FM6 PAD: INSERT PHASER, SLICER, EQ, SIDECHAIN; CHORUS, REVERB), the lead (VOICE VOX LEAD: INSERT
+ * FLANGER, DIST, EQ, COMP; DELAY, REVERB);
  * the MASTER's EQ and COMP */
 static void felucca_demo(void)
 {
@@ -387,7 +393,7 @@ static void felucca_demo(void)
         trk[i].p[P_SDIV] = 2;
     }
     t = &trk[0];
-    demo_sound(t, ENGI_DRUM, 5);              /* HARD KIT */
+    demo_sound(t, ENGI_DRUM, 4);              /* LAYER KIT */
     for (b = 0; b < 4u; b++) {
         uint32_t s0 = b * 16u;
         demo_hit(t, s0, 1u << 0, 120);
@@ -402,8 +408,9 @@ static void felucca_demo(void)
     t->p[P_DIST] = 20; t->p[P_EQLO] = 4; t->p[P_EQ1F] = 22; t->p[P_EQ1G] = 10; t->p[P_REV] = 20;
     trkx[0].rsv0 = 70; trkx[0].rsv1 = 50;
     t = &trk[1];
-    demo_sound(t, 6, 0);                      /* TRIO FAT BASS */
-    t->p[P_VOICE] = V_MONO;
+    demo_sound(t, 0, 4);                      /* ANALOG ACID */
+    t->p[P_LEVEL] = 118;
+    t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 40;
     for (b = 0; b < 4u; b++) {
         static const uint8_t R[4] = {40, 40, 36, 35};
         demo_note(&t->step[b * 16u], R[b], 112); demo_hold(t, b * 16u, 3);
@@ -416,7 +423,7 @@ static void felucca_demo(void)
     t->p[P_DKSRC] = 1; t->p[P_DKAMT] = 70; t->p[P_DKREL] = -10;
     t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
     t = &trk[2];
-    demo_sound(t, 0, 1);                      /* ANALOG SOFT PAD */
+    demo_sound(t, ENGI_FM6, 4);               /* FM6 PAD */
     for (b = 0; b < 4u; b++) {
         static const uint8_t C[4][4] = {{52, 55, 59, 62}, {52, 55, 59, 66}, {52, 55, 59, 60}, {51, 54, 57, 59}};
         dm_bar(t, b, C[b], 4, 90);
@@ -427,7 +434,8 @@ static void felucca_demo(void)
     t->p[P_DKSRC] = 1; t->p[P_DKAMT] = 80; t->p[P_DKREL] = -10;
     t->p[P_CHOR] = 60; t->p[P_REV] = 70; t->p[P_DLY] = 0;
     t = &trk[3];
-    demo_sound(t, 0, 0);                      /* ANALOG SAW LEAD */
+    demo_sound(t, 5, 1);                      /* VOICE VOX LEAD */
+    t->p[P_LEVEL] = 84;
     t->p[P_VOICE] = V_MONO; t->p[P_GLIDE] = 60;
     {
         static const uint8_t L[8][2] = {{71, 8}, {69, 8}, {66, 16}, {64, 8}, {67, 8}, {66, 12}, {63, 4}, {0, 0}};
@@ -452,8 +460,8 @@ static void felucca_demo(void)
     chain_config.row[0].repeat = 1;
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
-    (void)demo_song;
 }
+#endif
 #endif
 
 /* power-on: the parts with their default sounds (TRK_DEF); the sequencers empty */

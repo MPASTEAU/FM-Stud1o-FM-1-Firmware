@@ -463,106 +463,6 @@ static void graph_chord(const track_t *t, uint16_t c)
                  !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : c, T_SURF);
     }
 }
-/* the four sends as faders under their cards: a RAISE slot, the THEME fill from the bottom, a cap */
-/* (Dah) FX: its four sends as four automation lanes, as HOME's rows: each one's name, then its value over the page's
- * sixteen steps as a curve (held, or ramped: CURVE), its points (locks, events) marked; none: its value flat across.
- * The step playing marked */
-static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, uint16_t c);   /* ui_graph_fx.c */
-static void graph_fx_lanes(const track_t *t, uint16_t c);
-static void graph_fx(const track_t *t, uint16_t c)       /* (Dah) the chain on top, then the lanes */
-{
-    int32_t sh = graph_ht / 6, ht = graph_ht;
-    fx_chain_strip(t, 3, sh - 5, -1, c);
-    cv_oy += sh;
-    graph_ht = ht - sh;
-    graph_fx_lanes(t, c);
-    cv_oy -= sh;
-    graph_ht = ht;
-}
-static void graph_fx_lanes(const track_t *t, uint16_t c)
-{
-    uint32_t r, i, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), p0, ph;
-    int32_t nh = graph_ht / 5, rh = (graph_ht - nh) / 4, x0 = PANEL_X0 + 34, cw = (PANEL_W - 34) / 16;
-    int32_t ramp = trkx[trk_index(t) % NTRK].curve != 0u;
-    const step_t *s = seq_steps(t);
-    p0 = (song.playing ? t->seq_idx : song.seq_mode ? ui.cursor : 0u) / 16u * 16u;
-    if (p0 >= len)
-        p0 = 0;
-    ph = song.playing && t->seq_idx >= p0 && t->seq_idx < p0 + 16u ? t->seq_idx - p0 : 0xFFu;
-    {   /* the track's notes over the same steps, a reminder: a mini roll (DRUM: its hits), the beats' grid */
-        int32_t lo = 127, hi = 0, j, top = 2, bot = nh - 3;
-        int drum = drum_track(t);
-        for (i = 0; i <= 16u; i++)
-            cv_rect(x0 + (int32_t)i * cw, top, 1, bot - top + 1, i % 4u ? T_GRID : T_RAISE);
-        for (i = 0; i < 16u && p0 + i < len; i++)
-            for (j = 0; j < s[p0 + i].n && j < 4; j++) {
-                lo = s[p0 + i].note[j] < lo ? s[p0 + i].note[j] : lo;
-                hi = s[p0 + i].note[j] > hi ? s[p0 + i].note[j] : hi;
-            }
-        {
-            int32_t cy = -1;                          /* a note held on (TIE): its line on through the steps */
-            for (i = p0; i-- > 0u;)
-                if (s[i].time != ST_TIE) {
-                    if (s[i].time == ST_NOTE && s[i].n && hi > lo)
-                        cy = bot - 2 - (s[i].note[0] - lo) * (bot - top - 3) / (hi - lo);
-                    else if (s[i].time == ST_NOTE && s[i].n)
-                        cy = (top + bot) / 2;
-                    break;
-                }
-            for (i = 0; i < 16u && p0 + i < len; i++) {
-                const step_t *st = &s[p0 + i];
-                int32_t x = x0 + (int32_t)i * cw + 2;
-                if (st->time == ST_TIE && cy >= 0 && !drum) {
-                    cv_rect(x - 3, cy, cw, 2, ux_mix(T_SURF, c, 60));
-                    continue;
-                }
-                cy = -1;
-                if (st->time != ST_NOTE || !(st->n || st->hit))
-                    continue;
-                if (drum || !st->n) {
-                    uint32_t l;
-                    for (l = 0; l < NLANE; l++)
-                        if ((step_lanes(st) >> l) & 1u)
-                            cv_rect(x, bot - (int32_t)(l + 1u) * (bot - top) / (int32_t)NLANE, cw - 3, 2, ux.drum[l]);
-                } else
-                    for (j = 0; j < st->n && j < 4; j++) {
-                        int32_t ny = hi > lo ? bot - 2 - (st->note[j] - lo) * (bot - top - 3) / (hi - lo) : (top + bot) / 2;
-                        cv_rect(x, ny, cw - 3, 2, c);
-                        if (!j)
-                            cy = ny;
-                    }
-            }
-        }
-        if (ph != 0xFFu)
-            cv_rect(x0 + (int32_t)ph * cw + cw / 2, top, 1, graph_ht - top - 3, T_TEXT);   /* the step playing, down
-                                                         * through the lanes */
-    }
-    for (r = 0; r < 4u; r++) {
-        uint32_t id = fx_knob_id(t, r);                 /* (what its knob drives) */
-        const param_desc_t *d = track_desc(t, id);
-        int32_t top = nh + (int32_t)r * rh + 3, bot = top + rh - 6, px = -1, py = 0;
-        cv_text_on(PANEL_X0, (top + bot) / 2 - AF_S_CAP_Y - AF_S_CAP_H / 2, &AF_S, d->label, T_MID, T_SURF);
-        cv_rect(x0, bot, cw * 16, 1, T_RAISE);
-        for (i = 0; i < 16u && p0 + i < len; i++) {
-            int pt;
-            int32_t v = lane_value(t, p0 + i, id, &pt), x = x0 + (int32_t)i * cw + cw / 2;
-            int32_t y = d->max > d->min ? bot - (v - d->min) * (bot - top) / (d->max - d->min) : bot;
-            if (px >= 0) {
-                if (ramp && pt)
-                    cv_line_t(px, py, x, y, c, 2);
-                else {
-                    cv_line_t(px, py, x, py, c, 2);
-                    if (y != py)
-                        cv_line_t(x, py, x, y, c, 2);
-                }
-            }
-            if (pt)
-                cv_rect(x - 2, y - 2, 5, 5, T_ACCENT);
-            px = x;
-            py = y;
-        }
-    }
-}
 /* INSERT pages (1.5, fx.c track_insert): the drives and CRUSH as their curve, input (-1.5 .. +1.5 of a voice's full
  * scale) across, output up, dry and wet blended by MIX (fx.c ins_shape: the same shape; the dry diagonal RAISE); the
  * swept ones as two cycles of their sweep, as deep as DEPTH (FLANG the squared triangle, CHOR a sine, PHASR a
@@ -1409,14 +1309,6 @@ static uint32_t graph_signature(void)
         h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
-    if (pg->graph == GR_FX) {                        /* (Dah) its lanes: the automation, the step playing */
-        int pt;
-        uint32_t r;
-        h ^= (song.playing ? t->seq_idx + 1u : 0u) * 2654435761u + motion.count * 7919u + steps_sig(t) * 31u;
-        for (r = 0; r < 4u; r++)
-            for (i = 0; i < 16u; i++)
-                h = (h ^ (uint32_t)(lane_value(t, (ui.cursor / 16u) * 16u + i, fx_knob_id(t, r), &pt) + 128)) * 16777619u;
-    }
     if (pg->graph == GR_TOOLS)                       /* (Dah) the picked action's line */
         h ^= (ui.act + 1u) * 2654435761u + ui.tl_clean * 7919u;
     if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
@@ -2907,9 +2799,6 @@ static void draw_graph_in(void)
         case GR_CHORD:
             cv_oy = 0;
             graph_chord(t, c);
-            break;
-        case GR_FX:
-            graph_fx(t, c);
             break;
         case GR_SLCR:                                /* (Dah) its pattern at the left, the sound gated at the right */
             if (fx_mst(t))
