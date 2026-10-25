@@ -1140,11 +1140,33 @@ static void edit_param(uint32_t slot, int32_t steps)
         mod_ui_slot = (uint8_t)clamp((int32_t)mod_ui_slot + (steps > 0 ? 1 : -1), 0, 3);
         return;
     }
+    if (pg->id[0] == P_DKSRC && pg->scope == SC_TRACK && slot == 3u) {   /* (Dah) DUCK's GROUP: in it, the group's settings */
+        uint32_t k = song.sel % NTRK, i;
+        if (steps > 0 && !(trkx[k].group & 1u)) {
+            for (i = 0; i < trk_count(); i++)
+                if (i != k && (trkx[i].group & 1u)) {   /* (the group's: a member's) */
+                    TSEL->p[P_DKSRC] = trk[i].p[P_DKSRC];
+                    TSEL->p[P_DKAMT] = trk[i].p[P_DKAMT];
+                    TSEL->p[P_DKREL] = trk[i].p[P_DKREL];
+                    break;
+                }
+            trkx[k].group |= 1u;
+        } else if (steps < 0)
+            trkx[k].group &= (uint8_t)~1u;
+        ui.force = 1;
+        return;
+    }
     d = page_desc(pg, slot, &vp);
     if (!d || !vp || d->max == d->min)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
     *vp = (int16_t)v;
+    if (pg->id[0] == P_DKSRC && pg->scope == SC_TRACK && (trkx[song.sel % NTRK].group & 1u)) {   /* (Dah) the group: all */
+        uint32_t i;
+        for (i = 0; i < trk_count(); i++)
+            if (trkx[i].group & 1u)
+                trk[i].p[(uint32_t)(vp - TSEL->p)] = *vp;
+    }
     if (pg->scope != SC_GLOBAL) {
         if (motion_param((uint32_t)(vp - TSEL->p))) {   /* (Dah: STEP's automation lane shows the last one turned) */
             ui.auto_id = (uint8_t)((uint32_t)(vp - TSEL->p) + 1u);

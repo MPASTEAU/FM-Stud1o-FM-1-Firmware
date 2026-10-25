@@ -407,7 +407,7 @@ static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ?
 #define LDRAW_N 16u
 typedef struct {
     int8_t draw[LDRAW_N];
-    uint8_t smooth, curve, rsv[2];
+    uint8_t smooth, curve, group, rsv;   /* (Dah: group bit 0, the DUCK group: its members share one sidechain) */
 } trkx_t;
 static trkx_t trkx[NTRK];
 /* HA HA HE HU: the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and

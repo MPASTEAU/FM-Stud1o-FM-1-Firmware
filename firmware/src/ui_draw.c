@@ -1523,6 +1523,11 @@ static void draw_columns_in(void)
             draw_act_column(c, act_name(c), ok ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
+        if (c == 3u && cur_page()->id[0] == P_DKSRC && cur_page()->scope == SC_TRACK) {   /* (Dah) DUCK's GROUP */
+            uint32_t on = trkx[song.sel % NTRK].group & 1u;
+            draw_column(3, "GROUP", on ? "ON" : "OFF", "", on ? T_ACCENT : VAL(3u), -1, ICON_AUTO);
+            continue;
+        }
         if (!d || !d->label || d->label[0] == '-') {
             draw_column(c, "", "", "", T_THEME, -1, ICON_AUTO);
             continue;

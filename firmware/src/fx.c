@@ -932,6 +932,10 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n)
  * PAN and the sends: the sends dip with it. OFF: nothing runs (the track as before) */
 static int32_t duck_env[NPART], duck_att[NPART];       /* the envelope (Q15), the dip applied last block (Q15) */
 static uint8_t duck_hold[NPART];                        /* (Dah) blocks the dip stays full after a hit (~30 ms): it pumps */
+/* (Dah) what DUCK's page shows live (ui_graph_more.c graph_duck), taken until the page reads it: the watched tracks'
+ * level before and after the dip (their loudest), the deepest dip, a hit; the tracks watched (a bit each) */
+static volatile int32_t dv_pre, dv_post, dv_att;
+static volatile uint8_t dv_hit, dv_watch;
 #define DUCK_HOLD 40u
 static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d: SPREAD's side signal, dipped alike) */
 {
@@ -952,11 +956,26 @@ static void duck_part_sd(track_t *t, int32_t *b, int32_t *d, uint32_t n)   /* (d
             return;
     }
     {   /* (the dip from last block's to this one's, a step a sample: one divide a block) */
-        int32_t acc = a0 << 8, da = ((a1 - a0) << 8) / (int32_t)n;
+        int32_t acc = a0 << 8, da = ((a1 - a0) << 8) / (int32_t)n, pre = 0, post = 0, w = (dv_watch >> k) & 1u;
         for (i = 0; i < n; i++, acc += da) {
+            int32_t x = b[i];
             b[i] -= ((b[i] >> 4) * (acc >> 8)) >> 11;
+            if (w) {                                    /* (Dah: the page's live picture) */
+                x = x < 0 ? -x : x;
+                pre = x > pre ? x : pre;
+                x = b[i] < 0 ? -b[i] : b[i];
+                post = x > post ? x : post;
+            }
             if (d)
                 d[i] -= ((d[i] >> 4) * (acc >> 8)) >> 11;
+        }
+        if (w) {
+            if (pre > dv_pre) dv_pre = pre;             /* (the loudest of them since the page last read) */
+            if (post > dv_post) dv_post = post;
+            if (a1 > dv_att)
+                dv_att = a1;
+            if (src && src <= NPART && ((duck_hit >> (src - 1u)) & 1u))
+                dv_hit = 1;
         }
     }
     duck_att[k] = a1;

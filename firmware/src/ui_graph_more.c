@@ -243,39 +243,93 @@ static void graph_clock(uint16_t c)
         cv_rrect(x, bot - h, 5, h, 2, (uint32_t)i == ph ? T_TEXT : i % 4 == 0 ? c : ux_mix(c, T_SURF, 40), T_SURF);
     }
 }
-/* DUCK: the level of the track over a bar of four kicks: each one dips it by DEPTH, held a moment, back with REL; the
- * source named, or how to set it */
+/* DUCK, live: the tracks it watches (this one, or its GROUP: the members' numbers at the top), their level over the last
+ * ~3 s scrolling left: before the dip faint, after it in the colour, the dip itself a line from the top (ACCENT), each
+ * kick a mark under it. Nothing sounding yet: the dip's shape over four kicks, faint (DEPTH, REL) */
+#define DV_N PANEL_W
+static struct { uint16_t pre[DV_N], post[DV_N], att[DV_N]; uint8_t hit[DV_N]; uint32_t w, live; } dv;
+static uint32_t duck_watch(const track_t *t)            /* this track, or its group's members */
+{
+    uint32_t k = trk_index(t) % NTRK, m = 1u << k, i;
+    if (trkx[k].group & 1u)
+        for (i = 0; i < trk_count(); i++)
+            if (trkx[i].group & 1u)
+                m |= 1u << i;
+    return m;
+}
 static void graph_duck(const track_t *t, uint16_t c)
 {
-    int32_t top = 10, bot = graph_ht - 8, x, py = top, env = 0, hold = 0, beat = PANEL_W / 4;
-    int32_t rel = 23790 / (20 + (t->p[P_DKREL] + 64) * 3), depth = t->p[P_DKAMT];
+    int32_t top = 18, bot = graph_ht - 8, x, i;
+    uint32_t m = duck_watch(t), k;
     if (!t->p[P_DKSRC]) {
         panel_note("DUCK OFF", "[K1] A TRACK DUCKS IT", 0);
+        dv_watch = 0;
         return;
     }
-    for (x = 0; x < PANEL_W; x++) {
-        int32_t lvl, y, k;
-        if (x % beat == 0) {                            /* a kick */
-            env = 32767;
-            hold = 40 * beat / 1000 + 2;                /* (~30 ms of a beat at 92 BPM: a sketch) */
-            cv_rect(PANEL_X0 + x, bot + 2, 3, 4, T_TEXT);
+    dv_watch = (uint8_t)m;
+    {                                                   /* this frame's column */
+        uint32_t w = dv.w % DV_N;
+        dv.pre[w] = (uint16_t)(dv_pre > 65535 ? 65535 : dv_pre);
+        dv.post[w] = (uint16_t)(dv_post > 65535 ? 65535 : dv_post);
+        dv.att[w] = (uint16_t)dv_att;
+        dv.hit[w] = dv_hit;
+        if (dv_pre)
+            dv.live = 90;                               /* (~3 s of picture after the last sound) */
+        else if (dv.live)
+            dv.live--;
+        dv_pre = dv_post = dv_att = 0;
+        dv_hit = 0;
+        dv.w++;
+    }
+    for (k = 0, x = PANEL_X0; k < NTRK; k++)            /* the tracks watched */
+        if ((m >> k) & 1u) {
+            char d[2] = {(char)('1' + k), 0};
+            cv_rrect(x, 2, 12, 12, 3, ux.trk[k], T_SURF);
+            cv_text_in(x, 2 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, ux.trk[k]);
+            x += 15;
         }
-        for (k = 0; k < 14; k++)                        /* ~14 blocks a pixel (a beat ~ 55 px, ~650 ms) */
-            if (hold > 0)
-                hold--;
-            else
-                env = (env * (32768 - rel)) >> 15;
-        lvl = 32767 - ((env >> 8) * (depth * 258) >> 7);
-        y = bot - (lvl * (bot - top)) / 32767;
-        if (x)
-            cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, c, 2);
-        py = y;
+    if (trkx[trk_index(t) % NTRK].group & 1u)
+        cv_text_on(x + 2, 2 + CAP_IN(S, 12), &AF_S, "GROUP", T_MID, T_SURF);
+    if (!dv.live) {                                     /* nothing sounding: the shape, faint */
+        int32_t py = top, env = 0, hold = 0, beat = PANEL_W / 4;
+        int32_t rel = 23790 / (20 + (t->p[P_DKREL] + 64) * 3), depth = t->p[P_DKAMT];
+        for (x = 0; x < PANEL_W; x++) {
+            int32_t lvl, y;
+            if (x % beat == 0) {
+                env = 32767;
+                hold = 3;
+                cv_rect(PANEL_X0 + x, bot + 2, 3, 4, T_MID);
+            }
+            for (i = 0; i < 14; i++)
+                if (hold > 0) hold--; else env = (env * (32768 - rel)) >> 15;
+            lvl = 32767 - ((env >> 8) * (depth * 258) >> 7);
+            y = bot - (lvl * (bot - top)) / 32767;
+            if (x)
+                cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, ux_mix(c, T_SURF, 50), 2);
+            py = y;
+        }
+        return;
+    }
+    for (x = 0; x < DV_N; x++) {                        /* oldest at the left */
+        uint32_t w = (dv.w + (uint32_t)x) % DV_N;
+        int32_t hp = clamp((int32_t)dv.pre[w] * (bot - top) / 24000, 0, bot - top);
+        int32_t hq = clamp((int32_t)dv.post[w] * (bot - top) / 24000, 0, bot - top);
+        int32_t ha = (int32_t)dv.att[w] * (bot - top) / 32767;
+        if (hp)
+            cv_rect(PANEL_X0 + x, bot - hp, 1, hp, ux_mix(c, T_SURF, 70));   /* before */
+        if (hq)
+            cv_rect(PANEL_X0 + x, bot - hq, 1, hq, c);                       /* after */
+        cv_rect(PANEL_X0 + x, top + ha, 1, 2, T_ACCENT);                     /* the dip, from the top */
+        if (dv.hit[w])
+            cv_rect(PANEL_X0 + x, bot + 2, 2, 4, T_TEXT);                    /* a kick */
     }
 }
 /* the page's own panel when it has one here (1), else 0 (the scope) */
 static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
 {
     uint32_t id = pg->id[0];
+    if (!(pg->scope == SC_TRACK && id == P_DKSRC))
+        dv_watch = 0;                                   /* (the ISR's picture: only for DUCK's page) */
     if (pg->scope == SC_TRACK && id == P_FTYPE) graph_filter(t, c);
     else if (pg->scope == SC_TRACK && id == P_ED_FLT) graph_envdest(t, c);
     else if (pg->scope == SC_TRACK && (id == P_VOICE || id == P_ALLOC || id == P_SPRD)) graph_voice(t, c);
