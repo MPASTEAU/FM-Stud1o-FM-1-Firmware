@@ -9569,9 +9569,9 @@ static int test_extras(void)
 }
 /* (HA HA HE HU) the rack's pixels: row c's y, step i's column (+2: inside its 6 px), a column x of the row, its bg */
 static uint16_t rk_at(int32_t x, uint32_t c, int32_t dy) { return tr_px(3 + x, Y_GRAPH + 1 + (int32_t)c * RK_PITCH + dy); }
-static uint16_t rk_px(uint32_t i, uint32_t c, int32_t dy) { return rk_at(RK_SX + (int32_t)i * 8 + 2, c, dy); }
+static uint16_t rk_px(uint32_t i, uint32_t c, int32_t dy) { return rk_at(RK_SX + (int32_t)i * RK_SP + 2, c, dy); }
 static uint16_t rk_bg(uint32_t c) { return rk_at(RK_SX - 2, c, 1); }
-static int rk_ring(uint32_t i, uint32_t c) { return rk_at(RK_SX + (int32_t)i * 8 - 1, c, 6) == T_TEXT; }
+static int rk_ring(uint32_t i, uint32_t c) { return rk_at(RK_SX + (int32_t)i * RK_SP - 1, c, 6) == T_TEXT; }
 static int test_home_tracks(void)
 {
     int bad = 0, ok;
