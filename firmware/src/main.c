@@ -104,11 +104,11 @@ static void fm1_fault(const fm1_crash_t *c)
  *   track 1  GRAIN CLOUD PAD: Dm9's top, held the whole loop (the cloud)
  *   track 2  PHYS DRONE STRING: D2, held (the floor)
  *   track 3  ANALOG SOFT PAD: Dm9 Bbmaj7 Fmaj7 Gm7, a bar each; its filter breathing on the drawn LFO (LFO DRAW, slow)
- *   track 4  DRUM: a soft kick on each bar's 1, a closed hat on some off-beats, quiet
+ *   track 4  DRUM DEEP KIT: a slow heartbeat, a dull round kick twice a bar (lub-dub: a 1/16 apart), dry
  *   track 5  FM6 BELL: a few notes of D minor's pentatonic, far apart, in the delay and the reverb
  *   track 6  ANALOG WIND: an airy A4 swelling over two bars
  *   track 7  VOICE CHOIR AAH: F4 / A4 held, low
- *   track 8  FM6 TINE EP: a two-note answer at the end of the loop */
+ *   track 8  DRUM KIT: a soft snare on each bar's last beat, drowned in the hall reverb (Dah) */
 static void demo_note(step_t *s, uint32_t note, uint32_t vel)
 {
     s->note[s->n < 4u ? s->n : 3u] = (uint8_t)note;
@@ -180,13 +180,17 @@ static void felucca_demo(void)
     t->p[P_LD_FLT] = 30;
     for (i = 0; i < 4u; i++)
         dm_chord(t, i * 16u, 16, PAD[i], 4, 74);
-    t = &trk[3];                              /* the pulse, quiet */
-    t->p[P_LEVEL] = 78; t->p[P_REV] = 40;
-    for (i = 0; i < 64u; i += 16u) {
-        demo_hit(t, i, 1u << 0, 70);              /* (lanes: KICK 0, HAT CL 3) */
-        demo_hit(t, i + 6u, 1u << 3, 40);
-        demo_hit(t, i + 10u, 1u << 3, 34);
-        demo_hit(t, i + 14u, 1u << 3, 40);
+    t = &trk[3];                              /* the heartbeat: dull, slow, dry */
+    demo_sound(t, ENGI_DRUM, 1);              /* DEEP KIT */
+    t->p[P_E0 + 1] = 50;                      /* TUNE down */
+    t->p[P_E0 + 2] = 22;                      /* TONE dark: muffled */
+    t->p[P_E0 + 3] = 84;                      /* DECY a little longer */
+    t->p[P_E0 + 4] = 8;                       /* SNAP: no click */
+    t->p[P_E0 + 6] = 1;                       /* KICK ROUND */
+    t->p[P_LEVEL] = 100; t->p[P_REV] = 0; t->p[P_DLY] = 0; t->p[P_CHOR] = 0;
+    for (i = 0; i < 64u; i += 8u) {
+        demo_hit(t, i, 1u << 0, 120);             /* lub (lane 0: KICK) */
+        demo_hit(t, i + 1u, 1u << 0, 80);         /* dub */
     }
     t = &trk[4];                              /* the bell, far apart */
     demo_sound(t, ENGI_FM6, 1);               /* FM6 BELL */
@@ -201,11 +205,12 @@ static void felucca_demo(void)
     demo_sound(t, 5, 0);                      /* VOICE CHOIR AAH */
     t->p[P_ATK] = 90; t->p[P_LEVEL] = 74; t->p[P_REV] = 110;
     dm_chord(t, 0, 64, CHOIR, 2, 58);
-    t = &trk[7];                              /* the answer */
-    demo_sound(t, ENGI_FM6, 0);               /* FM6 TINE EP */
-    t->p[P_LEVEL] = 80; t->p[P_DLY] = 60; t->p[P_REV] = 80;
-    demo_note(&t->step[56], 69, 60);
-    demo_note(&t->step[59], 72, 56);
+    t = &trk[7];                              /* the snare, far away in the hall */
+    demo_sound(t, ENGI_DRUM, 0);              /* DRUM KIT */
+    t->p[P_E0 + 2] = 48;                      /* TONE a little soft */
+    t->p[P_LEVEL] = 74; t->p[P_REV] = 127; t->p[P_DLY] = 18;
+    for (i = 12; i < 64u; i += 16u)
+        demo_hit(t, i, 1u << 1, 58);              /* (lane 1: SNARE) */
     for (i = 0; i < NTRK; i++)
         pat_sig[i] = steps_sig(&trk[i]);
 }
