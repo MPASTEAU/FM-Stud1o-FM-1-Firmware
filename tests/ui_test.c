@@ -9181,7 +9181,7 @@ static int test_head_slot(void)                    /* (HA HA HE HU: the pattern'
     int bad = 0, ok;
     ui_power_on();
     frames(50);
-    ok = head_is("1") && swap16(host_screen[12u * 240u + HEAD_PAT_X + 3u]) == ux.trk[0];   /* (the badge, top right) */
+    ok = head_is("1") && swap16(host_screen[12u * 240u + HEAD_PAT_X + 1u]) == ux.trk[0];   /* (the badge, top right; Dah: its edge, "P1" inside) */
     pattern_new(0, 0); ui.msg_t = 0; frames(50);
     ok &= head_is("2");
     song.sel = 1; ok &= head_is("1");
