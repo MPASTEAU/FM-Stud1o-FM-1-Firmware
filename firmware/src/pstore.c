@@ -213,6 +213,14 @@ static int pattern_go(uint32_t k, uint32_t num)
         return 1;
     if (num == ps_num(k))
         return 0;
+    at = ps_find(k, num);
+    if (at >= 0) {                                      /* (Dah) its automation must fit the shared store, else it would
+                                                         * be dropped, and stored again without: refused (MEMORY FULL) */
+        const uint8_t *r = ps_heap + at + 4u;
+        uint32_t len = ps_rlen((uint32_t)at), pos = 11u + 10u * (len > 10u ? r[10] : 0u);
+        if (pos < len && motion.count - motion_count(&trk[k]) + r[pos] > MOTION_MAX)
+            return 1;
+    }
     if (ps_store(k))
         return 1;
     ps_cur[k] = (uint8_t)num;

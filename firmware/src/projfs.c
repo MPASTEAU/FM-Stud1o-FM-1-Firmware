@@ -66,7 +66,19 @@ static void pfs_scan(void)
         }
         if (h.gen > pfs.gmax)
             pfs.gmax = h.gen;
-        s += h.nsect;
+        s++;                                            /* (Dah: sector by sector: a record written inside a stale one's
+                                                         * sectors, after a power cut, is found too) */
+    }
+    for (i = 1; i <= PFS_IDS; i++) {                    /* (Dah) two records over the same sectors (a stale header a
+                                                         * power cut left): the newer one only */
+        uint32_t j;
+        for (j = 1; j <= PFS_IDS && pfs.start[i]; j++) {
+            uint32_t a0 = pfs.start[i] - 1u, b0 = pfs.start[j] - 1u;
+            if (j == i || !pfs.start[j] || a0 + pfs.nsect[i] <= b0 || b0 + pfs.nsect[j] <= a0)
+                continue;
+            if (pfs.gen[i] < pfs.gen[j])
+                pfs.start[i] = 0;
+        }
     }
     for (i = 1; i <= PFS_IDS; i++)
         if (pfs.start[i])
@@ -259,12 +271,21 @@ static int pr_get(void *p, uint32_t n)
 }
 static uint32_t pr_b(void) { uint8_t b = 0; if (!pr_get(&b, 1)) pw.err = 1; return b; }
 /* project id onto the tracks. 0 done, 2 damaged (the music as it was) */
-static int pfs_read(uint32_t id)
+static void pr_seek(uint32_t pos)                      /* (Dah) the payload read again from pos */
+{
+    pw.pos = pos;
+    if (pos & 255u && st_read(pw.base + PFS_PAY + (pos & ~255u), pw.buf, 256u))
+        pw.err = 1;
+}
+static int pfs_read_in(uint32_t id)
 {
     pfs_hdr_t h;
     project_t *q = &proj_scratch;
     uint32_t k, i, nt, n;
     uint8_t cur[NTRK];
+    uint32_t cur_at[NTRK], cur_n[NTRK];              /* (Dah: each track's pattern, where in the payload: read again
+                                                      * after the sounds, straight onto the track, not through the heap,
+                                                      * so a project whose heap is full opens) */
     if (!pfs_there(id) || !pfs_head(pfs.start[id] - 1u, &h))
         return 2;
     memset(&pw, 0, sizeof pw);                          /* its hash first, all of it */
@@ -301,11 +322,11 @@ static int pfs_read(uint32_t id)
         cur[k] = (uint8_t)pr_b();
         n = pr_b();
         n |= pr_b() << 8;
+        cur_at[k] = pw.pos;
+        cur_n[k] = n;
         if (n > PS_PAT_MAX || !pr_get(ps_buf, n)) return 2;
-        /* (the pattern goes on the track after the sounds: kept in the heap meanwhile) */
         if (k == 0u)
             ps_used = 0;
-        if (ps_put(k, 0xFFu, ps_buf, n)) return 2;     /* (number 255: the one it plays, for now) */
     }
     while (!pw.err && pw.pos + 4u <= h.len) {           /* the heap's patterns */
         uint8_t r[4];
@@ -319,18 +340,27 @@ static int pfs_read(uint32_t id)
     proj_bound(q);
     if (project_restore_runtime(q)) return 2;
     song.ntrk = (uint8_t)nt;
-    for (k = 0; k < NTRK; k++) {                        /* each track's pattern from its 255, its number back */
-        int32_t at = k < nt ? ps_find(k, 0xFFu) : -1;
+    for (k = 0; k < NTRK; k++) {                        /* each track's pattern, read again, its number back */
         ps_cur[k] = k < nt ? (cur[k] && cur[k] <= PS_NUM ? cur[k] : 1u) : 1u;
-        if (at >= 0 && ps_decode(&trk[k], ps_heap + at + 4u, ps_rlen((uint32_t)at))) {
+        if (k >= nt)
+            continue;
+        pr_seek(cur_at[k]);
+        if (!pw.err && pr_get(ps_buf, cur_n[k]) && ps_decode(&trk[k], ps_buf, cur_n[k]))
             pat_sig[k] = steps_sig(&trk[k]);
-            ps_del(k, 0xFFu);
-        }
+        ps_del(k, ps_cur[k]);                           /* (the one played lives on the track) */
     }
     proj_name_get(proj_name, (const uint8_t *)h.name);
     PFS_CUR = (uint8_t)id;
     settings_later();
+    trk_count_changed();                                /* (no arm, SONG lane, selection past the tracks) */
     return 0;
+}
+static int pfs_read(uint32_t id)                       /* 0 done; else nothing half loaded left in the heap */
+{
+    int r = pfs_read_in(id);
+    if (r)
+        ps_reset();
+    return r;
 }
 
 /* ------------------------------------------------------------------ the actions --- */
@@ -371,7 +401,7 @@ static int project_open(uint32_t id)                    /* OPEN: the one open sa
 {
     if (pfs_busy()) return 1;
     if (!pfs_there(id)) { ui_message("EMPTY PROJECT"); return 1; }
-    if (id != pfs_cur() && project_save_cur() == 2) { ui_message("MEMORY FULL"); return 2; }
+    if (id != pfs_cur() && project_save_cur()) { ui_message("SAVE ERROR"); return 2; }   /* (Dah: any failure: stop) */
     ps_reset();
     if (pfs_read(id)) { ui_message("PROJECT DAMAGED"); return 2; }
     ui_message("PROJECT OPEN");
@@ -382,7 +412,7 @@ static int project_new_file(void)                       /* NEW: the one open sav
     uint32_t id;
     char nm[16];
     if (pfs_busy()) return 1;
-    if (project_save_cur() == 2 || !(id = pfs_free_id())) { ui_message("MEMORY FULL"); return 2; }
+    if (project_save_cur() || !(id = pfs_free_id())) { ui_message("MEMORY FULL"); return 2; }
     chain_defaults(&chain_config);
     ps_reset();
     if (project_new()) return 2;
@@ -401,7 +431,8 @@ static int project_copy(const char *name)               /* COPY: the music as a 
 {
     uint32_t id;
     if (pfs_busy()) return 1;
-    if (!(id = pfs_free_id()) || project_save_cur() == 2) { ui_message("MEMORY FULL"); return 2; }
+    if (project_save_cur() || !(id = pfs_free_id())) { ui_message("MEMORY FULL"); return 2; }   /* (Dah: the id after the
+                                                         * save, which may take one for the music open) */
     str_cpy(proj_name, name, sizeof proj_name);
     if (pfs_write(id, proj_name)) { ui_message("MEMORY FULL"); return 2; }
     PFS_CUR = (uint8_t)id;

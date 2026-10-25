@@ -1488,6 +1488,12 @@ static void project_load(uint32_t slot)
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t))) { ui_message("EMPTY SLOT"); return; }
     (void)proj_x_apply(&proj_scratch, PX_OBJ0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));   /* (tracks 5..8) */
     proj_bound(&proj_scratch);                          /* a retained RAM slot of an older format: as from flash */
+#if FELUCCA_FLASH
+    ps_reset();                                         /* (Dah: a Felucca slot, its four tracks, not the project open's
+                                                         * patterns; no project open then: autosave writes a new one) */
+    song.ntrk = NTRK_V10;
+    DAH_CUR = 0;
+#endif
     if (!project_restore_runtime(&proj_scratch)) {
         proj_cur = (uint8_t)(slot & 3u);
         pat_from_set((slot & 3u) + 1u);

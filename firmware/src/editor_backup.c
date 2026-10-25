@@ -29,7 +29,7 @@ _Static_assert(ED_BK_PFS_MAX == PFS_NSECT * ST_SECTOR, "the projects image");
 #define ED_BK_RAW (proj_wire_u.raw)  /* reuse the existing serialized main-loop scratch */
 _Static_assert(sizeof proj_wire_u.raw >= sizeof(upf_t) && sizeof proj_wire_u.raw >= sizeof(fm6_bank_t), "backup staging");
 static persist_t ed_bk_settings __attribute__((section(".pool")));
-static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id, ed_bk_gen;
+static uint8_t ed_bk_valid, ed_bk_put, ed_bk_id, ed_bk_gen, ed_bk_pfs_done;   /* (Dah: id 18 restored this session) */
 static uint32_t ed_bk_len, ed_bk_crc, ed_bk_pos, ed_bk_ms, ed_bk_usb;
 static void ed_bk_u32(uint32_t n) { for (uint32_t i = 0; i < 5u; i++) ed_b((n >> (i * 7u)) & 127u); }
 static uint32_t ed_bk_r32(const uint8_t *p)
@@ -157,6 +157,9 @@ static uint32_t ed_bk_commit(void)
         }
         if (ed_bk_pfs_crc(ed_bk_len) != ed_bk_crc) return 2;
         pfs_scan();
+        ed_bk_pfs_done = 1;
+        if (!pfs_there(pfs_cur()))
+            PFS_CUR = 0;
         ui.force = 1;
         return 0;
     }
@@ -231,7 +234,13 @@ static uint32_t ed_bk_commit(void)
         if (ed_bk_len) memcpy(&proj_slot[ed_bk_id - 2u], raw, ed_bk_len);
     } else if (ed_bk_id == 1u) {
         memcpy(&ed_bk_settings, raw, sizeof ed_bk_settings);
-        settings_import(&ed_bk_settings, sizeof ed_bk_settings);
+        {
+            uint8_t cur = DAH_CUR;                  /* (Dah: the project open is the device's, unless the projects came
+                                                     * with the archive: else autosave would write over another one) */
+            settings_import(&ed_bk_settings, sizeof ed_bk_settings);
+            if (!ed_bk_pfs_done)
+                DAH_CUR = cur;
+        }
         panel_init(); settings_init(); palette_apply();
 #if FELUCCA_FLASH
         persist_saved = ed_bk_settings; persist_pending = 0;
@@ -271,6 +280,7 @@ static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
         if (a[1] == ED_BK_PFS) {                    /* (none in the archive: no project, every sector freed) */
             if (!flash_ok) return 4;
             pfs.ok = 0;
+            PFS_CUR = 0;                            /* (the sectors change under it: no project open meanwhile) */
         }
 #endif
         return 0;
