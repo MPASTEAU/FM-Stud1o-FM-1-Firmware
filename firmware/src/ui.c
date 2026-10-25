@@ -1879,6 +1879,8 @@ static void track_select(uint32_t i)
     }
     if (i >= trk_count() || i == song.sel)
         return;
+    if ((mix_solo >> (song.sel % NTRK)) & 1u)          /* (Dah) the track soloed: the SOLO goes along, the others normal */
+        mix_solo = (uint8_t)(1u << (i % NTRK));
     song.sel = (uint8_t)i;
     ui.entry_open = 0;
     ui.hot_t = 0;

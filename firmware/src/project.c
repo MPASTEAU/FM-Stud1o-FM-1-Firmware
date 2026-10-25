@@ -1382,6 +1382,7 @@ static int project_restore_runtime(const project_t *input)
     if (p != input) memcpy(p, input, sizeof *p);
     mst_defaults();                                     /* (Dah: the MASTER's chain: projfs.c puts a project's back) */
     chain_from_row = 0;                                 /* (SONG's GRID at the top) */
+    mix_solo = perf_solo = 0;                           /* (MIXER's SOLO: the project's, none) */
     chain_from_u = 0;
     proj_drums_to_part(p);                              /* a RAM slot of firmware before 1.0 */
     proj_phys(p);                                       /* .. before PHYS lost DUST and DRUM */
