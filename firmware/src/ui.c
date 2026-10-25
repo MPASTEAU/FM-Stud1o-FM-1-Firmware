@@ -420,7 +420,11 @@ static uint32_t large_kind(void)
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
 static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : Y_GRAPH; }
-static uint32_t graph_h(void) { return large_kind() == LK_TALL ? LG_H_GRAPH : H_GRAPH; }
+/* (Dah) the footer's first row has nothing to show (no OCT+ hint, MIDI LEARN line, DRUM grid page, STEP's lane, no
+ * layer, NAME or menu over it): the panel takes its rows, FOOT_GAIN more (graph_h); the footer keeps its second */
+#define FOOT_GAIN 18u
+static int foot_free(void);
+static uint32_t graph_h(void) { return large_kind() == LK_TALL ? LG_H_GRAPH : foot_free() ? H_GRAPH + FOOT_GAIN : H_GRAPH; }
 static int large_face_has(const char *s)                /* every glyph of s in the sparse L face */
 {
     for (; *s; s++)
@@ -664,6 +668,20 @@ static int16_t lane_value(const track_t *t, uint32_t si, uint32_t id, int *pt)
         if (st == si) *pt = 1;
     }
     return found ? bv : lfound ? lv : motion_base_value(t, id);
+}
+static uint32_t act_cols(void);
+static int name_on(void);
+static int detail_on(void);
+static int foot_free(void)
+{
+    const page_t *pg = cur_page();
+    if (ui.menu || ui.confirm || ui.layer || name_on() || ui.ml.on || large_kind() == LK_TALL)
+        return 0;
+    if (ui.home)
+        return 1;
+    if (act_cols() || (pg->graph == GR_ROLL && (drum_track(TSEL) || !detail_on())))   /* (the grid's page line, the lane) */
+        return 0;
+    return 1;
 }
 static int detail_on(void)
 {

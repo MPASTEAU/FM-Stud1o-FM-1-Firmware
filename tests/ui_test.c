@@ -8452,7 +8452,8 @@ static int test_large(void)
     ok &= lg_px(30, LG_Y_GRAPH + 1) == T_SURF;
     for (c = 0; c < 4u; c++)                                      /* each column's K pill, over its knob */
         ok &= lg_px(CARD_X(c) + 8, Y_LABEL + LG_MY + LG_MH / 2) == T_KEY;
-    ok &= !memcmp(off + Y_FOOT * 240, host_screen + Y_FOOT * 240, 240u * H_FOOT * sizeof *off);
+    ok &= !memcmp(off + (Y_FOOT + FOOT_GAIN) * 240, host_screen + (Y_FOOT + FOOT_GAIN) * 240,
+                  240u * (H_FOOT - FOOT_GAIN) * sizeof *off);   /* (Dah: its second row; LARGE OFF the first is the panel's) */
     bad += check("#15 LARGE ON: HOME's cards tall (a K1..K4 pill over each column), the scope a strip, the footer kept", ok);
 
     /* the value in L: CLOCK's BPM 124 stands about twice as tall as in M */
@@ -8479,7 +8480,7 @@ static int test_large(void)
 
     /* per page type: lists and rolls keep the layout, the layers too; MIXER's tracks in the strip */
     go_page(GR_BROWSE); frame();
-    ok = large_kind() == LK_LABEL && card_h() == CARD_H && graph_y() == Y_GRAPH && graph_h() == H_GRAPH;
+    ok = large_kind() == LK_LABEL && card_h() == CARD_H && graph_y() == Y_GRAPH && graph_h() == H_GRAPH + FOOT_GAIN;
     go_page(GR_ROLL); frame();
     ok &= large_kind() == LK_LABEL;
     go_page(GR_TRK); frame();
@@ -9702,11 +9703,11 @@ static int test_home_tracks(void)
     t->step[8] = (step_t){{64}, 1, ST_NOTE, SF_ACCENT, 100};
     t->step[10] = (step_t){{0}, 0, ST_TIE, 0, 100};     /* (a TIE after an empty step: nothing to carry) */
     go_home(); frame();
-    ok = rk_px(0, 0, 10) == T_THEME && rk_px(1, 0, 12) == T_LINE && rk_px(1, 0, 5) == T_SURF &&   /* a note (Dah: at its
+    ok = rk_px(0, 0, 12) == T_THEME && rk_px(1, 0, 14) == T_LINE && rk_px(1, 0, 5) == T_SURF &&   /* a note (Dah: at its
                                                          * height, 60 the page's lowest), empty */
-         rk_px(5, 0, 6) == ux_mix(T_SURF, T_THEME, 55) && rk_px(6, 0, 6) == ux_mix(T_SURF, T_THEME, 55) &&   /* tied */
+         rk_px(5, 0, 7) == ux_mix(T_SURF, T_THEME, 55) && rk_px(6, 0, 7) == ux_mix(T_SURF, T_THEME, 55) &&   /* tied */
          rk_px(8, 0, 2) == T_TEXT &&                                                        /* accented (64: the top) */
-         rk_px(10, 0, 12) == T_LINE && rk_px(10, 0, 6) == T_SURF &&                          /* a lone TIE */
+         rk_px(10, 0, 14) == T_LINE && rk_px(10, 0, 6) == T_SURF &&                          /* a lone TIE */
          rk_bg(0) == T_SURF && rk_bg(1) == T_RAISE && home_tracks() && large_kind() == LK_OFF;   /* T2 selected */
     bad += check("HOME > TRACKS (the rack): a row's steps: notes, empty stubs, TIEs carried on (half), accents, a lone TIE", ok);
     song.playing = 1;                                   /* the play head on step 3 (empty), then on the note 4 */
@@ -9715,24 +9716,24 @@ static int test_home_tracks(void)
     ok = rk_ring(3, 0) && !rk_ring(2, 0);
     t->seq_idx = 4;
     frame();
-    ok &= rk_ring(4, 0) && !rk_ring(3, 0) && rk_px(4, 0, 6) == T_THEME;
+    ok &= rk_ring(4, 0) && !rk_ring(3, 0) && rk_px(4, 0, 7) == T_THEME;
     bad += check("HOME > TRACKS: the step playing ringed (TEXT); it moves with the play head", ok);
 
     t->p[P_SLEN] = 40;                                  /* LEN 40: 3 pages; step 20 a note, step 16 empty */
     t->step[20] = (step_t){{65}, 1, ST_NOTE, 0, 100};
     t->seq_idx = 21;
     frame();
-    ok = rk_px(4, 0, 6) == T_THEME && rk_px(0, 0, 12) == T_LINE && rk_ring(5, 0);   /* playing 21 = its 6th */
+    ok = rk_px(4, 0, 7) == T_THEME && rk_px(0, 0, 14) == T_LINE && rk_ring(5, 0);   /* playing 21 = its 6th */
     t->seq_idx = 36;                                   /* the last page: 8 steps, the rest blank */
     frame();
-    ok &= rk_px(7, 0, 12) == T_LINE && rk_px(8, 0, 12) == T_SURF;
+    ok &= rk_px(7, 0, 14) == T_LINE && rk_px(8, 0, 14) == T_SURF;
     song.playing = 0;                                   /* stopped: T1 not selected, its first page */
     frame();
-    ok &= rk_px(0, 0, 10) == T_THEME && rk_px(4, 0, 6) == T_THEME;
+    ok &= rk_px(0, 0, 12) == T_THEME && rk_px(4, 0, 7) == T_THEME;
     song.sel = 0;                                       /* .. selected: its cursor's page */
     ui.cursor = 20; ui.bank = 1;
     frame();
-    ok &= rk_px(4, 0, 6) == T_THEME && rk_px(0, 0, 12) == T_LINE && rk_bg(0) == T_RAISE;
+    ok &= rk_px(4, 0, 7) == T_THEME && rk_px(0, 0, 14) == T_LINE && rk_bg(0) == T_RAISE;
     bad += check("HOME > TRACKS: LEN > 16: the play head's page (stopped: the cursor's, selected), past LEN blank", ok);
 
     song.sel = 1;
@@ -9744,7 +9745,7 @@ static int test_home_tracks(void)
     t->step[0].hit = 1; t->step[2].hit = 1 | 8; t->step[4].hit = 2; t->step[4].acc = 2;
     t->p[P_MUTE] = 0;
     frame();
-    ok &= rk_px(0, 3, 6) == T_THEME && rk_px(2, 3, 6) == T_THEME && rk_px(4, 3, 6) == T_TEXT && rk_px(1, 3, 12) == T_LINE;
+    ok &= rk_px(0, 3, 6) == T_THEME && rk_px(2, 3, 6) == T_THEME && rk_px(4, 3, 6) == T_TEXT && rk_px(1, 3, 14) == T_LINE;
     bad += check("HOME > TRACKS: DRUM hits as notes, an accented hit TEXT", ok);
 
     t = &trk[2];                                        /* T3 muted: its cushion and steps DIM, no meter */
@@ -9754,11 +9755,11 @@ static int test_home_tracks(void)
     t->p[P_MUTE] = 1;
     trk[3].peak = 20000;
     frame();
-    ok = rk_px(0, 2, 6) == T_DIM && rk_at(3, 2, 7) == T_DIM && rk_at(RK_MX + 1, 3, 6) == T_THEME &&
-         rk_at(RK_MX + 1, 2, 6) == T_LINE;
+    ok = rk_px(0, 2, 7) == T_DIM && rk_at(3, 2, 7) == T_DIM && rk_at(RK_MX + 1, 3, 7) == T_THEME &&
+         rk_at(RK_MX + 1, 2, 7) == T_LINE;   /* (Dah: the meter centred on the taller row) */
     t->p[P_MUTE] = 0;
     frame();
-    ok &= rk_px(0, 2, 6) == T_THEME && rk_at(3, 2, 7) == T_THEME;
+    ok &= rk_px(0, 2, 7) == T_THEME && rk_at(3, 2, 7) == T_THEME;
     bad += check("HOME > TRACKS: MUTE: the cushion and steps DIM; unmuted again: as before; the output meter", ok);
 
     /* HOME's knobs: the selected track's; ALGORITHM moves the selection; HOME tapped: MIXER, CLOCK, HOME */

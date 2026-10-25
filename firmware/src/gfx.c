@@ -67,7 +67,7 @@ typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #define AL_CELLS 32u                               /* the next cells (cv_rrect), not ink: a row of keys, a fill */
 #define AL_N(n) ((uint32_t)(n) << 8)
 
-#define CV_MAX (240u * 124u)      /* the graph strip is 240 x 124 */
+#define CV_MAX (240u * 142u)      /* the graph strip is 240 x 124 (Dah: 140 when the footer's first row is free) */
 static uint16_t cv_px[CV_MAX] __attribute__((section(".pool")));
 static uint32_t cv_w, cv_h;
 static uint16_t cv_bg;           /* what cv_begin cleared the canvas to */

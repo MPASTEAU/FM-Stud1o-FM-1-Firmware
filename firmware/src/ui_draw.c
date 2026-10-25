@@ -350,7 +350,7 @@ static int head_slot(char *b)
 }
 /* HA HA HE HU: the pattern worked on, at the right while the rail shows: the selected track's slot letter (A..D; a song
  * playing: its lane's) on a badge in the track's colour, "*" after it when edited since; no slot: "-" outlined */
-#define HEAD_PAT_W 22
+#define HEAD_PAT_W 24                                  /* (Dah: "P" and the number: which pattern, plainly) */
 #define HEAD_PAT_X (HEAD_GRP_R - HEAD_PAT_W)
 static void head_pattern(int slot, const char *sl)
 {
@@ -364,8 +364,13 @@ static void head_pattern(int slot, const char *sl)
         cv_rrect(HEAD_PAT_X, 3, HEAD_PAT_W, 18, 4, T_LINE, T_BG);
         cv_rrect(HEAD_PAT_X + 1, 4, HEAD_PAT_W - 2, 16, 3, T_BG, T_LINE);
     }
-    GFX_HOOK_ALIGN(HEAD_PAT_X, 3, HEAD_PAT_X + HEAD_PAT_W, 21, AL_HV, "header pattern letter on its badge");
-    cv_text_in(HEAD_PAT_X, 3 + CAP_IN(M, 18), HEAD_PAT_W, &AF_M, l, on ? T_INK : T_DIM, on ? tc : T_BG);
+    {                                                   /* (Dah) a small P, then the number: "P1" (two digits: all small) */
+        const aafont_t *nf = l[1] ? &AF_S : &AF_M;
+        int32_t w = text_w(&AF_S, "P") + 1 + text_w(nf, l), x = HEAD_PAT_X + (HEAD_PAT_W - w) / 2;
+        int32_t sy = 3 + CAP_IN(M, 18) + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;   /* (S on M's baseline) */
+        cv_text(x, sy, &AF_S, "P", on ? T_INK : T_DIM);
+        cv_text(x + text_w(&AF_S, "P") + 1, l[1] ? sy : 3 + CAP_IN(M, 18), nf, l, on ? T_INK : T_DIM);
+    }
 }
 /* the octave, or the song row while a song plays, its right end at HEAD_GRP_R (the rail: left of the pattern's badge,
  * the song row without its disc: the play state shows it) */
@@ -539,7 +544,7 @@ static void draw_frame(void)
     uint32_t ch = card_h(), gy = graph_y(), gh = graph_h();   /* (MENU > LARGE: tall cards, a strip) */
     gap_rows(H_HEAD, Y_LABEL);
     gap_rows(Y_LABEL + ch, gy);
-    gap_rows(gy + gh, Y_FOOT);
+    gap_rows(gy + gh, foot_free() ? Y_FOOT + FOOT_GAIN : Y_FOOT);
     draw_gaps(Y_LABEL, ch);
 }
 
@@ -1008,11 +1013,14 @@ static void draw_foot_in(void)
         ml_line(ln);
         sig += str_hash(0x1EA2u, ln);
     }
+    sig += (uint32_t)foot_free() * 0x2545F491u;
     if (!ui.force && sig == ui.foot_sig)
         return;
     ui.foot_sig = sig;
     cv_begin(240, H_FOOT, T_BG);
-    if (help) {                                       /* row 1: the hint in place of the steps or the OCT+ / OCT- hint */
+    if (foot_free()) {
+        /* (Dah: row 1 is the panel's: nothing here, only row 2 blitted) */
+    } else if (help) {                                /* row 1: the hint in place of the steps or the OCT+ / OCT- hint */
         help_row(help, 2);
     } else if (act_cols()) {                          /* row 1: the OCT+ / OCT- hint in place of the steps */
         char ha[16], hb[16];
@@ -1079,7 +1087,10 @@ static void draw_foot_in(void)
         }
         cv_text_r(r, 19, &AF_S, ti, ui.home ? T_MID : ux.fam[pg->fam % 12u], T_BG);   /* (the page: its family's colour) */
     }
-    cv_blit(0, Y_FOOT);
+    if (foot_free())
+        cv_blit_from(0, Y_FOOT, FOOT_GAIN);           /* (row 2 only: the panel above reaches down to it) */
+    else
+        cv_blit(0, Y_FOOT);
 }
 /* the EDIT layer's cards (ui_layer.c): ENG (the engine), No. (its sounds: KNOB 2's list), FAV, an empty card */
 static void engine_columns(void)
