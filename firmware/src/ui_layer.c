@@ -1263,8 +1263,8 @@ static void draw_layer(void)
                eqa_sig() * 2654435761u;
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
-        cv_begin(240, H_GRAPH, T_BG);
-        cv_rrect(3, 0, 234, H_GRAPH, 5, T_SURF, T_BG);
+        cv_begin(240, graph_h(), T_BG);                  /* (Dah: the panel's height, the page's under it hidden) */
+        cv_rrect(3, 0, 234, graph_h(), 5, T_SURF, T_BG);
         cv_bg = T_SURF;
         if (l == LAYER_FX)
             layer_fx();
@@ -1287,8 +1287,14 @@ static void draw_layer(void)
                             LAYERS[l].foot;
         int h = help_on() && help_row(l == LAYER_SEQ && eu.on ? H_EUCLID : HELP_LAYER[l], 21);   /* 1.5, HELP ON: a
                                                          * second row, what this one does not say */
-        cv_key_row(8, 232, h ? 2 : 9, ft, ft[2].act ? 3u : 2u, 7u, T_BG);
-        cv_blit(0, Y_FOOT);
+        {
+            int tall = foot_free() && !h;             /* (Dah: the panel reaches row 2: the keys' row there only) */
+            cv_key_row(8, 232, tall ? 21 : h ? 2 : 9, ft, ft[2].act ? 3u : 2u, 7u, T_BG);
+            if (tall)
+                cv_blit_from(0, Y_FOOT, FOOT_GAIN);
+            else
+                cv_blit(0, Y_FOOT);
+        }
         ui.foot_sig = 0;
     }
 }
