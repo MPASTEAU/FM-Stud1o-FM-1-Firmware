@@ -14,6 +14,7 @@
  * 5. the cost per type and track (instructions / sample, host) against an 8-voice ANALOG part.
  * 6. demos (DEMO_DIR): each TYPE on a loop (acid line + drums), two bars dry, two bars with the INSERT. */
 #define UI_TEST_NO_MAIN 1
+#include <stddef.h>
 #include "ui_test.c"
 #ifdef __APPLE__
 #include <libproc.h>
@@ -381,13 +382,14 @@ static void test_stored(void)
     motion_set_event(&trk[1], 3, P_IMIX, 77);
     motion_set_lock(&trk[2], 5, P_IA, 9);
     project_capture(&a);
-    ok = proj_pack(&st, &a) && st.raw[66] == P_COUNT && P_COUNT == 111u && proj_import(&b, &st, sizeof st) &&
-         !memcmp(&a, &b, sizeof a);
-    for (k = 0; k < NTRK; k++)
+    ok = proj_pack(&st, &a) && st.raw[66] == P_COUNT && P_COUNT == 114u && proj_import(&b, &st, sizeof st) &&
+         !memcmp(&a, &b, offsetof(project_t, t) + NTRK_V10 * sizeof a.t[0]);   /* FUN10: four tracks */
+    for (k = 0; k < NTRK_V10; k++)
         ok &= b.t[k].p[P_ITYPE] == (int16_t)(k * 2u + 1u) && b.t[k].p[P_IMIX] == (int16_t)(100 + k) &&
               b.t[k].p[P_IC] == (int16_t)(30 + k);
-    ok &= 68u + NTRK * (P_COUNT + 2u + NSTEP * 9u) + sizeof(chain_config_t) + sizeof(motion_store_t) + 16u == PROJ_FM6_OFF;
-    ck("project: FUN10 round trip of the INSERT (111 parameters, its motion), 16 spare bytes before the patches", ok);
+    ok &= 68u + NTRK_V10 * (P_COUNT + 2u + NSTEP * 9u) + sizeof(chain_v10_t) + sizeof(motion_store_v10_t) + 4u == PROJ_FM6_OFF;
+    ck("project: FUN10 round trip of the INSERT (Dah: 114 parameters, four tracks, its motion), 4 spare bytes before the patches",
+       ok);
     /* user presets: a record of 111 keeps them; one of 104 (1.2 .. 1.4) gets the INSERT OFF */
     memset(&r, 0, sizeof r);
     r.used = UP_USED; r.ver = UP_VER; r.engine = 0; r.np = P_COUNT;
@@ -411,9 +413,9 @@ static void test_stored(void)
             if (str_eq(PAGES[p].title, "SLICER")) ps = p;
             if (str_eq(PAGES[p].title, "INSERT")) pi = p;
             if (str_eq(PAGES[p].title, "INSERT 2")) pi2 = p;
-            if (str_eq(PAGES[p].title, "DLY")) pd = p;
+            if (str_eq(PAGES[p].title, "DUCK")) pd = p;
         }
-        ok = pi == ps + 1u && pi2 == pi + 1u && pd == pi2 + 1u && PAGES[pi].fam == FAM_FX && PAGES[pi].id[0] == P_ITYPE &&
+        ok = pi == ps + 1u && pi2 == pi + 1u && pd == pi2 + 1u && PAGES[pd].fam == FAM_FX && PAGES[pi].fam == FAM_FX && PAGES[pi].id[0] == P_ITYPE &&
              PAGES[pi2].id[0] == P_IMIX;
         set_ins(t, IT_CRUSH, 64, 96, 96, 127);
         ok &= str_eq(track_desc(t, P_IA)->label, "BITS") && str_eq(track_desc(t, P_IB)->label, "RATE") &&
@@ -434,7 +436,7 @@ static void test_stored(void)
         ok &= str_eq(track_desc(t, P_IA)->label, "INS A") && str_eq(param_desc_of(0, P_IB)->label, "INS B");
         for (i = P_ITYPE; i <= P_IMIX; i++)
             ok &= motion_param(i) && !param_kept(i);
-        ck("pages: SLICER, INSERT (TYPE A B C), INSERT 2 (MIX), DLY; A B C named by TYPE; recordable; part of the sound", ok);
+        ck("pages: SLICER, INSERT (TYPE A B C), INSERT 2 (MIX), DUCK (Dah: DLY in GLO); A B C named by TYPE; recordable; part of the sound", ok);
     }
 }
 

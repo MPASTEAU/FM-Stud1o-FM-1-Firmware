@@ -68,7 +68,7 @@ static int projects(void)
     memset(&v5, 0, sizeof v5);                              /* FUN5 the same */
     v5.magic = PROJ_MAGIC_V5; v5.size = sizeof v5;
     for (i = 0; i < G_COUNT; i++) v5.g[i] = GP[i].def;
-    for (i = 0; i < NTRK; i++) { v5.t[i].engine = trk[i].engine; memcpy(v5.t[i].p, trk[i].p, sizeof v5.t[i].p); }
+    for (i = 0; i < NTRK_V10; i++) { v5.t[i].engine = trk[i].engine; memcpy(v5.t[i].p, trk[i].p, sizeof v5.t[i].p); }
     v5.t[2].engine = NENGINES;
     v5.sum = proj_hash(&v5, sizeof v5 - 4u);
     bad += check("FUN5 with an engine past the last is not a project", !proj_import(&q, &v5, sizeof v5));

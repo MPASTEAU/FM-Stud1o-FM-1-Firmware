@@ -374,7 +374,7 @@ int main(void)
     v6.size = sizeof v6;
     for (uint32_t i = 0; i < G_COUNT; i++)
         v6.g[i] = GP[i].def;
-    for (uint32_t i = 0; i < NTRK; i++)
+    for (uint32_t i = 0; i < NTRK_V10; i++)
         v6.t[i].engine = trk[i].engine;
     v6.t[0].step[0] = (step10_t){{255, 72}, 9, 7, 0, 96, 0, 0};
     v6.t[0].p[61] = 3;                                   /* old E0 */
