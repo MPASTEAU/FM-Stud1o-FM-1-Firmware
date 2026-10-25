@@ -65,6 +65,52 @@ static void vowel_at(int32_t pos, int32_t *f, int32_t *b)
 }
 
 typedef struct { int32_t a, b, c; } fres_t;
+
+/* Dah: the choir, after the Roland VP-330's Human Voice and its ensemble. POLY (a choir: not a MONO lead or bass):
+ *   each voice  a vibrato of its own, 4.9 .. 5.7 Hz (the note's random bits), up to 22 cents, coming in over ~0.4 s
+ *               after the note as a singer's does, and a fixed detune of +-3 cents: the voices never beat in step
+ *   the part    an ensemble on the voices' sum: three taps of one 23 ms line around 9 ms, each moved by a slow
+ *               (0.63 Hz, +-1.5 ms) and a fast (6.1 Hz, +-0.25 ms) LFO, 120 degrees apart, mixed with the dry:
+ *               one voice sounds as many (the BBD ensemble of the string and choir machines)
+ * In the part's engine memory (eng_mem: 2.1 KB, every part) */
+#define FE_LEN 1024u
+typedef struct {
+    int16_t buf[FE_LEN];
+    uint32_t w, lph[2], time;
+    int32_t d[3];                                       /* each tap's delay at the end of the last block, Q8 samples */
+    uint32_t on[NVOICE];                                /* each voice's note-on, in blocks (its vibrato's onset) */
+} fmt_mem_t;
+static fmt_mem_t *fmt_of(const track_t *t) { return (fmt_mem_t *)ENG_MEM(t - trk); }
+static int fmt_choir(const track_t *t) { return t->p[P_VOICE] == V_POLY; }
+static void formant_post(track_t *t, int32_t *out, uint32_t n)
+{
+    fmt_mem_t *M = fmt_of(t);
+    uint32_t i, k, w = M->w;
+    int32_t d0[3], dq[3];
+    M->time++;
+    M->lph[0] += 1963458u;                              /* 0.63 Hz, a block of 32 */
+    M->lph[1] += 19011260u;                             /* 6.1 Hz */
+    for (k = 0; k < 3u; k++) {
+        int32_t d1 = (400 << 8) + ((sine_i(M->lph[0] + k * 1431655765u) * 66) >> 7) +
+                     ((sine_i(M->lph[1] + k * 1431655765u) * 11) >> 7);
+        d0[k] = M->d[k] ? M->d[k] : d1;
+        dq[k] = n ? (d1 - d0[k]) / (int32_t)n : 0;
+        M->d[k] = d1;
+    }
+    for (i = 0; i < n; i++) {
+        int32_t x = out[i], wet = 0;
+        M->buf[w & (FE_LEN - 1u)] = (int16_t)clamp(x >> 2, -32768, 32767);
+        for (k = 0; k < 3u; k++) {
+            int32_t d = d0[k] + dq[k] * (int32_t)i, di = d >> 8, fr = d & 255;
+            int32_t a = M->buf[(w - (uint32_t)di) & (FE_LEN - 1u)], b = M->buf[(w - (uint32_t)di - 1u) & (FE_LEN - 1u)];
+            wet += a + (((b - a) * fr) >> 8);
+        }
+        if (fmt_choir(t))
+            out[i] = ((x + (wet << 2)) * 13) >> 5;      /* dry + the three taps, about the level of the dry alone */
+        w++;
+    }
+    M->w = w;
+}
 #if FELUCCA_CPU2
 /* breath noise: an xorshift for all a part's voices (one per part, as the two cores render parts at once) */
 _Static_assert(NTRK == 8, "formant_nz: a seed per part");
@@ -93,7 +139,7 @@ static void fres_coef(fres_t *r, uint32_t f16, uint32_t bw16)
 
 static void formant_note_on(track_t *t, voice_t *v)
 {
-    (void)t;
+    fmt_of(t)->on[(uint32_t)(v - t->v) % NVOICE] = fmt_of(t)->time;   /* (Dah: its vibrato starts over) */
     v->s[7] = (int32_t)((noise32(&FORMANT_NZ(t)) >> 25) << 25);   /* TALK starts over; a random vowel (RAND) */
     if (!v->env && !v->env_out) {                       /* a fresh voice (not a retrigger): from rest */
         uint32_t i;
@@ -110,6 +156,14 @@ static void formant_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, con
     fres_t r1, r2, r3, r4;
     int32_t fa[3], ba[3], fb[3], bb[3], k, j, buzz, oq, tilt, gv, gn, og, ogk;
     uint32_t inc = m->inc, i, te, tp, rp, rn, ratio, bws, f0;
+    if (fmt_choir(t)) {                                 /* (Dah) the singer's vibrato and the voice's own detune */
+        const fmt_mem_t *M = fmt_of(t);
+        uint32_t r = ((uint32_t)v->s[7] >> 25) & 127u, age = M->time - M->on[(uint32_t)(v - t->v) % NVOICE];
+        int32_t dep = age >= 551u ? 419 : (int32_t)((419u * age) / 551u);   /* 22 cents, in over ~0.4 s */
+        int32_t vib = (sine_i(M->time * ((4900u + r * 6u) * 3117u) + (r << 25)) * dep) >> 15;
+        vib += ((int32_t)r - 64) * 57 / 64;             /* +-3 cents */
+        inc += (uint32_t)(((int64_t)inc * vib) >> 15);
+    }
     uint32_t ph = v->ph[0];
     int32_t y1 = v->s[0], y2 = v->s[1], y3 = v->s[2], y4 = v->s[3], y5 = v->s[4], y6 = v->s[5];
     int32_t y7 = (int32_t)v->ph[1], y8 = (int32_t)v->ph[2], lp = v->s[6], nst = FORMANT_NZ(t);
@@ -238,4 +292,6 @@ static const engine_t ENG_FORMANT = {
     .render = formant_render,
     .knob = {P_E0, P_E4, P_E5, P_E2},
     .poly = 4,
+    .post = formant_post,
+    .mem = sizeof(fmt_mem_t),
 };

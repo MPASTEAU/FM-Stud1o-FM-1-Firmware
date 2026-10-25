@@ -819,6 +819,9 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     }
     if (T_SPREAD(t))
         SPREAD_SUM(out, t);                /* out: every voice; spread_buf: the left ones */
+    if (e->post)                                        /* (Dah) the engine's own work on the voices' sum (VOICE's
+                                                         * ensemble) */
+        e->post(t, out, n);
     if (fade) {
         for (i = 0; i < 8u; i++)
             t->p[P_E0 + i] = pe_new[i];
