@@ -1112,8 +1112,27 @@ static void edit_param(uint32_t slot, int32_t steps)
         ev_knob(slot, steps);
         return;
     }
+    if (pg->graph == GR_SONG && sgw.on) {             /* (Dah) VIEW: MOVE (FOLLOW off), ZOOM, FOLLOW */
+        if (slot == 0u) {
+            sgw.at = (sgw.nofollow ? sgw.at : sgv.off) + steps * (int32_t)sg_zoom();   /* (a bar a detent) */
+            if (sgw.at < 0)
+                sgw.at = 0;
+            sgw.nofollow = 1;
+        } else if (slot == 1u) {
+            int32_t z = (int32_t)sg_zoom() + (steps > 0 ? 1 : -1) * ((int32_t)sg_zoom() / 4 > 1 ? (int32_t)sg_zoom() / 4 : 1);
+            int32_t bar = (sgv.off + SG_W / 2) / (int32_t)sg_zoom();   /* (the middle stays where it is) */
+            sgw.zoom = (uint8_t)clamp(z, 2, 96);
+            sgw.at = bar * (int32_t)sg_zoom() - SG_W / 2;
+            if (sgw.at < 0)
+                sgw.at = 0;
+        } else if (slot == 2u)
+            sgw.nofollow = steps < 0;
+        ui.force = 1;
+        return;
+    }
     if (pg->graph == GR_SONG) {                       /* KNOB 1 SECTION, 2 TRACK, 3 PAT (A..D, -), 4 REPS */
         chain_row_t *r;
+        sgw.touch = ui.frame;                           /* (Dah: the view on the section picked, a while) */
         if (slot == 0u) {
             ui.song_row = (uint8_t)clamp((int32_t)ui.song_row + steps, 0,
                 chain_config.count < CHAIN_ROWS ? chain_config.count : CHAIN_ROWS - 1u);
@@ -1295,9 +1314,11 @@ static void act_do(void)
                      c == 2u ? CF_DEL_TRACK : CF_CLEAR_SONG, c == 2u ? trk_count() - 1u : song.sel);
         return;
     }
-    if (cur_page()->graph == GR_SONG) {
-        if (song.playing || chain_busy() || seq_counting()) transport_req = 2;
-        else chain_play_ui();
+    if (cur_page()->graph == GR_SONG) {                 /* (Dah) OCT+: the VIEW, its knobs MOVE ZOOM FOLLOW (PLAY
+                                                         * plays the song) */
+        sgw.on = !sgw.on;
+        ui_message(sgw.on ? "VIEW: MOVE ZOOM FOLLOW" : "SONG");
+        ui.force = 1;
         return;
     }
     if (cur_page()->graph == GR_PATS) {

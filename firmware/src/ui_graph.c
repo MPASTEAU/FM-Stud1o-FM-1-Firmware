@@ -1132,6 +1132,7 @@ typedef struct {
     int32_t x[CHAIN_ROWS + 2u];                        /* each row's left edge (content px); x[n]: + ADD's; x[n + 1]: the end */
 } song_lay_t;
 static struct { int32_t off; uint32_t frame; uint8_t init, cur, play, last; } sgv;   /* the view (scrolled) */
+
 /* a * b / c without a 64-bit divide: a and c halved alike until a * b fits */
 static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
 {
@@ -1199,7 +1200,8 @@ static void song_layout(song_lay_t *L)
                 chg = 1;
             }
     }
-    L->fit = nf * SG_MINW <= wb && (!uf || sg_muldiv(SG_BARU, wb - nf * SG_MINW, uf) >= SG_FITBAR);
+    L->fit = 0;                                        /* (Dah) never fitted: the song at its zoom, scrolling */
+    (void)forced;
     if (L->fit) {
         uint32_t nb = 0, ub = 0;
         for (i = 0; i <= n; i++) {
@@ -1210,7 +1212,7 @@ static void song_layout(song_lay_t *L)
     } else {
         L->x[0] = 0;
         for (i = 0; i < n; i++) {
-            uint32_t w = ((L->u0[i + 1u] - L->u0[i]) * SG_BAR + SG_BARU / 2u) / SG_BARU;
+            uint32_t w = ((L->u0[i + 1u] - L->u0[i]) * sg_zoom() + SG_BARU / 2u) / SG_BARU;   /* (Dah: VIEW's ZOOM) */
             L->x[i + 1u] = L->x[i] + (int32_t)(w > SG_MINW ? w : SG_MINW);
         }
     }
@@ -1270,10 +1272,14 @@ static int32_t song_follow(const song_lay_t *L)
     m = (SG_W - (b - a)) / 2;
     m = m > SG_MINW ? SG_MINW : m < 0 ? 0 : m;
     if (a - m < tgt) tgt = a - m;
-    if (b + m > tgt + SG_W) tgt = b + m - SG_W;
+    if (b + m > tgt + SG_W) tgt = b - a + 2 * m > SG_W ? a - m : b + m - SG_W;   /* (Dah: wider than the view: its start) */
     end = L->x[L->n + 1u] - SG_W;
-    if (p != 0xFFu && song_playx(L) >= 0) {           /* (Dah) playing: the playhead stays in the middle once there,
-                                                         * the song going by under it */
+    if (sgw.nofollow) {                               /* (Dah) VIEW: FOLLOW off: where MOVE put it */
+        tgt = sgw.at;
+        snap = 1;
+    } else if (p != 0xFFu && song_playx(L) >= 0 && ui.frame - sgw.touch > 90u) {   /* (Dah) playing: the playhead stays
+                                                         * in the middle once there, the song going by under it; a
+                                                         * section picked (KNOB 1, 2): its block for 3 s, then this */
         tgt = song_playx(L) - SG_W / 2;
         snap = 1;
     }

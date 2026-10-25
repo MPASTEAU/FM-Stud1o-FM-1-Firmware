@@ -515,6 +515,12 @@ static void ui_message(const char *s) { ui_say(s, ""); }
 #define MSG_NO_SAMPLE MSG_NOFILE "NO SAMPLE"
 
 static int chain_busy(void) { return chain.running || chain.armed; }
+/* (Dah) SONG's VIEW (OCT+ opens it: its knobs MOVE ZOOM FOLLOW, ui_input.c): px a bar, the view's left edge when not
+ * following (content px), FOLLOW (playing: the playhead held in the middle; on by default), the frame a section was
+ * picked last (its block shown a while, then the playhead again) */
+#define SG_ZOOM0 24u
+static struct { uint8_t on, nofollow, zoom; int32_t at; uint32_t touch; } sgw;
+static uint32_t sg_zoom(void) { return sgw.zoom ? sgw.zoom : SG_ZOOM0; }
 /* Main loop only, with interrupts enabled. PLAY may be consumed between reads;
  * take one coherent snapshot before a flash operation or song preparation. */
 static int transport_busy(void)
@@ -2020,7 +2026,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return (c & 3u) == 1u && ui.tl_clean ? "CLEAN" : actions[c & 3u];   /* (1.5.5: KNOB 2 on: CLEAN INIT) */
     }
     if (cur_page()->graph == GR_SONG)
-        return song.playing || chain_busy() ? "STOP" : "PLAY";
+        return sgw.on ? "DONE" : "VIEW";                /* (Dah: OCT+ the VIEW; PLAY plays) */
     if (cur_page()->graph == GR_PATS)
         return "LOAD";
     if (cur_page()->graph == GR_USER)
@@ -2048,7 +2054,7 @@ static int act_ready(void)
         return !chain_busy() && (c == 0u ? !seq_is_empty(TSEL) || motion_count(TSEL) : c == 1u ? 1 :
                                  c == 2u ? trk_count() > 1u : chain_config.count != 0u);
     if (cur_page()->graph == GR_SONG)
-        return song.playing || chain_busy() || chain_config.count;
+        return 1;
     if (cur_page()->graph == GR_PATS)
         return pat_last[s] != pat_pick() + 1u || steps_sig(TSEL) != pat_sig[s];
     if (cur_page()->graph == GR_USER)

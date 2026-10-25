@@ -1175,6 +1175,15 @@ static void draw_columns_in(void)
         }
         return;
     }
+    if (cur_page()->graph == GR_SONG && sgw.on) {   /* (Dah) VIEW: MOVE (the bar at the middle), ZOOM, FOLLOW */
+        fmt_int(val, (sgv.off + SG_W / 2) / (int32_t)sg_zoom() + 1);
+        draw_column(0, "BAR", val, "", VAL(0u), -1, ICON_AUTO);
+        fmt_int(val, (int32_t)(SG_W / sg_zoom()));
+        draw_column(1, "ZOOM", val, "BARS", VAL(1u), -1, ICON_AUTO);
+        draw_column(2, "FOLLOW", sgw.nofollow ? "OFF" : "ON", "", sgw.nofollow ? T_DIM : VAL(2u), -1, ICON_AUTO);
+        draw_column(3, "", "", "", T_THEME, -1, ICON_AUTO);
+        return;
+    }
     if (cur_page()->graph == GR_SONG) {             /* SECTION, TRACK, its PAT (A..D, -), REPS (the section's) */
         uint32_t row = ui.song_row < CHAIN_ROWS ? ui.song_row : CHAIN_ROWS - 1u, k = ui.song_trk % NTRK, sl;
         int used = row < chain_config.count, sec = ui.song_trk >= NTRK;

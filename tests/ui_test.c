@@ -2575,7 +2575,12 @@ static int test_chain(void)
     bad += check("SONG OCT chord does not start playback or leave the page", !transport_req && !ui.home);
     press(B_OCTDN);                                     /* (Dah: the chord was ASSIGN: OCT- leaves it) */
     press(B_OCTUP);
-    bad += check("SONG OCT+ on release starts, pending start blocks SAVE", chain.armed && transport_req == 1);
+    bad += check("SONG OCT+ (Dah): the VIEW (MOVE ZOOM FOLLOW), nothing plays", sgw.on && !transport_req && !chain.armed);
+    press(B_OCTUP);
+    ok = !sgw.on;
+    press(B_PLAY);
+    bad += check("SONG PLAY starts it, pending start blocks SAVE (OCT+ again: the VIEW closed)", ok && chain.armed &&
+                 transport_req == 1);
     project_save(3);
     bad += check("SONG pending start cannot write a project", msg_is("STOP TO SAVE") && !project_used(3));
     press(B_PLAY); events_block(32);
@@ -2598,10 +2603,11 @@ static int test_chain(void)
 
 /* SONG's timeline (ui_graph.c song_layout / song_follow / graph_song): widths by bars, the least width, + ADD's slot,
  * the view following the cursor and the playing row, the styles of a slot not saved and of + ADD */
-static int sg_seen(const song_lay_t *L, uint32_t r)  /* row r's block (r == n: + ADD's) wholly in the view */
+static int sg_seen(const song_lay_t *L, uint32_t r)  /* row r's block (r == n: + ADD's) in the view (Dah: its start, or
+                                                     * the whole view when wider) */
 {
     int32_t a = L->x[r], b = r < L->n ? L->x[r + 1u] - SG_GAP : L->x[r] + SG_ADDW;
-    return a >= sgv.off && b <= sgv.off + SG_W;
+    return b - a <= SG_W ? a >= sgv.off && b <= sgv.off + SG_W : a >= sgv.off && a < sgv.off + SG_W;
 }
 static uint16_t sg_px(int32_t x, int32_t y) { return swap16(host_screen[(uint32_t)(Y_GRAPH + y) * 240u + (uint32_t)x]); }
 static int test_song_timeline(void)
@@ -2623,20 +2629,20 @@ static int test_song_timeline(void)
     go_page(GR_SONG); frame();
     song_layout(&L);
     w0 = L.x[1] - L.x[0]; w1 = L.x[2] - L.x[1]; w2 = L.x[3] - L.x[2];
-    bad += check("SONG timeline: 1 + 4 + 1 bars fitted, the widths by bars, + ADD's slot at the end",
-                 L.fit && L.add && L.u0[3] == 6u * SG_BARU && L.x[3] == SG_W - SG_ADDW && L.x[4] == SG_W &&
-                 6 * w1 >= 4 * (SG_W - SG_ADDW) - 6 && 6 * w1 <= 4 * (SG_W - SG_ADDW) + 6 && w0 - w2 <= 1 && w2 - w0 <= 1);
+    bad += check("SONG timeline (Dah): 1 + 4 + 1 bars at the VIEW's zoom (a bar SG_ZOOM0 px), + ADD's slot at the end",
+                 !L.fit && L.add && L.u0[3] == 6u * SG_BARU && w0 == (int32_t)sg_zoom() && w1 == 4 * (int32_t)sg_zoom() &&
+                 w2 == w0 && L.x[4] == L.x[3] + SG_ADDW);
     chain_config.row[1] = chain_row_of(3, 1);       /* the 1/32 bar between two of 1 bar x 16 */
     chain_config.row[0].repeat = chain_config.row[2].repeat = 16;
     song_layout(&L);
     w0 = L.x[1] - L.x[0]; w1 = L.x[2] - L.x[1];
     bad += check("SONG timeline: a block far shorter than the rest keeps the least width (its letter) (Dah: 33 bars: not "
-                 "fitted under SG_BAR px a bar, scrolled)", w1 == SG_MINW && w0 == 16 * SG_BAR && !L.fit);
+                 "fitted, scrolled)", w1 == SG_MINW && w0 == 16 * (int32_t)sg_zoom() && !L.fit);
     chain_config.count = CHAIN_ROWS;                 /* 16 rows of 2 bars x 16: 512 bars, scrolled */
     for (k = 0; k < CHAIN_ROWS; k++) chain_config.row[k] = chain_row_of(2, 16);
     song_layout(&L);
-    bad += check("SONG timeline: a long song scrolls (6 px a bar), no + ADD at 16 rows",
-                 !L.fit && !L.add && L.x[1] - L.x[0] == 32 * SG_BAR && L.x[L.n + 1u] == L.x[L.n]);
+    bad += check("SONG timeline: a long song scrolls (the zoom's px a bar), no + ADD at 16 rows",
+                 !L.fit && !L.add && L.x[1] - L.x[0] == 32 * (int32_t)sg_zoom() && L.x[L.n + 1u] == L.x[L.n]);
     ui_prefs |= PREF_ANIM_OFF;
     ok = 1;
     for (r = 0; r < CHAIN_ROWS; r += 3u) {
@@ -2650,8 +2656,8 @@ static int test_song_timeline(void)
     turn(EN_K1, 15);                                 /* (KNOB 1: the last row) */
     ok = ui.song_row == 15u && !sg_seen(&L, 15) && sgv.off > 0;   /* on its way */
     frames(800);
-    bad += check("SONG timeline: ANIM ON, the view glides to the cursor's block, then holds it",
-                 ok && sg_seen(&L, 15) && sgv.off == L.x[L.n + 1u] - SG_W);
+    bad += check("SONG timeline: ANIM ON, the view glides to the cursor's block, then holds it (its start: wider)",
+                 ok && sg_seen(&L, 15) && sgv.off == L.x[15]);
     chain_config.count = 12;                         /* + ADD's slot followed too */
     song_layout(&L);
     ui.song_row = 12; frames(800);
@@ -2667,8 +2673,10 @@ static int test_song_timeline(void)
                  chain.running && chain.row == 9u && ui.song_row == 0u && sg_seen(&L, 9) && !sg_seen(&L, 0) &&
                  song_playx(&L) >= L.x[9] && song_playx(&L) < L.x[10]);
     turn(EN_K1, 1); frames(800);
-    bad += check("SONG timeline: playing, the playhead held in the middle (Dah), the cursor moved all the same",
-                 ui.song_row == 1u && SG_X0 + song_playx(&L) - sgv.off >= SG_X0 + SG_W / 2 - 1 &&
+    ok = sg_seen(&L, 1);                              /* (Dah: a section picked: its block a while) */
+    frames(4000);                                     /* (then the playhead again) */
+    bad += check("SONG timeline: playing, a section picked: its block shown a while, then the playhead held in the middle (Dah)",
+                 ok && ui.song_row == 1u && SG_X0 + song_playx(&L) - sgv.off >= SG_X0 + SG_W / 2 - 1 &&
                  SG_X0 + song_playx(&L) - sgv.off <= SG_X0 + SG_W / 2 + 1);
     seq_stop(); chain_stop(); frames(100);
     /* styles: a slot not saved outlined (DIM), the selected one filled (THEME), the others RAISE; + ADD dashed */
@@ -9075,7 +9083,7 @@ static int test_song_lanes_drawn(void)
          sg_px(SG_X0 + L.x[0] + 4, SG_LY(2) + 4) != T_THEME;
     bad += check("SONG lanes drawn: the cursor on a \"-\" cell: its outline only", ok);
     chain_prepare(); events_block(32);
-    for (k = 0; k < 600u; k++) events_block(32);
+    for (k = 0; k < 2400u; k++) events_block(32);   /* (Dah: past the first block's letter at the zoom's scale) */
     ui.song_row = 2; frames(50);
     ok = 1;
     {
@@ -9112,6 +9120,7 @@ static int test_song_pictures(void)
     uint32_t i, d, want, lv[16] = {0};
     int32_t sx, wt;
     ui_power_on();
+    sgw.zoom = 192;                                  /* (Dah: zoomed in, a bar over the view: the cells wide) */
     pat_park();                                      /* (HA HA HE HU: pattern 2 below, B of before) */
     for (i = 0; i < NTRK; i++) {                     /* every track empty, 1/16, LEN 16 */
         memset(trk[i].step, 0, sizeof trk[i].step);
@@ -9154,6 +9163,7 @@ static int test_song_pictures(void)
     }
     bad += check("SONG pictures: in the cell selected INK bars on THEME", ok);
     chain_config.row[0].repeat = 2;                  /* x2: the pattern twice, a notch between */
+    sgw.zoom = 96;                                   /* (Dah: the two in the view) */
     ui.song_trk = 0; frames(100);
     song_layout(&L);
     sx = SG_X0 + L.x[0]; wt = L.x[1] - L.x[0] - SG_GAP;
@@ -9179,6 +9189,7 @@ static int test_song_pictures(void)
     ui_prefs &= ~PREF_ANIM_OFF;
     chain_defaults(&chain_config);
     ui.song_row = ui.song_trk = 0;
+    sgw.zoom = 0;
     return bad;
 }
 
