@@ -262,8 +262,10 @@ static int pattern_new(uint32_t k, int dup)
         return 1;
     if (dup) {                                          /* (the copy: the same bytes under the new number) */
         uint32_t n = ps_encode(&trk[k % NTRK], ps_buf);
-        if (ps_put(k % NTRK, num, ps_buf, n))
+        if (ps_put(k % NTRK, num, ps_buf, n)) {
+            ps_del(k % NTRK, ps_num(k));                /* (Dah: refused: no stale copy of the one played left) */
             return 1;
+        }
     }
     return pattern_go(k, num) ? 1 : 0;
 }

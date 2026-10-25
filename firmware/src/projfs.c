@@ -419,6 +419,7 @@ static int project_new_file(void)                       /* NEW: the one open sav
     chain_defaults(&chain_config);
     song.ntrk = 1;
     song.sel = 0;
+    trk_count_changed();                                /* (Dah: no arm left on the tracks gone) */
     pfs_auto_name(id, nm);
     str_cpy(proj_name, nm, sizeof proj_name);
     PFS_CUR = (uint8_t)id;
@@ -457,6 +458,7 @@ static int project_delete(uint32_t id)                  /* REC on FILE: a projec
     if (PFS_CUR == id) {
         PFS_CUR = 0;
         settings_later();
+        as.saved = 0;                                   /* (Dah: the music stays: autosave keeps it, a new project) */
     }
     ui_message("PROJECT DELETED");
     return 0;

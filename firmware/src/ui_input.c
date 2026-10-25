@@ -568,8 +568,8 @@ static void song_keys(uint32_t notes)
         }
         if (ui.song_trk >= NTRK) {                    /* SEC: the key puts the slot on every track of the section */
             uint32_t k;
-            for (k = 0; k < NTRK; k++)
-                chain_config.row[ui.song_row].slot[k] = (uint8_t)(s + 1);
+            for (k = 0; k < NTRK; k++)                  /* (Dah: the project's tracks; the others "-") */
+                chain_config.row[ui.song_row].slot[k] = k < trk_count() ? (uint8_t)(s + 1) : (uint8_t)CHAIN_SILENT;
         } else {
             chain_config.row[ui.song_row].slot[ui.song_trk] = (uint8_t)(s + 1);
         }
@@ -1985,6 +1985,10 @@ static void setup_show(const char *what, const char *name)     /* "PRESS" / "TUR
 }
 static void panel_setup(void)
 {
+#if defined(FELUCCA_WEB) && FELUCCA_WEB
+    ui_message("NOT IN THE EMULATOR");          /* (Dah: its waits run on the audio's clock, stopped meanwhile) */
+    return;
+#endif
     uint32_t i, used = 0, t0 = fm1_ms;
     const panel_t old = panel;
     setup_title();

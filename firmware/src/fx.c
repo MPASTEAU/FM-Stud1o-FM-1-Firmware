@@ -163,24 +163,30 @@ static inline int32_t lowcut1(int32_t x, int32_t *lc, int32_t *err, uint32_t sh)
  * The low-pass has 4 poles (#42: with 2, the trapezoid rebuilt the 300 .. 600 Hz of the mix itself, late,
  * and cancelled up to 6 dB of it; now under 0.5 dB) */
 static int32_t sb_lp1, sb_lp2, sb_lp3, sb_lp4, sb_env, sb_h1, sb_h2, sb_hl;
+/* (Dah) a one-pole step d * k >> sh that never stops short of its target (a floored step left a DC offset at rest) */
+static inline int32_t sb_mv(int32_t d, int32_t k, int32_t sh)
+{
+    int32_t s = (d * k) >> sh;
+    return s ? s : d > 0 ? 1 : d < 0 ? -1 : 0;
+}
 static inline int32_t spk_bass(int32_t m)
 {
     int32_t a, t, u;
-    sb_lp1 += ((m - sb_lp1) * 692) >> 15;
-    sb_lp2 += ((sb_lp1 - sb_lp2) * 692) >> 15;
-    sb_lp3 += ((sb_lp2 - sb_lp3) * 692) >> 15;
-    sb_lp4 += ((sb_lp3 - sb_lp4) * 692) >> 15;
+    sb_lp1 += sb_mv(m - sb_lp1, 692, 15);
+    sb_lp2 += sb_mv(sb_lp1 - sb_lp2, 692, 15);
+    sb_lp3 += sb_mv(sb_lp2 - sb_lp3, 692, 15);
+    sb_lp4 += sb_mv(sb_lp3 - sb_lp4, 692, 15);
     a = sb_lp4 < 0 ? -sb_lp4 : sb_lp4;
     if (a > sb_env)
         sb_env += (a - sb_env) >> 2;
     else if (sb_env > 0)
         sb_env -= (sb_env >> 11) + 1;
     t = clamp(sb_lp4 * 8, -sb_env, sb_env);
-    sb_h1 += (t - sb_h1) >> 5;
+    sb_h1 += sb_mv(t - sb_h1, 1, 5);
     u = t - sb_h1;
-    sb_h2 += (u - sb_h2) >> 5;
+    sb_h2 += sb_mv(u - sb_h2, 1, 5);
     u -= sb_h2;
-    sb_hl += (u - sb_hl) >> 3;
+    sb_hl += sb_mv(u - sb_hl, 1, 3);
     return sb_hl + (sb_hl >> 1);      /* x1.5 (#180: x3 peaked at 1.5 .. 3.5 x a full-scale kick, the limiter */
 }                                     /* pulled the mix down up to 16 dB on each hit and the buzz took over) */
 
