@@ -21,7 +21,7 @@
 #include <stdint.h>
 
 #define FELUCCA_WEB 1
-#define FELUCCA_DEMO 1                   /* as src/felucca.c: power-on with the dubstep demo */
+#define FELUCCA_DEMO 1                   /* power-on with the demo (the device: off, its flash full) */
 #ifndef FELUCCA_CDC
 #define FELUCCA_CDC 1                    /* as src/felucca.c: MENU > USB SERIAL is there (nothing behind it) */
 #endif

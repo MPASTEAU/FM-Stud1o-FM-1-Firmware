@@ -61,15 +61,17 @@ static void graph_lfo(const track_t *t, uint16_t c)
     uint32_t ph = (uint32_t)t->p[P_LPHASE] << 25;
     int32_t z = uni ? cy + a : cy;                   /* the zero line: POL UNI (LFO 2) draws 0..+1 over it */
     cv_rect(PANEL_X0, z, PANEL_W, 1, T_RAISE);
-    for (x = 0; x < PANEL_W; x++) {                  /* two cycles (lfo_wave only reads the track) */
-        int32_t w = lfo_wave((track_t *)t, ph + (uint32_t)x * (0xFFFFFFFFu / (PANEL_W / 2u))), y;
+    for (x = 0; x < PANEL_W; x++) {                  /* one cycle (Dah; lfo_wave only reads the track) */
+        int32_t w = lfo_wave((track_t *)t, ph + (uint32_t)x * (0xFFFFFFFFu / PANEL_W)), y;
         if (t->p[P_LWAVE] == 4)
-            w = (int32_t)((x / 20 * 2654435761u) >> 16) - 32768;
+            w = (int32_t)((x / 10 * 2654435761u) >> 16) - 32768;
         y = uni ? z - (w + 32768) * a / 32768 : cy - w * a / 32768;
         if (x)
             cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, c, 2);
         py = y;
     }
+    cv_rect(PANEL_X0 + (int32_t)((t->lfo_ph - ph) / (0xFFFFFFFFu / PANEL_W)), cy - a - 4, 1, 2 * a + 8, T_ACCENT);   /* (Dah)
+                                                         * where it is now */
 }
 
 /* HA HA HE HU: LFO DRAW's panel: the 16 points as bars from the middle line (the point picked in the colour, the others
@@ -94,6 +96,8 @@ static void graph_ldraw(const track_t *t, uint16_t c)
             cv_line_t(PANEL_X0 + i - 1, py, PANEL_X0 + i, y, t->p[P_LWAVE] == 5 ? T_TEXT : T_MID, 2);
         py = y;
     }
+    if (t->p[P_LWAVE] == 5)                          /* (Dah) where the LFO is now: a bar */
+        cv_rect(PANEL_X0 + (int32_t)(t->lfo_ph / (0xFFFFFFFFu / PANEL_W)), cy - a - 2, 1, 2 * a + 4, T_ACCENT);
 }
 /* step bar x of step i of a 16-step row: 4 groups, as the footer (9 px bars, 13 px apart, 4 px between groups),
  * the row centred: x 12 .. 228 */
@@ -401,15 +405,24 @@ static void graph_detail(const track_t *t, uint16_t c)
 }
 /* SCL: the 12 keys as rounded bars (black keys high, white keys low): in the scale THEME, the root the
  * accent, out of the scale RAISE */
+/* (Dah) the notes the track sounds now: bit k = pitch class k (its voices with their gate on, the arp's, MONO's) */
+static uint32_t trk_sounding(const track_t *t)
+{
+    uint32_t i, m = 0;
+    for (i = 0; i < NVOICE; i++)
+        if (t->v[i].active && t->v[i].gate)
+            m |= 1u << (t->v[i].note % 12u);
+    return m;
+}
 static void graph_scale(const track_t *t, uint16_t c)
 {
     static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint32_t i, mask = scale_mask(t);
+    uint32_t i, mask = scale_mask(t), on = trk_sounding(t);
     for (i = 0; i < 12u; i++) {
         uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
         int32_t x = 13 + (int32_t)i * 18;
         uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : c) : T_RAISE;
-        cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, col, T_SURF);
+        cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, (on >> i) & 1u ? T_TEXT : col, T_SURF);   /* (Dah: sounding: TEXT) */
     }
 }
 /* CHORD (SCL 2): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
@@ -459,8 +472,11 @@ static void graph_chord(const track_t *t, uint16_t c)
         int32_t x = 13 + (int32_t)(i * w);              /* (216 px of keys and their gaps: x 13 .. 227) */
         for (j = 0; j < n; j++)
             on |= nn[j] == note;
+        for (j = 0; j < NVOICE; j++)                    /* (Dah) sounding now: TEXT */
+            if (t->v[j].active && t->v[j].gate && t->v[j].note == note)
+                on = 2;
         cv_rrect(x, BLACK[note % 12u] ? 36 : 62, (int32_t)w - 2, 48, w > 6u ? 3 : 2,
-                 !on ? T_RAISE : note % 12u == (uint32_t)r % 12u ? T_ACCENT : c, T_SURF);
+                 !on ? T_RAISE : on == 2u ? T_TEXT : note % 12u == (uint32_t)r % 12u ? T_ACCENT : c, T_SURF);
     }
 }
 /* INSERT pages (1.5, fx.c track_insert): the drives and CRUSH as their curve, input (-1.5 .. +1.5 of a voice's full
@@ -1280,7 +1296,8 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
-    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX) h ^= ui.frame / 2u;   /* (Dah: FX's: live) */
+    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_LFO || pg->graph == GR_LDRAW ||
+        pg->graph == GR_SCALE || pg->graph == GR_CHORD) h ^= ui.frame / 2u;   /* (Dah: FX's: live) */
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +

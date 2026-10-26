@@ -390,7 +390,7 @@ static void fxv_split(const track_t *t, uint32_t u, uint16_t c, const char *pre,
 static void graph_duck(const track_t *t, uint16_t c)
 {
     int32_t top = 18, bot = graph_ht - 8, x, i;
-    uint32_t m = duck_watch(t), k;
+    uint32_t m = duck_watch(t);
     if (!t->p[P_DKSRC]) {
         panel_note("SIDECHAIN OFF", "[K1] THE TRACK THAT PUMPS IT", 0);
         dv_watch = 0;

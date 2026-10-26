@@ -122,7 +122,7 @@ static __attribute__((noinline)) void dv_push(void)
     dv_hit = 0;
     dvr_w++;
 }
-static void dv_level(const int32_t *b, uint32_t n, int post)   /* (the block's loudest, into dv_pre / dv_post) */
+static __attribute__((noinline)) void dv_level(const int32_t *b, uint32_t n, int post)   /* (the block's loudest, into dv_pre / dv_post) */
 {
     uint32_t i;
     int32_t m = 0;

@@ -38,8 +38,13 @@
                                   * buffers or menu row). (The same default: core.h) */
 #endif
 #ifndef FELUCCA_DEMO
-#define FELUCCA_DEMO 1           /* HA HA HE HU: power-on with the dubstep demo (main.c felucca_demo); 0: Felucca's parts
-                                  * with empty sequencers. (The host tests' default: 0, core.h) */
+#if defined(FELUCCA_WEB) && FELUCCA_WEB
+#define FELUCCA_DEMO 1           /* HA HA HE HU: power-on with the demo song (main.c felucca_demo); 0: Felucca's parts
+                                  * with empty sequencers. (The host tests' default: 0, core.h). Dah: the emulator's;
+                                  * the device's flash is full (FELUCCA_DEMO=1 build.py to have it there too) */
+#else
+#define FELUCCA_DEMO 0
+#endif
 #endif
 #define FM1_CPU1_USED FELUCCA_CPU2   /* hal/fm1_sys.h: the second core is built in; every reset holds it first (its
                                       * waiting loop is in RAM the ROM and the SPL use at boot) */
