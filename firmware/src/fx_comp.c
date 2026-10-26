@@ -71,6 +71,8 @@ static __attribute__((noinline)) void comp_track(track_t *t, int32_t *b, int32_t
     gi = (int32_t)(((int64_t)gi * go) >> 12);           /* (IN and OUT round the reduction) */
     g0 = (int32_t)(((int64_t)g0 * gi) >> 12);
     g1 = (int32_t)(((int64_t)g1 * gi) >> 12);
+    if (g1 < g0)
+        g0 = g1;                                        /* (Dah: down at once, no transient through; up gliding) */
     dg = (g1 - g0) / (int32_t)n;
     for (i = 0; i < n; i++, g0 += dg) {
         b[i] = (int32_t)(((int64_t)b[i] * g0) >> 12);
@@ -102,6 +104,8 @@ static __attribute__((noinline)) void comp_master(int32_t *l, int32_t *r, uint32
     gi = (int32_t)(((int64_t)gi * go) >> 12);
     g0 = (int32_t)(((int64_t)g0 * gi) >> 12);
     g1 = (int32_t)(((int64_t)g1 * gi) >> 12);
+    if (g1 < g0)
+        g0 = g1;                                        /* (Dah: down at once, no transient through; up gliding) */
     dg = (g1 - g0) / (int32_t)n;
     for (i = 0; i < n; i++, g0 += dg) {
         l[i] = (int32_t)(((int64_t)l[i] * g0) >> 12);

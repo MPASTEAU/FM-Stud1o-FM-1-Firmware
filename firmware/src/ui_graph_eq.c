@@ -106,18 +106,20 @@ static void eqs_take(void)
             uint32_t b0 = f0 * EQS_N / FS, b1 = f1 * EQS_N / FS, b;
             int64_t best = 0;
             int32_t db;
-            if (b1 <= b0 + 1u) {                        /* (Dah) below a bin a column: between the two bins round
-                                                         * it, in dB (no block for the lows: rounded) */
-                uint32_t q = (f0 + f1) / 2u * EQS_N * 16u / FS, i0 = q >> 4, fr = q & 15u;
-                int32_t d0, d1;
-                int64_t p0, p1;
-                i0 = i0 ? i0 : 1u;
-                p0 = (int64_t)eqs_re[i0] * eqs_re[i0] + (int64_t)eqs_im[i0] * eqs_im[i0];
-                p1 = (int64_t)eqs_re[i0 + 1u] * eqs_re[i0 + 1u] + (int64_t)eqs_im[i0 + 1u] * eqs_im[i0 + 1u];
-                d0 = p0 ? eq_log2q8((uint64_t)p0) : 0;
-                d1 = p1 ? eq_log2q8((uint64_t)p1) : 0;
-                db = d0 + (d1 - d0) * (int32_t)fr / 16;
-                db = db > 0 ? (db - 26 * 256) * 771 / 256 * 8 / 256 : -480;
+            if (b1 <= b0 + 1u) {                        /* (Dah) below a bin a column: each bin round it a bell
+                                                         * (a gaussian, ~half a bin wide) on its frequency, summed */
+                static const uint16_t GW[36] = {32767, 32512, 31759, 30542, 28917, 26953, 24734, 22345, 19874, 17402,
+                    15002, 12732, 10638, 8750, 7086, 5650, 4435, 3427, 2607, 1952, 1440, 1045, 747, 526, 364, 248, 167,
+                    110, 72, 46, 29, 18, 11, 7, 4, 2};   /* exp(-(d / 16)^2 / 0.5), Q15: d in 1/16 bins */
+                int32_t q = (int32_t)((f0 + f1) / 2u * EQS_N * 16u / FS), ib = q >> 4, k;
+                int64_t acc = 0;
+                for (k = ib - 2; k <= ib + 3; k++) {
+                    int32_t d = q - k * 16;
+                    d = d < 0 ? -d : d;
+                    if (k >= 1 && k < (int32_t)(EQS_N / 2u) && d < 36)
+                        acc += (((int64_t)eqs_re[k] * eqs_re[k] + (int64_t)eqs_im[k] * eqs_im[k]) * GW[d]) >> 15;
+                }
+                db = acc ? (eq_log2q8((uint64_t)acc) - 26 * 256) * 771 / 256 * 8 / 256 : -480;
             } else {
                 for (b = b0; b < b1 && b < EQS_N / 2u; b++) {
                     int64_t p = (int64_t)eqs_re[b] * eqs_re[b] + (int64_t)eqs_im[b] * eqs_im[b];

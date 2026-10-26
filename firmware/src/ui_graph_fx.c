@@ -462,10 +462,21 @@ static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
             graph_comp(fx_camt(t), cmp_master.gr, c, PANEL_W);
         else {                                          /* (Dah) the curve at the left, the sound at the right */
             char b[12];
-            int32_t gr = cmp_trk[trk_index(t) % NTRK].gr * 10 / 8;
+            int32_t gr = 0, k;
             (void)fxv_take(t, DV_COMP);
+            for (k = 1; k <= 60; k++) {                 /* (the deepest of the last ~0.35 s: readable) */
+                int32_t a = (int32_t)(dvr_att[(dvr_w - (uint32_t)k) % DVR_N] & 32767u);
+                gr = a > gr ? a : gr;
+            }
+            gr = gr * 180 / 32767;                      /* (dB x 10: the ring's 0 .. 18 dB) */
             graph_comp(fx_camt(t), cmp_trk[trk_index(t) % NTRK].gr, c, FXV_LW);
             fmt_fix(b, -gr, 1);
+            if (b[0] == '.' || (b[0] == '-' && b[1] == '.')) {   /* ("0.0", "-0.5": a zero first) */
+                int32_t z = b[0] == '-', m = (int32_t)str_len(b);
+                for (; m >= z; m--)
+                    b[m + 1] = b[m];
+                b[z] = '0';
+            }
             x = cv_text_on(FXV_RX, 2 + CAP_IN(S, 12), &AF_S, "GR", T_ACCENT, T_SURF);
             x = cv_text_on(x + 4, 2 + CAP_IN(S, 12), &AF_S, b, T_TEXT, T_SURF);
             cv_text_on(x + 3, 2 + CAP_IN(S, 12), &AF_S, "dB", T_MID, T_SURF);

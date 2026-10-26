@@ -291,16 +291,50 @@ static int fxv_take(const track_t *t, uint32_t u)
 #define FXV_LINE 1u                                     /* fxv_draw: the effect's dip (dv att) a line from the top */
 #define FXV_AREA 2u                                     /* .. that dip as an area from the top */
 #define FXV_CUT 4u                                      /* .. what it took away (before less after) as an area */
-#define FXV_OWN 8u                                      /* .. before and after each on its own scale (a send's return) */
+#define FXV_OWN 8u                                      /* .. before and after each on its own scale */
+#define FXV_SEND 16u                                    /* .. after: this track's own return, from its sound and the
+                                                         * bus's settings (the bus mixes every track's: dv_unit's) */
+/* (Dah) a send's return for this track alone, in the ring's columns (DVR_K x CTL samples), from what it sends (dvr_pre):
+ * CHORUS at once, DELAY its repeats (TIME, FEEDBACK, MIX), REVERB a tail (SIZE); into ui_tmp (/ 2), the newest last */
+static void fxv_send(const track_t *t, uint32_t e)   /* (e: the ring's write place, as the picture reads it) */
+{
+    uint32_t x, k, cols = DVR_K * CTL;
+    int32_t sq = (dv_unit == DV_CHO ? t->p[P_CHOR] : dv_unit == DV_DLY ? t->p[P_DLY] : t->p[P_REV]) * 258;   /* Q15 */
+    int32_t env = 0, d = (int32_t)(delay_samples() / cols);
+    for (x = 0; x < DV_N && x < 512u; x++) {            /* (the whole ring, oldest first: the tails from before) */
+        uint32_t w = (e + x) % DV_N;
+        int32_t v = mulq15(dvr_pre[w], sq);
+        if (dv_unit == DV_DLY) {                        /* the repeats: each D columns back, FEEDBACK down each time */
+            int32_t g = song.g[G_DMIX] * 258, o = 0;
+            for (k = 1; k < 24u && d > 0 && (int32_t)(k * (uint32_t)d) <= (int32_t)x; k++) {
+                int32_t p = mulq15(mulq15(dvr_pre[(e + x - k * (uint32_t)d) % DV_N], sq), g);
+                o = p > o ? p : o;
+                g = mulq15(g, song.g[G_DFDBK] * 230);
+                if (g < 64)
+                    break;
+            }
+            v = o;
+        } else if (dv_unit == DV_REV) {                 /* the tail: ~0.3 .. 3.8 s to -60 dB with SIZE */
+            int32_t len = (300 + song.g[G_RSIZE] * 3500 / 127) * 44 / (int32_t)cols;   /* (columns) */
+            env -= env * 7 / (len > 7 ? len : 7);
+            v = v / 2 > env ? v / 2 : env;
+            env = v;
+        }
+        ui_tmp[x] = (int16_t)(v >> 1);
+    }
+}
+#define FXV_Q(w) ((mode & FXV_SEND) ? (int32_t)ui_tmp[((w) + DV_N - e) % DV_N] * 2 : (int32_t)dvr_post[w])
 static void fxv_draw(int32_t x0, int32_t wd, int32_t top, int32_t bot, uint16_t c, uint32_t mode)   /* (the newest wd) */
 {
     int32_t x, fp = 4000, fq = 4000, band = (mode & (FXV_LINE | FXV_AREA | FXV_CUT)) ? 10 : 0, cy, hh;
     uint32_t e = dvr_w;
     uint16_t dry = ux_mix(T_TEXT, T_SURF, 45);
+    if (mode & FXV_SEND)
+        fxv_send(TSEL, e);
     for (x = 0; x < wd; x++) {                          /* (the scale: the loudest shown) */
         uint32_t w = (e + DV_N - (uint32_t)wd + (uint32_t)x) % DV_N;
         fp = dvr_pre[w] > fp ? dvr_pre[w] : fp;
-        fq = dvr_post[w] > fq ? dvr_post[w] : fq;
+        fq = FXV_Q(w) > fq ? FXV_Q(w) : fq;
     }
     if (!(mode & FXV_OWN))
         fp = fq = fp > fq ? fp : fq;
@@ -326,10 +360,10 @@ static void fxv_draw(int32_t x0, int32_t wd, int32_t top, int32_t bot, uint16_t 
     for (x = 0; x < wd; x++) {                          /* oldest at the left */
         uint32_t w = (e + DV_N - (uint32_t)wd + (uint32_t)x) % DV_N;
         int32_t hp = clamp((int32_t)dvr_pre[w] * hh / fp, 0, hh);
-        int32_t hq = clamp((int32_t)dvr_post[w] * hh / fq, 0, hh);
+        int32_t hq = clamp(FXV_Q(w) * hh / fq, 0, hh);
         int32_t ha = (int32_t)(dvr_att[w] & 32767u) * (band - 3) / 32767;
-        if ((mode & FXV_CUT) && dvr_pre[w] > dvr_post[w])   /* (what it took away, of what came in) */
-            ha = (int32_t)(dvr_pre[w] - dvr_post[w]) * (band - 3) / (dvr_pre[w] | 1);
+        if ((mode & FXV_CUT) && dvr_pre[w] > FXV_Q(w))   /* (what it took away, of what came in) */
+            ha = (int32_t)(dvr_pre[w] - FXV_Q(w)) * (band - 3) / (dvr_pre[w] | 1);
         if (band && ha > 0)
             cv_rect(x0 + x, top, 1, ha, T_ACCENT);      /* the effect's work, down from the top */
         if (hp >= hq) {                                 /* the dry and the wet, each its colour: the taller behind */
@@ -418,13 +452,13 @@ static int graph_more(const page_t *pg, const track_t *t, uint16_t c)
     else if (pg->scope == SC_GLOBAL && (id == (PS_TRK | P_DLY) || id == G_DMIX)) {   /* (Dah: FX's: the shape at the
                                                          * left, the track and the bus's return at the right) */
         graph_dly(c, FXV_LW);
-        fxv_split(t, DV_DLY, c, "DRY", "ECHO", FXV_OWN);
+        fxv_split(t, DV_DLY, c, "DRY", "ECHO", FXV_SEND);
     } else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_REV)) {
         graph_reverb(c, FXV_LW);
-        fxv_split(t, DV_REV, c, "DRY", "TAIL", FXV_OWN);
+        fxv_split(t, DV_REV, c, "DRY", "TAIL", FXV_SEND);
     } else if (pg->scope == SC_GLOBAL && id == (PS_TRK | P_CHOR)) {
         graph_chorus(c, FXV_LW);
-        fxv_split(t, DV_CHO, c, "DRY", "WET", FXV_OWN);
+        fxv_split(t, DV_CHO, c, "DRY", "WET", FXV_SEND);
     }
     else if (pg->scope == SC_GLOBAL && id == G_BPM) graph_clock(c);
     else return 0;

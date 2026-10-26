@@ -642,8 +642,6 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         fx.dly_lp = 0;
     }
     uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
-    int32_t wc = dv_watch && dv_unit == DV_CHO, wd = dv_watch && dv_unit == DV_DLY, pk = 0;   /* (Dah: CHORUS's,
-                                                         * DELAY's page: its return) */
     if (pf.ew1 && fb < THR_FB)
         fb += mulq16(THR_FB - fb, (uint32_t)pf.ew1 << 1);   /* ECHO THROW (perform.c): more feedback while held, 0.7
                                                              * at most (the loop's gain below 1: it never runs away) */
@@ -659,8 +657,6 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             int32_t c1 = cho_buf[(fx.cho_w - ri - 1u) & (CHO_LEN - 1u)];
             y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
         }
-        if (wc)
-            pk = y < 0 ? (-y > pk ? -y : pk) : (y > pk ? y : pk);
         fx.cho_w++;
         /* delay with a low-passed feedback */
         x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
@@ -668,31 +664,12 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         dly_buf[fx.dly_w & (DLY_LEN - 1u)] =
             (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
         fx.dly_w++;
-        x = mulq15(x << 1, dmix);
-        if (wd)
-            pk = x < 0 ? (-x > pk ? -x : pk) : (x > pk ? x : pk);
-        y += x;
+        y += mulq15(x << 1, dmix);
         wet[i] = y;
     }
-    if ((wc | wd) && pk > dv_post)
-        dv_post = pk;
     rt = song.g[G_RTYPE];
     rt = rt == 1 || rt == 2 ? rt : 0;
     hl.side = 0;
-    if (dv_watch && dv_unit == DV_REV && n <= CTL) {    /* (Dah: REVERB's page: its return alone) */
-        static int32_t pre[CTL];
-        for (i = 0; i < n; i++)
-            pre[i] = wet[i];
-        fx_rev_run(rev_in, wet, n, rt);
-        for (i = 0, pk = 0; i < n; i++) {
-            int32_t v = wet[i] - pre[i];
-            v = v < 0 ? -v : v;
-            pk = v > pk ? v : pk;
-        }
-        if (pk > dv_post)
-            dv_post = pk;
-        return;
-    }
     fx_rev_run(rev_in, wet, n, rt);
 }
 static void fx_rev_run(const int32_t *rev_in, int32_t *wet, uint32_t n, int32_t rt)
