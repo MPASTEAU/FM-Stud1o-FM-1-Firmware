@@ -9845,6 +9845,43 @@ static int test_home_tracks(void)
  * scope), HOME > TRACKS and ENV, FLAT and LINE, MENU > LARGE off and on; a full redraw still covers the screen */
 /* (Dah) GLO + ALGORITHM: the pattern, every track's (FL Studio's), past the last a new one; its list ~1 s; an empty
  * pattern: its record alone (4 bytes) */
+/* (Dah) HOME > TRACKS: OCT+ held, the VIEW: KNOB 2 ZOOM (8 16 32 64 steps), KNOB 1 MOVE, KNOB 4 FOLLOW; let go: the
+ * octave kept */
+static int hvw_cols_ok(uint32_t n) { return hv_cols() == n; }
+static int test_home_view(void)
+{
+    int ok;
+    ui_power_on();
+    ui_home_view = 1;
+    ui.home = 1;
+    ui.force = 1;
+    frame();
+    trk[0].p[P_SLEN] = 64;
+    fm1_in.buttons |= 1u << panel.btn[B_OCTUP]; host_pressed |= fm1_in.buttons; frame();
+    fm1_ms += 600u; frame();
+    ok = hvw.on && hvw_cols_ok(16u);
+    turn(EN_K2, -1);
+    ok &= hvw_cols_ok(32u);
+    turn(EN_K2, -1);
+    ok &= hvw_cols_ok(64u);
+    turn(EN_K2, 1);
+    turn(EN_K2, 1);
+    ok &= hvw_cols_ok(16u);
+    {
+        uint32_t b0 = hv_base(&trk[0], 1);
+        turn(EN_K1, -1);
+        ok &= hvw.nofollow && hv_base(&trk[0], 1) + 8u == b0;
+    }
+    turn(EN_K4, 1);
+    ok &= !hvw.nofollow;
+    fm1_in.buttons = 0; frame();
+    ok &= !hvw.on && song.octave == 0;
+    turn(EN_K2, -1);                                    /* (closed: KNOB 2 is HOME's again) */
+    ok &= hvw_cols_ok(16u);
+    ui_home_view = 0;
+    hvw.zoom = 1; hvw.at = -1;
+    return check("HOME TRACKS OCT+ held (Dah): the VIEW (MOVE, ZOOM 8..64 steps, FOLLOW); let go: closed, no octave", ok);
+}
 static int test_glo_pattern(void)
 {
     int bad = 0, ok;
@@ -10246,6 +10283,7 @@ int main(void)
     bad += test_help();
     bad += test_no_flash();
     bad += test_glo_pattern();
+    bad += test_home_view();
 #if FELUCCA_FM4
     bad += test_fm_charts();                        /* (DIGITAL's charts: built with FELUCCA_FM4=1 only) */
 #else

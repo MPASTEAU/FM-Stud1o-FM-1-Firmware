@@ -1184,6 +1184,15 @@ static void draw_columns_in(void)
     char val[12];
     const char *unit;
     (void)motion_mask(song.sel, card_mot_mask);       /* (PLAY OFF: no scan) */
+    if (ui.home && hvw.on) {                            /* (Dah) HOME's VIEW: MOVE, ZOOM, FOLLOW */
+        fmt_int(val, (int32_t)(hv_base(TSEL, 1) / 16u) + 1);
+        draw_column(0, "MOVE", val, "BAR", VAL(0u), -1, ICON_AUTO);
+        fmt_int(val, (int32_t)hv_cols());
+        draw_column(1, "STEPS", val, "", VAL(1u), -1, ICON_AUTO);
+        draw_column(2, "", "", "", T_DIM, -1, ICON_AUTO);
+        draw_column(3, "FOLLOW", hvw.nofollow ? "OFF" : "ON", "", hvw.nofollow ? T_DIM : VAL(3u), -1, ICON_AUTO);
+        return;
+    }
     if (ui.home) {
         for (c = 0; c < 4u; c++) {
             int16_t *vp;

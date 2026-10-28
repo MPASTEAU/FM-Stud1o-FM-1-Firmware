@@ -142,6 +142,23 @@ static uint32_t prv_base(const track_t *t)
         b = len - n;
     return len > n ? b : 0u;
 }
+/* (Dah) HOME's VIEW, the tracks' rack (OCT+ held: KNOB 1 MOVE, 2 ZOOM, 4 FOLLOW): 8 16 32 or 64 steps across, where
+ * they start (-1: the page playing, or the cursor's); FOLLOW: playing, each track's page playing */
+static struct { uint8_t on, zoom, nofollow; int16_t at; } hvw = {0, 1, 0, -1};
+static uint32_t hv_cols(void) { return 8u << (hvw.zoom & 3u); }
+static uint32_t hv_base(const track_t *t, int sel)
+{
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), n = hv_cols(), b;
+    if (song.playing && !hvw.nofollow)
+        b = (t->seq_idx % len) / n * n;
+    else if (hvw.at >= 0)
+        b = (uint32_t)hvw.at;
+    else
+        b = sel ? ui.cursor / n * n : 0u;
+    if (b >= len)
+        b = (len - 1u) / n * n;
+    return b;
+}
 static int32_t prv_x(uint32_t i) { return PR_X0 + (int32_t)(i * 195u / prv_cols()); }   /* (column i's left: x 35 .. 230) */
 
 static int32_t pr_note(const step_t *st, uint32_t j)   /* the step's note j (0..3), then its lane hits (-1: none) */
@@ -2460,22 +2477,21 @@ static void rack_row(uint32_t c)
     track_t *t = &trk[c];
     const step_t *s = seq_steps(t);
     uint32_t sel = c == song.sel, mute = t->p[P_MUTE] != 0, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
-    uint32_t np = (len + 15u) / 16u, pg, p0, ph, i, sig, carry = 0;
-    int32_t y = Y_GRAPH + 1 + (int32_t)c * RK_PITCH, m;
+    uint32_t np = (len + 15u) / 16u, pg, p0, ph, i, sig, carry = 0, nc = hv_cols();
+    int32_t y = Y_GRAPH + 1 + (int32_t)c * RK_PITCH, m, sp = 192 / (int32_t)nc, cw = sp > 3 ? sp - 2 : sp - 1;
     uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute ? T_DIM : ux.trk[c % NTRK];
     char b[16], d[2] = {(char)('1' + c), 0};
-    pg = song.playing ? t->seq_idx / 16u : sel ? ui.cursor / 16u : 0u;
-    if (pg >= np)
-        pg = np - 1u;
-    p0 = pg * 16u;
-    ph = song.playing && t->seq_idx / 16u == pg ? t->seq_idx % 16u : 0xFFu;
+    p0 = hv_base(t, (int)sel);                         /* (Dah: HOME's VIEW: where, how many steps across) */
+    pg = p0 / nc;
+    ph = song.playing && t->seq_idx >= p0 && t->seq_idx < p0 + nc ? t->seq_idx - p0 : 0xFFu;
+    (void)np;
     trk_short_name(c, b);
     m = mute ? 0 : meter_px(t->peak);
     t->peak = 0;
     if (m < ts.meter[c] - 1)
         m = ts.meter[c] - 1;
     sig = str_hash(1u + sel + mute * 2u + t->eng_req * 8u, b) + steps_hash(t) * 31u + pg * 7919u + ph * 104729u +
-          len * 1299709u + tc * 3u + (chain.running ? chain.lane[c % NTRK] : ps_num(c)) * 15485863u;
+          len * 1299709u + tc * 3u + nc * 4099u + (chain.running ? chain.lane[c % NTRK] : ps_num(c)) * 15485863u;
     if (!ui.force && sig == ts.col[c]) {
         if (m != ts.meter[c]) {                        /* the meter alone */
             ts.meter[c] = (uint8_t)m;
@@ -2511,39 +2527,39 @@ static void rack_row(uint32_t c)
          * (a chord: its notes), a TIE on at the height carried; DRUM: its hits as before */
         int32_t lo = 127, hi = 0, cy[4] = {RK_H / 2 - 1, 0, 0, 0}, ncy = 1, j;   /* (Dah: a chord's notes carried, each) */
         int roll = !drum_track(&trk[c % NTRK]);
-        for (i = 0; roll && i < 16u && p0 + i < len; i++)
+        for (i = 0; roll && i < nc && p0 + i < len; i++)
             for (j = 0; j < s[p0 + i].n && j < 4; j++) {
                 lo = s[p0 + i].note[j] < lo ? s[p0 + i].note[j] : lo;
                 hi = s[p0 + i].note[j] > hi ? s[p0 + i].note[j] : hi;
             }
-        for (i = 0; i < 16u && p0 + i < len; i++) {
+        for (i = 0; i < nc && p0 + i < len; i++) {
             const step_t *st = &s[p0 + i];
-            int32_t bx = RK_SX + (int32_t)i * RK_SP;
+            int32_t bx = RK_SX + (int32_t)i * sp;
             uint16_t under = bg;
             if (i == ph) {                             /* the step playing: ringed */
-                cv_rrect(bx - 1, 1, RK_CW + 2, RK_H - 2, 2, T_TEXT, bg);
-                cv_rrect(bx, 2, RK_CW, RK_H - 4, 2, bg, T_TEXT);
+                cv_rrect(bx - 1, 1, cw + 2, RK_H - 2, 2, T_TEXT, bg);
+                cv_rrect(bx, 2, cw, RK_H - 4, 2, bg, T_TEXT);
             }
             if (st->time == ST_NOTE && (st->n || st->hit)) {
                 int acc = (st->flags & SF_ACCENT) || (st->acc & st->hit);
                 if (roll && st->n && hi >= lo) {
                     for (j = 0; j < st->n && j < 4; j++) {
                         int32_t ny = hi > lo ? (RK_H - 4) - (st->note[j] - lo) * (RK_H - 6) / (hi - lo) : RK_H / 2 - 1;
-                        cv_rect(bx, ny, RK_CW, 2, acc && !mute ? T_TEXT : tc);
+                        cv_rect(bx, ny, cw, 2, acc && !mute ? T_TEXT : tc);
                         cy[j] = ny;
                     }
                     ncy = j;
                 } else
-                    cv_rrect(bx, 3, RK_CW, RK_H - 6, 2, acc && !mute ? T_TEXT : tc, under);
+                    cv_rrect(bx, 3, cw, RK_H - 6, 2, acc && !mute ? T_TEXT : tc, under);
                 carry = 1;
                 continue;
             }
             if (st->time == ST_TIE && carry) {         /* carried on: half the colour (the roll: each note at its
                                                          * height, a chord held: its lines) */
                 for (j = 0; j < (roll ? ncy : 1); j++)
-                    cv_rect(bx - 1, roll ? cy[j] : RK_H / 2 - 1, RK_CW + 2, 2, ux_mix(bg, tc, 55));
+                    cv_rect(bx - 1, roll ? cy[j] : RK_H / 2 - 1, cw + 2, 2, ux_mix(bg, tc, 55));
             } else
-                cv_rect(bx, RK_H - 2, RK_CW, 1, T_LINE);
+                cv_rect(bx, RK_H - 2, cw, 1, T_LINE);
             carry = st->time == ST_TIE && carry;
         }
     }

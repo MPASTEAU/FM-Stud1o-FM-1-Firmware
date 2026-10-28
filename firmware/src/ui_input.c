@@ -427,7 +427,7 @@ static void ui_leds(void)
     k = oct_leds();
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)((k >> 1) & 1u));
-    led_put(nb, panel.btn[B_OCTUP], ((k & OCT_BREATH) && (ui.home || cur_page()->graph != GR_SONG)) || sgw.on || prv.on);
+    led_put(nb, panel.btn[B_OCTUP], ((k & OCT_BREATH) && (ui.home || cur_page()->graph != GR_SONG)) || sgw.on || prv.on || hvw.on);
                                                         /* (Dah: the VIEW open, OCT+ held: it glows; SONG: then only) */
     led_put(nb, panel.btn[B_OCTDN], (k & OCT_BREATH_DN) != 0u);
     c = key_leds(&br);
@@ -1208,6 +1208,26 @@ static void roll_view_knob(uint32_t slot, int32_t steps)
         prv.nofollow = steps < 0;
     ui.force = 1;
 }
+static void home_view_knob(uint32_t slot, int32_t steps)   /* (Dah) HOME's VIEW: the same, on the tracks' rack */
+{
+    uint32_t len = 1, n = hv_cols(), i;
+    for (i = 0; i < trk_count(); i++)                   /* (MOVE: as far as the longest track) */
+        if ((uint32_t)clamp(trk[i].p[P_SLEN], 1, NSTEP) > len)
+            len = (uint32_t)clamp(trk[i].p[P_SLEN], 1, NSTEP);
+    if (slot == 0u) {
+        int32_t a = (int32_t)hv_base(TSEL, 1) + (steps > 0 ? 1 : -1) * (int32_t)(n / 2u > 4u ? n / 2u : 4u);
+        hvw.at = (int16_t)clamp(a, 0, len > n ? (int32_t)(len - n) : 0);
+        hvw.nofollow = 1;
+    } else if (slot == 1u) {
+        uint32_t mid = hv_base(TSEL, 1) + hv_cols() / 2u;
+        hvw.zoom = (uint8_t)clamp((int32_t)hvw.zoom + (steps > 0 ? -1 : 1), 0, 3);   /* (right: closer) */
+        n = hv_cols();
+        hvw.at = (int16_t)(mid / n * n);
+    } else if (slot == 3u)
+        hvw.nofollow = steps < 0;
+    ui.force = 1;
+}
+static int home_view_page(void) { return ui.home && !ui.menu && !ui.confirm && home_tracks(); }
 static int roll_view_page(void)
 {
     return !ui.home && !ui.menu && !ui.confirm && cur_page()->graph == GR_ROLL && !drum_track(TSEL) && !detail_on();
@@ -2319,16 +2339,17 @@ static void ui_input(void)
         static uint32_t up_ms;
         if (sg_pend && (ui.home || cur_page()->graph != GR_SONG))
             sg_pend = 0;                                /* (Dah: SONG left: the section pending dropped) */
-        int down = ((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm, held;
-        uint8_t so, ro;
+        int down = ((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u) && !lay && !ui.menu && !ui.confirm, held;
+        uint8_t so, ro, ho;
         if (!down)
             up_ms = 0;
         else if (!up_ms)
             up_ms = fm1_ms | 1u;
         held = down && (int32_t)(fm1_ms - up_ms) >= 500;   /* (fm1_ms | 1 may be fm1_ms + 1: no wrap) */
-        so = (uint8_t)(held && cur_page()->graph == GR_SONG);
+        so = (uint8_t)(held && !ui.home && cur_page()->graph == GR_SONG);
         ro = (uint8_t)(held && roll_view_page());
-        if (so | ro)
+        ho = (uint8_t)(held && home_view_page());       /* (Dah: HOME's tracks, the same VIEW) */
+        if (so | ro | ho)
             oct_up_used = 1;                            /* (the VIEW opened: its release no octave) */
         {                                               /* (Dah) SONG: OCT- held 0.5 s, the section picked out */
             static uint32_t dn_ms;
@@ -2350,9 +2371,10 @@ static void ui_input(void)
                 }
             }
         }
-        if (so != sgw.on || ro != prv.on) {
+        if (so != sgw.on || ro != prv.on || ho != hvw.on) {
             sgw.on = so;
             prv.on = ro;
+            hvw.on = ho;
             ui.force = 1;
         }
     }
@@ -2425,8 +2447,10 @@ static void ui_input(void)
             ka_knob(k);
             continue;
         }
-        if (sgw.on || prv.on) {                         /* (Dah) OCT+ held: SONG's, STEP's VIEW */
-            if (sgw.on)
+        if (sgw.on || prv.on || hvw.on) {                /* (Dah) OCT+ held: SONG's, STEP's, HOME's VIEW */
+            if (hvw.on)
+                home_view_knob(k, s);
+            else if (sgw.on)
                 song_view_knob(k, s);
             else
                 roll_view_knob(k, s);
