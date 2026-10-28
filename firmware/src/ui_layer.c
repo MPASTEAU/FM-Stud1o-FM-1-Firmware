@@ -470,7 +470,8 @@ static void rec_key(uint32_t p)
         rec_clear();
         return;
     }
-    v = (rp_get(RL_F[r]) + 1u) % 3u;                    /* the next value, round */
+    v = r == 1u ? !rp_get(RL_F[r]) : (rp_get(RL_F[r]) + 1u) % 3u;   /* the next value, round (Dah: the countdown ON
+                                                         * / OFF) */
     rec_set(r, v);
     ui_say(r == 2u ? "CLICK LEVEL " : r ? "COUNT-IN " : "CLICK ", rl_name(r, v));
 }

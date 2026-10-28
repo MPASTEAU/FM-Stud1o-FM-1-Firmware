@@ -365,7 +365,8 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     if (br)
         *br = 0;
     c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds(br) : grid_on() ? grid_leds() :
-                 (fm1_in.notes & ~kb_layer) | play_leds() | step_leds() | (song_keys_on() ? song_leds() : 0u);
+                 song_keys_on() ? song_leds() :         /* (Dah: SONG: the patterns only, no notes played) */
+                 (fm1_in.notes & ~kb_layer) | play_leds() | step_leds();
 #if FELUCCA_SLICE
     if (!ui.layer && !ui.menu && !name_on() && slice_page_on())
         c |= slice_leds();                              /* SLICES: and the keys of the selected slice */
@@ -426,10 +427,21 @@ static void ui_leds(void)
     k = oct_leds();
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
     led_put(nl, panel.btn[B_OCTUP], (int)((k >> 1) & 1u));
-    led_put(nb, panel.btn[B_OCTUP], (int)(k & OCT_BREATH));
+    led_put(nb, panel.btn[B_OCTUP], ((k & OCT_BREATH) && (ui.home || cur_page()->graph != GR_SONG)) || sgw.on || prv.on);
+                                                        /* (Dah: the VIEW open, OCT+ held: it glows; SONG: then only) */
     led_put(nb, panel.btn[B_OCTDN], (k & OCT_BREATH_DN) != 0u);
     c = key_leds(&br);
     g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? grid_glow() : 0u;   /* (key_leds: the grid's map) */
+    if (song_keys_on()) {                               /* (Dah) SONG: the white keys the cell's track's patterns: its
+                                                         * own lit, the others it has breathing */
+        uint32_t kk;
+        for (kk = 0; ui.song_trk < NTRK && kk < 27u; kk++) {
+            int32_t s2 = song_key(kk);
+            if (s2 >= 0 && !((c >> kk) & 1u) && ps_exists(ui.song_trk, (uint32_t)s2 + 1u))
+                br |= 1u << kk;
+        }
+        keys_map = 1;
+    }
     beat = g ? grid_beats() & ~c : 0u;                  /* (the grid's empty beat starts: brighter than the glow) */
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
@@ -576,7 +588,7 @@ static void song_add(void)
     chain_config.count = (uint8_t)(n + 1u);
     ui.song_row = (uint8_t)n;
 }
-/* SONG's keys (song.grid 3): a press of A3 B3 C4 D4 (seq.c song_key) sets the selected cell's slot A..D (on + ADD it
+/* SONG's keys (song.grid 3; Dah: key k pattern k + 1, the track's ones glowing, the cell's lit) set the selected cell's slot (on + ADD it
  * adds the section first: a copy of the one before, the first with every track on that slot) */
 static void song_keys(uint32_t notes)
 {
@@ -585,6 +597,10 @@ static void song_keys(uint32_t notes)
         int32_t s = (notes >> k) & 1u ? song_key(k) : -1;
         if (s < 0)
             continue;
+        if (ui.song_trk < NTRK && !ps_exists(ui.song_trk, (uint32_t)s + 1u)) {   /* (Dah: a pattern the track has) */
+            ui_message("NO SUCH PATTERN");
+            continue;
+        }
         if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
         if (ui.song_row >= chain_config.count) {
             if (ui.song_row >= CHAIN_ROWS)
@@ -597,8 +613,9 @@ static void song_keys(uint32_t notes)
             uint32_t k;
             for (k = 0; k < NTRK; k++)                  /* (Dah: the project's tracks; the others "-") */
                 chain_config.row[ui.song_row].slot[k] = k < trk_count() ? (uint8_t)(s + 1) : (uint8_t)CHAIN_SILENT;
-        } else {
-            chain_config.row[ui.song_row].slot[ui.song_trk] = (uint8_t)(s + 1);
+        } else {                                      /* (Dah: the cell's own again: out, "-") */
+            uint8_t *sl = &chain_config.row[ui.song_row].slot[ui.song_trk];
+            *sl = *sl == (uint8_t)(s + 1) ? (uint8_t)CHAIN_SILENT : (uint8_t)(s + 1);
         }
         ui.force = 1;
     }
@@ -608,7 +625,7 @@ static uint32_t song_leds(void)
 {
     uint32_t k, s;
     if (ui.song_trk >= NTRK || ui.song_row >= chain_config.count || !(s = chain_config.row[ui.song_row].slot[ui.song_trk]) ||
-        s > 4u)                                         /* (Dah: SEC, every lane: none lit) */
+        s > 27u)                                        /* (Dah: SEC, every lane: none lit) */
         return 0;
     for (k = 0; k < 27u; k++)
         if (song_key(k) == (int32_t)s - 1)
@@ -732,10 +749,16 @@ static int rec_tap(void)                                /* 1: the arming changed
         else confirm_open(CF_ERASE_USER, ui.uslot);
         return 0;
     }
-    if (g == GR_SONG) {                                 /* SONG: the section picked */
+    if (g == GR_SONG) {                                 /* (Dah) SONG: REC adds a section before the one picked (a
+                                                         * copy of it); on + ADD, at the end. OCT- held: the one picked out */
         if (chain_busy()) ui_message("STOP TO EDIT");
-        else if (ui.song_row < chain_config.count) confirm_open(CF_DEL_ROW, ui.song_row);
-        else ui_message("NO SECTION THERE");
+        else if (chain_config.count >= CHAIN_ROWS) ui_message("SONG FULL");
+        else {                                          /* (shown blinking: OCT+ adds it) */
+            sg_pend = 1;
+            sg_prow = (uint8_t)ui.song_row;
+            ui_message("ADD? OCT+ YES");
+        }
+        ui.force = 1;
         return 0;
     }
     if (chain_busy()) {
@@ -1124,17 +1147,10 @@ static void step_edit(uint32_t slot, int32_t steps)
     }
 }
 
-static void edit_param(uint32_t slot, int32_t steps)
+/* (Dah) SONG's VIEW (OCT+ held): KNOB 1 GRID (where PLAY starts), 2 ZOOM, 3 WINDOW, 4 FOLLOW */
+static void song_view_knob(uint32_t slot, int32_t steps)
 {
-    int16_t *vp;
-    const page_t *pg = cur_page();
-    const param_desc_t *d;
-    int32_t v;
-    if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c) */
-        ev_knob(slot, steps);
-        return;
-    }
-    if (pg->graph == GR_SONG && sgw.on) {             /* (Dah) VIEW: GRID (where PLAY starts), ZOOM, WINDOW, FOLLOW */
+    {
         if (slot == 0u) {                               /* GRID: a bar a detent; the view on it */
             song_lay_t L;
             uint32_t r = 0;
@@ -1172,7 +1188,47 @@ static void edit_param(uint32_t slot, int32_t steps)
         } else
             sgw.nofollow = steps < 0;                   /* FOLLOW */
         ui.force = 1;
+    }
+}
+/* (Dah) STEP's VIEW (OCT+ held, a melodic track): KNOB 1 MOVE (a quarter of the view a detent), 2 ZOOM (8 16 32 64
+ * steps), 4 FOLLOW */
+static void roll_view_knob(uint32_t slot, int32_t steps)
+{
+    uint32_t len = (uint32_t)TSEL->p[P_SLEN], n = prv_cols();
+    if (slot == 0u) {
+        int32_t a = (int32_t)prv_base(TSEL) + (steps > 0 ? 1 : -1) * (int32_t)(n / 4u);
+        prv.at = (int16_t)clamp(a, 0, len > n ? (int32_t)(len - n) : 0);
+        prv.nofollow = 1;
+    } else if (slot == 1u) {
+        uint32_t mid = prv_base(TSEL) + n / 2u;
+        prv.zoom = (uint8_t)clamp((int32_t)prv.zoom + (steps > 0 ? -1 : 1), 0, 3);   /* (right: closer) */
+        n = prv_cols();
+        prv.at = (int16_t)(mid > n / 2u ? mid - n / 2u : 0u);
+    } else if (slot == 3u)
+        prv.nofollow = steps < 0;
+    ui.force = 1;
+}
+static int roll_view_page(void)
+{
+    return !ui.home && !ui.menu && !ui.confirm && cur_page()->graph == GR_ROLL && !drum_track(TSEL) && !detail_on();
+}
+static void edit_param(uint32_t slot, int32_t steps)
+{
+    int16_t *vp;
+    const page_t *pg = cur_page();
+    const param_desc_t *d;
+    int32_t v;
+    if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c) */
+        ev_knob(slot, steps);
         return;
+    }
+    if (pg->graph == GR_SONG && sgw.on) {             /* (Dah) VIEW: GRID (where PLAY starts), ZOOM, WINDOW, FOLLOW */
+        song_view_knob(slot, steps);
+        return;
+    }
+    if (pg->graph == GR_SONG && sg_pend) {            /* (Dah: a section pending: moved away, dropped) */
+        sg_pend = 0;
+        ui.force = 1;
     }
     if (pg->graph == GR_SONG) {                       /* KNOB 1 SECTION, 2 TRACK, 3 PAT (A..D, -), 4 REPS */
         chain_row_t *r;
@@ -1396,10 +1452,27 @@ static void act_do(void)
                      c == 2u ? CF_DEL_TRACK : CF_CLEAR_SONG, c == 2u ? trk_count() - 1u : song.sel);
         return;
     }
-    if (cur_page()->graph == GR_SONG) {                 /* (Dah) OCT+: the VIEW, its knobs MOVE ZOOM FOLLOW (PLAY
-                                                         * plays the song) */
-        sgw.on = !sgw.on;
-        ui_message(sgw.on ? "VIEW: MOVE ZOOM FOLLOW" : "SONG");
+    if (cur_page()->graph == GR_SONG) {                 /* (Dah) a section to add or to delete: done; else the VIEW is
+                                                         * OCT+ held (ui_input) */
+        uint32_t r = sg_prow, n = chain_config.count;
+        if (sg_pend == 1u && !chain_busy() && n < CHAIN_ROWS) {
+            if (r >= n)
+                song_add();
+            else {
+                for (; n > r; n--)
+                    chain_config.row[n] = chain_config.row[n - 1u];
+                chain_config.count++;
+            }
+            ui_message("SECTION ADDED");
+        } else if (sg_pend == 2u && !chain_busy() && r < n) {
+            for (; r + 1u < chain_config.count; r++)
+                chain_config.row[r] = chain_config.row[r + 1u];
+            chain_config.count--;
+            if (ui.song_row > chain_config.count) ui.song_row = chain_config.count;
+            ui_message("SECTION DELETED");
+        } else if (!sg_pend)
+            ui_message("HOLD OCT+: VIEW");
+        sg_pend = 0;
         ui.force = 1;
         return;
     }
@@ -1497,6 +1570,8 @@ static void act_do(void)
 
 /* OCT- / OCT+ where they answer (the dialogs, the menu, action pages): on release, and only a press
  * that began there; both down together (UPDATE MODE, main.c) is no tap. Bit 0 OCT-, bit 1 OCT+ */
+static uint8_t oct_up_used;                             /* (Dah) OCT+ held with a knob turned (the VIEW): no tap */
+static uint8_t oct_dn_used;                             /* (Dah) OCT- held for an action (SONG: a section out): no tap */
 static uint32_t oct_taps(uint32_t pressed, int here)
 {
     static uint8_t down, chord, where;                  /* (Dah) where: pressed where they answer, a bit each */
@@ -1510,6 +1585,14 @@ static uint32_t oct_taps(uint32_t pressed, int here)
     if (now == 3u)
         chord = 1;
     tap = down & ~now & 3u;
+    if (oct_up_used && (tap & 2u))
+        tap &= ~2u;
+    if (oct_dn_used && (tap & 1u))
+        tap &= ~1u;
+    if (!(now & 2u))
+        oct_up_used = 0;
+    if (!(now & 1u))
+        oct_dn_used = 0;
     down &= (uint8_t)now;
     if (chord) {
         tap = 0;
@@ -1647,9 +1730,8 @@ static void presets_turn(int32_t s)
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
-    } else if (g != GR_TOOLS && g != GR_SLICES) {     /* (HA HA HE HU: a sound loads on HOME and PRESETS only; a stray
-                                                         * turn on a sound's page no longer replaces it) */
-        ui_message("PRESETS: ON HOME");
+    } else if (g != GR_TOOLS && g != GR_SLICES) {     /* (Dah) the sound, on every page (its list shown ~1 s) */
+        preset_step(s);
     }
 }
 
@@ -1685,9 +1767,9 @@ static void chain_open(void)
 static int sel_is_list(void)                           /* (Dah) the page shown has a list SELECT moves down */
 {
     uint32_t g = cur_page()->graph;
-    return g == GR_BROWSE || g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN ||
-           g == GR_PATS || g == GR_SONG || g == GR_EVENTS || g == GR_TRK ||
-           (cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX);   /* (Dah: MIXER, its strips and the MASTER) */
+    return g == GR_TRK || g == GR_FILE || g == GR_PATTERN;   /* (Dah: MIXER, its strips and the MASTER; FILE, PATTERN,
+                                                     * whose knobs are the actions; where SELECT did what KNOB 1 does,
+                                                     * the tempo again) */
 }
 static void sel_list(int32_t s)
 {
@@ -1996,7 +2078,17 @@ static void ui_input(void)
         }
         if (ui.ly == LAYER_FX && ((pressed >> panel.btn[B_EDIT]) & 1u))
             fx_default();                               /* .. EDIT: its default back */
-        panel_enc(EN_ALGO);                             /* (another track: OCT- puts back the layer's track only) */
+        if ((s = panel_enc(EN_ALGO)) != 0 && glo) {     /* (Dah) GLO + ALGORITHM: the pattern, every track's (its list
+                                                         * ~1 s, + NEW at the end); else: another track: OCT- puts back
+                                                         * the layer's track only */
+            uint32_t was = ps_num(song.sel);
+            pattern_turn(s);
+            tl_ms = fm1_ms | 1u;
+            tl_pat = 1;
+            if (ps_num(song.sel) != was)
+                tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
+            combo = 1;
+        }
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
             combo = 1;
     } else if ((kq = (uint32_t)layer_knobs_quiet()) != 0) {   /* a layer letting go: KNOB 1..4 are nobody's (#39) */
@@ -2187,6 +2279,11 @@ static void ui_input(void)
     } else if (act_cols() && (oct & 2u)) {              /* action pages: OCT+ does the picked action, */
         act_do();
     } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it (Dah: no more BACK to HOME) */
+        if (sg_pend) {                                  /* (Dah) SONG: the section to add / delete: not */
+            sg_pend = 0;
+            ui.force = 1;
+            ui_message("CANCELLED");
+        }
         if (cur_page()->graph != GR_PATS && ui.act)
             ui.act = 0;
     } else if (ui.ml.on && oct) {                          /* MIDI LEARN: OCT- clears the picked CC, OCT+ done */
@@ -2217,6 +2314,48 @@ static void ui_input(void)
      * pass runs, so one landing after the layer's read went to the page as well: KNOB 1..4 edited the layer's control
      * and the page under it (HOME's sound, motion recorded), PRESETS could load a sound. They stay for the next pass */
     kq |= lay;
+    {                                                   /* (Dah) OCT+ held 0.5 s on SONG, on STEP (a melodic track): the
+                                                         * VIEW (OCT+ blinking; let go: closed, no octave) */
+        static uint32_t up_ms;
+        if (sg_pend && (ui.home || cur_page()->graph != GR_SONG))
+            sg_pend = 0;                                /* (Dah: SONG left: the section pending dropped) */
+        int down = ((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm, held;
+        uint8_t so, ro;
+        if (!down)
+            up_ms = 0;
+        else if (!up_ms)
+            up_ms = fm1_ms | 1u;
+        held = down && (int32_t)(fm1_ms - up_ms) >= 500;   /* (fm1_ms | 1 may be fm1_ms + 1: no wrap) */
+        so = (uint8_t)(held && cur_page()->graph == GR_SONG);
+        ro = (uint8_t)(held && roll_view_page());
+        if (so | ro)
+            oct_up_used = 1;                            /* (the VIEW opened: its release no octave) */
+        {                                               /* (Dah) SONG: OCT- held 0.5 s, the section picked out */
+            static uint32_t dn_ms;
+            int dn = ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm &&
+                     cur_page()->graph == GR_SONG && !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
+            if (!dn)
+                dn_ms = 0;
+            else if (!dn_ms)
+                dn_ms = fm1_ms | 1u;
+            else if (!oct_dn_used && (int32_t)(fm1_ms - dn_ms) >= 500) {
+                oct_dn_used = 1;
+                if (chain_busy()) ui_message("STOP TO EDIT");
+                else if (ui.song_row >= chain_config.count) ui_message("NO SECTION THERE");
+                else {                                  /* (shown blinking: OCT+ deletes it) */
+                    sg_pend = 2;
+                    sg_prow = (uint8_t)ui.song_row;
+                    ui_message("DELETE? OCT+ YES");
+                    ui.force = 1;
+                }
+            }
+        }
+        if (so != sgw.on || ro != prv.on) {
+            sgw.on = so;
+            prv.on = ro;
+            ui.force = 1;
+        }
+    }
     if (chain_seek_req && !transport_busy()) {          /* (Dah) SONG's GRID turned while it played: on from there */
         chain_play_ui();
         chain_seek_req = 0;
@@ -2224,11 +2363,19 @@ static void ui_input(void)
     if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
         if (mx_master)
             ui_message("MASTER: FX ONLY");              /* (Dah: no sound to load there) */
+        else if (detail_on() && !chain_busy())
+            cursor_move(ui.cursor + s);                 /* (DETAIL: the cursor, its KNOB 1 CHANCE) */
+        else if (lock_held())
+            nudge_turn(lock_held(), s);                 /* (STEP, steps held: their NUDGE) */
         else
-            presets_turn(s);
+            preset_step(s);                             /* (Dah) PRESETS: the sound, on every page (its list ~1 s);
+                                                         * the lists: SELECT (MENU > SELECT LIST), KNOB 1 */
     }
     if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page; (HA HA HE HU) past the
                                                       * project's last: ADD TRACK? (the dialog) */
+        uint32_t was = mx_master ? NTRK : song.sel;
+        tl_ms = fm1_ms | 1u;                            /* (Dah) the tracks' list over the panel ~1 s (ui_graph.c) */
+        tl_pat = 0;
         if (s > 0 && mx_master) {                       /* (Dah) the MASTER, left of track 1, on every page */
             mx_master = 0;
             track_select(0);
@@ -2241,13 +2388,17 @@ static void ui_input(void)
             confirm_open(CF_ADD_TRACK, trk_count());
         else if (!mx_master)
             track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
+        if ((mx_master ? NTRK : song.sel) != was)
+            tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
     }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
         if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
-        } else if (!glo && sel_mode() == SEL_PAGE && !ui.home && sel_is_list()) {   /* MENU > SELECT LIST (HA HA HE HU;
+        } else if (!glo && !ui.home && sel_is_list() && (sel_mode() == SEL_PAGE || cur_page()->graph == GR_FILE ||
+                                                         cur_page()->graph == GR_PATTERN)) {   /* (Dah: FILE, PATTERN: their
+                                                         * list SELECT's, whatever MENU > SELECT says) */   /* MENU > SELECT LIST (HA HA HE HU;
                                                          * 1.5.5's PAGE, #188, turned the pages): down the page's list
                                                          * (sel_list); Dah: a page with no list (ENV, LFO, ARP, SCL ..):
                                                          * the tempo, as on HOME. Not while a layer's button is down or
@@ -2272,6 +2423,16 @@ static void ui_input(void)
             continue;
         if (ka.st) {                                    /* (Dah) ASSIGN: the knob names, it edits nothing */
             ka_knob(k);
+            continue;
+        }
+        if (sgw.on || prv.on) {                         /* (Dah) OCT+ held: SONG's, STEP's VIEW */
+            if (sgw.on)
+                song_view_knob(k, s);
+            else
+                roll_view_knob(k, s);
+            oct_up_used = 1;
+            ui.hot_col = (uint8_t)k;
+            ui.hot_t = 40;
             continue;
         }
         if (mx_master && (ui.home || (pg->fam != FAM_FX && pg->graph != GR_TRK))) {   /* (Dah) the MASTER: FX's pages */

@@ -27,6 +27,10 @@ SIZE_FILES = ["ui.c", "favorites.c", "menu_items.c", "icons.c", "ui_graph.c", "u
               "ui_drumlane.c", "ui_fm6op.c", "ui_graph_eq.c", "ui_graph_fx.c", "ui_graph_more.c", "ui_help.c", "ui_lfodraw.c",
               "ui_pattern.c", "ui_tools.c", "projfs.c", "pstore.c", "editor_learn.c", "editor_palette.c", "midi_learn.c",
               "category.c"]
+# (Dah) the sound files' cold code: once a note, a hit or a load (not a sample's), main loop only: for size too
+COLD_FNS = ("dv_setup", "dv_setup_synth", "smp_user_scan", "fm1_fault_c", "fm6_note_on", "fm6_sync", "drum_note_on",
+            "px_string_excite", "px_modal_exciter", "fm6_pack", "fm6_unpack", "slice_note_on", "sample_note_on", "pd_setup",
+            "fvb_boot", "fm6_done", "smp_sine", "slc_state_at", "gr_seek")
 ISR_ROOTS = ("fm1_alnk0_irq", "fm1_timer5_irq")      # hal/fm1_isr.S: the audio ISR, the key / LED scan (+ USB poll)
 DEF = re.compile(r"^(?:static|void|int|uint\w*|int\w*|const)\b[^;=(]*?\b([A-Za-z_]\w*)\s*\(", re.M)
 IR_DEF = re.compile(r"^(define [^\n]*?@\"?([\w.]+)\"?\([^\n]*\)(?: unnamed_addr| local_unnamed_addr)?)( #\d+[^\n]*\{)$",
@@ -54,7 +58,7 @@ def size_names():
     names = set()
     for f in SIZE_FILES:
         names.update(definitions((SRC / f).read_text()))
-    return names
+    return names | set(COLD_FNS)
 
 
 IR_BODY = re.compile(r"^define [^\n]*?@\"?([\w.]+)\"?\((.*?)^\}", re.M | re.S)

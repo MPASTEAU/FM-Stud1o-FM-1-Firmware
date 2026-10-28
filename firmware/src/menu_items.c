@@ -133,7 +133,7 @@ static const char *const HOLD_N[4] = {"0.3 s", "0.4 s", "0.5 s", "0.6 s"};   /* 
 /* 1.1 (Discussion #131): the metronome (click.c) and the count-in (seq.c); ui.c ui_rec_prefs holds them */
 static const char *const CLICK_N[3] = {"OFF", "REC", "ON"};          /* REC: while a track is armed and playing */
 static const char *const CLKLVL_N[3] = {"LOW", "MID", "HIGH"};
-static const char *const COUNTIN_N[3] = {"OFF", "1 BAR", "2 BARS"};
+static const char *const COUNTIN_N[3] = {"OFF", "ON", "ON"};   /* (Dah) the countdown, a bar (2: 2 bars, stored before) */
 /* 1.1.5: SCREEN OFF (ui.c scr_*: the screen dark after this long without panel input; NEVER the default since 1.1.5.1) */
 static const char *const SCROFF_N[5] = {"NEVER", "5 MIN", "15 MIN", "30 MIN", "60 MIN"};
 /* ANIM (#46: OFF, values snap: ui_draw.c roll_note, ui_graph.c pr_follow; no power-on sweep, main.c boot_leds). 1.2
@@ -182,7 +182,7 @@ static const char *const SELECT_N[SEL_N] = {"BPM", "LIST", "MODW", "VEL"};   /* 
 /* a row's value as 0..menu_n(row) - 1 in the order the menu steps it (LEDS: OFF DIM LO DIM HI INV INV LO INV HI) */
 static uint32_t menu_n(uint32_t row)
 {
-    return row == MI_COLOR ? palette_n() : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
+    return row == MI_COLOR ? palette_n() : row == MI_COUNTIN ? 2u : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
            row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_ROWS : row == MI_SCROFF ? NELEM(SCROFF_N) :
            row == MI_TUNE ? TUNE_N : row == MI_MIDIIN ? NELEM(N_ROUTE) : MI_TCH(row) ? MCH_N : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT :
            row == MI_SELECT ? SEL_N : 2u;

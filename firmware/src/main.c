@@ -155,7 +155,7 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
 static void felucca_demo(void) __attribute__((noinline));   /* (its own, built for size: tools/size_fns.py) */
 static void demo_var(uint32_t k, uint32_t v) __attribute__((noinline));
 #ifndef DAH_DEMO_SONG
-#define DAH_DEMO_SONG 4                         /* (Dah) the power-on song: 4 the long chords, 3 the slow one, after Archive, 2 the deep house, 1 the
+#define DAH_DEMO_SONG 5                         /* (Dah) the power-on song: 5 the dark one, 4 the long chords, 3 the slow one, after Archive, 2 the deep house, 1 the
                                                  * trip-hop (kept), 0 the FX test */
 #endif
 #if DAH_DEMO_SONG == 1
@@ -950,6 +950,199 @@ static void felucca_demo(void)
         if (i < 5u) {                         /* the drone, string, chord, choir, bass pump on the kick (last) */
             t->p[P_DKSRC] = 7;
             t->p[P_DKAMT] = i == 4u ? 70 : 60;
+            t->p[P_DKREL] = 10;
+        }
+    }
+    for (i = 0; i < sizeof DS / sizeof DS[0]; i++) {
+        uint32_t k2 = (uint32_t)DS[i][0], id = (uint32_t)DS[i][1];
+        trkx_t *x = &trkx[k2 % NTRK];
+        if (k2 == 8u) mtrk.p[id] = DS[i][2];
+        else if (id == DS_DIN) x->din = (int8_t)DS[i][2];
+        else if (id == DS_CIN) x->cin = (int8_t)DS[i][2];
+        else if (id == DS_COUT) x->cout = (int8_t)DS[i][2];
+        else trk[k2].p[id] = DS[i][2];
+    }
+    for (k = 0; k < 8u; k++)
+        for (v = 1; v <= NV[k]; v++) {
+            if (v > 1u)
+                (void)pattern_new(k, 0);
+            demo_var(k, v);
+        }
+    for (k = 0; k < 8u; k++)
+        (void)pattern_go(k, 1);
+    chain_defaults(&chain_config);
+    chain_config.count = 16;
+    for (i = 0; i < 16u; i++) {
+        for (k = 0; k < NTRK; k++)
+            chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
+        chain_config.row[i].repeat = 1;
+    }
+    for (i = 0; i < NTRK; i++)
+        pat_sig[i] = steps_sig(&trk[i]);
+}
+#elif DAH_DEMO_SONG == 5
+/* (Dah) the dark one: 72 BPM in 1/16, B minor, sixteen sections of four bars from the SONG. Huge chords (two pads, eight
+ * voices) held a section each: Bm(add9) G(maj7 #11) Em9 F#7(b9), at the end C over B, a cluster, resolving to Bm. Over
+ * them a guitar of a synth (driven, fuzzed) sliding slowly into its notes, a light vibrato late in them; the beat half time, heavy:
+ *   track 1  GRAIN CLOUD PAD, the drone   track 2  PHYS DRONE STRING, bowed   track 3  FM6 PAD, the chord low
+ *   track 4  ANALOG STRINGS, the chord high   track 5  ANALOG SUB BASS   track 6  DRUM HARD KIT, the snare, the hats
+ *   track 7  DRUM DEEP KIT, the kick   track 8  ANALOG SAW LEAD, the guitar */
+static const uint8_t DK_LO[5][4] = {{47, 54, 59, 62}, {43, 50, 59, 66}, {40, 47, 55, 62}, {42, 49, 58, 64}, {47, 48, 55, 64}};
+static const uint8_t DK_HI[5][4] = {{66, 71, 73, 74}, {66, 71, 73, 74}, {66, 67, 71, 74}, {67, 70, 73, 76}, {67, 71, 72, 76}};
+static const uint8_t DK_ROOT[5] = {35, 31, 28, 30, 35};   /* Bm G Em F#7(b9) C/B */
+/* the guitar's phrases: note (0 a rest), steps, slide into the next */
+static const uint8_t DK_GT[5][10][3] = {
+    {{71, 8, 1}, {74, 4, 1}, {73, 4, 0}, {71, 16, 0}, {0, 4, 0}, {66, 4, 1}, {69, 4, 1}, {71, 4, 1}, {73, 16, 0}},
+    {{74, 8, 1}, {73, 4, 1}, {71, 4, 0}, {67, 16, 1}, {66, 16, 0}, {0, 16, 0}},
+    {{67, 4, 1}, {71, 4, 1}, {74, 8, 0}, {76, 8, 1}, {74, 8, 0}, {71, 16, 1}, {67, 16, 0}},
+    {{70, 8, 1}, {73, 8, 1}, {76, 16, 0}, {78, 8, 1}, {76, 8, 1}, {73, 16, 0}},
+    {{72, 16, 1}, {71, 48, 0}}};
+static void demo_var(uint32_t k, uint32_t v)
+{
+    uint32_t i, r = (v - 1u) % 5u;
+    track_t *t = &trk[k];
+    switch (k) {
+    case 0: case 1: {                                                       /* the drone, the string: root, fifth */
+        uint8_t d[2] = {(uint8_t)(DK_ROOT[r] + (k ? 12u : 24u)), (uint8_t)(DK_ROOT[r] + (k ? 19u : 31u))};
+        if (r == 3u) d[1] = (uint8_t)(DK_ROOT[r] + (k ? 13u : 25u));        /* (F#: its b9 groaning) */
+        dm_chord(t, 0, 64, d, 2, 90);
+        if (k == 0u)
+            demo_auto(t, P_E0, 0, 56, 10 + r * 22u, 30 + r * 22u);
+        break;
+    }
+    case 2: case 3:                                                         /* the chord, held */
+        dm_chord(t, 0, 64, k == 2u ? DK_LO[r] : DK_HI[r], 4, k == 2u ? 96 : 80);
+        if (r == 4u) {                                                      /* (the cluster: brighter, swelling, then
+                                                                             * each voice gliding into Bm: the slide) */
+            demo_auto(t, P_EQHI, 0, 56, 70, 110);
+            trkx[k].curve = 1;
+            t->step[63].flags |= SF_SLIDE;
+        }
+        break;
+    case 4:                                                                 /* the sub */
+        demo_note(&t->step[0], DK_ROOT[r] + 12u, 100);
+        demo_hold(t, 0, 64);
+        break;
+    case 5:                                                                 /* the snare on 3, the hats; 2: the roll */
+        for (i = 0; i < 64u; i++) {
+            uint32_t b = i % 16u;
+            if (v == 2u) {
+                if (i >= 32u && (i % (i >= 48u ? 1u : 2u)) == 0u)
+                    demo_hit(t, i, 1u << 1, 40 + (i - 32u) * 2u);
+            } else {
+                if (!(b & 1u))
+                    demo_hit(t, i, 1u << 3, b % 4u ? 34 : 54);
+                if (b == 8u)
+                    demo_hit(t, i, 1u << 1 | 1u << 2, 124);
+            }
+        }
+        break;
+    case 6:                                                                 /* the kick; 2: one hit, the cluster's */
+        for (i = 0; i < 64u; i += 16u) {
+            demo_hit(t, i, 1u << 0, 127);
+            if (v == 1u) {
+                demo_hit(t, i + 10u, 1u << 0, 110);
+                if ((i / 16u) & 1u)
+                    demo_hit(t, i + 14u, 1u << 0, 90);
+            } else
+                break;
+        }
+        break;
+    default: {                                                              /* the guitar */
+        uint32_t at = 0;
+        for (i = 0; i < 10u && DK_GT[r][i][1]; i++) {
+            const uint8_t *g = DK_GT[r][i];
+            if (g[0]) {
+                demo_note(&t->step[at], g[0], 104);
+                demo_hold(t, at, g[1]);
+                if (g[2])
+                    t->step[at + g[1] - 1u].flags |= SF_SLIDE;
+            }
+            at += g[1];
+        }
+        break;
+    }
+    }
+}
+static void felucca_demo(void)
+{
+    /* each track's variant: the region (1 Bm, 2 G, 3 Em, 4 F#7b9, 5 C/B); 0 silent */
+    static const uint8_t SEC[16][8] = {
+        {1, 0, 1, 0, 0, 0, 0, 0},             /* out of nothing: the drone, the chord low */
+        {1, 1, 1, 1, 0, 0, 0, 0},             /* the string, the chord high */
+        {1, 1, 1, 1, 1, 0, 0, 1},             /* the sub, the guitar */
+        {2, 2, 2, 2, 2, 0, 1, 2},             /* G: the kick */
+        {1, 1, 1, 1, 1, 1, 1, 1},             /* Bm: the beat */
+        {2, 2, 2, 2, 2, 1, 1, 2},
+        {3, 3, 3, 3, 3, 1, 1, 3},             /* Em */
+        {4, 4, 4, 4, 4, 2, 1, 4},             /* F#7(b9): the roll */
+        {1, 1, 1, 1, 1, 1, 1, 1},             /* again, heavier */
+        {2, 2, 2, 2, 2, 1, 1, 2},
+        {3, 3, 3, 3, 3, 1, 1, 3},
+        {4, 4, 4, 4, 4, 2, 1, 4},
+        {1, 1, 1, 1, 0, 0, 0, 1},             /* down: the chords, the guitar */
+        {4, 4, 4, 4, 4, 0, 0, 0},             /* the tension */
+        {5, 5, 5, 5, 5, 0, 2, 5},             /* C over B: the cluster, one hit */
+        {1, 1, 1, 1, 1, 0, 0, 0},             /* resolved: Bm */
+    };
+    static const uint8_t NV[8] = {5, 5, 5, 5, 5, 2, 2, 5};
+    static const uint8_t SND[8][2] = {{8, 0}, {ENGI_PHYS, 7}, {ENGI_FM6, 4}, {0, 11}, {0, 7}, {ENGI_DRUM, 5},
+                                      {ENGI_DRUM, 1}, {0, 0}};
+    enum { DS_DIN = 200, DS_CIN, DS_COUT };
+    static const int16_t DS[][3] = {          /* track (8 the MASTER), parameter (DS_*: the extras), value */
+        {0, P_ATK, 110}, {0, P_REL, 120}, {0, P_REV, 110}, {0, P_SPRD, 127},
+        {0, P_LWAVE, 1}, {0, P_LSYNC, 1}, {0, P_LTRIG, 1}, {0, P_M1SRC, 1}, {0, P_M1DST, 14}, {0, P_M1AMT, 40},
+        {1, P_ATK, 90}, {1, P_REL, 110}, {1, P_SUS, 127}, {1, P_SPRD, 100}, {1, P_REV, 90},
+        {1, P_ITYPE, IT_PHASER}, {1, P_IA, 4}, {1, P_IB, 80}, {1, P_IMIX, 60},
+        {2, P_ATK, 90}, {2, P_REL, 120}, {2, P_SUS, 127}, {2, P_SPRD, 127}, {2, P_REV, 100}, {2, P_CHOR, 70},
+        {2, P_GLIDE, 110}, {3, P_GLIDE, 110},                                /* (the resolution: slow glides) */
+        {2, P_ITYPE, IT_CHORUS}, {2, P_IA, 6}, {2, P_IB, 90}, {2, P_IMIX, 50},
+        {2, P_LWAVE, 1}, {2, P_LSYNC, 1}, {2, P_LTRIG, 1}, {2, P_LD_SHP, 36}, {2, P_LD_FLT, 14},
+        {3, P_ATK, 110}, {3, P_REL, 120}, {3, P_SUS, 127}, {3, P_SPRD, 127}, {3, P_REV, 110}, {3, P_CHOR, 60},
+        {3, P_LWAVE, 0}, {3, P_LSYNC, 2}, {3, P_LTRIG, 1}, {3, P_LD_FLT, 24}, {3, P_M1SRC, 9}, {3, P_M1DST, 5},
+        {3, P_M1AMT, 30},
+        {4, P_VOICE, V_MONO}, {4, P_ATK, 60}, {4, P_SUS, 127}, {4, P_REL, 90}, {4, P_REV, 0}, {4, P_DLY, 0},
+        {4, P_CHOR, 0},
+        {5, P_REV, 70}, {5, P_DLY, 10}, {5, P_CHOR, 0}, {5, DS_CIN, 12}, {5, DS_COUT, 8}, {5, P_DIST, 14},
+        {6, P_REV, 20}, {6, P_DLY, 0}, {6, P_CHOR, 0}, {6, DS_CIN, 16}, {6, DS_COUT, 16}, {6, P_DIST, 20},
+        {6, P_E0 + 1, 30}, {6, P_E0 + 2, 80},
+        {7, P_VOICE, V_MONO}, {7, P_GLIDE, 96}, {7, P_ATK, 4}, {7, P_SUS, 110}, {7, P_REL, 80},   /* the guitar: */
+        {7, P_DIST, 64}, {7, P_DCOL, -16}, {7, DS_DIN, 10},                 /* .. driven, fuzzed, */
+        {7, P_ITYPE, IT_FUZZ}, {7, P_IA, 40}, {7, P_IMIX, 40},
+        {7, P_LWAVE, 0}, {7, P_LRATE, 70}, {7, P_LFADE, 127}, {7, P_LD_PIT, 1},   /* .. a light vibrato, late, */
+        {7, P_REV, 90}, {7, P_DLY, 70}, {7, P_PAN, -8},                      /* .. far in the echo */
+        {8, P_DIST, 10}, {8, P_EQLO, 6}, {8, P_EQ1F, 100}, {8, P_EQ1G, 6},
+    };
+    static const int8_t EQ[8][6] = {          /* LOW CUT, HIGH CUT (118: open), a bell; the level; the COMPRESSOR */
+        {44, 100, 60, -3, 90, 60},            /* drone */
+        {30, 104, 50, -3, 124, 80},           /* string */
+        {30, 96, 50, -4, 104, 70},            /* chord low */
+        {50, 100, 80, 2, 100, 80},            /* chord high */
+        {0, 60, 20, 4, 104, 90},              /* sub */
+        {30, 118, 90, 4, 120, 80},            /* kit */
+        {0, 118, 18, 6, 126, 70},             /* kick */
+        {40, 100, 70, 4, 112, 80},            /* guitar */
+    };
+    uint32_t i, k, v;
+    song.g[G_BPM] = 72;
+    song.g[G_RTYPE] = 2; song.g[G_RSIZE] = 124; song.g[G_RDAMP] = 70;
+    song.g[G_DFDBK] = 70; song.g[G_DTIME] = 10; song.g[G_DCOLOR] = 40;
+    song.g[G_CRATE] = 8; song.g[G_CDEPTH] = 100;
+    song.g[G_MCOMP] = 54; song.g[G_MREL] = 70;
+    song.ntrk = 8;
+    for (i = 0; i < NTRK; i++) {
+        track_t *t = &trk[i];
+        track_defaults_steps(t);
+        t->p[P_SLEN] = 64;
+        t->p[P_SDIV] = 2;
+        demo_sound(t, SND[i][0], SND[i][1]);
+        t->p[P_EQLO] = EQ[i][0]; t->p[P_EQHI] = EQ[i][1]; t->p[P_EQ1F] = EQ[i][2]; t->p[P_EQ1G] = EQ[i][3];
+        t->p[P_LEVEL] = EQ[i][4];
+        trkx[i].rsv0 = (uint8_t)EQ[i][5];
+        trkx[i].rsv1 = 60;
+        if (i < 5u) {                         /* the drone, string, chords, sub pump on the kick (last) */
+            t->p[P_DKSRC] = 7;
+            t->p[P_DKAMT] = i == 4u ? 66 : 56;
             t->p[P_DKREL] = 10;
         }
     }

@@ -114,7 +114,7 @@ static int32_t bar_x(uint32_t i) { return 12 + (int32_t)(i % 16u) * 13 + (int32_
  * the view: a 1 px mark on the edge. The cursor: a TEXT column frame; the playhead: a 1 px ACCENT line. The view
  * (proll.lo, the bottom row) fits the notes of the page, else centres on the cursor's note, and follows in steps (a
  * third of the way per frame); graph_signature() holds it, so a page that does not change is not drawn again. */
-#define PR_ROWS 21                                  /* semitones shown (1.75 octaves) */
+#define PR_ROWS 19                                  /* semitones shown (Dah: 19, the ruler under them) */
 #define PR_RH 5                                     /* px per row */
 #define PR_Y0 9                                     /* the top row (canvas y) */
 #define PR_X0 35                                    /* the first step column */
@@ -125,6 +125,24 @@ static struct {
     uint32_t frame;
 } proll;
 static const uint8_t KEY_BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
+/* (Dah) STEP's VIEW (OCT+ held: KNOB 1 MOVE, 2 ZOOM, 4 FOLLOW): 8 16 32 or 64 steps across; where they start (-1: the
+ * cursor's page, as before); FOLLOW: playing, the step playing in the middle */
+static struct { uint8_t on, zoom, nofollow; int16_t at; } prv = {0, 1, 0, -1};
+static uint32_t prv_cols(void) { return 8u << (prv.zoom & 3u); }
+static uint32_t prv_base(const track_t *t)
+{
+    uint32_t len = (uint32_t)t->p[P_SLEN], n = prv_cols(), b;
+    if (song.playing && !prv.nofollow && t->seq_idx < len)
+        b = t->seq_idx > n / 2u ? t->seq_idx - n / 2u : 0u;
+    else if (prv.at >= 0)
+        b = (uint32_t)prv.at;
+    else
+        b = (ui.cursor / n) * n;
+    if (len > n && b + n > len)
+        b = len - n;
+    return len > n ? b : 0u;
+}
+static int32_t prv_x(uint32_t i) { return PR_X0 + (int32_t)(i * 195u / prv_cols()); }   /* (column i's left: x 35 .. 230) */
 
 static int32_t pr_note(const step_t *st, uint32_t j)   /* the step's note j (0..3), then its lane hits (-1: none) */
 {
@@ -156,12 +174,12 @@ static uint32_t pr_held(void)
  * forced, a gap in the frames, another track or MENU > ANIM OFF */
 static void pr_follow(const track_t *t)
 {
-    uint32_t i, j, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
+    uint32_t i, j, len = (uint32_t)t->p[P_SLEN], base = prv_base(t), nc = prv_cols();
     int32_t lo = 127, hi = -1, tgt, d, cur = proll.lo;
     int snap = ui.force || !proll.init || proll.trk != song.sel || ui.frame != proll.frame + 1u || (ui_prefs & PREF_ANIM_OFF);
     if (proll.init && proll.frame == ui.frame)
         return;
-    for (i = 0; i < 16u && base + i < len; i++) {
+    for (i = 0; i < nc && base + i < len; i++) {
         uint32_t s = pr_src(t, base + i, len);
         for (j = 0; s < NSTEP && j < 4u + NLANE; j++) {
             int32_t n = pr_note(&seq_steps(t)[s], j);
@@ -226,12 +244,12 @@ static void pr_bars(const step_t *st, int32_t x, int32_t w, uint16_t c, int acc_
 }
 static void graph_roll(const track_t *t, uint16_t c)
 {
-    uint32_t i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, ncol, mask = scale_mask(t), held = pr_held();
+    uint32_t i, len = (uint32_t)t->p[P_SLEN], base = prv_base(t), nc = prv_cols(), ncol, mask = scale_mask(t), held = pr_held();
     uint64_t locks = motion_lock_steps(trk_index(t));
-    int32_t r, ybot = PR_Y0 + PR_ROWS * PR_RH, gw;
+    int32_t r, ybot = PR_Y0 + PR_ROWS * PR_RH, gw, cw = (int32_t)(195u / nc);
     char nb[8];
-    ncol = base < len ? (len - base < 16u ? len - base : 16u) : 0u;
-    gw = (int32_t)ncol * PR_CW + 1;
+    ncol = base < len ? (len - base < nc ? len - base : nc) : 0u;
+    gw = prv_x(ncol) - PR_X0 + 1;
     for (r = 0; r < PR_ROWS; r++) {                 /* rows: the lane, the key, the C names */
         int32_t n = (int32_t)proll.lo + PR_ROWS - 1 - r, y = PR_Y0 + r * PR_RH;
         uint32_t pc = (uint32_t)n % 12u;
@@ -254,38 +272,64 @@ static void graph_roll(const track_t *t, uint16_t c)
             }
         }
     }
-    for (i = 0; i <= ncol; i++)                       /* step lines, the beats brighter */
-        cv_rect(PR_X0 + (int32_t)i * PR_CW, PR_Y0, 1, ybot - PR_Y0, i % 4u ? T_GRID : T_RAISE);
+    for (i = 0; i <= ncol; i++) {                     /* step lines, the beats brighter (zoomed out: the beats only) */
+        uint32_t si = base + i;
+        if (cw >= 4 || si % 4u == 0u)
+            cv_rect(prv_x(i), PR_Y0, 1, ybot - PR_Y0, si % 16u == 0u ? T_MID : si % 4u ? T_GRID : T_RAISE);
+    }
+    {                                                 /* (Dah) the ruler: a tick a step, the beats taller, the bars
+                                                       * numbered */
+        int32_t ry = ybot + 1, last = -100;
+        for (i = 0; i < ncol; i++) {
+            uint32_t si = base + i;
+            int32_t x = prv_x(i);
+            if (si % 16u == 0u) {
+                char bn[4];
+                cv_rect(x, ry, 1, 6, T_MID);
+                fmt_int(bn, (int32_t)(si / 16u) + 1);
+                if (x > last)
+                    last = cv_text_on(x + 2, ry + 1 - AF_S_CAP_Y, &AF_S, bn, T_DIM, T_SURF) + 2;
+            } else if (si % 4u == 0u)
+                cv_rect(x, ry, 1, 3, T_RAISE);
+            else if (cw >= 4)
+                cv_rect(x, ry, 1, 1, T_GRID);
+        }
+    }
     for (i = 0; i < ncol; i++) {
         uint32_t si = base + i;
-        int32_t x = PR_X0 + (int32_t)i * PR_CW;
+        int32_t x = prv_x(i);
         if (si == ui.cursor)
-            cv_frame(x, PR_Y0 - 2, PR_CW + 1, ybot - PR_Y0 + 4, T_TEXT);
-        if (song.playing && si == t->seq_idx)
-            cv_rect(x + 6, PR_Y0, 1, ybot - PR_Y0, T_ACCENT);
-        if ((locks >> si) & 1u)                       /* a parameter lock: a mark under the step */
-            cv_rect(x + 3, ybot + 3, 7, 2, T_ACCENT);
+            cv_frame(x, PR_Y0 - 2, cw + 1, ybot - PR_Y0 + 4, T_TEXT);
+        if ((locks >> si) & 1u)                       /* a parameter lock: a mark over the step */
+            cv_rect(x + 1, PR_Y0 - 3, cw - 1, 1, T_ACCENT);
         if (step_detailed(&seq_steps(t)[si]))         /* 1.5.1: CHANCE / RATCH / NUDGE set: a mark over it (DETAIL) */
-            cv_rect(x + 4, 2, 5, 3, c);
+            cv_rect(x + cw / 2 - 2, 2, cw - 1 < 5 ? cw - 1 : 5, 2, c);
     }
     for (i = 0; i < ncol; i++) {                      /* the notes */
         uint32_t si = base + i, s = pr_src(t, si, len), nx = (si + 1u) % len;
         const step_t *st, *ns = &seq_steps(t)[nx];
-        int32_t x = PR_X0 + (int32_t)i * PR_CW, y = -10000;
+        int32_t x = prv_x(i), y = -10000, w = prv_x(i + 1u) - x;
         uint16_t col;
         if (s == NSTEP)
             continue;                                 /* a REST, empty, or a TIE after one */
         st = &seq_steps(t)[s];
         col = s == ui.cursor || si == ui.cursor ? T_ACCENT : c;
         if (s == si)
-            pr_bars(st, x + 2, 9, col, (st->flags & SF_ACCENT) != 0u, &y, step_ratchet(st));
+            pr_bars(st, x + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, col, (st->flags & SF_ACCENT) != 0u, &y,
+                    step_ratchet(st));
         else                                          /* a TIE: the bars on through the gap before */
-            pr_bars(st, x - 1, 12, col, (st->flags & SF_ACCENT) != 0u, &y, 1u);
+            pr_bars(st, x - 1, w, col, (st->flags & SF_ACCENT) != 0u, &y, 1u);
         if ((st->flags & SF_SLIDE) && step_ratchet(st) == 1u &&   /* (a ratcheted step never slides out) */
             ns->time == ST_NOTE && ns->n && y >= PR_Y0 && y < ybot) {
             int32_t ny = clamp(pr_row_y(ns->note[0]), PR_Y0, ybot - PR_RH);
-            cv_line(x + 10, y + 2, x + 14, ny + 2, T_TEXT);   /* the slide into the next note */
+            cv_line(x + w - 2, y + 2, x + w + 2, ny + 2, T_TEXT);   /* the slide into the next note */
         }
+    }
+    if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the playhead, gliding through
+                                                         * the step (its samples so far of the step's) */
+        uint32_t ss = div_samples((uint32_t)t->p[P_SDIV]), f = ss ? ((t->seq_pos >> 8) * 64u / ss) : 0u;
+        int32_t x = prv_x(t->seq_idx - base) + (int32_t)((uint32_t)cw * (f > 64u ? 64u : f) / 64u);
+        cv_rect(x, PR_Y0, 2, ybot - PR_Y0 + 6, T_ACCENT);
     }
 }
 /* SEQ > STEP on a DRUM track: the grid, 8 lanes x the 16 steps of the page shown. Lanes by their two-letter
@@ -1291,13 +1335,17 @@ static uint32_t graph_signature(void)
     const page_t *pg = cur_page();
     const track_t *t = TSEL;
     uint32_t h = 2166136261u + graph_h() * 7u, i;   /* (Dah: the panel's height too) */
+    if (tl_on() || pl_on())
+        return h ^ ui.frame * 2654435761u;           /* (Dah) the tracks', the sounds' list gliding */
     if (ui.home)
-        return h ^ (ui.frame / 2u);                  /* scope: redraw every other frame */
+        return h ^ (pl_on() ? ui.frame * 2654435761u : ui.frame / 2u);   /* scope: every other frame (Dah: the list: each) */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_LFO || pg->graph == GR_LDRAW ||
-        pg->graph == GR_SCALE || pg->graph == GR_CHORD) h ^= ui.frame / 2u;   /* (Dah: FX's: live) */
+        pg->graph == GR_SCALE || pg->graph == GR_CHORD) h ^= ui.frame / 2u;
+    if (pg->graph == GR_ROLL && (song.playing || prv.on))   /* (Dah: the playhead gliding; the VIEW) */
+        h ^= ui.frame * 2654435761u + prv.zoom * 7u + (uint32_t)prv.at * 131u + prv.nofollow * 3u;   /* (Dah: FX's: live) */
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
     h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
@@ -1310,6 +1358,7 @@ static uint32_t graph_signature(void)
     }
     if (pg->graph == GR_SONG) {
         h ^= ui.song_row * 40503u + chain_config.count * 7919u + ui.song_trk * 3571u;
+        h ^= sg_pend ? (sg_pend * 131u + sg_prow * 7u + ((ui.frame / 6u) & 1u)) * 2246822519u : 0u;   /* (Dah: blinking) */
         h = fnv(h, chain_config.row, sizeof chain_config.row);
         h ^= chain.running ? (chain.row + 1u) * 104729u + chain.remaining * 1299709u : 0u;
         h ^= sg_gen();                               /* (HA HA HE HU: the patterns) */
@@ -1409,6 +1458,48 @@ static void list_row(int32_t y, int sel, const char *tag, uint16_t tc, const cha
         GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
     cv_free_text(LIST_NX, y + LIST_TY, &AF_M, name, sel ? T_INK : nc, bg, x1 - LIST_NX);
 }
+/* (Dah) a gliding list's row: its text only (the bar stays in the middle, the row under it in INK) */
+static void list_text(int32_t y, int sel, const char *tag, uint16_t tc, const char *name, uint16_t nc, int32_t x1)
+{
+    uint16_t bg = sel ? T_THEME : T_SURF;
+    cv_text_on(14, y + LIST_TY, &AF_M, tag, sel ? T_INK : tc, bg);
+    cv_free_text(LIST_NX, y + LIST_TY, &AF_M, name, sel ? T_INK : nc, bg, x1 - LIST_NX);
+}
+/* (Dah) a gliding list: rows' (y, tag, its colour, name) under a bar fixed in the middle: drawn plain, the bar over
+ * them, then again in INK inside the bar only (the text clip) */
+typedef struct { int32_t y; char tag[6]; uint16_t tc; char nm[16]; uint8_t star; } glrow_t;
+static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
+{
+    uint32_t i;
+    int32_t by = LIST_Y(3);
+    int16_t c0 = cv_cy0, c1 = cv_cy1;
+    if (n && (r[0].y - 3) % 17 == 0) {                 /* (still, on the rows: plain ones, as any list) */
+        for (i = 0; i < n; i++) {
+            list_row(r[i].y, r[i].y == by, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
+            if (r[i].star)
+                cv_icon_in(214, r[i].y, 0, 16, 12, ICON_X_STAR, r[i].y == by ? T_INK : T_ACCENT, r[i].y == by ? T_THEME : T_SURF);
+        }
+        return;
+    }
+    for (i = 0; i < n; i++) {
+        list_text(r[i].y, 0, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
+        if (r[i].star)
+            cv_icon_in(214, r[i].y, 0, 16, 12, ICON_X_STAR, T_ACCENT, T_SURF);
+    }
+    cv_rrect(6, by, 228, 16, 4, T_THEME, T_SURF);
+    cv_cy0 = (int16_t)(by + cv_oy);
+    cv_cy1 = (int16_t)(by + 16 + cv_oy);
+    for (i = 0; i < n; i++)
+        if (r[i].y > by - 16 && r[i].y < by + 16)
+            list_text(r[i].y, 1, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
+    cv_cy0 = c0;
+    cv_cy1 = c1;
+}
+static int32_t glide(int32_t *dy)                       /* (Dah) a step of the glide: a quarter of the way, a px at least */
+{
+    *dy -= *dy / 4 ? *dy / 4 : *dy > 0 ? 1 : *dy < 0 ? -1 : 0;
+    return *dy;
+}
 /* an empty list: a title and a hint, centred */
 static void note_line(int32_t y, const char *s, uint16_t fg)   /* centred S; "[K2] ADD PATTERN": a key hint */
 {
@@ -1468,6 +1559,28 @@ static void graph_browse(void)
         panel_note(b, "[K4] ANOTHER LIST", "TAG YOURS WHEN SAVING");
         return;
     }
+    if (!list_mode() && pl_dy) {                    /* (Dah) the bar fixed in the middle, the sounds gliding under it */
+        int32_t dy = glide(&pl_dy);
+        glrow_t r[9];
+        for (row = -4; row <= 4; row++) {
+            glrow_t *g = &r[row + 4];
+            uint32_t i = (cur + total * 8u + (uint32_t)(row + 8) - 8u) % total;
+            g->y = LIST_Y(row + 3) + dy;
+            g->tc = T_DIM;
+            e = preset_at(i, &k);
+            if (e == NENGINES) {
+                up_slot_label(g->tag, k);
+                up_name(k, g->nm);
+            } else {
+                str_cpy(g->tag, eng_abbr(ENGINES[e]->name), sizeof g->tag);
+                str_cpy(g->nm, ENGINES[e]->presets[k].name, sizeof g->nm);
+            }
+            g->star = (uint8_t)favorite_has(e, k);
+        }
+        glide_rows(r, 9, 212);
+        if (dy)
+            return;                                 /* (gliding: the suggested pattern once there) */
+    }
     for (row = -3; row <= 3; row++) {
         int32_t y = LIST_Y(row + 3), x1 = 212;
         char tag[6], nm[13], pt[4], pn[13];
@@ -1497,6 +1610,71 @@ static void graph_browse(void)
             cv_icon_in(214, y, 0, 16, 12, ICON_X_STAR, sel ? T_INK : T_ACCENT, sel ? T_THEME : T_SURF);
         }
     }
+}
+/* (Dah) ALGORITHM turned: the MASTER and the project's tracks, the selected one in the middle (its colour, its
+ * sound's name), gliding to it */
+static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
+static void graph_patlist(void)                         /* (Dah) GLO + ALGORITHM: the patterns, + NEW after the last */
+{
+    uint8_t nums[PS_NUM];
+    int32_t row, n = (int32_t)ps_list_all(nums), cur = 0, dy = glide(&tl_dy);
+    glrow_t r[9];
+    uint32_t m = 0;
+    while (cur + 1 < n && nums[cur] != ps_num(song.sel))
+        cur++;
+    for (row = -4; row <= 4; row++) {
+        int32_t i = cur + row;
+        glrow_t *g = &r[m];
+        if (i < 0 || i > n || (i == n && n >= (int32_t)PS_NUM))
+            continue;
+        m++;
+        g->y = LIST_Y(row + 3) + dy;
+        g->star = 0;
+        g->tc = i == n ? T_MID : ux.trk[song.sel % NTRK];
+        if (i == n) {
+            str_cpy(g->tag, "+", sizeof g->tag);
+            str_cpy(g->nm, "NEW PATTERN", sizeof g->nm);
+        } else {
+            g->tag[0] = (char)('0' + nums[i] / 10u);
+            g->tag[1] = (char)('0' + nums[i] % 10u);
+            g->tag[2] = 0;
+            str_cpy(g->nm, "PATTERN", sizeof g->nm);
+            g->nm[7] = ' ';
+            g->nm[8] = (char)(nums[i] >= 10u ? '0' + nums[i] / 10u : '0' + nums[i]);
+            g->nm[9] = nums[i] >= 10u ? (char)('0' + nums[i] % 10u) : 0;
+            g->nm[10] = 0;
+        }
+    }
+    glide_rows(r, m, 232);
+}
+static void graph_trklist(void)
+{
+    int32_t row, cur = mx_master ? -1 : (int32_t)song.sel, n = (int32_t)trk_count();
+    int32_t dy = glide(&tl_dy);
+    glrow_t r[9];
+    uint32_t m = 0;
+    for (row = -4; row <= 4; row++) {                /* (the bar fixed in the middle, the tracks gliding) */
+        int32_t i = cur + row;
+        glrow_t *g = &r[m];
+        if (i < -1 || i > n || (i == n && n >= NTRK))
+            continue;                               /* (Dah: after the last track, + ADD TRACK: ALGORITHM on) */
+        m++;
+        g->y = LIST_Y(row + 3) + dy;
+        g->star = 0;
+        g->tag[0] = i < 0 ? 'M' : 'T';
+        g->tag[1] = i < 0 ? 0 : (char)('1' + i);
+        g->tag[2] = 0;
+        g->tc = i < 0 || i == n ? T_MID : ux.trk[i];
+        if (i < 0)
+            str_cpy(g->nm, "MASTER", sizeof g->nm);
+        else if (i == n) {
+            g->tag[0] = '+';
+            g->tag[1] = 0;
+            str_cpy(g->nm, "ADD TRACK", sizeof g->nm);
+        } else
+            sound_name(&trk[i], g->nm);
+    }
+    glide_rows(r, m, 232);
 }
 /* the EDIT layer (ui_layer.c): the sound loaded, as the browser's selected row: "03" (its place in KNOB 2's list,
  * the engine's sounds) or "U07", the name, the star of a favourite */
@@ -2331,7 +2509,7 @@ static void rack_row(uint32_t c)
         }
     {   /* (Dah) a melodic track: a mini piano roll, each note at its height between the page's lowest and highest
          * (a chord: its notes), a TIE on at the height carried; DRUM: its hits as before */
-        int32_t lo = 127, hi = 0, cy = RK_H / 2 - 1, j;
+        int32_t lo = 127, hi = 0, cy[4] = {RK_H / 2 - 1, 0, 0, 0}, ncy = 1, j;   /* (Dah: a chord's notes carried, each) */
         int roll = !drum_track(&trk[c % NTRK]);
         for (i = 0; roll && i < 16u && p0 + i < len; i++)
             for (j = 0; j < s[p0 + i].n && j < 4; j++) {
@@ -2352,16 +2530,19 @@ static void rack_row(uint32_t c)
                     for (j = 0; j < st->n && j < 4; j++) {
                         int32_t ny = hi > lo ? (RK_H - 4) - (st->note[j] - lo) * (RK_H - 6) / (hi - lo) : RK_H / 2 - 1;
                         cv_rect(bx, ny, RK_CW, 2, acc && !mute ? T_TEXT : tc);
-                        if (!j) cy = ny;
+                        cy[j] = ny;
                     }
+                    ncy = j;
                 } else
                     cv_rrect(bx, 3, RK_CW, RK_H - 6, 2, acc && !mute ? T_TEXT : tc, under);
                 carry = 1;
                 continue;
             }
-            if (st->time == ST_TIE && carry)           /* carried on: half the colour (the roll: at its height) */
-                cv_rect(bx - 1, roll ? cy : RK_H / 2 - 1, RK_CW + 2, 2, ux_mix(bg, tc, 55));
-            else
+            if (st->time == ST_TIE && carry) {         /* carried on: half the colour (the roll: each note at its
+                                                         * height, a chord held: its lines) */
+                for (j = 0; j < (roll ? ncy : 1); j++)
+                    cv_rect(bx - 1, roll ? cy[j] : RK_H / 2 - 1, RK_CW + 2, 2, ux_mix(bg, tc, 55));
+            } else
                 cv_rect(bx, RK_H - 2, RK_CW, 1, T_LINE);
             carry = st->time == ST_TIE && carry;
         }
@@ -2692,6 +2873,22 @@ static void graph_song(void)
         r0 = r0 > SG_X0 ? r0 : SG_X0;
         r1 = r1 < hi ? r1 : hi;
         if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
+        if (sg_pend && ((ui.frame / 6u) & 1u)) {       /* (Dah) the section to add (a bar where it goes), to delete
+                                                         * (framed), blinking */
+            uint32_t r = sg_prow < L.n ? sg_prow : L.n;
+            int32_t ax = SG_X0 + L.x[r] - off;
+            if (sg_pend == 1u)
+                cv_rect(clamp(ax - 2, SG_X0, hi - 3), SG_Y, 3, SG_H, T_ACCENT);
+            else if (r < L.n) {
+                int32_t bx2 = SG_X0 + L.x[r + 1u] - off - SG_GAP;
+                ax = ax < SG_X0 ? SG_X0 : ax;
+                bx2 = bx2 > hi ? hi : bx2;
+                if (bx2 > ax) {
+                    cv_frame(ax, SG_Y - 1, bx2 - ax, SG_H + 2, T_REC);
+                    cv_frame(ax + 1, SG_Y, bx2 - ax - 2, SG_H, T_REC);
+                }
+            }
+        }
         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
             for (k = 0; k < trk_count(); k++) {
                 uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
@@ -2754,14 +2951,24 @@ static void draw_graph_in(void)
     const track_t *t = TSEL;
     uint16_t c = ACC;
     uint32_t sig;
-    if (!ui.home && pg->graph == GR_TRK) {
+    if (!ui.home && pg->graph == GR_TRK && !pl_on() && !tl_on()) {
         draw_tracks();
         return;
+    }
+    {                                                /* (Dah) a list over the panel gone: all of it again */
+        static uint8_t ov;
+        uint8_t now = (uint8_t)(pl_on() || tl_on());
+        if (ov && !now)
+            ui.force = 1;
+        ov = now;
+        if (now)
+            goto lists;
     }
     if (ui.home && home_tracks()) {                  /* MENU > HOME TRACKS (1.3) */
         draw_home_tracks();
         return;
     }
+lists:
     if (!ui.home && pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) sample_wave_tick(t);
     sig = graph_signature();
     if (!ui.force && sig == ui.graph_sig)
@@ -2782,9 +2989,21 @@ static void draw_graph_in(void)
         else if (k == SK_LFO) graph_lfo(t, c);
         else graph_title();
         graph_ht = 100;
+    } else if (tl_on()) {
+        cv_oy = 0;
+        if (tl_pat)
+            graph_patlist();                         /* (Dah) GLO + ALGORITHM: the patterns, ~1 s */
+        else
+            graph_trklist();                         /* (Dah) ALGORITHM just turned: the tracks, ~1 s */
+    } else if (pl_on() && !ui.home && pg->graph != GR_BROWSE) {
+        cv_oy = 0;
+        graph_browse();                              /* (Dah) PRESETS just turned, any page: the sounds, ~1 s */
     } else if (ui.home) {
         cv_oy = 0;
-        graph_scope(c);
+        if (pl_on())
+            graph_browse();                          /* (Dah) PRESETS just turned: the list, ~1 s */
+        else
+            graph_scope(c);
     } else {
         if (pg->fam == FAM_FX)
             t = fx_tsel();

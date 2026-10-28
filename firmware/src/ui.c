@@ -522,6 +522,8 @@ static int chain_busy(void) { return chain.running || chain.armed; }
 #define SG_ZOOM0 24u
 static uint8_t mx_master;                               /* (Dah) MIXER: the MASTER picked (SELECT past the last track) */
 static track_t *fx_tsel(void) { return mx_master ? &mtrk : TSEL; }   /* (Dah) FX's pages: the track's chain, the MASTER's */
+static uint8_t sg_pend, sg_prow;                         /* (Dah) SONG: 1 a section to add before sg_prow, 2 sg_prow to
+                                                         * delete; OCT+ does it, OCT- drops it (blinking meanwhile) */
 static struct { uint8_t on, nofollow, zoom, run; int32_t at; uint32_t touch, gu; } sgw;   /* (run: the song playing last
                                                          * frame; gu: the GRID, where PLAY starts, 1/48 quarters) */
 static uint32_t sg_zoom(void) { return sgw.zoom ? sgw.zoom : SG_ZOOM0; }
@@ -1837,9 +1839,17 @@ static void eng_list_step(int32_t direction)         /* the next / previous soun
     preset_hinted();
 }
 
+/* (Dah) PRESETS turned: the list over HOME's panel ~1 s, the rows gliding to the sound picked (pl_dy px still to go) */
+static uint32_t pl_ms, tl_ms;                           /* (.. ALGORITHM turned: the tracks' list, the same way) */
+static int32_t pl_dy, tl_dy;
+static uint8_t tl_pat;                                  /* (Dah) .. GLO + ALGORITHM: the patterns' list */
+static int tl_on(void) { return tl_ms && (uint32_t)((int32_t)(fm1_ms - tl_ms) + 1) < 1001u && !ui.menu && !ui.confirm; }
+static int pl_on(void) { return pl_ms && (uint32_t)((int32_t)(fm1_ms - pl_ms) + 1) < 1001u; }   /* (fm1_ms | 1: a ms ahead) */
 static void preset_step(int32_t direction)
 {
     uint32_t total, cur = preset_pos(&total);
+    pl_ms = fm1_ms | 1u;
+    pl_dy = clamp(pl_dy + (direction > 0 ? 17 : -17), -68, 68);
     if (!total) { ui_message(list_mode() == 1u ? "NO FAVORITES" : "NO SOUNDS IN LIST"); return; }
     preset_go(cur >= total ? (direction > 0 ? 0 : total - 1) :
               (cur + (direction > 0 ? 1u : total - 1u)) % total);
@@ -2036,7 +2046,8 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return (c & 3u) == 1u && ui.tl_clean ? "CLEAN" : actions[c & 3u];   /* (1.5.5: KNOB 2 on: CLEAN INIT) */
     }
     if (cur_page()->graph == GR_SONG)
-        return sgw.on ? "DONE" : "VIEW";                /* (Dah: OCT+ the VIEW; PLAY plays) */
+        return sg_pend == 1u ? "ADD" : sg_pend ? "DELETE" : "HOLD VIEW";   /* (Dah: OCT+ held, the VIEW; a section pending:
+                                                         * OCT+ does it) */
     if (cur_page()->graph == GR_PATS)
         return "LOAD";
     if (cur_page()->graph == GR_USER)

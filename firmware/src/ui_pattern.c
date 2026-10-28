@@ -1,13 +1,14 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* HA HA HE HU: SAVE > PATTERN, the selected track's patterns (pstore.c), as a list: KNOB 1 (or SELECT, PRESETS) picks one,
+/* HA HA HE HU: SAVE > PATTERN, the patterns (pstore.c; Dah: FL Studio's: a number every track's, the selected
+ * track's steps shown), as a list: KNOB 1 (or SELECT, PRESETS) picks one,
  * KNOB 2 OPEN (the track plays it), KNOB 3 COPY (a new one, a copy of the one it plays), KNOB 4 NEW (a new, empty one),
  * OCT+ does it; REC DELETE (the dialog). A row: its number, its steps and its size; the one the track plays "PLAYING".
  * The memory the patterns take (ps_used of PS_HEAP) on the last line. Included by ui_graph.c */
 static uint8_t pt_sel;                                  /* the pattern picked (its number) */
 static int pt_page(uint32_t g) { return g == GR_PATTERN; }
 static void pt_enter(void) { pt_sel = (uint8_t)ps_num(song.sel); }
-static uint32_t pt_list(uint8_t *nums) { return ps_list(song.sel, nums); }
+static uint32_t pt_list(uint8_t *nums) { return ps_list_all(nums); }
 static uint32_t pt_pick(void)                           /* the pattern picked, one of the track's */
 {
     uint8_t nums[PS_NUM];
@@ -47,14 +48,14 @@ static void pt_do(uint32_t c)
     uint32_t k = song.sel % NTRK;
     int r = 0;
     if (c == 1u) {
-        r = pattern_go(k, pt_pick());
+        r = pattern_go_all(pt_pick());                  /* (Dah: every track to it, FL Studio's way) */
         if (!r) {
             char m[16] = "PATTERN ";
             fmt_int(m + 8, (int32_t)ps_num(k));
             ui_message(m);
         }
     } else {
-        r = pattern_new(k, c == 2u);
+        r = pattern_new_all(c == 2u);
         if (!r) {
             pt_sel = (uint8_t)ps_num(k);
             ui_message(c == 2u ? "COPIED" : "NEW PATTERN");
@@ -68,12 +69,12 @@ static void pt_do(uint32_t c)
 }
 static int pt_ready(uint32_t c)                         /* column c (Dah: 0 OPEN 1 COPY 2 NEW 3 DELETE) */
 {
-    return c == 0u ? pt_pick() != ps_num(song.sel) : c == 3u ? 1 : ps_free_num(song.sel) != 0u;
+    return c == 0u ? pt_pick() != ps_num(song.sel) : c == 3u ? 1 : ps_free_all() != 0u;
 }
 /* REC: delete the pattern picked (the dialog first; the last one: emptied) */
 static void pt_delete(void)
 {
-    pattern_del(song.sel % NTRK, pt_pick());
+    pattern_del_all(pt_pick());                         /* (Dah: on every track) */
     pt_sel = (uint8_t)ps_num(song.sel);
     ui_message("PATTERN DELETED");
 }

@@ -457,9 +457,8 @@ static int nudge(void)
         ok = step_nudge(&t->step[4]) == -2 && msg_is("NUDGE -2") && ui.cursor == cur;
         fm1_in.notes &= ~(1u << k4); frame();
         ok &= (t->step[4].hit & 1u) != 0u;
-        turn(EN_PRESET, 1);
-        ok &= ui.cursor == cur + 1u && step_nudge(&t->step[4]) == -2;
-        bad += check("STEP (the grid): a step held + PRESETS: its NUDGE (-2); let go, the hit stays; alone, the cursor", ok);
+        ok &= step_nudge(&t->step[4]) == -2;
+        bad += check("STEP (the grid): a step held + PRESETS: its NUDGE (-2); let go, the hit stays (Dah: alone, the sound)", ok);
         hold(B_SAVE);
         bad += check("  SAVE held: that turn undone (one undo), the hit kept", step_nudge(&t->step[4]) == 0 &&
                      (t->step[4].hit & 1u) != 0u);

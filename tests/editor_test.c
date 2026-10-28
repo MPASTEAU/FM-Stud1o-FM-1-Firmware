@@ -916,7 +916,7 @@ static int menu_protocol(void)
         {"COLOR", 0}, {"STYLE", "FLAT,LINE"}, {"LARGE", "OFF,ON"}, {"ANIM", "ON,OFF,IDLE"}, {"LEDS", "OFF,DIM LO,DIM HI,INV,INV LO,INV HI"},
         {"HOLD", "0.3 s,0.4 s,0.5 s,0.6 s"}, {"KNOB ACCEL", "OFF,ON"}, {"FX LATCH", "OFF,ON"}, {"BPM LOCK", "OFF,ON"},
         {"SPEAKER EQ", "FLAT,LOWCUT,BASS+"}, {"USB LEVEL", "MASTER,FIXED"}, {"USB SERIAL", "ON,OFF"},
-        {"CLICK", "OFF,REC,ON"}, {"CLICK LEVEL", "LOW,MID,HIGH"}, {"COUNT-IN", "OFF,1 BAR,2 BARS"},   /* (1.1: appended) */
+        {"CLICK", "OFF,REC,ON"}, {"CLICK LEVEL", "LOW,MID,HIGH"}, {"COUNT-IN", "OFF,ON"},   /* (1.1: appended) */
         {"RESTORE LAST", "ON,OFF"}, {"SCALE LEDS", "OFF,ON"},                                        /* (1.2) */
         {"SCREEN OFF", "NEVER,5 MIN,15 MIN,30 MIN,60 MIN"},
         {"SCOPE", "OUT,MIX"}, {"STEP PREVIEW", "OFF,ON"}, {"CHORD ENTRY", "HOLD,ADD"},                  /* (1.2) */
@@ -1004,9 +1004,9 @@ static int menu_protocol(void)
     ok &= menu_set(10, 1) == 3 && (ui_prefs & PREF_USB_FIXED) && fx_usb_fixed;
     ok &= menu_set(12, 1) == 3 && click_mode == CLICK_REC && menu_set(12, 2) == 3 && click_mode == CLICK_ON;
     ok &= menu_set(13, 0) == 3 && click_lvl == 0u;
-    ok &= menu_set(14, 2) == 3 && cin_bars == 2u;
+    ok &= menu_set(14, 2) == 3 && cin_bars == 1u;   /* (Dah: the countdown OFF / ON) */
     ok &= menu_set(15, 1) == 3 && (ui_prefs & PREF_RESTORE_OFF);
-    ok &= menu_set(16, 1) == 3 && (ui_rec_prefs & 0x40u) && click_mode == CLICK_ON && cin_bars == 2u;   /* (its own bit) */
+    ok &= menu_set(16, 1) == 3 && (ui_rec_prefs & 0x40u) && click_mode == CLICK_ON && cin_bars == 1u;   /* (its own bit) */
     ok &= menu_set(17, 0) == 3 && scr_get() == 0u && menu_set(17, 9) == 3 && scr_get() == 4u &&   /* (clamped) */
           menu_set(17, 2) == 3 && scr_get() == 2u && ui_scr == 1u;
     ok &= menu_set(18, 1) == 3 && ui_prefs2 == 1u && scope_mix;                                    /* (1.2: their own byte) */
@@ -1030,7 +1030,7 @@ static int menu_protocol(void)
     ok &= menu_set(32, 1) == 1 && ui_prefs2 == 0x3Fu;   /* (no 2ND CORE in a FELUCCA_CPU2=0 build: an unknown id, nothing set) */
 #endif
     for (i = 0; i < MENU_N; i++) {                         /* MENU_DESC reads them back */
-        static const int32_t SET[33] = {2, 1, 1, 1, 1, 3, 1, 1, 1, 2, 1, 0, 2, 0, 2, 1, 1, 2, 1, 1, 1, 2, -13, 1, 1, 1, 9, 16, 17, 0, 1, 1, 1};
+        static const int32_t SET[33] = {2, 1, 1, 1, 1, 3, 1, 1, 1, 2, 1, 0, 2, 0, 1, 1, 1, 2, 1, 1, 1, 2, -13, 1, 1, 1, 9, 16, 17, 0, 1, 1, 1};   /* (COUNT-IN: ON, 1) */
         menu_desc(i, &it);
         ok &= it.value == SET[i];
     }
@@ -1045,7 +1045,7 @@ static int menu_protocol(void)
     ok &= menu_set(4, 99) == 3 && ed_rv(host_wire + 7) == 5 && settings_leds == LEDS_INV && leds_inv() == 2u;   /* (1.5.6: INV HI last) */
     ok &= menu_set(5, 8191) == 3 && ed_rv(host_wire + 7) == 3 && settings_hold == 3u;
     ok &= menu_set(2, 7) == 3 && ed_rv(host_wire + 7) == 1 && (ui_prefs & PREF_LARGE);
-    ok &= menu_set(14, 9) == 3 && ed_rv(host_wire + 7) == 2 && cin_bars == 2u;
+    ok &= menu_set(14, 9) == 3 && ed_rv(host_wire + 7) == 1 && cin_bars == 1u;
     ok &= menu_set(12, -1) == 3 && ed_rv(host_wire + 7) == 0 && click_mode == CLICK_OFF;
     ok &= menu_set(21, 9) == 0 && ed_rv(host_wire + 7) == 5 && song.g[G_ROUTE] == 5;   /* (1.5.5: TRACK the last) */
     ok &= menu_set(26, 40) == 0 && ed_rv(host_wire + 7) == 17 && mch_get(0) == MCH_OFF;   /* (T1 CHANNEL) */

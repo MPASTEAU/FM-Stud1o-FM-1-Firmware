@@ -921,7 +921,7 @@ static void foot_hint(char *a, char *b)
 {
     uint32_t c = act_col();
     str_cpy(a, "OCT+ ", 8);
-    str_cpy(a + 5, c ? act_name(c - 1u) : "--", 8);
+    str_cpy(a + 5, c ? act_name(c - 1u) : "--", 11);   /* (Dah: "HOLD VIEW") */
     str_cpy(b, ui.act && cur_page()->graph != GR_PATS ? "OCT- CANCEL" : "", 16);   /* (Dah: no BACK) */
 }
 
@@ -981,7 +981,8 @@ static void draw_lane(const track_t *t)
     uint32_t i, id = lane_id(t), len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
     const param_desc_t *d;
     if (id == 0xFFu) {
-        cv_free_hint(8, 2, "[REC] AND A KNOB: AUTOMATION", T_DIM, T_BG, 224);   /* (Dah: how it is made) */
+        khint_t kh = {KC_OCTUP, "HOLD VIEW"};          /* (Dah: as SONG's, the same keycap row) */
+        cv_key_row(8, 232, 2, &kh, 1, 3u, T_BG);
         return;
     }
     {   /* (Dah) the track's automated parameters, a lane each (4 at most), tiny: the one SELECT edits (its name at the
@@ -1085,7 +1086,14 @@ static void draw_foot_in(void)
         uint32_t nk = hb[0] ? 2u : 1u;                /* (Dah: OCT- shown only when it cancels) */
         kh[0] = (khint_t){KC_OCTUP, ha + 5};
         kh[1] = (khint_t){KC_OCTDN, hb[0] ? hb + 5 : ""};
-        if (dl) {                                     /* (Dah) FILE, PATTERN, SONG: "REC DELETE" after OCT+ */
+        if (cur_page()->graph == GR_SONG && sg_pend) {   /* (Dah) SONG, a section pending: OCT+ does it, OCT- not */
+            kh[1] = (khint_t){KC_OCTDN, "CANCEL"};
+            cv_key_row(8, 232, 2, kh, 2u, 3u, T_BG);
+        } else if (cur_page()->graph == GR_SONG) {    /* (Dah) SONG: OCT+ held the VIEW, REC adds, OCT- held deletes */
+            kh[1] = (khint_t){KC_REC, "ADD"};
+            kh[2] = (khint_t){KC_OCTDN, "DEL"};             /* (held: the room for "HOLD" there is not) */
+            cv_key_row(8, 232, 2, kh, 3u, 1u | 2u | (dl == 2u ? 4u : 0u), T_BG);
+        } else if (dl) {                              /* (Dah) FILE, PATTERN: "REC DELETE" after OCT+ */
             kh[2] = kh[1];
             kh[1] = (khint_t){KC_REC, "DELETE"};
             cv_key_row(8, 232, 2, kh, nk + 1u, (act_ready() ? 1u : 0u) | (dl == 2u ? 2u : 0u) | 4u, T_BG);
@@ -1191,11 +1199,20 @@ static void draw_columns_in(void)
         }
         return;
     }
+    if (cur_page()->graph == GR_ROLL && prv.on) {   /* (Dah) STEP's VIEW: MOVE, ZOOM, FOLLOW */
+        fmt_int(val, (int32_t)(prv_base(TSEL) / 16u) + 1);
+        draw_column(0, "MOVE", val, "BAR", VAL(0u), -1, ICON_AUTO);
+        fmt_int(val, (int32_t)prv_cols());
+        draw_column(1, "STEPS", val, "", VAL(1u), -1, ICON_AUTO);   /* (the steps shown: the zoom; no unit) */
+        draw_column(2, "", "", "", T_DIM, -1, ICON_AUTO);
+        draw_column(3, "FOLLOW", prv.nofollow ? "OFF" : "ON", "", prv.nofollow ? T_DIM : VAL(3u), -1, ICON_AUTO);
+        return;
+    }
     if (cur_page()->graph == GR_SONG && sgw.on) {   /* (Dah) VIEW: GRID (PLAY's start), ZOOM, WINDOW, FOLLOW */
         fmt_int(val, (int32_t)(sgw.gu / SG_BARU) + 1);
         draw_column(0, "GRID", val, "", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)(SG_W / sg_zoom()));
-        draw_column(1, "ZOOM", val, "BARS", VAL(1u), -1, ICON_AUTO);
+        draw_column(1, "BARS", val, "", VAL(1u), -1, ICON_AUTO);   /* (the bars shown: the zoom; no unit) */
         fmt_int(val, sgv.off / (int32_t)sg_zoom() + 1);
         draw_column(2, "WINDOW", val, "", VAL(2u), -1, ICON_AUTO);
         draw_column(3, "FOLLOW", sgw.nofollow ? "OFF" : "ON", "", sgw.nofollow ? T_DIM : VAL(3u), -1, ICON_AUTO);
@@ -1776,45 +1793,33 @@ static void draw_uboot(void)
     ui.force = 0;
 }
 
-/* the count-in (seq.c, MENU > COUNT-IN; 1.1, Discussion #131): over the page until the sequencer starts. Its bar's four
- * beats counted down, 4 3 2 1, in four cells (the beat now filled THEME, those gone dim), with 2 BARS which bar it is;
- * PLAY stops it. Drawn again on each beat (seq.c's state; the header stays live) */
-#define CI_Y 88                                       /* the cells: 4 x 48 px, 8 px apart, 72 tall */
-#define CI_H 72
+/* (Dah) a digit 0..9 as seven segments, w x h at x y, t thick, straight onto the LCD */
+static void seg_digit(int32_t x, int32_t y, int32_t w, int32_t h, int32_t t, uint32_t d, uint16_t c)
+{
+    static const uint8_t SEG[10] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};   /* a b c d e f g */
+    uint32_t m = SEG[d % 10u];
+    int32_t hh = (h - t) / 2;
+    if (m & 1u) lcd_fill((uint32_t)(x + t), (uint32_t)y, (uint32_t)(w - 2 * t), (uint32_t)t, c);             /* a */
+    if (m & 2u) lcd_fill((uint32_t)(x + w - t), (uint32_t)(y + t), (uint32_t)t, (uint32_t)(hh - t), c);    /* b */
+    if (m & 4u) lcd_fill((uint32_t)(x + w - t), (uint32_t)(y + hh + t), (uint32_t)t, (uint32_t)(hh - t), c);   /* c */
+    if (m & 8u) lcd_fill((uint32_t)(x + t), (uint32_t)(y + h - t), (uint32_t)(w - 2 * t), (uint32_t)t, c);   /* d */
+    if (m & 16u) lcd_fill((uint32_t)x, (uint32_t)(y + hh + t), (uint32_t)t, (uint32_t)(hh - t), c);          /* e */
+    if (m & 32u) lcd_fill((uint32_t)x, (uint32_t)(y + t), (uint32_t)t, (uint32_t)(hh - t), c);               /* f */
+    if (m & 64u) lcd_fill((uint32_t)(x + t), (uint32_t)(y + hh), (uint32_t)(w - 2 * t), (uint32_t)t, c);     /* g */
+}
+/* the countdown (seq.c, MENU > COUNT-IN, REC's COUNT; Dah: 3 2 1 on the whole screen, the click from its first beat):
+ * over the page until the sequencer starts, the beats left as one big digit; PLAY stops it. Drawn again on each beat */
+#define CI_Y 88
 static void draw_countin(void)
 {
     static uint32_t shown;
-    uint32_t total = cin_total, e = total - cin_left, j, sig = total * 64u + e + 1u;
-    char sub[16];
+    uint32_t left = cin_left, sig = cin_total * 64u + left + 1u;
     if (!ui.force && shown == sig)
         return;
     shown = sig;
     lcd_fill(0, H_HEAD, 240, 240 - H_HEAD, T_BG);
     ui.head_sig = ~0u;
-    draw_text_box(0, 44, 240, &AF_M, "COUNT-IN", T_TEXT, 1);
-    if (total > 4u) {
-        str_cpy(sub, "BAR 1 OF 2", sizeof sub);
-        sub[4] = (char)('1' + e / 4u % 9u);
-        sub[9] = (char)('0' + total / 4u % 10u);
-    } else
-        str_cpy(sub, "1 BAR", sizeof sub);
-    draw_text_box(0, 66, 240, &AF_S, sub, T_MID, 1);
-    cv_begin(216, CI_H, T_BG);
-    for (j = 0; j < 4u; j++) {
-        int32_t x = (int32_t)j * 56;
-        char d[2] = {(char)('4' - j), 0};
-        int now = j == e % 4u, gone = j < e % 4u;
-        uint16_t fill = now ? T_THEME : T_SURF;
-        if (ux.style && !now) {                       /* LINE: no SURF card, a 1 px rule round it */
-            cv_rrect(x, 0, 48, CI_H, 8, T_RULE, T_BG);
-            cv_rrect(x + 1, 1, 46, CI_H - 2, 7, T_BG, T_RULE);
-        } else
-            cv_rrect(x, 0, 48, CI_H, 8, fill, T_BG);
-        GFX_HOOK_ALIGN(x, 0, x + 48, CI_H, AL_HV, "count-in beat centred in its cell");
-        cv_text_in(x, CAP_IN(L, CI_H), 48, &AF_L, d, now ? T_INK : gone ? T_DIM : T_TEXT, fill);
-    }
-    cv_blit(12, CI_Y);
-    draw_text_box(0, CI_Y + CI_H + 14, 240, &AF_S, "RECORDING STARTS AFTER 1", T_MID, 1);
+    seg_digit(70, H_HEAD + 18, 100, 160, 16, left ? left : 1u, T_REC);
     {   /* PLAY stops it */
         int32_t x = HALF_UP(240 - kh_ink(KC_PLAY, "STOP"));
         cv_begin(240, KC_H + 2, T_BG);

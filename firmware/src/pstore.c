@@ -268,9 +268,20 @@ static int ps_decode(track_t *t, const uint8_t *b, uint32_t n)
     return 1;
 }
 /* track k's pattern as it is on the track, into the heap (its number); 1 = no room */
+static int ps_empty(uint32_t k)                         /* (Dah) track k's steps all empty, no automation */
+{
+    const track_t *t = &trk[k % NTRK];
+    uint32_t i;
+    for (i = 0; i < NSTEP; i++)
+        if (!ps_step_empty(&t->step[i]))
+            return 0;
+    return motion_count(t) == 0u;
+}
 static int ps_store(uint32_t k)
 {
-    uint32_t n = ps_encode(&trk[k % NTRK], ps_buf);
+    uint32_t n;
+    n = ps_empty(k) ? 0u : ps_encode(&trk[k % NTRK], ps_buf);   /* (Dah) an empty pattern: its record alone, 4
+                                                         * bytes (it comes back empty, the timing the track's) */
     return ps_put(k % NTRK, ps_num(k), ps_buf, n);
 }
 /* an empty pattern on track k (its timing kept) */
@@ -360,7 +371,84 @@ static int pattern_new(uint32_t k, int dup)
     }
     return pattern_go(k, num) ? 1 : 0;
 }
+/* (Dah) the patterns as FL Studio's: a number is every track's pattern of that number (pattern 1: all the
+ * instruments' 1). Every track to num (its own, or an empty one); a number none has; new (empty or a copy of each
+ * track's); one gone on every track. 0 done, 1 no room, 2 no number */
+static int ps_exists(uint32_t k, uint32_t num);
+static int pattern_go_all(uint32_t num)
+{
+    uint32_t k;
+    int r = 0;
+    for (k = 0; k < trk_count(); k++)
+        r |= pattern_go(k, num);
+    return r;
+}
+static uint32_t ps_free_all(void)
+{
+    uint32_t num, k;
+    for (num = 1; num <= PS_NUM; num++) {
+        for (k = 0; k < trk_count() && !ps_exists(k, num); k++)
+            ;
+        if (k == trk_count())
+            return num;
+    }
+    return 0;
+}
+static uint32_t ps_list_all(uint8_t *nums)             /* the numbers any track has a pattern on, in order */
+{
+    uint32_t n = 0, num, k;
+    for (num = 1; num <= PS_NUM; num++) {
+        for (k = 0; k < trk_count() && !ps_exists(k, num); k++)
+            ;
+        if (k < trk_count())
+            nums[n++] = (uint8_t)num;
+    }
+    return n;
+}
+static int pattern_new_all(int dup)
+{
+    uint32_t num = ps_free_all(), k;
+    if (!num)
+        return 2;
+    for (k = 0; dup && k < trk_count(); k++) {          /* (the copies: each track's bytes under the new number) */
+        uint32_t n;
+        if (ps_empty(k))
+            continue;
+        n = ps_encode(&trk[k], ps_buf);
+        if (ps_put(k, num, ps_buf, n))
+            return 1;
+    }
+    return pattern_go_all(num) ? 1 : 0;
+}
 /* track k's pattern num gone; the one it plays: it goes to another (or an empty 1) */
+/* (Dah) GLO + ALGORITHM: the previous, the next pattern (every track); past the last a new, empty one */
+static void pattern_turn(int32_t s)
+{
+    uint8_t nums[PS_NUM];
+    uint32_t n = ps_list_all(nums), i, cur = ps_num(song.sel);
+    int r;
+    for (i = 0; i + 1u < n && nums[i] != cur; i++)
+        ;
+    if (s < 0 && !i)
+        return;
+    if (s > 0 && i + 1u >= n) {
+        r = pattern_new_all(0);
+        if (r)
+            ui_message(r == 2 ? "NO MORE PATTERNS" : "MEMORY FULL");
+        return;
+    }
+    if (pattern_go_all(nums[s > 0 ? i + 1u : i - 1u]))
+        ui_message("MEMORY FULL");
+}
+static void pattern_del(uint32_t k, uint32_t num);
+static void pattern_del_all(uint32_t num)              /* (Dah) num on every track gone, every track then on the same one */
+{
+    uint32_t k, to;
+    for (k = 0; k < trk_count(); k++)
+        pattern_del(k, num);
+    to = ps_num(song.sel);
+    (void)pattern_go_all(to);
+}
 static void pattern_del(uint32_t k, uint32_t num)
 {
     uint8_t nums[PS_NUM];

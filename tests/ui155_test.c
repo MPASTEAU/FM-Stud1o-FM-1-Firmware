@@ -158,24 +158,12 @@ static int select_page(void)
     turn(EN_SELECT, 2);
     ok = title_is("ENV") && song.g[G_BPM] > b0;         /* (Dah: no list: the tempo) */
     song.g[G_BPM] = (int16_t)b0;
-    song.sel = 0;                                       /* (track 1: patterns 1 2 3, it plays 3) */
-    pattern_new(0, 0); pattern_new(0, 0);
-    go_title("PATTERN"); frame();
-    turn(EN_SELECT, -2);
-    ok &= title_is("PATTERN") && pt_sel == 1u && ps_num(0) == 3u;
-    ps_reset();
-    go_title("FILE"); frame();
-    ui.fsel = 0;
-    turn(EN_SELECT, 1);
-    ok &= title_is("FILE") && ui.fsel == (pfs_count() > 1u ? 1u : 0u);   /* (no project saved here: none to move to) */
-    go_title("SONG"); frame();
-    chain_config.count = 3;
-    chain_config.row[0] = chain_config.row[1] = chain_config.row[2] = chain_row_of(0, 1);
-    ui.song_row = 0;
+    go_title("SONG"); frame();                          /* (Dah) where SELECT did KNOB 1's (SONG, PATTERN, FILE ..):
+                                                         * the tempo again */
     turn(EN_SELECT, 2);
-    ok &= title_is("SONG") && ui.song_row == 2u && song.g[G_BPM] == b0;
-    chain_defaults(&chain_config); ui.song_row = 0;
-    bad += check("  LIST: SELECT moves down the page's list (PATTERN, FILE, SONG ..); no list (ENV): the tempo", ok);
+    ok &= title_is("SONG") && song.g[G_BPM] > b0;
+    song.g[G_BPM] = (int16_t)b0;
+    bad += check("  LIST (Dah): the tempo where SELECT did what KNOB 1 does (SONG, PATTERN, FILE ..), and with no list (ENV)", ok);
 
     go_home(); frame();
     b0 = song.g[G_BPM];

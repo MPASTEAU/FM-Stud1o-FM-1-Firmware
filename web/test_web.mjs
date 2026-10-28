@@ -178,7 +178,7 @@ async function editorMock() {
        items.map((d) => d.name).join() ===
          "COLOR,STYLE,LARGE,ANIM,LEDS,HOLD,KNOB ACCEL,FX LATCH,BPM LOCK,SPEAKER EQ,USB LEVEL,USB SERIAL,CLICK,CLICK LEVEL,COUNT-IN,RESTORE LAST,SCALE LEDS,SCREEN OFF,SCOPE,STEP PREVIEW,CHORD ENTRY,MIDI IN,TUNE,HOME,HELP,SELECT,T1 CHANNEL,T2 CHANNEL,T3 CHANNEL,T4 CHANNEL,AUTO SELECT,SCREEN WAKE,2ND CORE" &&
        items[12].names.join() === "OFF,REC,ON" && items[12].value === 0 && items[13].names.join() === "LOW,MID,HIGH" &&
-       items[13].value === 1 && items[14].names.join() === "OFF,1 BAR,2 BARS" && items[14].value === 0 &&
+       items[13].value === 1 && items[14].names.join() === "OFF,ON" && items[14].value === 0 &&
        items[15].names.join() === "ON,OFF" && items[15].value === 0 && items[16].names.join() === "OFF,ON" && items[16].value === 0 &&
        items[17].names.join() === "NEVER,5 MIN,15 MIN,30 MIN,60 MIN" && items[17].value === 0 &&
        items[18].names.join() === "OUT,MIX" && items[18].value === 0 && items[19].names.join() === "OFF,ON" &&
@@ -211,7 +211,7 @@ async function editorMock() {
        "editor: MENU_SET clamps (COLOR 50 -> 9), the same setting as UI_SET 0");
     r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(14, 1)));
     ok(r.rc === 0 && r.id === 14 && r.value === 1 && E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(14))).value === 1,
-       "editor: MENU_SET round trip (1.1: COUNT-IN 1 BAR)");
+       "editor: MENU_SET round trip (1.1: COUNT-IN ON)");
     await rq(E.req.menuSet(14, 0));
     r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(15, 1)));
     ok(r.rc === 0 && r.id === 15 && r.value === 1, "editor: MENU_SET round trip (1.2: RESTORE LAST OFF)");
