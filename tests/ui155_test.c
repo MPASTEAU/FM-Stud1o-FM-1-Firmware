@@ -135,8 +135,10 @@ static int select_page(void)
     go_title("ENV"); frame();
     b0 = song.g[G_BPM];
     turn(EN_SELECT, 2);
-    ok &= song.g[G_BPM] == b0 + 2 && title_is("ENV");
-    bad += check("SELECT (#188): MENU > CONTROL > SELECT, BPM by default: SELECT sets the tempo as before", ok);
+    ok &= song.g[G_BPM] == b0 && ps_num(0) == 2u && title_is("ENV");
+    turn(EN_SELECT, -1);
+    ok &= ps_num(0) == 1u;
+    bad += check("SELECT (#188): MENU > CONTROL > SELECT, BPM by default (Dah: SELECT the pattern, OCT+ + SELECT the tempo)", ok);
 
     menu_put(MI_SELECT, 1);
     ok = menu_get(MI_SELECT) == 1u && favorites.factory[15][24] == (uint8_t)(before[24] | 0x10u);
@@ -155,25 +157,23 @@ static int select_page(void)
 
     b0 = song.g[G_BPM];                                 /* (HA HA HE HU: LIST, 1.5.5's PAGE: the page's list, not the pages) */
     go_title("ENV"); frame();
-    turn(EN_SELECT, 2);
-    ok = title_is("ENV") && song.g[G_BPM] > b0;         /* (Dah: no list: the tempo) */
-    song.g[G_BPM] = (int16_t)b0;
+    turn(EN_SELECT, 1);
+    ok = title_is("ENV") && song.g[G_BPM] == b0 && ps_num(0) == 2u;   /* (Dah: no list: the pattern) */
     go_title("SONG"); frame();                          /* (Dah) where SELECT did KNOB 1's (SONG, PATTERN, FILE ..):
-                                                         * the tempo again */
-    turn(EN_SELECT, 2);
-    ok &= title_is("SONG") && song.g[G_BPM] > b0;
-    song.g[G_BPM] = (int16_t)b0;
-    bad += check("  LIST (Dah): the tempo where SELECT did what KNOB 1 does (SONG, PATTERN, FILE ..), and with no list (ENV)", ok);
+                                                         * the pattern too */
+    turn(EN_SELECT, -1);
+    ok &= title_is("SONG") && song.g[G_BPM] == b0 && ps_num(0) == 1u;
+    bad += check("  LIST (Dah): the pattern where SELECT did what KNOB 1 does (SONG, PATTERN, FILE ..), and with no list (ENV)", ok);
 
     go_home(); frame();
     b0 = song.g[G_BPM];
-    turn(EN_SELECT, 2);
-    ok = ui.home && song.g[G_BPM] == b0 + 2;
+    turn(EN_SELECT, 1);
+    ok = ui.home && song.g[G_BPM] == b0 && ps_num(0) == 2u;
     go_title("CLOCK"); frame();
     b0 = song.g[G_BPM];
     turn(EN_K1, 1);
     ok &= song.g[G_BPM] == b0 + 1;                      /* CLOCK's KNOB 1: the tempo */
-    bad += check("  LIST: on HOME SELECT is the tempo; CLOCK's KNOB 1 too", ok);
+    bad += check("  LIST: on HOME SELECT is the pattern (Dah); CLOCK's KNOB 1 too", ok);
 
     go_title("ENV"); frame();
     b0 = song.g[G_BPM];

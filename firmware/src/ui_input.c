@@ -1208,6 +1208,20 @@ static void roll_view_knob(uint32_t slot, int32_t steps)
         prv.nofollow = steps < 0;
     ui.force = 1;
 }
+/* (Dah) the previous, the next pattern (every track; past the last a new one), the patterns' list over the panel ~1 s */
+static void pattern_turn_ui(int32_t s)
+{
+    uint32_t was = ps_num(song.sel);
+    if (chain_busy()) {
+        ui_message("STOP THE SONG");
+        return;
+    }
+    pattern_turn(s);
+    tl_ms = fm1_ms | 1u;
+    tl_pat = 1;
+    if (ps_num(song.sel) != was)
+        tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
+}
 static void home_view_knob(uint32_t slot, int32_t steps)   /* (Dah) HOME's VIEW: the same, on the tracks' rack */
 {
     uint32_t len = 1, n = hv_cols(), i;
@@ -2106,12 +2120,7 @@ static void ui_input(void)
         if ((s = panel_enc(EN_ALGO)) != 0 && glo) {     /* (Dah) GLO + ALGORITHM: the pattern, every track's (its list
                                                          * ~1 s, + NEW at the end); else: another track: OCT- puts back
                                                          * the layer's track only */
-            uint32_t was = ps_num(song.sel);
-            pattern_turn(s);
-            tl_ms = fm1_ms | 1u;
-            tl_pat = 1;
-            if (ps_num(song.sel) != was)
-                tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
+            pattern_turn_ui(s);
             combo = 1;
         }
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
@@ -2419,7 +2428,12 @@ static void ui_input(void)
             tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
     }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
-        if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
+        if (!glo && !lay && ((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u)) {   /* (Dah) OCT+ held + SELECT: the tempo,
+                                                         * on every page (OCT+'s release then no octave) */
+            oct_up_used = 1;
+            song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
+            ui.bpm_t = 40;
+        } else if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
@@ -2432,6 +2446,9 @@ static void ui_input(void)
                                                          * letting go, LFO is held (MOMENTARY) or steps are held */
             for (k = (uint32_t)(s > 0 ? s : -s); k && !lay && !kq && !mom_down() && !lock_held(); k--)
                 sel_list(s > 0 ? 1 : -1);
+        } else if (!glo && !lay) {                      /* (Dah) SELECT: the pattern, every track's, on any page without
+                                                         * a list (its list ~1 s); the tempo: GLO + SELECT */
+            pattern_turn_ui(s);
         } else if (glo || !(ui_prefs & PREF_BPM_LOCK)) {
             song.g[G_BPM] = (int16_t)clamp(song.g[G_BPM] + accel(EN_SELECT, s, 200), GP[G_BPM].min, GP[G_BPM].max);
             ui.bpm_t = 40;                              /* the header's BPM lights up; no message over the header */

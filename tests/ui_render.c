@@ -1905,13 +1905,16 @@ static void sweep_columns(void)
 #define FS_N (1u + ROLL_FRAMES)                   /* frames per filmstrip row */
 #define FS_Z 4u                                   /* zoom */
 #define FS_GAP 2u                                 /* px between frames, before the zoom */
-static void roll_turns(int32_t s)                 /* one UI frame with SELECT and KNOB 4 turned by s */
+static void roll_turns(int32_t s)                 /* one UI frame with SELECT (Dah: OCT+ held, the tempo) and KNOB 4
+                                                   * turned by s */
 {
+    fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
     host_enc[panel.enc[EN_SELECT]] += s * panel.dir[EN_SELECT];
     host_enc[panel.enc[EN_K4]] += s * panel.dir[EN_K4];
     host_ticks += 16000u; fm1_ms += 16u;
     ui_input();
     ui_draw();
+    fm1_in.buttons &= ~(1u << panel.btn[B_OCTUP]);
     host_ticks += 200000u;
 }
 static void roll_film_put(uint8_t *img, uint32_t iw, uint32_t row, uint32_t k, int32_t x0, int32_t y0, uint32_t w, uint32_t h)

@@ -354,6 +354,14 @@ static void turn(uint32_t role, int32_t s)
         frame();
     }
 }
+/* (Dah) OCT+ held + SELECT: the tempo (SELECT alone: the pattern); OCT+ let go at the next frame (no octave) */
+static void tempo_turn(int32_t s)
+{
+    fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
+    host_pressed |= 1u << panel.btn[B_OCTUP];
+    turn(EN_SELECT, s);
+    fm1_in.buttons &= ~(1u << panel.btn[B_OCTUP]);
+}
 static void stop_transport(void) { transport_req = 0; song.playing = 0; }
 static int16_t stored_param(uint32_t slot, uint32_t track, uint32_t id)
 {
@@ -2233,7 +2241,7 @@ static int test_roll(void)
     /* BPM 120 -> 121 (SELECT): the header rolls, the digits 1 and 2 stay; the BPM card too (no unit:
      * the label says BPM: set in M, it rolls like any number) */
     ui_power_on(); roll_settle();
-    turn(EN_SELECT, 1);
+    tempo_turn(1);
     ok = song.g[G_BPM] == 121 && str_eq(ui.roll[ROLL_BPM].from, "120") && ui.roll[ROLL_BPM].dir == 1 &&
          str_eq(ui.roll[0].from, "120") && ui.roll[0].dir == 1;
     frame(); frame();
@@ -2309,7 +2317,7 @@ static int test_roll(void)
         ok &= !ui.roll[3].from[0] && !ui.roll[ROLL_BPM].from[0];
     }
     ui_power_on(); roll_settle();
-    turn(EN_SELECT, 1);
+    tempo_turn(1);
     ok &= ui.roll[ROLL_BPM].from[0] != 0;
     ui.force = 1; frame();
     ok &= !ui.roll[ROLL_BPM].from[0];
@@ -2319,7 +2327,7 @@ static int test_roll(void)
     /* MONO: every roll frame is gray */
     ui_power_on(); roll_settle();
     ok = 1;
-    turn(EN_SELECT, 9);
+    tempo_turn(9);
     turn(EN_K4, -1);
     for (k = 0; k < ROLL_FRAMES; k++) { ok &= screen_gray(); frame(); }
     bad += check("roll: MONO roll frames are gray", ok);
@@ -8345,9 +8353,15 @@ static int test_bpm_lock(void)
     ui_prefs = 0;
     frame();
     b0 = song.g[G_BPM];
-    turn(EN_SELECT, 2);
+    tempo_turn(2);
     ok = song.g[G_BPM] == b0 + 2 && !msg_is("BPM LOCKED") && str_eq(menu_flag(MI_BPMLOCK)->name[0], "OFF");
-    bad += check("#58 BPM LOCK OFF (the default): SELECT sets the tempo as before", ok);
+    frame();
+    ok &= song.octave == 0;
+    turn(EN_SELECT, 1);                                 /* (Dah: SELECT alone: the next pattern, a new one) */
+    ok &= song.g[G_BPM] == b0 + 2 && ps_num(0) == 2u;
+    turn(EN_SELECT, -1);
+    ok &= ps_num(0) == 1u;
+    bad += check("#58 (Dah) OCT+ held + SELECT sets the tempo (no octave after), SELECT alone the pattern", ok);
 
     hold(B_HOME);
     ui.menu_sel = MI_BPMLOCK;
@@ -8373,16 +8387,12 @@ static int test_bpm_lock(void)
         ui.msg_t = 0; fm1_ms += 1200u;
         b0 = song.g[G_BPM];
         turn(EN_SELECT, 1);
-        ok &= song.g[G_BPM] == b0 && msg_is("BPM LOCKED") && !ui.bpm_t;
-        ui.msg_t = 0;
-        turn(EN_SELECT, -4);                                          /* (the same burst: said once) */
-        ok &= song.g[G_BPM] == b0 && !ui.msg_t;
+        ok &= song.g[G_BPM] == b0 && !ui.bpm_t;
+        turn(EN_SELECT, -4);
+        ok &= song.g[G_BPM] == b0;
     }
-    fm1_ms += 1200u;
-    turn(EN_SELECT, 1);
-    ok &= msg_is("BPM LOCKED");                                       /* (a new burst: said again) */
     ok &= text_w(&AF_S, "BPM LOCKED") <= 236 - 106;                   /* (fits the header's message zone) */
-    bad += check("#58 BPM LOCK ON: SELECT leaves the tempo on HOME and the pages, \"BPM LOCKED\" once per turn burst", ok);
+    bad += check("#58 BPM LOCK ON: SELECT leaves the tempo on HOME and the pages (Dah: the pattern's)", ok);
 
     /* ON: HOME > CLOCK's BPM knob (up to 1.1.5 GLO > GLOBAL's) */
     go_home(); press(B_HOME); press(B_HOME); frame();   /* (HOME > MIXER > CLOCK) */
@@ -8431,7 +8441,7 @@ static int test_bpm_lock(void)
         frame();
         b0 = song.g[G_BPM];
         go_home(); frame();
-        turn(EN_SELECT, 1);
+        tempo_turn(1);
         ok &= song.g[G_BPM] == b0 + 1;
         bad += check("#58 BPM LOCK saved with the settings; settings from before it: OFF (idempotent)", ok);
     }
@@ -8595,7 +8605,7 @@ static int test_menu_prefs(void)
     ui_power_on(); ui_prefs = PREF_ANIM_OFF; roll_settle();      /* (ui_power_on clears the favorites record) */
     turn(EN_K4, 1);
     ok &= song.g[G_TUNE] == 1 && !ui.roll[3].from[0] && roll_static_now();   /* OFF: the value at once, static */
-    turn(EN_SELECT, 1);
+    tempo_turn(1);
     ok &= !ui.roll[ROLL_BPM].from[0];
     bad += check("#46 ANIM OFF: the card values and the header BPM snap (no rolling digits), the frame is static", ok);
     {   /* the piano roll's view: ON glides toward the notes over frames, OFF jumps there at once */
