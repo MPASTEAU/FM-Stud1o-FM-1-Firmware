@@ -155,7 +155,7 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
 static void felucca_demo(void) __attribute__((noinline));   /* (its own, built for size: tools/size_fns.py) */
 static void demo_var(uint32_t k, uint32_t v) __attribute__((noinline));
 #ifndef DAH_DEMO_SONG
-#define DAH_DEMO_SONG 5                         /* (Dah) the power-on song: 5 the dark one, 4 the long chords, 3 the slow one, after Archive, 2 the deep house, 1 the
+#define DAH_DEMO_SONG 6                         /* (Dah) the power-on song: 6 after Zimmer's Time, 5 the dark one, 4 the long chords, 3 the slow one, after Archive, 2 the deep house, 1 the
                                                  * trip-hop (kept), 0 the FX test */
 #endif
 #if DAH_DEMO_SONG == 1
@@ -1154,6 +1154,164 @@ static void felucca_demo(void)
         else if (id == DS_CIN) x->cin = (int8_t)DS[i][2];
         else if (id == DS_COUT) x->cout = (int8_t)DS[i][2];
         else trk[k2].p[id] = DS[i][2];
+    }
+    for (k = 0; k < 8u; k++)
+        for (v = 1; v <= NV[k]; v++) {
+            if (v > 1u)
+                (void)pattern_new(k, 0);
+            demo_var(k, v);
+        }
+    for (k = 0; k < 8u; k++)
+        (void)pattern_go(k, 1);
+    chain_defaults(&chain_config);
+    chain_config.count = 16;
+    for (i = 0; i < 16u; i++) {
+        for (k = 0; k < NTRK; k++)
+            chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
+        chain_config.row[i].repeat = 1;
+    }
+    for (i = 0; i < NTRK; i++)
+        pat_sig[i] = steps_sig(&trk[i]);
+}
+#elif DAH_DEMO_SONG == 6
+/* (Dah) after Hans Zimmer's Time (its chords from a MIDI file): 140 BPM in 1/16, A minor, Am Em G D two bars each
+ * (the second time Em with B on top), sixteen sections of four bars from the SONG, out of a piano alone to the brass and
+ * the drums, down to the piano again on Am; eight voices at most at once (the budget):
+ *   track 1  SAMPLE PIANO, the chord picked   track 2  ANALOG STRINGS, held   track 3  PHYS DRONE STRING, the roots
+ *   track 4  ANALOG SUB BASS   track 5  FM6 PLUCK, the eighths   track 6  FM6 BRASS, low   track 7  DRUM DEEP KIT
+ *   track 8  VOICE CHOIR AAH, the top */
+static const uint8_t TM_CH[5][3] = {{45, 57, 72}, {52, 64, 79}, {43, 55, 71}, {50, 62, 78}, {52, 64, 83}};   /* root, its
+                                                                             * octave, the top: Am Em G D Em(B) */
+static const uint8_t TM_RG[4][2] = {{0, 1}, {2, 3}, {0, 4}, {0, 0}};   /* the regions: a chord a half */
+static void demo_var(uint32_t k, uint32_t v)
+{
+    uint32_t h, i;
+    track_t *t = &trk[k];
+    if (k == 6u) {                                                          /* the drums: 1 the hits, 2 the climax,
+                                                                             * 3 the build (the roll) */
+        for (i = 0; i < 64u; i += 16u) {                                    /* (a hit at a time: the voices) */
+            demo_hit(t, i, 1u << 0, v != 1u || i % 32u == 0u ? 127 : 84);
+            if (v == 2u) {
+                demo_hit(t, i + 8u, 1u << 1, 124);                          /* (half time: the snare on 3) */
+                demo_hit(t, i + 11u, 1u << 0, 100);
+            }
+        }
+        for (i = 32u; v == 3u && i < 64u; i += i >= 56u ? 1u : i >= 48u ? 2u : 4u)
+            demo_hit(t, i, 1u << 1, 50 + (i - 32u) * 2u);
+        return;
+    }
+    for (h = 0; h < 2u; h++) {
+        const uint8_t *c = TM_CH[TM_RG[(v - 1u) % 4u][h]];
+        uint32_t at = h * 32u, len = v == 4u ? 64u : 32u;
+        uint8_t n[4];
+        if (v == 4u && h)
+            break;                                                          /* (the end: Am, four bars) */
+        switch (k) {
+        case 0:                                                             /* the piano: quarters up and down */
+            for (i = 0; i < len; i += 4u) {
+                static const uint8_t UP[4] = {1, 3, 2, 3};
+                uint32_t u = UP[i / 4u % 4u];
+                demo_note(&t->step[at + i], u == 1u ? c[1] : u == 2u ? c[2] : c[1] + 7u, i % 16u ? 70 : 88);
+                demo_hold(t, at + i, 4);
+            }
+            break;
+        case 1:                                                             /* the strings: the chord held */
+            n[0] = c[1]; n[1] = (uint8_t)(c[1] + 7u); n[2] = c[2];
+            dm_chord(t, at, len, n, 3, 84);
+            break;
+        case 2:                                                             /* the drone: the root */
+            dm_chord(t, at, len, c, 1, 96);
+            break;
+        case 3:                                                             /* the sub */
+            demo_note(&t->step[at], c[0] - 12u, 100);
+            demo_hold(t, at, len);
+            break;
+        case 4:                                                             /* the eighths */
+            for (i = 0; i < len; i += 2u) {
+                static const uint8_t ARP[4] = {1, 3, 2, 3};
+                uint32_t u = ARP[i / 2u % 4u];
+                demo_note(&t->step[at + i], u == 1u ? c[1] : u == 2u ? c[2] : c[1] + 7u, i % 8u ? 72 : 100);
+                demo_hold(t, at + i, 2);
+            }
+            break;
+        case 5:                                                             /* the brass, low: the root */
+            dm_chord(t, at, len, c, 1, 120);
+            break;
+        default:                                                            /* the choir: the top */
+            dm_chord(t, at, len, c + 2, 1, 100);
+            break;
+        }
+    }
+}
+static void felucca_demo(void)
+{
+    /* each track's variant: the region (1 Am Em, 2 G D, 3 Am Em(B), 4 Am held; the drums 1 hits, 2 climax, 3 build);
+     * 0 silent */
+    static const uint8_t SEC[16][8] = {
+        {1, 0, 0, 0, 0, 0, 0, 0},             /* the piano alone */
+        {2, 0, 0, 0, 0, 0, 0, 0},
+        {3, 3, 0, 0, 0, 0, 0, 0},             /* the strings */
+        {2, 2, 2, 0, 0, 0, 0, 0},             /* the drone */
+        {1, 1, 1, 0, 1, 0, 0, 0},             /* the eighths */
+        {2, 2, 0, 2, 2, 0, 1, 0},             /* the sub (for the drone), the first hits */
+        {3, 3, 0, 3, 3, 0, 1, 0},
+        {0, 2, 0, 2, 2, 0, 3, 2},             /* the choir (for the piano), the build */
+        {0, 1, 0, 0, 1, 1, 2, 1},             /* the brass, the drums (the piano, the sub resting: eight voices) */
+        {0, 2, 0, 0, 2, 2, 2, 2},
+        {0, 3, 0, 0, 3, 3, 2, 3},
+        {0, 2, 0, 0, 2, 2, 3, 2},             /* the build again */
+        {0, 1, 0, 0, 1, 1, 2, 1},
+        {0, 2, 0, 0, 2, 2, 2, 2},
+        {3, 3, 3, 0, 0, 0, 0, 3},             /* down */
+        {4, 4, 0, 0, 0, 0, 0, 0},             /* the piano, Am */
+    };
+    static const uint8_t NV[8] = {4, 4, 3, 3, 3, 3, 3, 3};
+    static const uint8_t SND[8][2] = {{ENGI_SAMPLE, 0}, {0, 11}, {ENGI_PHYS, 7}, {0, 7}, {ENGI_FM6, 7}, {ENGI_FM6, 3},
+                                      {ENGI_DRUM, 1}, {5, 0}};
+    static const int16_t DS[][3] = {          /* track (8 the MASTER), parameter, value */
+        {0, P_REV, 90}, {0, P_REL, 100},
+        {1, P_ATK, 100}, {1, P_REL, 96}, {1, P_SUS, 127}, {1, P_SPRD, 127}, {1, P_REV, 110}, {1, P_CHOR, 40},
+        {2, P_ATK, 90}, {2, P_REL, 110}, {2, P_SUS, 127}, {2, P_REV, 90},
+        {3, P_VOICE, V_MONO}, {3, P_ATK, 60}, {3, P_SUS, 127}, {3, P_REL, 90}, {3, P_REV, 0}, {3, P_DLY, 0},
+        {3, P_CHOR, 0},
+        {4, P_VOICE, V_MONO}, {4, P_REV, 70}, {4, P_DLY, 50}, {4, P_PAN, 10},   /* (the eighths: one voice) */
+        {5, P_ATK, 70}, {5, P_REL, 100}, {5, P_SUS, 127}, {5, P_SPRD, 100}, {5, P_REV, 100}, {5, P_DIST, 10},
+        {6, P_REV, 80}, {6, P_DLY, 0}, {6, P_CHOR, 0}, {6, P_DIST, 16},
+        {7, P_ATK, 100}, {7, P_REL, 120}, {7, P_SUS, 127}, {7, P_REV, 120}, {7, P_SPRD, 127},
+        {8, P_EQLO, 6}, {8, P_EQ1F, 100}, {8, P_EQ1G, 4},
+    };
+    static const int8_t EQ[8][6] = {          /* LOW CUT, HIGH CUT (118: open), a bell; the level; the COMPRESSOR */
+        {20, 118, 60, 0, 112, 60},            /* piano */
+        {40, 104, 70, 2, 100, 70},            /* strings */
+        {20, 100, 40, 0, 104, 70},            /* drone */
+        {0, 60, 20, 2, 100, 90},              /* sub */
+        {40, 110, 80, 2, 84, 70},             /* eighths */
+        {20, 96, 40, 3, 108, 80},             /* brass */
+        {0, 118, 18, 6, 126, 70},             /* drums */
+        {44, 104, 80, 2, 96, 70},             /* choir */
+    };
+    uint32_t i, k, v;
+    song.g[G_BPM] = 140;
+    song.g[G_RTYPE] = 2; song.g[G_RSIZE] = 127; song.g[G_RDAMP] = 60;
+    song.g[G_DFDBK] = 50; song.g[G_DTIME] = 10; song.g[G_DCOLOR] = 40;
+    song.g[G_CRATE] = 8; song.g[G_CDEPTH] = 80;
+    song.g[G_MCOMP] = 50; song.g[G_MREL] = 70;
+    song.ntrk = 8;
+    for (i = 0; i < NTRK; i++) {
+        track_t *t = &trk[i];
+        track_defaults_steps(t);
+        t->p[P_SLEN] = 64;
+        t->p[P_SDIV] = 2;
+        demo_sound(t, SND[i][0], SND[i][1]);
+        t->p[P_EQLO] = EQ[i][0]; t->p[P_EQHI] = EQ[i][1]; t->p[P_EQ1F] = EQ[i][2]; t->p[P_EQ1G] = EQ[i][3];
+        t->p[P_LEVEL] = EQ[i][4];
+        trkx[i].rsv0 = (uint8_t)EQ[i][5];
+        trkx[i].rsv1 = 60;
+    }
+    for (i = 0; i < sizeof DS / sizeof DS[0]; i++) {
+        uint32_t k2 = (uint32_t)DS[i][0];
+        if (k2 == 8u) mtrk.p[DS[i][1]] = DS[i][2];
+        else trk[k2].p[DS[i][1]] = DS[i][2];
     }
     for (k = 0; k < 8u; k++)
         for (v = 1; v <= NV[k]; v++) {
