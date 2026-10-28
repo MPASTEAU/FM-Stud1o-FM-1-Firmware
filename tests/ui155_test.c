@@ -261,22 +261,26 @@ static int project_erase_ui(void)
     song.sel = 0;
     trk[0].step[0] = (step_t){{60}, 1, ST_NOTE, 0, 100};
     go_page(GR_PATTERN); frame();
-    ok = act_cols() == 15u && str_eq(act_name(0), "OPEN") && str_eq(act_name(1), "COPY") && str_eq(act_name(2), "NEW") &&
+    ok = act_cols() == 14u && str_eq(act_name(0), "PATTERN") && str_eq(act_name(1), "COPY") && str_eq(act_name(2), "NEW") &&
          str_eq(act_name(3), "DELETE");
     turn(EN_K2, 1);
     ok &= ui.act == 2u && act_ready();
     press(B_OCTUP);
-    ok &= ps_num(0) == 2u && ps_exists(0, 1) && trk[0].step[0].n == 1u && trk[0].step[0].note[0] == 60u && pt_sel == 2u;
+    ok &= ps_num(0) == 2u && ps_num(1) == 2u && ps_exists(0, 1) && trk[0].step[0].n == 1u && trk[0].step[0].note[0] == 60u;
     turn(EN_K3, 1);
     press(B_OCTUP);
-    ok &= ps_num(0) == 3u && trk[0].step[0].time != ST_NOTE && ps_exists(0, 2);
+    ok &= ps_num(0) == 3u && ps_num(1) == 3u && trk[0].step[0].time != ST_NOTE && ps_exists(0, 2);
+    turn(EN_K1, -1);                                    /* (KNOB 1: the one before, every track on it at once) */
+    ok &= ps_num(0) == 2u && ps_num(1) == 2u && trk[0].step[0].note[0] == 60u;
+    turn(EN_K1, 1);
+    ok &= ps_num(0) == 3u;
     turn(EN_K4, 1);
     press(B_OCTUP);
     confirm_text(a, b);
     ok &= ui.confirm == CF_DEL_PAT && str_eq(a, "DELETE PATTERN 3?");
     press(B_OCTDN);
     ok &= !ui.confirm && ps_exists(0, 3);
-    bad += check("SAVE > PATTERN: KNOB 1 OPEN, 2 COPY (the one played, played now), 3 NEW (empty), 4 DELETE (the dialog)", ok);
+    bad += check("SAVE > PATTERN (Dah): KNOB 1 the pattern (every track on it), 2 COPY, 3 NEW (empty), 4 DELETE (the dialog)", ok);
 
     press(B_REC);
     ok = ui.confirm == CF_DEL_PAT && !song.rec;

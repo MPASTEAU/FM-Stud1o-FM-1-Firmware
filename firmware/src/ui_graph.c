@@ -1890,30 +1890,61 @@ static void graph_events(void)
 }
 /* SAVE > PATTERN: the track's patterns, four rows round the one picked: its number (the one played in the track's colour),
  * its notes and size; the memory the patterns take, on the last line */
+/* (Dah) pattern num's steps, every track's a line (x0, y0, w x h): a step that strikes a block in the track's colour,
+ * its TIEs after it the same, dimmer; the track's length a hairline (bg: the row's) */
+static void pt_mini(uint32_t num, int32_t x0, int32_t y0, int32_t w, int32_t h, uint16_t bg)
+{
+    uint32_t k, i, nt = trk_count(), len, n, pos;
+    int32_t lh = h / (int32_t)(nt ? nt : 1u), dw = w / NSTEP > 1 ? w / NSTEP - 1 : 1;
+    for (k = 0; k < nt; k++) {
+        const step_t *s = ps_st;
+        uint16_t tc = ux.trk[k];
+        int32_t y = y0 + (int32_t)k * lh, dh = lh > 2 ? lh - 1 : 1;
+        int on = 0;
+        if (num == ps_num(k)) {
+            s = trk[k].step;
+            len = (uint32_t)clamp(trk[k].p[P_SLEN], 1, NSTEP);
+        } else if (ps_exists(k, num) && (n = ps_fetch(k, num)) >= 12u && (pos = 10u, ps_steps_get(ps_buf, n, &pos, ps_st)))
+            len = (uint32_t)clamp((int32_t)(ps_buf[0] | ps_buf[1] << 8), 1, NSTEP);
+        else
+            continue;                                   /* (none: an empty line) */
+        cv_rect(x0, y + dh / 2, w * (int32_t)len / NSTEP, 1, T_LINE);
+        for (i = 0; i < len; i++) {
+            int32_t x = x0 + (int32_t)i * w / NSTEP;
+            if (s[i].time == ST_NOTE && (s[i].n || s[i].hit)) {
+                cv_rect(x, y, dw, dh, tc);
+                on = 1;
+            } else if (s[i].time == ST_TIE && on)
+                cv_rect(x - 1, y, dw + 1, dh, ux_mix(bg, tc, 50));
+            else
+                on = 0;
+        }
+    }
+}
 static void graph_pattern(void)
 {
     uint8_t nums[PS_NUM];
-    uint32_t n = pt_list(nums), cur = pt_pick(), i, at = 0, first;
-    char b[4], nm[28];
+    uint32_t n = pt_list(nums), cur = ps_num(song.sel), i, at = 0, first;
+    char b[4];
     for (i = 0; i < n; i++)
         if (nums[i] == cur) at = i;
-    first = n <= 4u ? 0u : at < 2u ? 0u : at + 2u > n ? n - 4u : at - 1u;
-    for (i = 0; i < 4u && first + i < n; i++) {
+    first = n <= 3u ? 0u : at < 1u ? 0u : at + 2u > n ? n - 3u : at - 1u;
+    for (i = 0; i < 3u && first + i < n; i++) {        /* (three rows, every track a line in each) */
         uint32_t num = nums[first + i];
-        int32_t y = 12 + (int32_t)i * 26;
+        int32_t y = 4 + (int32_t)i * 34;
+        int sel = num == cur;
+        uint16_t bg = sel ? T_RAISE : T_SURF;
         fmt_int(b, (int32_t)num);
-        fmt_int(nm, (int32_t)pt_steps(num));
-        str_cpy(nm + str_len(nm), " NOTES  ", 9);
-        fmt_int(nm + str_len(nm), (int32_t)ps_size(song.sel, num));
-        str_cpy(nm + str_len(nm), " B", 4);
-        list_row(y, num == cur, b, num == ps_num(song.sel) ? ux.trk[song.sel % NTRK] : T_MID, nm, T_TEXT, 232);
+        if (sel) {
+            cv_rrect(6, y, 228, 32, 4, T_THEME, T_SURF);
+            cv_rrect(8, y + 2, 224, 28, 3, T_RAISE, T_THEME);
+        }
+        GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
+        cv_text_on(14, y + CAP_IN(M, 32), &AF_M, b, sel ? T_THEME : T_MID, bg);
+        pt_mini(num, 36, y + 4, 192, 25, bg);
     }
     {
-        char m[32] = "PATTERN ";                        /* (Dah: the one picked of how many, then the memory) */
-        fmt_int(m + str_len(m), (int32_t)(at + 1u));
-        str_cpy(m + str_len(m), "/", 4);
-        fmt_int(m + str_len(m), (int32_t)n);
-        str_cpy(m + str_len(m), "  MEMORY ", 12);
+        char m[32] = "MEMORY ";                         /* (Dah: the memory; which one of how many: KNOB 1's card) */
         fmt_int(m + str_len(m), (int32_t)pt_mem_pct());
         str_cpy(m + str_len(m), " %", 4);
         GFX_HOOK_ALIGN(0, 110, 0, 120, AL_V, "pattern memory line");   /* (its "/": 2 px higher) */

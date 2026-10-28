@@ -2018,8 +2018,10 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return slice_page_ok() ? 12u : 0u;       /* SPLIT JOIN (a SLICE track only) */
     if (pg->graph == GR_SLOTS)
         return 14u;                              /* PATTERN: ERASE (1.5.5, #199) LOAD SAVE */
-    if (pg->graph == GR_FILE || pg->graph == GR_PATTERN)
-        return 15u;                              /* (Dah) FILE, PATTERN: OPEN COPY NEW DELETE (the list: PRESETS, SELECT) */
+    if (pg->graph == GR_FILE)
+        return 15u;                              /* (Dah) FILE: OPEN COPY NEW DELETE (the list: PRESETS, SELECT) */
+    if (pg->graph == GR_PATTERN)
+        return 14u;                              /* (Dah) PATTERN: KNOB 1 the pattern; COPY NEW DELETE */
     if (pg->scope == SC_GLOBAL)
         for (c = 0; c < 4u; c++)
             if (go_id(page_id(pg, c)))
@@ -2056,7 +2058,7 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return c == 3u ? "JOIN" : "SPLIT";
     if (cur_page()->graph == GR_PATTERN || cur_page()->graph == GR_FILE) {   /* (Dah) */
         static const char *const FL_ACT[4] = {"OPEN", "COPY", "NEW", "DELETE"};
-        return FL_ACT[c & 3u];
+        return cur_page()->graph == GR_PATTERN && !(c & 3u) ? "PATTERN" : FL_ACT[c & 3u];
     }
     if (cur_page()->graph == GR_SLOTS && (c & 3u) == 1u)
         return "ERASE";

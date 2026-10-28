@@ -1610,8 +1610,15 @@ static void draw_columns_in(void)
             draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->graph == GR_PATTERN) {          /* (Dah) PATTERN: OPEN COPY NEW DELETE */
-            draw_act_column(c, act_name(c), pt_ready(c) ? T_THEME : T_DIM, ICON_AUTO);
+        if (cur_page()->graph == GR_PATTERN) {          /* (Dah) PATTERN: the one playing (KNOB 1); COPY NEW DELETE */
+            if (!c) {
+                uint8_t nums[PS_NUM];
+                char u[6] = "/";
+                fmt_int(val, (int32_t)ps_num(song.sel));
+                fmt_int(u + 1, (int32_t)pt_list(nums));
+                draw_column(0, "PATTERN", val, u, VAL(0u), -1, ICON_AUTO);
+            } else
+                draw_act_column(c, act_name(c), pt_ready(c) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
         if (cur_page()->graph == GR_FILE) {             /* (Dah) FILE: OPEN COPY NEW DELETE (the memory: the list's) */

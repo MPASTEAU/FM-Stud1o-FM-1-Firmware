@@ -724,7 +724,7 @@ static int rec_tap(void)                                /* 1: the arming changed
     }
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
         if (chain_busy()) ui_message("STOP TO EDIT");
-        else confirm_open(CF_DEL_PAT, pt_pick());
+        else confirm_open(CF_DEL_PAT, ps_num(song.sel));
         return 0;
     }
     if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
@@ -1338,6 +1338,11 @@ static void edit_param(uint32_t slot, int32_t steps)
             ui.act = steps > 0 ? (uint8_t)(slot + 1u) : ui.act == slot + 1u ? 0u : ui.act;
         return;
     }
+    if (pg->graph == GR_PATTERN) {                        /* (Dah) KNOB 1 the pattern, every track on it */
+        if (slot == 0u)
+            pt_move(steps);
+        return;
+    }
     if (pg->graph == GR_USER) {                           /* KNOB 1 the slot */
         if (slot == 0u)
             ui.uslot = (uint8_t)clamp((int32_t)ui.uslot + steps, 0, UP_SLOTS - 1);
@@ -1526,13 +1531,13 @@ static void act_do(void)
             name_open(NK_USER_SAVE, ui.uslot);
         return;
     }
-    if (cur_page()->graph == GR_PATTERN) {              /* (Dah) PATTERN: OPEN, COPY, NEW, DELETE (the dialog) */
+    if (cur_page()->graph == GR_PATTERN) {              /* (Dah) PATTERN: COPY, NEW, DELETE (the dialog) */
         ui.act = 0;
         if (chain_busy())                               /* (the song owns the tracks' timing meanwhile) */
             ui_message("STOP TO EDIT");
         else if (c == 3u)
-            confirm_open(CF_DEL_PAT, pt_pick());
-        else
+            confirm_open(CF_DEL_PAT, ps_num(song.sel));
+        else if (c)
             pt_do(c + 1u);
         return;
     }
