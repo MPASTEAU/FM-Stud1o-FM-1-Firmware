@@ -421,6 +421,7 @@ static int pattern_new_all(int dup)
     return pattern_go_all(num) ? 1 : 0;
 }
 /* track k's pattern num gone; the one it plays: it goes to another (or an empty 1) */
+static void confirm_open(uint32_t kind, uint32_t trk);
 /* (Dah) GLO + ALGORITHM: the previous, the next pattern (every track); past the last a new, empty one */
 static void pattern_turn(int32_t s)
 {
@@ -431,12 +432,14 @@ static void pattern_turn(int32_t s)
         ;
     if (s < 0 && !i)
         return;
-    if (s > 0 && i + 1u >= n) {
-        r = pattern_new_all(0);
-        if (r)
-            ui_message(r == 2 ? "NO MORE PATTERNS" : "MEMORY FULL");
+    if (s > 0 && i + 1u >= n) {                         /* (Dah: a new one asked first, as ADD TRACK) */
+        if (!ps_free_all())
+            ui_message("NO MORE PATTERNS");
+        else if (!ui.confirm)
+            confirm_open(CF_NEW_PAT, ps_free_all());
         return;
     }
+    (void)r;
     if (pattern_go_all(nums[s > 0 ? i + 1u : i - 1u]))
         ui_message("MEMORY FULL");
 }

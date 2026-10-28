@@ -6834,7 +6834,8 @@ static void rc_run(uint32_t lb, uint32_t mode, uint32_t k, uint32_t pg, int late
         rc_enc(EN_K1 + k, d, late && (mode != 1u || i));   /* (a combo: the first in time, it opens the map) */
         if (i == 1u) {
             rc_enc(EN_PRESET, 1, late);                 /* (in time: the layer's read drops them) */
-            rc_enc(EN_ALGO, 1, late);
+            if (lb != B_GLO)                            /* (Dah: GLO + ALGORITHM is the pattern, a combo of its own) */
+                rc_enc(EN_ALGO, 1, late);
         }
         frame();
     }
@@ -8357,7 +8358,9 @@ static int test_bpm_lock(void)
     ok = song.g[G_BPM] == b0 + 2 && !msg_is("BPM LOCKED") && str_eq(menu_flag(MI_BPMLOCK)->name[0], "OFF");
     frame();
     ok &= song.octave == 0;
-    turn(EN_SELECT, 1);                                 /* (Dah: SELECT alone: the next pattern, a new one) */
+    turn(EN_SELECT, 1);                                 /* (Dah: SELECT alone: the next pattern, a new one: asked) */
+    ok &= ui.confirm == CF_NEW_PAT;
+    press(B_OCTUP);
     ok &= song.g[G_BPM] == b0 + 2 && ps_num(0) == 2u;
     turn(EN_SELECT, -1);
     ok &= ps_num(0) == 1u;
@@ -9912,7 +9915,11 @@ static int test_glo_pattern(void)
     btn_down(B_GLO); frame();
     host_enc[panel.enc[EN_ALGO]] += panel.dir[EN_ALGO];
     frame();
-    ok = tl_on() && tl_pat && ui.layer == LAYER_GLO;
+    ok = ui.confirm == CF_NEW_PAT && ps_num(0) == 1u;    /* (past the last: NEW PATTERN 2? asked; OCT+ yes) */
+    btn_up(B_GLO); frame();
+    press(B_OCTUP);
+    btn_down(B_GLO); frame();
+    ok &= tl_on() && tl_pat;
     tl_ms = 0;
     frame();
     for (k = 0; k < trk_count(); k++)

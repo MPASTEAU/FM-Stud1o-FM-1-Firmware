@@ -1881,6 +1881,12 @@ static void confirm_text(char *a, char *b)
         str_cpy(b, "TRACK 1", 24);
         b[6] = (char)('1' + song.sel % NTRK);
         break;
+    case CF_NEW_PAT:                                 /* (Dah) SELECT, GLO + ALGORITHM past the last pattern */
+        str_cpy(a, "NEW PATTERN ", 24);
+        fmt_int(a + str_len(a), (int32_t)k);
+        str_cpy(a + str_len(a), "?", 4);
+        str_cpy(b, "EMPTY, EVERY TRACK", 24);
+        break;
     case CF_ADD_TRACK:                               /* (HA HA HE HU) ALGORITHM past the last track */
         str_cpy(a, "ADD TRACK 1?", 24);
         a[10] = (char)('1' + k % NTRK);

@@ -2218,6 +2218,14 @@ static void ui_input(void)
                 pt_delete();
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
+            } else if (kind == CF_NEW_PAT) {       /* (Dah) a new, empty pattern, every track on it */
+                int r = pattern_new_all(0);
+                if (r)
+                    ui_message(r == 2 ? "NO MORE PATTERNS" : "MEMORY FULL");
+                else {
+                    tl_ms = fm1_ms | 1u;            /* (its list again, the new one in the middle) */
+                    tl_pat = 1;
+                }
             } else if (kind == CF_DEL_TRACK) {
                 track_remove_last();
             } else if (kind == CF_OPEN_ARCH) {
@@ -2263,7 +2271,8 @@ static void ui_input(void)
                     ui_message("PATTERN CLEARED");
                 }
             }
-        } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0)) {   /* (Dah: ADD TRACK: ALGO
+        } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
+                   (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0))) {   /* (Dah: ADD TRACK: ALGO
                                                          * turned back cancels too) */
             ui.confirm = 0;
             ui.force = 1;
