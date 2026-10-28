@@ -1237,6 +1237,25 @@ static void home_view_knob(uint32_t slot, int32_t steps)   /* (Dah) HOME's VIEW:
         hvw.zoom = (uint8_t)clamp((int32_t)hvw.zoom + (steps > 0 ? -1 : 1), 0, 3);   /* (right: closer) */
         n = hv_cols();
         hvw.at = (int16_t)(mid / n * n);
+    } else if (slot == 2u) {                            /* (Dah) KNOB 3: the selected track's own pattern, "-" none */
+        uint8_t nums[PS_NUM];
+        uint32_t k = song.sel % NTRK, cnt = ps_list_all(nums);
+        int32_t at = -1;
+        if (chain_busy()) {
+            ui_message("STOP THE SONG");
+            return;
+        }
+        if (!((seq_off >> k) & 1u))
+            for (i = 0; i < cnt; i++)
+                if (nums[i] == ps_num(k)) at = (int32_t)i;
+        at = clamp(at + (steps > 0 ? 1 : -1), -1, (int32_t)cnt - 1);
+        if (at < 0)
+            seq_off |= (uint8_t)(1u << k);
+        else {
+            seq_off &= (uint8_t)~(1u << k);
+            if (pattern_go(k, nums[at]))
+                ui_message("MEMORY FULL");
+        }
     } else if (slot == 3u)
         hvw.nofollow = steps < 0;
     ui.force = 1;

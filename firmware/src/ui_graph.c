@@ -1631,38 +1631,11 @@ static void graph_browse(void)
 /* (Dah) ALGORITHM turned: the MASTER and the project's tracks, the selected one in the middle (its colour, its
  * sound's name), gliding to it */
 static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
-static void graph_patlist(void)                         /* (Dah) GLO + ALGORITHM: the patterns, + NEW after the last */
+static void pat_rows(int32_t dy, int add);
+static void graph_patlist(void)                         /* (Dah) SELECT, GLO + ALGORITHM: the patterns, each its steps (every
+                                                         * track a line, as HOME's), + NEW after the last; gliding */
 {
-    uint8_t nums[PS_NUM];
-    int32_t row, n = (int32_t)ps_list_all(nums), cur = 0, dy = glide(&tl_dy);
-    glrow_t r[9];
-    uint32_t m = 0;
-    while (cur + 1 < n && nums[cur] != ps_num(song.sel))
-        cur++;
-    for (row = -4; row <= 4; row++) {
-        int32_t i = cur + row;
-        glrow_t *g = &r[m];
-        if (i < 0 || i > n || (i == n && n >= (int32_t)PS_NUM))
-            continue;
-        m++;
-        g->y = LIST_Y(row + 3) + dy;
-        g->star = 0;
-        g->tc = i == n ? T_MID : ux.trk[song.sel % NTRK];
-        if (i == n) {
-            str_cpy(g->tag, "+", sizeof g->tag);
-            str_cpy(g->nm, "NEW PATTERN", sizeof g->nm);
-        } else {
-            g->tag[0] = (char)('0' + nums[i] / 10u);
-            g->tag[1] = (char)('0' + nums[i] % 10u);
-            g->tag[2] = 0;
-            str_cpy(g->nm, "PATTERN", sizeof g->nm);
-            g->nm[7] = ' ';
-            g->nm[8] = (char)(nums[i] >= 10u ? '0' + nums[i] / 10u : '0' + nums[i]);
-            g->nm[9] = nums[i] >= 10u ? (char)('0' + nums[i] % 10u) : 0;
-            g->nm[10] = 0;
-        }
-    }
-    glide_rows(r, m, 232);
+    pat_rows(glide(&tl_dy) * 2, 1);
 }
 static void graph_trklist(void)
 {
@@ -1921,28 +1894,39 @@ static void pt_mini(uint32_t num, int32_t x0, int32_t y0, int32_t w, int32_t h, 
         }
     }
 }
-static void graph_pattern(void)
+/* (Dah) the patterns as rows of 34 px, the one playing in the middle (framed), dy px on its way (gliding); add: + NEW after
+ * the last (SELECT turned past it makes one) */
+static void pat_rows(int32_t dy, int add)
 {
     uint8_t nums[PS_NUM];
-    uint32_t n = pt_list(nums), cur = ps_num(song.sel), i, at = 0, first;
+    int32_t n = (int32_t)pt_list(nums), at = 0, i, row;
+    uint32_t cur = ps_num(song.sel);
     char b[4];
     for (i = 0; i < n; i++)
         if (nums[i] == cur) at = i;
-    first = n <= 3u ? 0u : at < 1u ? 0u : at + 2u > n ? n - 3u : at - 1u;
-    for (i = 0; i < 3u && first + i < n; i++) {        /* (three rows, every track a line in each) */
-        uint32_t num = nums[first + i];
-        int32_t y = 4 + (int32_t)i * 34;
-        int sel = num == cur;
-        uint16_t bg = sel ? T_RAISE : T_SURF;
-        fmt_int(b, (int32_t)num);
-        if (sel) {
-            cv_rrect(6, y, 228, 32, 4, T_THEME, T_SURF);
-            cv_rrect(8, y + 2, 224, 28, 3, T_RAISE, T_THEME);
+    cv_rrect(6, 38, 228, 32, 4, T_THEME, T_SURF);       /* (the frame stays, the rows glide through it) */
+    cv_rrect(8, 40, 224, 28, 3, T_RAISE, T_THEME);
+    for (row = -2; row <= 2; row++) {
+        int32_t k = at + row, y = 38 + row * 34 + dy;
+        int mid = y > 38 - 17 && y < 38 + 17;
+        uint16_t bg = mid ? T_RAISE : T_SURF;
+        if (k < 0 || k > n || (k == n && (!add || n >= (int32_t)PS_NUM)) || y < 0 || y + 32 > 106)
+            continue;
+        if (k == n) {                                   /* + NEW */
+            GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
+            cv_text_on(14, y + CAP_IN(M, 32), &AF_M, "+", mid ? T_THEME : T_DIM, bg);
+            cv_text_on(36, y + CAP_IN(M, 32), &AF_M, "NEW", mid ? T_THEME : T_DIM, bg);
+            continue;
         }
+        fmt_int(b, (int32_t)nums[k]);
         GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
-        cv_text_on(14, y + CAP_IN(M, 32), &AF_M, b, sel ? T_THEME : T_MID, bg);
-        pt_mini(num, 36, y + 4, 192, 25, bg);
+        cv_text_on(14, y + CAP_IN(M, 32), &AF_M, b, mid ? T_THEME : T_MID, bg);
+        pt_mini(nums[k], 36, y + 4, 192, 25, bg);
     }
+}
+static void graph_pattern(void)
+{
+    pat_rows(0, 0);
     {
         char m[32] = "MEMORY ";                         /* (Dah: the memory; which one of how many: KNOB 1's card) */
         fmt_int(m + str_len(m), (int32_t)pt_mem_pct());
@@ -2510,7 +2494,8 @@ static void rack_row(uint32_t c)
     uint32_t sel = c == song.sel, mute = t->p[P_MUTE] != 0, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
     uint32_t np = (len + 15u) / 16u, pg, p0, ph, i, sig, carry = 0, nc = hv_cols();
     int32_t y = Y_GRAPH + 1 + (int32_t)c * RK_PITCH, m, sp = 192 / (int32_t)nc, cw = sp > 3 ? sp - 2 : sp - 1;
-    uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute ? T_DIM : ux.trk[c % NTRK];
+    int off = (seq_off >> (c % NTRK)) & 1u && !chain.running;   /* (Dah: on no pattern: "-", its steps dim) */
+    uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute || off ? T_DIM : ux.trk[c % NTRK];
     char b[16], d[2] = {(char)('1' + c), 0};
     p0 = hv_base(t, (int)sel);                         /* (Dah: HOME's VIEW: where, how many steps across) */
     pg = p0 / nc;
@@ -2522,7 +2507,7 @@ static void rack_row(uint32_t c)
     if (m < ts.meter[c] - 1)
         m = ts.meter[c] - 1;
     sig = str_hash(1u + sel + mute * 2u + t->eng_req * 8u, b) + steps_hash(t) * 31u + pg * 7919u + ph * 104729u +
-          len * 1299709u + tc * 3u + nc * 4099u + (chain.running ? chain.lane[c % NTRK] : ps_num(c)) * 15485863u;
+          len * 1299709u + tc * 3u + nc * 4099u + (uint32_t)off * 7u + (chain.running ? chain.lane[c % NTRK] : ps_num(c)) * 15485863u;
     if (!ui.force && sig == ts.col[c]) {
         if (m != ts.meter[c]) {                        /* the meter alone */
             ts.meter[c] = (uint8_t)m;
@@ -2543,7 +2528,7 @@ static void rack_row(uint32_t c)
     {                                                  /* (Dah) the pattern it plays, its number before the steps */
         char pn[4];
         uint32_t pnum = chain.running ? chain.lane[c % NTRK] : ps_num(c);
-        if (pnum == CHAIN_SILENT)
+        if (pnum == CHAIN_SILENT || off)
             str_cpy(pn, "-", sizeof pn);
         else
             fmt_int(pn, (int32_t)pnum);

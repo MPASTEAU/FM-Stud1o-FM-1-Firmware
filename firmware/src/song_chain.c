@@ -128,6 +128,8 @@ static uint32_t chain_clock(const chain_row_t *r)
 }
 /* a track parameter a playing song sets from its slots (the editor and the pages leave it alone meanwhile) */
 static int chain_owns(uint32_t id) { return (id >= P_SLEN && id <= P_SGATE) || id == P_SQNT; }
+static uint8_t seq_off;                              /* (Dah) the tracks on no pattern (HOME's VIEW, KNOB 3 "-"): their
+                                                      * steps kept, none played (not saved: a live state) */
 static const step_t *seq_steps(const track_t *t)
 {
     uint32_t k = (uint32_t)(t - trk), s;
@@ -135,6 +137,10 @@ static const step_t *seq_steps(const track_t *t)
         return t->step;
     s = chain.lane[k];
     return s != CHAIN_SILENT ? chain.source[chain.cur].step[k] : chain_silent;
+}
+static const step_t *seq_play_steps(const track_t *t)   /* (Dah) the steps the sequencer plays: none on no pattern */
+{
+    return !chain.running && (seq_off >> ((uint32_t)(t - trk) % NTRK)) & 1u ? chain_silent : seq_steps(t);
 }
 static void motion_restore(track_t *t);
 static void motion_restore_keep(track_t *t, const motion_store_t *m);

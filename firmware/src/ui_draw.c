@@ -1189,7 +1189,11 @@ static void draw_columns_in(void)
         draw_column(0, "MOVE", val, "BAR", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)hv_cols());
         draw_column(1, "STEPS", val, "", VAL(1u), -1, ICON_AUTO);
-        draw_column(2, "", "", "", T_DIM, -1, ICON_AUTO);
+        if ((seq_off >> (song.sel % NTRK)) & 1u)       /* (Dah) the track's pattern ("-": none) */
+            str_cpy(val, "-", sizeof val);
+        else
+            fmt_int(val, (int32_t)ps_num(song.sel));
+        draw_column(2, "PAT", val, "", VAL(2u), -1, ICON_AUTO);
         draw_column(3, "FOLLOW", hvw.nofollow ? "OFF" : "ON", "", hvw.nofollow ? T_DIM : VAL(3u), -1, ICON_AUTO);
         return;
     }

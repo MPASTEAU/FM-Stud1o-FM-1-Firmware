@@ -1002,7 +1002,7 @@ static const step_t *seq_next_step(const track_t *t, uint32_t idx, uint32_t len)
             return 0;
         return &chain.source[b].step[k][0];
     }
-    return &seq_steps(t)[(idx + 1u) % len];
+    return &seq_play_steps(t)[(idx + 1u) % len];
 }
 static __attribute__((noinline)) int seq_same_next(const track_t *t, uint32_t idx, uint32_t len)
 {
@@ -1024,7 +1024,7 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     uint32_t vel = (s->flags & SF_ACCENT) ? 127u : (s->vel ? s->vel : 96u);
     uint32_t slide_in = t->seq_hold && t->seq_n && !(skip & SEQ_REP);
     uint32_t len = t->p[P_SLEN] ? (uint32_t)t->p[P_SLEN] : 1u;
-    uint32_t next_tie = seq_steps(t)[(idx + 1u) % len].time == ST_TIE;
+    uint32_t next_tie = seq_play_steps(t)[(idx + 1u) % len].time == ST_TIE;
     uint32_t hits = step_ratchet(s);
     uint8_t nn[4 + NLANE], vv[4 + NLANE];           /* the notes it plays: its notes, then its hits */
     uint32_t m = 0, sk = 0, sl, over;
@@ -1202,7 +1202,7 @@ static __attribute__((noinline)) void seq_audition(void)
  * The step is read again: an edit to fewer parts (or another source in a song) ends the repeats */
 static __attribute__((noinline)) void seq_ratchet(track_t *t, uint32_t period)
 {
-    const step_t *s = &seq_steps(t)[t->seq_idx];
+    const step_t *s = &seq_play_steps(t)[t->seq_idx];
     uint32_t hits = step_ratchet(s);
     if (t->rat_left >= hits) {
         t->rat_left = 0;
@@ -1230,7 +1230,7 @@ static int32_t seq_nudge(const track_t *t, const step_t *s)
  * and KEY (mod.c mod_time). Not inlined: once a step, off the audio ISR's loop */
 static __attribute__((noinline)) uint32_t seq_time(track_t *t, uint32_t idx, uint32_t period)
 {
-    const step_t *s = &seq_steps(t)[idx];
+    const step_t *s = &seq_play_steps(t)[idx];
     uint32_t vel = (s->flags & SF_ACCENT) ? 127u : (s->vel ? s->vel : 96u);
     if (s->time != ST_NOTE || (!s->n && !s->hit) || step_ratchet(s) != 1u)
         return 0;
@@ -1241,7 +1241,7 @@ static __attribute__((noinline)) uint32_t seq_time(track_t *t, uint32_t idx, uin
 static const motion_store_t *chain_motion(const track_t *t)
 {
     uint32_t s = chain.lane[trk_index(t)];
-    return !chain.running ? &motion : s != CHAIN_SILENT ? &chain.source[chain.cur].motion : 0;
+    return !chain.running ? ((seq_off >> trk_index(t)) & 1u ? 0 : &motion) : s != CHAIN_SILENT ? &chain.source[chain.cur].motion : 0;
 }
 
 /* step idx plays: its chance (the one roll, as seq_step made it: a step that does not play applies no lock), the
@@ -1249,7 +1249,7 @@ static const motion_store_t *chain_motion(const track_t *t)
  * already sounds left out (rskip), then its notes. On its start, or (NUDGE) at its start + its nudge */
 static __attribute__((noinline)) void seq_play(track_t *t, uint32_t idx, uint32_t period)
 {
-    const step_t *s = &seq_steps(t)[idx];
+    const step_t *s = &seq_play_steps(t)[idx];
     const motion_store_t *m = chain_motion(t);
     uint32_t skip = SEQ_ROLLED, i, k;
     if (seq_miss(t, s, idx))
@@ -1313,14 +1313,14 @@ static __attribute__((noinline)) void seq_nd_start(track_t *t, uint32_t period, 
         ;                                           /* (it played early) */
     } else {                                        /* late by its NUDGE and (1.5.6) the matrix's TIME */
         uint32_t h = seq_time(t, t->seq_idx, period);
-        d = seq_nudge(t, &seq_steps(t)[t->seq_idx]);
+        d = seq_nudge(t, &seq_play_steps(t)[t->seq_idx]);
         if (d > 0 || h)
             t->nd_late = (uint32_t)(d > 0 ? d : 0) * period / NUDGE_DIV + h + 1u;
         else
             seq_play(t, t->seq_idx, period);
     }
     t->nd_fired = 0;
-    if ((!chain.running || nx) && (d = seq_nudge(t, &seq_steps(t)[nx])) < 0) {
+    if ((!chain.running || nx) && (d = seq_nudge(t, &seq_play_steps(t)[nx])) < 0) {
         uint32_t at = step_samples(t, period, t->seq_idx), back = (uint32_t)-d * period / NUDGE_DIV;
         at = (at > back ? at - back : 0u) + 1u;
         t->nd_early = at < t->nd_late ? t->nd_late : at;   /* (never before this step's own late play) */

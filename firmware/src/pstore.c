@@ -577,6 +577,7 @@ static void ps_reset(void)                              /* no pattern but the on
     ps_used = 0;
     ps_gen++;
     memset(ps_cur, 0, sizeof ps_cur);
+    seq_off = 0;                                        /* (Dah: every track on its pattern again) */
 }
 
 /* HA HA HE HU: section r's patterns into buffer b (main loop: chain_prepare, chain_poll; Dah: the buffers in turn, the

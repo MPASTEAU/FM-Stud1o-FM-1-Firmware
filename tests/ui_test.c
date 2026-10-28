@@ -9884,13 +9884,17 @@ static int test_home_view(void)
     }
     turn(EN_K4, 1);
     ok &= !hvw.nofollow;
+    turn(EN_K3, -1);                                    /* (Dah) KNOB 3: the track on no pattern ("-") */
+    ok &= (seq_off & 1u) && seq_play_steps(&trk[0]) == chain_silent && seq_steps(&trk[0]) == trk[0].step;
+    turn(EN_K3, 1);
+    ok &= !(seq_off & 1u) && ps_num(0) == 1u && seq_play_steps(&trk[0]) == trk[0].step;
     fm1_in.buttons = 0; frame();
     ok &= !hvw.on && song.octave == 0;
     turn(EN_K2, -1);                                    /* (closed: KNOB 2 is HOME's again) */
     ok &= hvw_cols_ok(16u);
     ui_home_view = 0;
     hvw.zoom = 1; hvw.at = -1;
-    return check("HOME TRACKS OCT+ held (Dah): the VIEW (MOVE, ZOOM 8..64 steps, FOLLOW); let go: closed, no octave", ok);
+    return check("HOME TRACKS OCT+ held (Dah): the VIEW (MOVE, ZOOM 8..64 steps, PAT: the track's, - none, FOLLOW); let go: closed, no octave", ok);
 }
 static int test_glo_pattern(void)
 {
