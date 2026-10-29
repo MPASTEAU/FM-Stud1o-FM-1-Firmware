@@ -1920,12 +1920,11 @@ static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
     *cur = preset_pos(&n);
     return n;
 }
-static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, int32_t y, int32_t h, uint32_t dist)
+static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, int32_t y, int32_t h, uint32_t dq, int sel)
 {
     char tag[6] = {0}, nm[16] = {0};
-    int sel = dist == 0u;
-    const aafont_t *f = dist <= 1u ? &AF_M : &AF_S;
-    uint16_t ink = dist == 0u ? T_TEXT : dist == 1u ? T_TEXT : dist == 2u ? T_MID : T_DIM, tc = T_MID, bg = T_BG;
+    const aafont_t *f = dq < 384u ? &AF_M : &AF_S;      /* (dq: its distance from the middle, 1/256 rows) */
+    uint16_t ink = dq < 384u ? T_TEXT : dq < 640u ? T_MID : T_DIM, tc = T_MID, bg = T_BG;
     int32_t ty = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), nx = 52;
     if (sel) {
         bg = T_RAISE;
@@ -1983,12 +1982,39 @@ static uint32_t fl_sig(void)                           /* what the full list sho
     return kind * 7919u + cur * 131u + n * 104729u + ps_gen * 31u + ux.gen * 3u + TSEL->eng_req * 977u +
            TSEL->preset * 1009u + trk_count() * 15485863u + mx_master * 2u;
 }
-static void draw_list_full(void)
+/* (Dah) the list's place on screen, 1/256 rows, gliding to the one picked (a third of the way a frame) */
+static int32_t fl_pos, fl_tgt;
+static uint32_t fl_last = 0xFFu;
+static int fl_moving(void) { return fl_pos != fl_tgt; }
+static int32_t fl_h(int32_t dq)                         /* a row's height at its distance (1/256 rows), between FL_H's */
+{
+    int32_t k = dq >> 8, fr = dq & 255;
+    if (k >= 4)
+        return FL_H[4];
+    return FL_H[k] + (FL_H[k + 1] - FL_H[k]) * fr / 256;
+}
+static void draw_list_full(int fresh)
 {
     uint8_t nums[PS_NUM];
-    uint32_t kind = fl_kind(), cur, n = fl_count(kind, &cur, nums), half, d;
-    int32_t mid = FL_TOP + (240 - FL_TOP) / 2;
+    uint32_t kind = fl_kind(), cur, n = fl_count(kind, &cur, nums), half;
+    int32_t mid = FL_TOP + (240 - FL_TOP) / 2, c0, f, d, top0;
     char t[24];
+    fl_tgt = (int32_t)cur * 256;
+    if (fresh || kind != fl_last || fl_pos < 0 || fl_pos > (int32_t)n * 256)
+        fl_pos = fl_tgt;
+    else if (fl_pos != fl_tgt) {
+        d = (fl_tgt - fl_pos) / 3;
+        if (d > -24 && d < 24)
+            d = fl_tgt > fl_pos ? 24 : -24;
+        fl_pos = (d > 0 ? fl_pos + d > fl_tgt : fl_pos + d < fl_tgt) ? fl_tgt : fl_pos + d;
+    }
+    fl_last = kind;
+    c0 = fl_pos >> 8;
+    f = fl_pos & 255;
+    {   /* the row at c0: its top, the middle moved by the way it has gone towards the next */
+        int32_t h0 = fl_h(f), h1 = fl_h(256 - f);
+        top0 = mid - f * ((h0 + h1) / 2 + 1) / 256 - h0 / 2;
+    }
     str_cpy(t, kind == FL_PAT ? "PATTERN " : kind == FL_TRK ? "TRACK " : "SOUND ", sizeof t);
     fmt_int(t + str_len(t), (int32_t)cur + 1);
     str_cpy(t + str_len(t), "/", 2);
@@ -2002,21 +2028,20 @@ static void draw_list_full(void)
             GFX_HOOK_ALIGN(0, mid - 10, 0, mid + 10, AL_V, "full list row on its middle");
             cv_text(14, mid - 10 + CAP_IN(S, 20), &AF_S, "NOTHING IN THIS LIST", T_MID);
         } else {
-            int32_t y = mid - FL_H[0] / 2;
-            fl_row(kind, cur, n, nums, y, FL_H[0], 0);
-            for (d = 1; ; d++) {                         /* above it */
-                int32_t h = FL_H[d < 5u ? d : 4u];
-                y -= h + 1;
-                if (y < FL_TOP || d > cur)
+            int32_t i, y = top0;
+            for (i = c0; i >= 0; i--) {                 /* the row at c0 and those above it */
+                int32_t dq = fl_pos - i * 256, h = fl_h(dq < 0 ? -dq : dq);
+                if (i < c0)
+                    y -= h + 1;
+                if (y < FL_TOP)
                     break;
-                fl_row(kind, cur - d, n, nums, y, h, d);
+                if ((uint32_t)i < n)
+                    fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)(dq < 0 ? -dq : dq), (uint32_t)i == cur);
             }
-            y = mid + FL_H[0] / 2 + 1;
-            for (d = 1; ; d++) {                         /* under it */
-                int32_t h = FL_H[d < 5u ? d : 4u];
-                if (y + h > 240 || cur + d >= n)
-                    break;
-                fl_row(kind, cur + d, n, nums, y, h, d);
+            y = top0 + fl_h(f) + 1;
+            for (i = c0 + 1; (uint32_t)i < n && y < 240; i++) {   /* under it */
+                int32_t dq = i * 256 - fl_pos, h = fl_h(dq);
+                fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)dq, (uint32_t)i == cur);
                 y += h + 1;
             }
         }

@@ -2287,8 +2287,8 @@ static void ui_draw_page(uint32_t counting)
         if (on) {
             static uint32_t lsig;
             uint32_t sg = fl_sig();
-            if (!was || ui.force || sg != lsig)
-                draw_list_full();
+            if (!was || ui.force || sg != lsig || fl_moving())   /* (gliding: every frame) */
+                draw_list_full(!was);
             lsig = sg;
             was = on;
             ui.force = 0;
