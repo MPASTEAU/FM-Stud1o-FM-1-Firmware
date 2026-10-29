@@ -2022,11 +2022,7 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
     const aafont_t *f = dq < 384u ? &AF_M : &AF_S;      /* (dq: its distance from the middle, 1/256 rows) */
     uint16_t ink = dq < 384u ? T_TEXT : dq < 640u ? T_MID : T_DIM, tc = T_MID, bg = T_BG;
     int32_t ty = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), nx = 52;
-    if (sel) {                                          /* (Dah: left of the scrollbar) */
-        cv_rrect(4, y, 224, h, -8, T_THEME, T_BG);       /* (Dah: an outline only, its corners round: -8 in every
-                                                         * style) */
-        cv_rrect(6, y + 2, 220, h - 4, -6, bg, T_THEME);
-    }
+    (void)sel;                                          /* (Dah: the frame stays in the middle, draw_list_full) */
     if (kind == FL_PAT) {
         uint8_t tmp[PS_NUM];
         (void)n;
@@ -2148,6 +2144,11 @@ static void draw_list_full(int fresh)
             int32_t by = CAP_IN(L, FL_TOP) + AF_L_CAP_Y + AF_L_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;
             if (pl[0])
                 cv_text(x + 6, by, &AF_S, pl, T_MID);
+        }
+        if (n) {                                        /* (Dah) the frame fixed in the middle, the rows gliding through
+                                                         * it: an outline only, round (left of the scrollbar) */
+            cv_rrect(4, mid - FL_H[0] / 2, 224, FL_H[0], -8, T_THEME, T_BG);
+            cv_rrect(6, mid - FL_H[0] / 2 + 2, 220, FL_H[0] - 4, -6, T_BG, T_THEME);
         }
         if (!n) {
             GFX_HOOK_ALIGN(0, mid - 10, 0, mid + 10, AL_V, "full list row on its middle");
