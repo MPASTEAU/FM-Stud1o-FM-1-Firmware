@@ -1841,6 +1841,8 @@ static void preset_step(int32_t direction)
         d = direction > 0 ? 1 : -1;
     preset_go(cur >= total ? (direction > 0 ? 0 : total - 1) :
               (uint32_t)(((int32_t)cur + d + (int32_t)total * 8) % (int32_t)total));
+    if (!song.playing && !chain_busy())                 /* (Dah) stopped: the sound heard (seq.c seq_preview) */
+        pv_req = (uint8_t)(song.sel + 1u);
 }
 
 /* HOME: the track KNOB k edits (MENU > HOME LEVELS, 1.5: track k; else the selected one) and what: the engine's four

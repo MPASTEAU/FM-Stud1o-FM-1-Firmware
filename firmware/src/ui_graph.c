@@ -263,10 +263,8 @@ static void pr_bars(const step_t *st, int32_t x, int32_t w, uint16_t c, int acc_
             pr_split(x, PR_Y0, w, 1, c, hits);
         else if (y >= ybot)
             pr_split(x, ybot - 1, w, 1, c, hits);
-        else if (acc)
-            pr_split(x, y, w, PR_RH, c == T_ACCENT ? c : T_TEXT, hits);
-        else
-            pr_split(x, y + 1, w, PR_RH - 2, c, hits);
+        else                                          /* (Dah) a cell, the row's height (as HOME's steps) */
+            pr_split(x, y, w, PR_RH - 1, acc && c != T_ACCENT ? T_TEXT : c, hits);
     }
 }
 static void graph_roll(const track_t *t, uint16_t c)
@@ -347,8 +345,8 @@ static void graph_roll(const track_t *t, uint16_t c)
         if (s == si)
             pr_bars(st, x + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, col, (st->flags & SF_ACCENT) != 0u, &y,
                     step_ratchet(st));
-        else                                          /* a TIE: the bars on through the gap before */
-            pr_bars(st, x - 1, w, col, (st->flags & SF_ACCENT) != 0u, &y, 1u);
+        else                                          /* a TIE (Dah): a cell of its own, fainter (as HOME's) */
+            pr_bars(st, x + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, ux_mix(T_SURF, col, 55), 0, &y, 1u);
         if ((st->flags & SF_SLIDE) && step_ratchet(st) == 1u &&   /* (a ratcheted step never slides out) */
             ns->time == ST_NOTE && ns->n && y >= PR_Y0 && y < ybot) {
             int32_t ny = clamp(pr_row_y(ns->note[0]), PR_Y0, ybot - PR_RH);

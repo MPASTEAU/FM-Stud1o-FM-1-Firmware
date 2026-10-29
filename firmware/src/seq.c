@@ -1181,6 +1181,29 @@ static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *n
  * at the track's GATE (seq_tick lets it go, stopped too). A SLIDE or TIE after it does not hold it. Nothing is recorded:
  * the step is only read */
 static volatile uint16_t aud_req;
+/* (Dah) PRESETS turned, stopped: the new sound heard, a note on the selected track (pv_req: track + 1) for PV_MS, the
+ * last one let go first (a quick turn: each sound a moment, the last one whole); C4 (a DRUM kit: its kick) */
+#define PV_MS 350u
+static volatile uint8_t pv_req;
+static uint8_t pv_on, pv_note;
+static uint32_t pv_ms;
+static __attribute__((noinline)) void seq_preview(void)
+{
+    uint32_t i = pv_req;
+    if (pv_on && (i || fm1_ms - pv_ms > PV_MS)) {
+        trk_note_off(&trk[(pv_on - 1u) % NTRK], pv_note);
+        pv_on = 0;
+    }
+    if (!i)
+        return;
+    pv_req = 0;
+    if (song.playing || cin_left || --i >= NTRK)
+        return;
+    pv_note = trk[i].eng_req % NENGINES == ENGI_DRUM ? DRUM_LANE_NOTE[0] : 60u;
+    trk_note_on(&trk[i], pv_note, 100u);
+    pv_on = (uint8_t)(i + 1u);
+    pv_ms = fm1_ms;
+}
 static __attribute__((noinline)) void seq_audition(void)
 {
     uint32_t r = aud_req, i = (r & 0xFFu) - 1u, idx = r >> 8;
@@ -1603,6 +1626,8 @@ static void events_block(uint32_t n)
     }
     if (aud_req)
         seq_audition();                               /* (STEP PREVIEW: a step sounds, stopped) */
+    if (pv_req | pv_on)
+        seq_preview();                                /* (Dah: a sound picked, heard) */
     chain_tick(seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);
