@@ -2157,7 +2157,7 @@ static void ui_input(void)
         if (!ui.home && cur_page()->fam == FAM_FX)
             ok |= 1u << panel.btn[B_OCTUP] | 1u << panel.btn[B_OCTDN] | 1u << panel.btn[B_REC];
         if ((pressed & ~ok) || notes)
-            cards_say("MASTER: FX ONLY", "TURN ALGO FOR A TRACK");
+            cards_say("MASTER: FX ONLY", "\x02" "ALGORITHM\nFOR A TRACK");
         pressed &= ok;
         notes = 0;
         if (ui.home_t0) ui.home_t0 |= 2u;               /* (held: no tap, no hold) */
@@ -2524,7 +2524,7 @@ static void ui_input(void)
     }
     if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
         if (mx_master)
-            cards_say("MASTER: FX ONLY", "TURN ALGO FOR A TRACK");              /* (Dah: no sound to load there) */
+            cards_say("MASTER: FX ONLY", "\x02" "ALGORITHM\nFOR A TRACK");              /* (Dah: no sound to load there) */
         else if (detail_on() && !chain_busy())
             cursor_move(ui.cursor + s);                 /* (DETAIL: the cursor, its KNOB 1 CHANCE) */
         else if (lock_held())
@@ -2614,7 +2614,7 @@ static void ui_input(void)
             continue;
         }
         if (mx_master && (ui.home || (pg->fam != FAM_FX && pg->graph != GR_TRK))) {   /* (Dah) the MASTER: FX's pages */
-            cards_say("MASTER: PRESS FX", "OR TURN ALGO FOR A TRACK");
+            cards_say("MASTER: PRESS FX", "\x02" "ALGORITHM\nFOR A TRACK");
             continue;
         }
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */

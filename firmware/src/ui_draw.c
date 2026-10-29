@@ -1460,10 +1460,10 @@ static int32_t pop_wrap(const char *b, int32_t w, char out[2][40])   /* b on two
     while (b[i] && n < 2u) {
         char t[40];
         uint32_t j = i;
-        for (k = 0; b[j] && k < 39u; k++, j++) {     /* as many words as fit */
+        for (k = 0; b[j] && b[j] != '\n' && k < 39u; k++, j++) {   /* as many words as fit ("\n": a line ends) */
             t[k] = b[j];
             t[k + 1u] = 0;
-            if (b[j + 1u] == ' ' || !b[j + 1u]) {
+            if (b[j + 1u] == ' ' || b[j + 1u] == '\n' || !b[j + 1u]) {
                 if (text_w(&AF_M, t) > w && last)
                     break;
                 last = k + 1u;
@@ -1473,7 +1473,7 @@ static int32_t pop_wrap(const char *b, int32_t w, char out[2][40])   /* b on two
             last = k;
         str_cpy(out[n], b + i, last + 1u);
         i += last;
-        while (b[i] == ' ')
+        while (b[i] == ' ' || b[i] == '\n')
             i++;
         n++;
         last = 0;
@@ -1506,7 +1506,10 @@ static int msg_popup(void)
         a = LY_LONG[ly_hint][0];
         b = LY_LONG[ly_hint][1];
     }
-    nl = b[0] ? pop_wrap(b, W - 28, ln) : 0;
+    int knob = b[0] == '\x02';                         /* (Dah) "\x02": a knob drawn first (turn it) */
+    if (knob)
+        b++;
+    nl = b[0] ? pop_wrap(b, W - 28 - (knob ? 2 * KNOB_SMALL_R + 6 : 0), ln) : 0;
     H = 2 * 20 + AF_M_CAP_H + (nl ? 10 + 20 * nl - (20 - AF_M_CAP_H) : 0);   /* (the words' ink, 20 px over and under:
                                                          * centred both ways) */
     y0 = 120 - H / 2;
@@ -1533,8 +1536,17 @@ static int msg_popup(void)
     }
     if (nl) {
         int32_t k;
-        for (k = 0; k < nl; k++)
-            cv_text_in(0, ly + AF_M_CAP_H + 10 + 20 * k - AF_M_CAP_Y, W, &AF_M, ln[k], T_MID, T_SURF);
+        for (k = 0; k < nl; k++) {
+            int32_t yy = ly + AF_M_CAP_H + 10 + 20 * k;
+            if (knob && !k) {                           /* the knob, then its line, centred together */
+                int32_t r = KNOB_SMALL_R, kw = 2 * r + 6, tw = text_w(&AF_M, ln[0]), kx = (W - kw - tw) / 2;
+                int32_t cy = yy + AF_M_CAP_H / 2;
+                knob_arc(kx, cy - r, r, KNOB_SMALL_COV, KNOB_SMALL_ANG, -KA_END, 0, T_MID, T_TEXT, T_SURF);
+                cv_rect(kx + r, cy - r + 3, 1, r - 3, T_TEXT);   /* (its pointer, up) */
+                cv_text(kx + kw, yy - AF_M_CAP_Y, &AF_M, ln[0], T_MID);
+            } else
+                cv_text_in(0, yy - AF_M_CAP_Y, W, &AF_M, ln[k], T_MID, T_SURF);
+        }
     }
     lcd_fill(0, (uint32_t)card_y(), 240, (uint32_t)(240 - (int32_t)card_y()), T_BG);   /* (the page under it, quiet) */
     cv_blit((uint32_t)x0, (uint32_t)y0);
