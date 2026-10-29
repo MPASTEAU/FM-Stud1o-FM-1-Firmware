@@ -2418,6 +2418,9 @@ static void ui_input(void)
             }
         }
         if (so != sgw.on || ro != prv.on || ho != hvw.on) {
+            if (hvw.on && !ho)                          /* (Dah) HOME's VIEW closed: the rows follow the play again
+                                                         * (a MOVE in it held them only while it was open) */
+                hvw.nofollow = 0;
             sgw.on = so;
             prv.on = ro;
             hvw.on = ho;

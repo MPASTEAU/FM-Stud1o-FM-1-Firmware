@@ -418,7 +418,8 @@ static uint32_t large_kind(void)
            g == GR_SLICES || g == GR_EVENTS || (g >= GR_DLANE && g <= GR_DSYN5) ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
-#define home_bare() (ui.home && !ui.layer && large_kind() != LK_TALL)   /* (Dah) HOME: no footer, the panel down to the screen's foot,
+#define home_bare() ((ui.home || cur_page()->fam == FAM_FX) && !ui.layer && large_kind() != LK_TALL)   /* (Dah: HOME's
+                                                         * look, the FX pages too) */   /* (Dah) HOME: no footer, the panel down to the screen's foot,
                                                          * its cards knobs (HOME_CARD_H) */
 #define HOME_CARD_H 40
 #define HOME_HEAD_H 18                                  /* (Dah) HOME's header: one size of text, lower */
@@ -1895,6 +1896,8 @@ static const param_desc_t *home_param(uint32_t k, int16_t **vp)
 }
 
 /* select track i (KNOB 1 on TRACKS, the editor): its sound, pages and pattern from now on */
+static int8_t oct_trk[NTRK];                            /* (Dah) each track's octave (the keys': a sub two down, the
+                                                         * plucks one up), back when it is selected again */
 static void track_select(uint32_t i)
 {
     if (i < trk_count() && mx_master) {
@@ -1905,6 +1908,8 @@ static void track_select(uint32_t i)
         return;
     if ((mix_solo >> (song.sel % NTRK)) & 1u)          /* (Dah) the track soloed: the SOLO goes along, the others normal */
         mix_solo = (uint8_t)(1u << (i % NTRK));
+    oct_trk[song.sel % NTRK] = (int8_t)song.octave;     /* (Dah: the octave goes with the track) */
+    song.octave = oct_trk[i % NTRK];
     song.sel = (uint8_t)i;
     ui.entry_open = 0;
     ui.hot_t = 0;

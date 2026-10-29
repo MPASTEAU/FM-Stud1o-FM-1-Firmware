@@ -439,7 +439,8 @@ static void sound_name(const track_t *t, char *b);
 static struct { uint8_t voices, cpu; uint32_t t; } hld;
 static void head_home(void)
 {
-    char pn[16], sl[3], num[4] = {0}, ch[2], bp[12];
+    char pn[16], sl[3], num[4] = {0}, ch[2], bp[12], ti[20];
+    int32_t lw;
     uint32_t k = song.sel % NTRK, sig;
     uint16_t tc = mx_master ? T_TEXT : ux.trk[k];
     const char *en = mx_master ? "MASTER" : ENGINES[TSEL->eng_req % NENGINES]->name;
@@ -466,7 +467,8 @@ static void head_home(void)
     sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
                          (uint32_t)song.rec * 977u + tc * 13u + (ui.msg_t ? str_hash(5u, ui.msg) : 0u) * 7u +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
-                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u);
+                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
+                         (ui.home ? 0u : ui.page + 1u) * 3141592653u);
     if (!ui.force && sig == ui.head_sig)
         return;
     ui.head_sig = sig;
@@ -479,8 +481,13 @@ static void head_home(void)
         cv_text(xr - w, ty, &AF_S, bp + 4, ui.bpm_t ? T_ACCENT : T_TEXT);
         xr -= w + 8;
     }
+    if (ui.home)                                        /* (the page's name: what the left side needs) */
+        str_cpy(ti, "HOME", sizeof ti);
+    else
+        page_title(ti);
+    lw = 6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 + 4;
     {   /* (Dah) the load: the voices sounding of the budget ("6/8"), the audio's CPU ("42%"), read every HL_MS; the
-         * accent when the budget is full or the CPU over 85 % */
+         * accent when the budget is full or the CPU over 85 %. Not where the page's name leaves no room for it */
         char lv[8], lc[8];
         int32_t w;
         fmt_int(lv, (int32_t)hld.voices);
@@ -488,11 +495,13 @@ static void head_home(void)
         fmt_int(lv + str_len(lv), NVOICE);
         fmt_int(lc, (int32_t)hld.cpu);
         str_cpy(lc + str_len(lc), "%", 2);
-        GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-        xr = cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG) - 6;
         w = text_w(&AF_S, lv);
-        cv_text(xr - w, ty, &AF_S, lv, hld.voices >= NVOICE ? T_ACCENT : T_MID);
-        xr -= w + 8;
+        if (xr - text_w(&AF_S, lc) - 6 - w - (song.rec ? 14 : 0) >= lw) {
+            GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
+            xr = cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG) - 6;
+            cv_text(xr - w, ty, &AF_S, lv, hld.voices >= NVOICE ? T_ACCENT : T_MID);
+            xr -= w + 8;
+        }
     }
     if (song.rec) {                                     /* REC: a dot, filled the selected track armed, a ring another */
         cv_rrect(xr - 8, (hh - 8) / 2, 8, 8, 4, T_REC, T_BG);
@@ -501,7 +510,7 @@ static void head_home(void)
         xr -= 14;
     }
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-    x = cv_text(6, ty, &AF_S, "HOME", T_MID) + 8;       /* the page */
+    x = cv_text(6, ty, &AF_S, ti, T_MID) + 8;            /* the page (its place in its family: "DIST 2/5") */
     if (ui.msg_t) {                                     /* a message: over the rest */
         cv_free_text(x, ty, &AF_S, ui.msg, T_TEXT, T_BG, xr - x);
         cv_blit(0, Y_HEAD);
@@ -525,19 +534,22 @@ static void home_foot(void)
     char pn[16];
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig;
-    static const khint_t KH[2] = {{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}};
+    static const khint_t KH[3][2] = {{{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}},   /* HOME */
+                                     {{KC_OCTUP, "OPEN"}, {KC_REC, "DEL"}},      /* FX > CHAIN: the effect picked */
+                                     {{KC_FX, "NEXT"}, {KC_SELECT, "PAT"}}};     /* an effect's page */
+    uint32_t hk = ui.home ? 0u : cur_page()->id[0] == P_FXORD ? 1u : 2u;
     if (mx_master)
         str_cpy(pn, "FX", sizeof pn);
     else
         sound_name(TSEL, pn);
-    sig = str_hash(77u + mx_master, pn) + (uint32_t)ux.gen * 31u;
+    sig = str_hash(77u + mx_master, pn) + (uint32_t)ux.gen * 31u + hk * 7919u;
     if (!ui.force && sig == fsig)
         return;
     fsig = sig;
     lcd_fill(0, (uint32_t)y0 - 2u, 240, 2, T_BG);
     cv_begin(240, HOME_FOOT_H, T_BG);
-    x = cv_key_hint(4, (HOME_FOOT_H - KC_H) / 2, KH[0].key, KH[0].act, 1, T_BG) + 8;
-    x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, KH[1].key, KH[1].act, 1, T_BG) + 10;
+    x = cv_key_hint(4, (HOME_FOOT_H - KC_H) / 2, KH[hk][0].key, KH[hk][0].act, 1, T_BG) + 8;
+    x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, KH[hk][1].key, KH[hk][1].act, 1, T_BG) + 10;
     w = text_w(&AF_S, pn);                              /* (the preset's name alone) */
     if (w > 236 - x)
         w = 236 - x;
@@ -950,8 +962,9 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     uint16_t tc = T_THEME;
     const aafont_t *vf = &AF_M;
     uint32_t n;
-    str_cpy(nm, label, 12);                             /* the name, its unit after it ("ATK ms") */
-    if (unit[0] && !str_eq(unit, label)) {
+    str_cpy(nm, label, 12);                             /* the name, its unit after it ("ATK ms"; too wide: the name
+                                                         * alone) */
+    if (unit[0] && !str_eq(unit, label) && text_w(&AF_S, label) + text_w(&AF_S, " ") + text_w(&AF_S, unit) <= COL_W - 4) {
         str_cpy(nm + str_len(nm), " ", 2);
         str_cpy(nm + str_len(nm), unit, 7);
     }
@@ -1019,7 +1032,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
                 GFX_HOOK_ALIGN(2, ly, COL_W - 2, ly + AF_S_CAP_H, AL_H, "knob card label centred");
             nm[nl] = 0;
             nx = cv_text(nx, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : T_TEXT);
-            if (unit[0] && !str_eq(unit, label))
+            if (unit[0] && !str_eq(unit, label) && text_w(&AF_S, label) + text_w(&AF_S, " ") + text_w(&AF_S, unit) <= COL_W - 4)
                 cv_text(nx + text_w(&AF_S, " "), ly - AF_S_CAP_Y, &AF_S, unit, T_MID);
         } else
             cv_free_text(2, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : T_TEXT, T_SURF, COL_W - 4);
