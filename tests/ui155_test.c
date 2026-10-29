@@ -3,7 +3,7 @@
 /* 1.5.5, fixes and UI, on the real UI sources (with the stubs of tests/ui_test.c):
  *   PAN        (#199) a bipolar value (-64..63, F_BIPCT) reads -100..+100 %: +100 at the top (was +98), the stored
  *              range and the sound unchanged; the MIXER strip's number the same
- *   (and AUTOMATION KNOB 3, SELECT PAGE, PROJECT ERASE, CLEAN INIT; OCT- on the press as in 1.5.1 (1.5.6: #205 taken
+ *   (and SELECT PAGE, PROJECT ERASE, CLEAN INIT; OCT- on the press as in 1.5.1 (1.5.6: #205 taken
  *   out), next to EUCLID, FILL)
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
@@ -42,64 +42,6 @@ static int pan_range(void)
     ok = fmt_is(&TP[P_M1AMT], 63, "+100") && fmt_is(&TP[P_ED_FLT], -64, "-100") &&
          TP[P_PAN].min == -64 && TP[P_PAN].max == 63 && TP[P_PAN].def == 0;
     bad += check("  every bipolar value the same (MOD AMT, ENV FLT); the stored range -64..63 as before", ok);
-    return bad;
-}
-
-/* --------------------------------------------- AUTOMATION's KNOB 3 --- */
-static uint32_t ev_at(uint32_t r) { uint16_t rw[EV_ROWS]; return r < ev_list(rw) ? rw[r] : 0xFFFFu; }
-static uint32_t ev_sel(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
-static void kslow(uint32_t role, int32_t s)        /* a knob turned by s detents, unaccelerated */
-{
-    memset(ui.enc_t, 0, sizeof ui.enc_t);
-    turn(role, s);
-}
-static int auto_k3(void)
-{
-    int bad = 0, ok = 1, i;
-    track_t *t;
-    uint32_t r0, c0, c1, id1;
-    ui_power_on();
-    song.sel = 0;
-    t = &trk[0];
-    track_defaults_steps(t);
-    t->p[P_SLEN] = 16;
-    go_home();
-    ui.cursor = 0;
-    go_page(GR_EVENTS);
-    frame();
-    kslow(EN_K1, 2);                                    /* + ADD on step 1: a lock of the page's first parameter */
-    press(B_OCTUP);
-    kslow(EN_K1, 1);
-    kslow(EN_K3, 3);                                    /* .. and one three parameters on */
-    press(B_OCTUP);
-    ok = motion_count(t) == 2u && (ev_at(2) >> 8) == EVK_REC && (ev_at(3) >> 8) == EVK_REC;
-    c0 = ev_at(2);
-    c1 = ev_at(3);
-    id1 = MOTION_ID(&motion.event[c1 & 0xFFu]);
-    ok &= MOTION_ID(&motion.event[c0 & 0xFFu]) < id1 && ui.ev_row == 3u && ev_sel() == c1;
-    bad += check("AUTOMATION: two locks on step 1, the second (a later parameter) selected", ok);
-    r0 = ui.ev_row;
-    for (i = 0; i < 8; i++) {                           /* KNOB 3 left, past the first one's parameter */
-        kslow(EN_K3, -1);
-        ok &= ui.ev_row == r0 && ev_sel() == c1 && ev_at(2) == c0 && ev_at(3) == c1;
-    }
-    ok &= MOTION_ID(&motion.event[c1 & 0xFFu]) < MOTION_ID(&motion.event[c0 & 0xFFu]);
-    bad += check("  KNOB 3 (#199): the row stays where it is and selected while its parameter goes past the other's",
-        ok);
-    ok = 1;
-    for (i = 0; i < 8; i++) {                           /* .. and back */
-        kslow(EN_K3, 1);
-        ok &= ui.ev_row == r0 && ev_sel() == c1 && ev_at(2) == c0;
-    }
-    ok &= MOTION_ID(&motion.event[c1 & 0xFFu]) > MOTION_ID(&motion.event[c0 & 0xFFu]);
-    bad += check("  and back to the right: no jump either way", ok);
-    kslow(EN_K1, -1);                                    /* the first record: its rows as they were */
-    ok = ev_sel() == c0;
-    for (i = 0; i < 4; i++) {
-        kslow(EN_K3, 1);
-        ok &= ui.ev_row == 2u && ev_sel() == c0 && ev_at(3) == c1;
-    }
-    bad += check("  the other row the same (a step's records listed in the order they were added)", ok);
     return bad;
 }
 
@@ -474,7 +416,7 @@ static int oct_layers(void)
 
 int main(void)
 {
-    int bad = pan_range() + auto_k3() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

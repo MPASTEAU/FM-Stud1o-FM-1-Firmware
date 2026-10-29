@@ -4,8 +4,7 @@
  *   CONDITIONS  a step's 1:2 .. 4:4 by the track's loops (each track its own LEN), counted from PLAY, RESTART, each SONG
  *               section; FILL / !FILL with GLO + E4 held (and the GLO lock); a NUDGE early step 1 the next loop's; a
  *               failed condition applies no lock; a step without one rolls its chance as before (the same draws)
- *   the knob    DETAIL's KNOB 1 past 100 % into the conditions (one a detent, a fast turn stops at 100), AUTOMATION's
- *               COND rows, the marks, EDIT back to 100 %
+ *   the knob    DETAIL's KNOB 1 past 100 % into the conditions (one a detent, a fast turn stops at 100), the marks, EDIT back to 100 %
  *   storage     FUN10 round trip (the chance byte 102..112), proj_bound, a byte past them refused; what 1.5 / 1.5.1 do
  *               with it (their proj_unpack's rule, copied: a project holding a condition is refused, one without loads)
  *   editor      STEP_SET / TRACK_STEP's condition byte (INFO 4B 01 0B), a chance of 100 without it keeps the condition
@@ -238,7 +237,7 @@ static int cond_nudge(void)
     }
 }
 
-/* DETAIL's KNOB 1 and AUTOMATION */
+/* DETAIL's KNOB 1 */
 static void go_page_title(const char *ti)
 {
     uint32_t i;
@@ -254,8 +253,6 @@ static int cond_ui(void)
 {
     int bad = 0, ok;
     track_t *t = melody(1u | 1u << 2);
-    uint16_t rw[EV_ROWS];
-    uint32_t n, r, found = 0;
     go_page(GR_ROLL);
     ui.cursor = 2;
     go_page_title("DETAIL");
@@ -279,12 +276,6 @@ static int cond_ui(void)
     kt(EN_K1, 4);
     ok &= step_cond(&t->step[2]) == 4u;                /* 2:3 */
     bad += check("  a fast turn stops at 100 % on the way in", ok);
-    go_page_title("AUTOMATION");
-    n = ev_list(rw);
-    for (r = 0; r < n; r++)
-        found |= rw[r] == EVC(EVK_CHANCE, 2);
-    ui.force = 1; frame();
-    bad += check("AUTOMATION: the condition is the step's CHANCE row (\"STEP 03 COND 2:3\")", found != 0u);
     go_page_title("DETAIL");
     ui.cursor = 2;
     press(B_EDIT);

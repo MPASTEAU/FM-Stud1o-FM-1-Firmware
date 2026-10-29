@@ -667,7 +667,7 @@ static int lock_ui(void)
     bad += check("from DIST: the knobs lock DRIVE COLOR OUT (Dah: IN its extras', none)", lock_id(0) == 0xFFu && lock_id(1) == P_DIST && lock_id(2) == P_DCOL);
     lk_down(k4); turn(EN_K2, 5); lk_up(k4);
     bad += check("  step 5 gets a DRIVE lock", motion_lock_get(t, 4, P_DIST, &v) && v == t->p[P_DIST] + 5);
-    go_auto_top();
+    go_page(GR_EVENTS);
     frame();
     bad += check("AUTOMATION: EVENT 0, LOCK 3", motion_count(t) - motion_lock_count(t) == 0u && motion_lock_count(t) == 3u);
     /* the roll: the step being entered is the one held */
@@ -751,15 +751,13 @@ static int lock_undo(void)
         motion_lock_count(t) == 1u);
     return bad;
 }
-/* 1.1.5: SEQ > AUTO LIST (ui_events.c); 1.2: the AUTOMATION page, its rows: PLAY, QUANTIZE, the records (and CHANCE / RATCH / NUDGE), + ADD */
-static uint32_t rows_n(void) { uint16_t rw[EV_ROWS]; return ev_list(rw); }   /* PLAY, QUANTIZE and + ADD included */
-static uint32_t row_at(uint32_t r) { uint16_t rw[EV_ROWS]; return r < ev_list(rw) ? rw[r] : 0xFFFFu; }
+/* (Dah) SEQ > AUTOMATION (ui_events.c): HOME's four knobs as lanes; KNOB k an event at the cursor, REC deletes */
 static int auto_list(void)
 {
-    int bad = 0, ok;
+    int bad = 0, ok, pt;
     int16_t v;
     track_t *t;
-    uint32_t id0, id1, i;
+    uint32_t id0 = 0xFFu, k0 = 4u, k, i;
     ui_power_on();
     song.sel = 0;
     t = &trk[0];
@@ -769,79 +767,42 @@ static int auto_list(void)
     cursor_set(4);
     go_page(GR_EVENTS);
     frame();
-    id0 = ui.ev_id;
-    ok = auto_cur() == EVC(EVK_TOP, 0) && str_eq(act_name(4), "CLEAR") && !act_ready();
-    turn(EN_K1, 2);                                      /* (past QUANTIZE, 1.2) */
-    bad += check("AUTOMATION: empty, PLAY then + ADD LOCK (on the SEQ cursor's step, the first knob of the sound page)",
-        ok && cur_page()->graph == GR_EVENTS && rows_n() == 3u && auto_cur() == EVC(EVK_ADD, 0) && ui.ev_step == 4u &&
-        id0 == lock_id(0) && str_eq(act_name(4), "ADD") && act_ready());
-    press(B_OCTUP);
-    bad += check("  OCT+: a lock on step 5 at the sound's own value, its row selected",
-        motion_lock_get(t, 4, id0, &v) && v == motion_base_value(t, id0) && ui.ev_row == 2u && auto_cur() >> 8 == EVK_REC &&
-        str_eq(ui.msg, "LOCK ADDED") && motion_enabled(t));
-    turn(EN_K4, 3);
-    bad += check("  KNOB 4: its value", motion_lock_get(t, 4, id0, &v) && v == motion_base_value(t, id0) + 3);
-    turn(EN_K2, 2);
-    bad += check("  KNOB 2: its step (5 -> 7), the value kept", !motion_lock_get(t, 4, id0, &v) &&
-        motion_lock_get(t, 6, id0, &v) && v == motion_base_value(t, id0) + 3);
-    turn(EN_K3, 1);
-    id1 = MOTION_ID(&motion.event[0]);
-    bad += check("  KNOB 3: the next parameter, from the sound's own value", id1 > id0 && ev_id_ok(t, id1) &&
-        motion_lock_get(t, 6, id1, &v) && v == motion_base_value(t, id1) && motion_count(t) == 1u);
-    press(B_OCTUP);
-    bad += check("  OCT+ on the row: LOCK -> AUTO", motion_count(t) == 1u && !motion_lock_count(t) &&
-        str_eq(act_name(4), "LOCK"));
-    press(B_OCTUP);
-    ok = motion_lock_count(t) == 1u;
-    press(B_OCTUP);
-    bad += check("  and back (AUTO -> LOCK -> AUTO)", ok && !motion_lock_count(t));
-    turn(EN_K1, 1);
-    turn(EN_K2, -2);
-    bad += check("  KNOB 1: + ADD LOCK; KNOB 2 there: its step", auto_cur() == EVC(EVK_ADD, 0) && ui.ev_step == 2u);
-    press(B_OCTUP);
-    bad += check("  OCT+: a second lock on step 3, first in the list (by step)", motion_count(t) == 2u &&
-        motion_lock_get(t, 2, ui.ev_id, &v) && rows_n() == 5u && ui.ev_row == 2u &&
-        (motion.event[row_at(2) & 0xFFu].place & 63u) == 2u);
-    turn(EN_K1, 5);
-    press(B_OCTUP);
-    bad += check("  OCT+ on + ADD LOCK where one is: ALREADY LISTED, that row selected", motion_count(t) == 2u &&
-        str_eq(ui.msg, "ALREADY LISTED") && ui.ev_row == 2u);
-    press(B_EDIT);
-    bad += check("  EDIT: the row's record goes", motion_count(t) == 1u && !motion_lock_get(t, 2, ui.ev_id, &v) &&
-        str_eq(ui.msg, "DELETED"));
-    hold(B_SAVE);
-    bad += check("  SAVE held: it is back", motion_count(t) == 2u);
-    hold(B_SAVE);
-    bad += check("  held again: gone again", motion_count(t) == 1u);
+    for (k = 0; k < 4u && k0 == 4u; k++)
+        if (au_id(k) != 0xFFu && track_desc(t, au_id(k))->fmt != F_ENUM)
+            k0 = k, id0 = au_id(k);
+    ok = k0 < 4u && ui.cursor == 4u && !act_cols() && !motion_count(t);
+    turn(EN_K1 + k0, 3);
+    ok &= motion_find(t, 4, id0) >= 0 && !motion_lock_count(t) && motion_enabled(t) && motion_count(t) == 1u &&
+          lane_value(t, 4, id0, &pt) == motion.event[0].value && pt;
+    bad += check("AUTOMATION: the SEQ cursor kept; KNOB k an automation event on lane k there", ok);
     frames(2000);
-    turn(EN_K1, -5);
-    turn(EN_K1, 2);                                      /* (the first record: the row after PLAY and QUANTIZE) */
     v = motion.event[0].value;
-    turn(EN_K4, 2); turn(EN_K4, 2); turn(EN_K4, 2);
-    ok = motion.event[0].value == v + 6;
+    turn(EN_K1 + k0, 2); turn(EN_K1 + k0, 2); turn(EN_K1 + k0, 2);
+    ok = motion.event[0].value != v;
     hold(B_SAVE);
-    bad += check("  KNOB 4 turned on (three turns): one undo", ok && motion.event[0].value == v);
+    bad += check("  KNOB turned on (three turns): one undo", ok && motion.event[0].value == v);
+    (void)motion_set_lock(t, 4, id0, 10);
+    turn(EN_K1 + k0, 1);
+    bad += check("  a lock there becomes an event, from the lock's value", motion_lock_count(t) == 0u &&
+        motion.event[motion_find(t, 4, id0)].value > 10);
     chain.running = 1;
-    turn(EN_K4, 1);
-    bad += check("  a song playing: STOP TO EDIT", motion.event[0].value == v && str_eq(ui.msg, "STOP TO EDIT"));
+    v = motion.event[motion_find(t, 4, id0)].value;
+    turn(EN_K1 + k0, 1);
+    bad += check("  a song playing: STOP TO EDIT", motion.event[motion_find(t, 4, id0)].value == v &&
+        str_eq(ui.msg, "STOP TO EDIT"));
     chain.running = 0;
     for (i = 0; motion.count < MOTION_MAX; i++)          /* the 128 used (track 2) */
         motion_set_event(&trk[1], i % NSTEP, i < NSTEP ? P_REV : P_DLY, 10);
-    turn(EN_K1, 5);
-    press(B_OCTUP);
-    bad += check("  the 128 used: OCT+ adds nothing, AUTOMATION FULL", motion_count(t) == 1u &&
-        str_eq(ui.msg, "AUTOMATION FULL") && !act_ready());
+    cursor_set(7);
+    turn(EN_K1 + k0, 1);
+    bad += check("  the 128 used: nothing added, AUTOMATION FULL", motion_find(t, 7, id0) < 0 &&
+        str_eq(ui.msg, "AUTOMATION FULL"));
     motion_clear(&trk[1]);
-    for (i = 0; i < P_COUNT; i++)                        /* names: an id each, none of DIGITAL's, lanes on DRUM only */
-        if (ev_id_ok(t, i) && ((i >= P_FM1_ATK && i <= P_FM4_LEVEL) || (i >= P_LN0 && i <= P_LN7) || !motion_param(i)))
-            break;
-    bad += check("  KNOB 3's list: what motion records and the sound has (no OP ENV, no DRUM lanes off DRUM)", i == P_COUNT &&
-        ev_id_ok(&trk[3], P_LN0));
-    {
-        char a[12], b[12];
-        ev_name(t, P_ED_FLT, a); ev_name(t, P_LD_FLT, b);
-        bad += check("  names: ENV FLT / LFO FLT", str_eq(a, "ENV FLT") && str_eq(b, "LFO FLT"));
-    }
+    cursor_set(4);
+    press(B_REC);
+    ok = motion_find(t, 4, id0) < 0 && str_eq(ui.msg, "POINT DELETED");
+    hold(B_SAVE);
+    bad += check("  REC deletes the point at the cursor; SAVE held: back", ok && motion_find(t, 4, id0) >= 0);
     ui_prefs |= PREF_LARGE;
     bad += check("  MENU > LARGE: the list layout with labels in M (as the other lists)", large_kind() == LK_LABEL);
     ui_prefs &= ~PREF_LARGE;

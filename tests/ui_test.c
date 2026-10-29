@@ -397,33 +397,6 @@ static void go_page(uint32_t graph)               /* the page that draws graph *
     ui.page = (uint8_t)i;
     page_entered();
 }
-/* SEQ > AUTOMATION (1.2): its first row (PLAY, CLEAR); + ADD with id (a parameter, EV_CHANCE, EV_RATCH) on step */
-static void go_auto_top(void)
-{
-    go_page(GR_EVENTS);
-    ui.ev_row = 0;
-    ui.ev_keep = 0;
-}
-static void go_auto_add(uint32_t id, uint32_t step)
-{
-    go_page(GR_EVENTS);
-    ui.ev_row = 0xFFFFu;                          /* (ev_row: the last, + ADD) */
-    ui.ev_keep = 0;
-    ui.ev_id = (uint8_t)id;
-    ui.ev_step = (uint8_t)step;
-}
-/* the row showing c (EVC), selected; 0: not listed */
-static int auto_pick(uint32_t c)
-{
-    uint16_t rw[EV_ROWS];
-    uint32_t n = ev_list(rw), r;
-    for (r = 0; r < n && rw[r] != c; r++)
-        ;
-    if (r == n)
-        return 0;
-    ui.ev_row = (uint16_t)r;
-    return 1;
-}
 static int steps_are(const track_t *t, uint32_t n)  /* steps 1..16 = PATTERNS[n], 17..64 empty, LEN 16 */
 {
     uint32_t i;
@@ -2627,26 +2600,14 @@ static int test_presets_knob(void)
 }
 
 /* 1.2 (Discussion #153): the pages by button. HOME: HOME > MIXER > CLOCK; SEQ: STEP <-> AUTOMATION, held SEQ TOOLS
- * everywhere; GLO: SONG (GLOBAL became CLOCK, SYSTEM the MENU's); SAVE: USER -> PRESETS -> PHRASES -> PROJECT -> TOOLS (1.5). AUTOMATION's list edits a step's
- * CHANCE / RATCH (the step's own fields, nothing else), one undo each; a remembered page that left its family */
-static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const step_t *want)   /* the steps = ref, at: want */
-{
-    uint32_t i;
-    for (i = 0; i < NSTEP; i++)
-        if (memcmp(&t->step[i], i == at ? want : &ref[i], sizeof ref[i]))
-            return 0;
-    return 1;
-}
-static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
+ * everywhere; GLO: SONG (GLOBAL became CLOCK, SYSTEM the MENU's); SAVE: USER -> PRESETS -> PHRASES -> PROJECT -> TOOLS (1.5);
+ * a remembered page that left its family. (Dah) AUTOMATION: HOME's four knobs as lanes, SELECT KNOB 1..4 REC */
 static int test_page_cycles(void)
 {
     static const char *const SAVE_CYC[5] = {"FILE", "PATTERN", "USER", "PHRASES", "FILE"};   /* (1.5, #173;
                                                      * HA HA HE HU: FILE, the projects, then PATTERN, A..D) */
     int bad = 0, ok = 1;
-    uint32_t i, n0;
-    step_t ref[NSTEP], want;
-    int16_t p0[P_COUNT];
-    uint16_t rw[EV_ROWS];
+    uint32_t i;
     /* the cycles: each button's taps, in order */
     ui_power_on();
     for (i = 0; i < 5u; i++) {
@@ -2711,80 +2672,56 @@ static int test_page_cycles(void)
     bad += check("1.2: a remembered page no longer in its family (or none) lands on the family's first; GLO always SONG, "
                  "HOME always the MIXER first", ok);
 
-    /* AUTOMATION: + ADD CHANCE / RATCH, the knobs, EDIT: the step's fields only */
-    ui_power_on();
-    my_steps(TSEL);
-    memcpy(ref, TSEL->step, sizeof ref);
-    memcpy(p0, TSEL->p, sizeof p0);
-    go_auto_top(); frame();
-    n0 = ev_list(rw);
-    ok = n0 == 3u && rw[0] == EVC(EVK_TOP, 0) && rw[1] == EVC(EVK_QNT, 0) && rw[2] == EVC(EVK_ADD, 0);
-    go_auto_add(EV_CHANCE, 3); frame();
-    press(B_OCTUP);
-    want = ref[3]; step_set_chance(&want, 50);
-    ok &= steps_but(TSEL, ref, 3, &want) && auto_cur() == EVC(EVK_CHANCE, 3) && msg_is("CHANCE ADDED") && !motion_count(TSEL);
-    bad += check("AUTOMATION + ADD CHANCE: step 4's CHANCE 50 %, nothing else; its row selected", ok);
-    turn(EN_K4, 10);
-    want = ref[3]; step_set_chance(&want, 60);
-    ok = steps_but(TSEL, ref, 3, &want);
-    turn(EN_K2, 1);                                     /* to step 5 (at its default): step 4 back to 100 % */
-    want = ref[4]; step_set_chance(&want, 60);
-    ok &= steps_but(TSEL, ref, 4, &want) && auto_cur() == EVC(EVK_CHANCE, 4);
-    bad += check("  KNOB 4 the CHANCE, KNOB 2 moves it to the next step (the old one back to 100 %)", ok);
-    hold(B_SAVE);
-    want = ref[3]; step_set_chance(&want, 60);
-    ok = steps_but(TSEL, ref, 3, &want) && !memcmp(TSEL->p, p0, sizeof p0);
-    hold(B_SAVE);
-    want = ref[4]; step_set_chance(&want, 60);
-    ok &= steps_but(TSEL, ref, 4, &want) && !memcmp(TSEL->p, p0, sizeof p0);
-    bad += check("  SAVE held: the move undone (the sound and LEN untouched); held again: redone", ok);
-    turn(EN_K4, 1000);                                  /* back at 100 %: the row stays while edited */
-    ok = steps_but(TSEL, ref, 0xFFu, 0) && auto_cur() == EVC(EVK_CHANCE, 4);
-    turn(EN_K1, -1);                                    /* (another row: it leaves the list) */
-    ok &= auto_cur() == EVC(EVK_QNT, 0) && ev_list(rw) == 3u;
-    bad += check("  at 100 % it stays listed while edited; another row picked: gone (nothing stored)", ok);
-    memcpy(ref, TSEL->step, sizeof ref);
-    go_auto_add(EV_RATCH, 6); frame();
-    press(B_OCTUP);
-    turn(EN_K4, 1); turn(EN_K4, 1); turn(EN_K4, 1);     /* x2 -> x4 (the end holds) */
-    want = ref[6]; step_set_ratchet(&want, 4);
-    ok = steps_but(TSEL, ref, 6, &want) && auto_cur() == EVC(EVK_RATCH, 6) && step_chance(&TSEL->step[6]) == 100u;
-    hold(B_SAVE);                                       /* the turn (one undo): x2 again */
-    want = ref[6]; step_set_ratchet(&want, 2);
-    ok &= steps_but(TSEL, ref, 6, &want);
-    hold(B_SAVE);
-    press(B_EDIT);                                      /* EDIT: back to x1 */
-    ok &= steps_but(TSEL, ref, 0xFFu, 0) && msg_is("DELETED");
-    hold(B_SAVE);
-    want = ref[6]; step_set_ratchet(&want, 4);
-    ok &= steps_but(TSEL, ref, 6, &want);
-    bad += check("AUTOMATION RATCH: + ADD x2, KNOB 4 to x4, EDIT x1; each one undo (SAVE held), the step's flags only", ok);
-    {   /* the order: PLAY, QUANTIZE, then by step (CHANCE, RATCH, NUDGE, the records), + ADD; a lock on the same step
-         * after them */
-        go_auto_add(EV_CHANCE, 6); frame(); press(B_OCTUP);
-        go_auto_add(EV_NUDGE, 6); frame(); press(B_OCTUP);
-        motion_set_lock(TSEL, 6, P_ATK, 3);
-        motion_set_lock(TSEL, 2, P_ATK, 5);
-        n0 = ev_list(rw);
-        ok = n0 == 8u && rw[0] == EVC(EVK_TOP, 0) && rw[1] == EVC(EVK_QNT, 0) && rw[2] >> 8 == EVK_REC &&
-             rw[3] == EVC(EVK_CHANCE, 6) && rw[4] == EVC(EVK_RATCH, 6) && rw[5] == EVC(EVK_NUDGE, 6) &&
-             rw[6] >> 8 == EVK_REC && rw[7] == EVC(EVK_ADD, 0);
-        go_auto_add(EV_CHANCE, 6); frame(); press(B_OCTUP);
-        ok &= msg_is("ALREADY LISTED") && auto_cur() == EVC(EVK_CHANCE, 6);
-        bad += check("  the rows: PLAY, QUANTIZE, by step (CHANCE, RATCH, NUDGE, then its locks / events), + ADD; one there: "
-                     "ALREADY LISTED", ok);
-        auto_pick(EVC(EVK_NUDGE, 6));
-        press(B_EDIT);                                  /* (the NUDGE out again: the rest as before) */
-        ok = step_nudge(&TSEL->step[6]) == 0;
-        bad += check("  EDIT on the NUDGE row: back to 0", ok);
+    {   /* (Dah) AUTOMATION: HOME's four knobs as lanes; SELECT the cursor, KNOB k lane k's point there, REC deletes */
+        track_t *t;
+        uint32_t k, k0 = 4u, k1 = 4u, id0 = 0xFFu, id1 = 0xFFu;
+        int32_t v0;
+        int pt;
+        ui_power_on(); t = TSEL;
+        go_page(GR_EVENTS); frame();
+        ok = act_cols() == 0u && ui.cursor == 0u;
+        for (k = 0; k < 4u; k++) {
+            uint32_t id = au_id(k);
+            ok &= id == 0xFFu || id == ENGINES[t->eng_req % NENGINES]->knob[k];
+            if (id != 0xFFu && track_desc(t, id)->fmt != F_ENUM) {
+                if (k0 == 4u) k0 = k, id0 = id;
+                else if (k1 == 4u) k1 = k, id1 = id;
+            }
+        }
+        ok &= k1 < 4u;
+        turn(EN_SELECT, 3); ok &= ui.cursor == 3u;
+        turn(EN_SELECT, -10); ok &= ui.cursor == 0u;
+        turn(EN_SELECT, 200); ok &= ui.cursor == (uint32_t)t->p[P_SLEN] - 1u;
+        bad += check("AUTOMATION: the lanes are HOME's four knobs; no action column; SELECT the cursor inside LEN", ok);
+        cursor_set(4); frame();
+        v0 = lane_value(t, 4, id0, &pt);
+        turn(EN_K1 + k0, 3);
+        ok = motion_find(t, 4, id0) >= 0 && lane_value(t, 4, id0, &pt) != v0 && pt && motion_enabled(t) &&
+             !(motion.event[motion_find(t, 4, id0)].param & MOTION_LOCK) && ui.hot_col == k0 && motion_count(t) == 1u;
+        ok &= lane_value(t, 5, id0, &pt) == lane_value(t, 4, id0, &pt) && lane_value(t, 3, id0, &pt) == v0;
+        hold(B_SAVE);
+        ok &= motion_find(t, 4, id0) < 0;
+        hold(B_SAVE);
+        ok &= motion_find(t, 4, id0) >= 0;
+        bad += check("  KNOB k: an event on lane k at the cursor from the lane's value, held after it; one undo", ok);
+        (void)motion_set_lock(t, 4, id1, track_desc(t, id1)->min);
+        ui.hot_t = 0; frame();
+        press(B_REC);
+        ok = motion_find(t, 4, id0) < 0 && motion_find(t, 4, id1) < 0 && msg_is("POINTS DELETED") && !song.rec;
+        press(B_REC);
+        ok &= msg_is("NO POINT HERE");
+        bad += check("  REC: the points at the cursor go (an event, a lock), none there: NO POINT HERE", ok);
+        (void)motion_set_event(t, 4, id1, track_desc(t, id1)->min);
+        turn(EN_K1 + k0, 1);
+        press(B_REC);
+        ok = motion_find(t, 4, id0) < 0 && motion_find(t, 4, id1) >= 0 && msg_is("POINT DELETED");
+        bad += check("  REC after a knob turned: that lane's point only", ok);
+        chain.running = 1;
+        turn(EN_K1 + k0, 2);
+        ok = motion_find(t, 4, id0) < 0 && msg_is("STOP TO EDIT");
+        chain.running = 0;
+        bad += check("  while a song plays: STOP TO EDIT, nothing changes", ok);
     }
-    memcpy(ref, TSEL->step, sizeof ref);
-    chain.running = 1;
-    auto_pick(EVC(EVK_CHANCE, 6));
-    turn(EN_K4, 5); press(B_EDIT);
-    ok = steps_but(TSEL, ref, 0xFFu, 0) && msg_is("STOP TO EDIT");
-    chain.running = 0;
-    bad += check("  while a song plays: STOP TO EDIT, nothing changes", ok);
     return bad;
 }
 
@@ -2884,27 +2821,22 @@ static int test_product_ux(void)
             ok &= !page_visible(i);
     bad += check("DIGITAL retired: engine 1 asked for loads FM6; the OP ENV / OP LEVEL pages never show", ok);
 #endif
-    ui_power_on(); go_auto_add(EV_CHANCE, 0); press(B_OCTUP); turn(EN_K4, 15);
-    bad += check("CHANCE is per step and starts at backward-compatible 100 percent", step_chance(&TSEL->step[0]) == 65 && step_chance(&TSEL->step[1]) == 100);
-    turn(EN_K4, -1000); ok = step_chance(&TSEL->step[0]) == 0;
-    turn(EN_K4, 1000); ok &= step_chance(&TSEL->step[0]) == 100;
-    bad += check("CHANCE controls clamp to 0..100 without changing adjacent steps", ok);
     ui_power_on(); song.rec = 1; seq_start(); go_home();
     int16_t baseline = TSEL->p[P_E0]; turn(EN_K1, 1);
     bad += check("REC plus a sound knob records motion through the UI", motion_count(TSEL) == 1 && motion_enabled(TSEL));
     press(B_PLAY); events_block(32);
     bad += check("stopping returns the original sound after a recorded knob gesture", TSEL->p[P_E0] == baseline);
-    go_auto_top(); turn(EN_K4, -1);
+    go_page(GR_EVENTS); motion_set_enabled(TSEL, 0);
     bad += check("#93 the page is AUTOMATION (GR_EVENTS inside)", str_eq(cur_page()->title, "AUTOMATION"));
     bad += check("MOTION playback OFF preserves its stored events", !motion_enabled(TSEL) && motion_count(TSEL) == 1);
-    press(B_OCTUP);
+    confirm_open(CF_CLEAR_MOTION, song.sel); frame();
     bad += check("MOTION clear always asks confirmation", ui.confirm == CF_CLEAR_MOTION && motion_count(TSEL) == 1);
     {
         char qa[24], qb[24];
         confirm_text(qa, qb);
         bad += check("#93   the dialog asks CLEAR T1 AUTOMATION?", str_eq(qa, "CLEAR T1 AUTOMATION?"));
     }
-    press(B_OCTDN); press(B_OCTUP); press(B_OCTUP);
+    press(B_OCTDN); confirm_open(CF_CLEAR_MOTION, song.sel); frame(); press(B_OCTUP);
     bad += check("confirmed MOTION clear removes events and SAVE hold restores them", motion_count(TSEL) == 0 &&
                  msg_is("AUTOMATION CLEARED"));
     hold(B_SAVE);
@@ -2920,10 +2852,10 @@ static int test_product_ux(void)
         bad += check("MOTION: a recorded knob marks its HOME card (and no other)", ok && motion_count(TSEL) == 1);
         song.rec = 0; press(B_PLAY); events_block(32); frame();
         ok = card_motion(0);
-        go_auto_top(); turn(EN_K4, -1); go_home(); frame();
+        motion_set_enabled(TSEL, 0); go_home(); frame();
         ok &= !card_motion(0) && motion_count(TSEL) == 1;
         bad += check("MOTION: PLAY OFF takes the icon off the card, the events stay", ok);
-        go_auto_top(); turn(EN_K4, 1); go_home(); frame();
+        motion_set_enabled(TSEL, 1); go_home(); frame();
         ok = card_motion(0);
         track_select(1); frame();
         ok &= !card_motion(0);                           /* (another track: its own motion, none) */
@@ -2935,7 +2867,7 @@ static int test_product_ux(void)
         motion_set_event(TSEL, 3, P_PAN, 20); frame();
         ok &= card_motion(1) && !card_motion(0) && !card_motion(2) && !card_motion(3);
         bad += check("MOTION: a mix parameter's event marks its MIXER card (PAN)", ok);
-        go_auto_top(); press(B_OCTUP); press(B_OCTUP);
+        confirm_open(CF_CLEAR_MOTION, song.sel); frame(); press(B_OCTUP);
         ok = motion_count(TSEL) == 0;
         go_home(); frame();
         ok &= !card_motion(0) && !card_motion(1);
@@ -4275,18 +4207,14 @@ static int test_bughunt_ui(void)
         tap_key(white(2));
         bad += check("AUTOMATION on a DRUM track: no grid (title, LEDs), a white key toggles no hit",
                      drum_track(TSEL) && !grid_on() && !keys_mode() && lane_steps(TSEL, ui.lane) == before);
-        ui_power_on(); go_auto_top(); frame();
+        ui_power_on(); go_page(GR_EVENTS); frame();
         my_steps(TSEL);
         s0 = TSEL->step[0];
         tap_key(white(5)); frame();
         ok = !memcmp(&s0, &TSEL->step[0], sizeof s0) && ui.cursor == 0u;
         press(B_EDIT);
         ok &= !memcmp(&s0, &TSEL->step[0], sizeof s0) && !msg_is("STEP CLEARED");
-        ui_power_on(); go_auto_add(EV_CHANCE, 0); frame();
-        s0 = TSEL->step[0];
-        press(B_OCTUP);                                 /* (100 % by default: + ADD CHANCE, 50 %) */
-        bad += check("AUTOMATION on a melodic track: a key writes no step, EDIT clears none; + ADD CHANCE the chance",
-                     ok && step_chance(&TSEL->step[0]) != step_chance(&s0));
+        bad += check("AUTOMATION on a melodic track: a key writes no step, EDIT clears none", ok);
         ui_power_on(); go_page(GR_ROLL); frame(); song.rec = 1;   /* (#133: armed, stopped) */
         tap_key(white(5)); frame();
         bad += check("  STEP still: armed, a key writes the cursor step", step_on(&TSEL->step[0]) || TSEL->step[0].n);
@@ -6638,8 +6566,7 @@ static int test_layer_knob_race(void)
                         continue;
                     if (mode == 2u && LB[l] == B_EDIT && pg < NPAGES &&   /* (EDIT's tap acts there: no lock) */
                         (PAGES[pg].graph == GR_USER || PAGES[pg].graph == GR_SLOTS || PAGES[pg].graph == GR_ROLL ||
-                         PAGES[pg].graph == GR_FILE ||          /* (HA HA HE HU: FILE, the project renamed) */
-                         PAGES[pg].graph == GR_EVENTS))
+                         PAGES[pg].graph == GR_FILE))           /* (HA HA HE HU: FILE, the project renamed) */
                         continue;
                     rc_run(LB[l], mode, k, pg, 0, &a0, &b0);
                     rc_run(LB[l], mode, k, pg, 1, &a1, &b1);
@@ -9386,14 +9313,6 @@ static int test_extras(void)
     turn(EN_K4, 1);
     ok &= trkx[0].smooth && lfo_wave(t, (3u << 28) + (1u << 27)) == (trkx[0].draw[3] * 520 + trkx[0].draw[4] * 520) / 2;
     bad += check("LFO DRAW: POINT VALUE (WAVE to DRAW) SHAPE (a template) SMOOTH (stepped / joined), as the LFO plays it", ok);
-
-    go_title("AUTOMATION"); frame();                 /* the PLAY row: KNOB 3 CURVE */
-    ok = cur_page()->graph == GR_EVENTS && !trkx[0].curve;
-    turn(EN_K3, 1);
-    ok &= trkx[0].curve == 1;
-    turn(EN_K3, -1);
-    ok &= trkx[0].curve == 0;
-    bad += check("AUTOMATION's PLAY row: KNOB 3 CURVE STEP (as always) / RAMP, the track's", ok);
 
     for (n = 0; n < 2u; n++) {                       /* REV 0 on step 1, 96 on step 9: halfway at step 5 (RAMP), 0 (STEP) */
         int16_t mid;

@@ -8,9 +8,8 @@
  *         before; the DRUM grid's KNOB 3 is still HIT. Played: one note-on, held to the end of its last TIE (as a
  *         recorded hold plays).
  *   VEL   step_t.vel as it plays (seq.c seq_step: 0 = 96, ACC 127, a DRUM step's accented hit 127, its other hits the
- *         step's); SEQ > AUTOMATION: no VEL rows until + ADD VEL's OCT+ (SHOW) lists every note step inside LEN, KNOB 4
- *         1..127, EDIT back to 96, SAVE held undoes, KNOB 2 nothing, HIDE / leaving the page hides them; a pattern
- *         untouched plays as before (the golden renders: tests/regress.c).
+ *         step's); SEQ > DETAIL's KNOB 4 1..127, SAVE held undoes; a pattern untouched plays as before (the golden
+ *         renders: tests/regress.c).
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
@@ -182,7 +181,6 @@ static int vel(void)
     int bad = 0, ok;
     uint32_t off, n;
     uint8_t v[8];
-    uint16_t rw[EV_ROWS];
     step_t ref[NSTEP];
     track_t *t;
 
@@ -209,47 +207,16 @@ static int vel(void)
     t->step[8].flags = SF_ACCENT;
     t->step[20] = (step_t){{70}, 1, ST_NOTE, 0, 30};                     /* past LEN */
     memcpy(ref, t->step, sizeof ref);
-    go_auto_top(); frame();
-    ok = ev_list(rw) == 3u;
-    go_auto_add(EV_VEL, 4); frame();
-    ok &= str_eq(act_name(4), "SHOW");
-    press(B_OCTUP);
-    n = ev_list(rw);
-    ok &= msg_is("VEL SHOWN") && n == 7u && rw[2] == EVC(EVK_VEL, 0) && rw[3] == EVC(EVK_VEL, 4) &&
-          rw[5] == EVC(EVK_VEL, 12) && auto_cur() == EVC(EVK_VEL, 4) && !memcmp(t->step, ref, sizeof ref);
-    bad += check("AUTOMATION: no VEL rows; + ADD VEL OCT+ (SHOW): one per note step inside LEN, nothing changed", ok);
+    go_page(GR_ROLL); cursor_set(4); go_title("DETAIL"); frame();   /* (Dah: SEQ > DETAIL's KNOB 4) */
+    memset(ui.enc_t, 0, sizeof ui.enc_t);
     turn(EN_K4, -10);
     ok = t->step[4].vel == 90u && same_but(t, ref, 4, 4);
     frames(2000);
     turn(EN_K4, 100);
     ok &= t->step[4].vel == 127u;
-    turn(EN_K2, 1);
-    ok &= t->step[4].vel == 127u && t->step[5].vel == 0u && auto_cur() == EVC(EVK_VEL, 4);
     hold(B_SAVE);
     ok &= t->step[4].vel == 90u;
-    bad += check("  KNOB 4 the step's velocity (1..127), KNOB 2 nothing; SAVE held: the turn undone", ok);
-    press(B_EDIT);
-    ok = t->step[4].vel == 0u && msg_is("VEL 96") && auto_cur() == EVC(EVK_VEL, 4) && ev_list(rw) == n;
-    for (n = 0; n < 20u; n++)
-        turn(EN_K4, -1);
-    ok &= t->step[4].vel == 76u;
-    bad += check("  EDIT: back to 96 (stored 0), the row stays", ok);
-    {   /* drawn: DIM where it does not play (the ACC step) */
-        ok = auto_pick(EVC(EVK_VEL, 8)) && !ev_vel_plays(&t->step[8]) && ev_vel_plays(&t->step[4]);
-        bad += check("  an ACC step's VEL does not play (DIM)", ok);
-    }
-    ui.ev_row = 0xFFFFu;                              /* + ADD, on the page (go_auto_add enters it again) */
-    ui.ev_id = EV_VEL;
-    frame();
-    ok = str_eq(act_name(4), "HIDE");
-    press(B_OCTUP);
-    ok &= msg_is("VEL HIDDEN") && ev_list(rw) == 3u;
-    press(B_OCTUP);
-    ok &= ev_list(rw) > 3u;
-    go_home(); frame();
-    go_auto_top(); frame();
-    ok &= ev_list(rw) == 3u;
-    bad += check("  HIDE hides them; leaving the page too", ok);
+    bad += check("DETAIL: KNOB 4 the cursor step's velocity (1..127), the others untouched; SAVE held: the turn undone", ok);
     return bad;
 }
 

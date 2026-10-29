@@ -724,6 +724,10 @@ static int rec_tap(void)                                /* 1: the arming changed
         ui.force = 1;                                   /* (Dah: no message, the header's dot says it) */
         return 1;
     }
+    if (g == GR_EVENTS) {                               /* (Dah) AUTOMATION: the point(s) at the cursor out */
+        au_delete();
+        return 0;
+    }
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
         if (chain_busy()) ui_message("STOP TO EDIT");
         else confirm_open(CF_DEL_PAT, ps_num(song.sel));
@@ -898,7 +902,7 @@ static void grid_keys(uint32_t pressed)
  * DRUM grid its white keys (several at once: each gets the lock; a press on a hit takes it away only when let go,
  * and not at all when it was held for a lock), on the roll the step being entered (its note keys held). [EDIT]
  * tapped meanwhile clears the held steps' locks (EDIT alone still clears the step, its locks with it). Not while a
- * song plays (STOP TO EDIT). A lock is a motion record (motion.c): AUTOMATION's PLAY plays it, CLEAR clears it */
+ * song plays (STOP TO EDIT). A lock is a motion record (motion.c), a point on SEQ > AUTOMATION's lanes */
 static uint64_t lock_held(void)
 {
     const track_t *t = TSEL;
@@ -1004,9 +1008,9 @@ static void lock_clear(uint64_t held)
 
 /* NUDGE (1.2, #162; core.h step_nudge): the steps `held` move by one sixteenth of a step (-8..+7) a detent: SEQ > STEP
  * with steps held (as for a lock: the grid's step keys, the roll's step being entered) and the PRESETS knob; let go,
- * PRESETS moves the cursor again (MENU > STEP PREVIEW: it sounds). SEQ > AUTOMATION's NUDGE rows (ui_events.c) are the
- * other way. They play with the track's QUANTIZE OFF (AUTOMATION's QUANTIZE row; ON, the default, plays every step on
- * its start: the message says so). One undo per turn (SAVE held), as AUTOMATION's */
+ * PRESETS moves the cursor again (MENU > STEP PREVIEW: it sounds). SEQ > DETAIL's KNOB 3 is the other way. They play
+ * with the track's QUANTIZE OFF (ON, the default, plays every step on its start: the message says so). One undo per
+ * turn (SAVE held) */
 static void nudge_turn(uint64_t held, int32_t steps)
 {
     uint32_t i;
@@ -1034,8 +1038,8 @@ static void nudge_turn(uint64_t held, int32_t steps)
 
 /* SEQ > DETAIL (1.5.1, Discussion #199; ui.c detail_on): KNOB 1 CHANCE (0..100 %, 1.5.5: then the conditions 1:2 ..
  * 4:4, FILL, !FILL, ui_events.c ev_chance_turn), 2 RATCH (x1..x4), 3 NUDGE (-8..+7
- * sixteenths), 4 VEL (1..127) of the cursor step, the fields SEQ > AUTOMATION lists as rows (ui_events.c ev_sval,
- * ev_sput: one storage, nothing new stored; back at its default a field is no row there). On the DRUM grid the white
+ * sixteenths), 4 VEL (1..127) of the cursor step, the step's own fields (ui_events.c ev_sval,
+ * ev_sput: one storage, nothing new stored). On the DRUM grid the white
  * keys held pick several steps: each moves by the turn. A step that plays nothing takes none (sd_takes: NO NOTE).
  * One undo per knob gesture on a step (SAVE held): walking to the next step starts another */
 static uint64_t sd_held(void)                           /* the grid's step keys held on DETAIL (bit = step), 0 none */
@@ -1283,8 +1287,8 @@ static void edit_param(uint32_t slot, int32_t steps)
     const page_t *pg = cur_page();
     const param_desc_t *d;
     int32_t v;
-    if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c) */
-        ev_knob(slot, steps);
+    if (pg->graph == GR_EVENTS) {                         /* AUTOMATION (ui_events.c): lane slot's point at the cursor */
+        au_knob(slot, steps);
         return;
     }
     if (pg->graph == GR_SONG && sgw.on) {             /* (Dah) VIEW: GRID (where PLAY starts), ZOOM, WINDOW, FOLLOW */
@@ -1481,10 +1485,6 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
-    if (cur_page()->graph == GR_EVENTS) {
-        ev_oct();
-        return;
-    }
     if (cur_page()->graph == GR_SONG) {                 /* (Dah) a section to add or to delete: done; else the VIEW is
                                                          * OCT+ held (ui_input) */
         uint32_t r = sg_prow, n = chain_config.count;
@@ -1720,7 +1720,7 @@ static void seq_entry(uint32_t pressed)
 }
 
 /* Discussions #92 / #94: the PRESETS knob by page (the menu, a dialog, NAME and the layers: ui_input before this).
- *   the SEQ pages (STEP and the DRUM grid: the step cursor; AUTOMATION: the row) and the list / action pages USER,
+ *   the list / action pages USER,
  *     PHRASES, PROJECT, SONG: as their KNOB 1 (the SEQ pages: a sound load there would drop the track's motion: never).
  *     1.2: with PATTERN, CHANCE and the old AUTOMATION gone, KNOB 1 is the cursor or the row on every SEQ page, so
  *     the PRESETS knob is no longer a second cursor where KNOB 1 was something else; TOOLS and SLICES: nothing
@@ -1742,8 +1742,7 @@ static void presets_turn(int32_t s)
         edit_param(0, s);
     } else if (g == GR_PATTERN || g == GR_FILE) {          /* (Dah) the list (its knobs are the actions) */
         g == GR_PATTERN ? pt_move(s) : file_move(s);
-    } else if (g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG ||
-               g == GR_EVENTS) {
+    } else if (g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
@@ -1865,7 +1864,7 @@ static void fx_sel_turn(int32_t s)
     tl_pat = 2;
 }
 /* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
- * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, PHRASES, SONG's sections, AUTOMATION's rows, STEP's
+ * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, PHRASES, SONG's sections, STEP's
  * cursor. On HOME and on a page with no list (ENV, LFO, ARP, SCL ..) the tempo (Dah) */
 static int sel_is_list(void)                           /* (Dah) the page shown has a list SELECT moves down */
 {
@@ -1954,10 +1953,6 @@ static int page_tap(uint32_t b)
         (void)motion_clear_locks(TSEL, ui.cursor);
         cursor_set(ui.cursor + 1);
         ui_message("STEP CLEARED");
-        return 1;
-    }
-    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_EVENTS) {   /* AUTOMATION: EDIT deletes the row's record */
-        ev_delete();
         return 1;
     }
     if (b == B_EDIT && !ui.home && cur_page()->graph == GR_FILE) {   /* (HA HA HE HU) FILE: EDIT renames the project open */
@@ -2525,6 +2520,9 @@ static void ui_input(void)
             ui.bpm_t = 40;
         } else if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
+        } else if (!glo && sel_mode() < SEL_MODW && !lay && !ui.home && !ui.menu && !ui.confirm &&
+                   cur_page()->graph == GR_EVENTS) {
+            au_select(s);                               /* (Dah) AUTOMATION: SELECT the step cursor */
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && !ui.home && sel_is_list() && (sel_mode() == SEL_PAGE || cur_page()->graph == GR_FILE ||

@@ -550,6 +550,12 @@ static uint32_t foot_rename(void);
 static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
 {
     *ok = 0;
+    if (!ui.home && cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION: SELECT the step, REC its point(s) out */
+        kh[0] = (khint_t){KC_SELECT, "STEP"};
+        kh[1] = (khint_t){KC_REC, "DEL"};
+        *ok = 1u | (au_del_mask() ? 2u : 0u);
+        return 2u;
+    }
     if (act_cols()) {
         uint32_t rn = foot_rename(), dl = foot_del(), nk;
         foot_hint(ha, hb);
@@ -579,7 +585,7 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
             *ok |= (dl == 2u ? 1u : 0u) << nk;
             nk++;
         } else if (rn) {
-            kh[nk] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
+            kh[nk] = (khint_t){KC_EDIT, "NAME"};
             *ok |= (rn == 2u ? 1u : 0u) << nk;
             nk++;
         }
@@ -1326,8 +1332,7 @@ static void foot_hint(char *a, char *b)
     str_cpy(b, ui.act && cur_page()->graph != GR_PATS ? "OCT- CANCEL" : "", 16);   /* (Dah: no BACK) */
 }
 
-/* SAVE > USER / PROJECT: EDIT renames the selected slot (ui_name.c); SEQ > AUTOMATION: EDIT deletes the row's
- * record (ui_events.c); 0 = not such a page, 1 an empty slot (PLAY, QUANTIZE, + ADD), 2 used */
+/* SAVE > USER / PROJECT: EDIT renames the selected slot (ui_name.c); 0 = not such a page, 1 an empty slot, 2 used */
 /* (Dah) the list pages: REC deletes the row picked; 0 none, 1 nothing there to delete, 2 something */
 static uint32_t foot_del(void)
 {
@@ -1339,11 +1344,6 @@ static uint32_t foot_del(void)
 static uint32_t foot_rename(void)
 {
     uint32_t g = ui.home ? GR_NONE : cur_page()->graph;
-    if (g == GR_EVENTS) {
-        uint16_t rw[EV_ROWS];
-        uint32_t k = ev_cur(rw, 0) >> 8;
-        return k == EVK_TOP || k == EVK_QNT || k == EVK_ADD ? 1u : 2u;
-    }
     if (g == GR_USER)
         return 1u + (uint32_t)up_used(ui.uslot);
     if (g == GR_SLOTS)
@@ -1506,7 +1506,7 @@ static void draw_foot_in(void)
             kh[nk] = (khint_t){KC_REC, "DELETE"};
             cv_key_left(8, 2, kh, nk + 1u, ok | (dl == 2u ? 1u : 0u) << nk, T_BG);
         } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" after them */
-            kh[nk] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
+            kh[nk] = (khint_t){KC_EDIT, "NAME"};
             cv_key_left(8, 2, kh, nk + 1u, ok | (rn == 2u ? 1u : 0u) << nk, T_BG);
         } else {
             cv_key_left(8, 2, kh, nk, ok, T_BG);
@@ -1786,93 +1786,24 @@ static void draw_columns_in(void)
         draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
         return;
     }
-    if (cur_page()->graph == GR_EVENTS) {              /* AUTOMATION (ui_events.c): ROW STEP PARAM VALUE */
+    if (cur_page()->graph == GR_EVENTS) {              /* (Dah) AUTOMATION: the four lanes' values at the cursor */
         const track_t *t = TSEL;
-        uint16_t rw[EV_ROWS];
-        uint32_t n, c = ev_cur(rw, &n), r = ev_row(n), k = c >> 8, step, id;
-        int16_t v;
-        char nm[12];
-        const param_desc_t *d;
-        if (k == EVK_TOP) {                            /* PLAY: the counts, PLAY ON / OFF (OCT+: CLEAR) */
-            draw_column(0, "ROW", "ALL", "", VAL(0u), -1, ICON_AUTO);
-            fmt_int(val, (int32_t)(motion_count(t) - motion_lock_count(t)));
-            draw_column(1, "EVENT", val, "", T_MID, -1, ICON_NONE);
-            draw_column(2, "CURVE", trkx[song.sel % NTRK].curve ? "RAMP" : "STEP", "", VAL(2u), -1, ICON_NONE);   /* (HA HA HE HU:
-                                                       * the events held or in lines; the locks counted in the list) */
-            draw_column(3, "PLAY", motion_enabled(t) ? "ON" : "OFF", "", VAL(3u), -1, motion_icon());
-            return;
-        }
-        if (k == EVK_QNT) {                            /* QUANTIZE (1.2): the steps with a NUDGE, QNTZ ON / OFF */
-            draw_column(0, "ROW", "ALL", "", VAL(0u), -1, ICON_AUTO);
-            (void)ev_nudged;
-            draw_column(1, "GRID", ui.ev_grid ? "1/8" : "STEP", "", VAL(1u), -1, ICON_NONE);   /* (HA HA HE HU) */
-            draw_column(2, "APPLY", "GO", "", VAL(2u), -1, ICON_NONE);   /* (KNOB 3 right) */
-            draw_column(3, "QNTZ", N_QNT[clamp(t->p[P_SQNT], 0, 4)], "", VAL(3u), -1, ICON_QUANTIZE);
-            return;
-        }
-        if (k == EVK_ADD) {
-            ev_fix();
-            str_cpy(val, "ADD", sizeof val);
-        } else {                                       /* "3/7": the rows between QUANTIZE and + ADD */
-            fmt_int(val, (int32_t)r - 1);
-            str_cpy(val + str_len(val), "/", 4);
-            fmt_int(val + str_len(val), (int32_t)n - 3);
-        }
-        step = ev_step_of(c);
-        id = k == EVK_REC ? MOTION_ID(&motion.event[c & 0xFFu]) : k == EVK_ADD ? ui.ev_id :
-             k == EVK_CHANCE ? EV_CHANCE : k == EVK_RATCH ? EV_RATCH : k == EVK_VEL ? EV_VEL : EV_NUDGE;
-        draw_column(0, "ROW", val, "", VAL(0u), -1, ICON_AUTO);
-        fmt_int(val, (int32_t)step + 1);
-        draw_column(1, "STEP", val, "", k != EVK_ADD || step < (uint32_t)t->p[P_SLEN] ? VAL(1u) : T_DIM, -1, ICON_AUTO);
-        if (!ev_id_ok(t, id)) {
-            draw_column(2, "PARAM", "--", "", T_DIM, -1, ICON_AUTO);
-            draw_column(3, "VALUE", "--", "", T_DIM, -1, ICON_AUTO);
-            return;
-        }
-        ev_name(t, id, nm);
-        draw_column(2, "PARAM", nm, "", k == EVK_REC || k == EVK_ADD ? VAL(2u) : T_MID, -1, ICON_AUTO);
-        if (id == EV_NUDGE) {                          /* a step's NUDGE (1.2): "+3 /16", DIM where it does not play */
-            const step_t *cs = &t->step[step % NSTEP];
-            int32_t sv = k == EVK_ADD ? ev_sadd(EVK_NUDGE) : step_nudge(cs);
-            ev_nudge_fmt(val, sv);
-            draw_column(3, "VALUE", val, "/16", k != EVK_ADD && ev_nudge_plays(t, cs) ? VAL(3u) : T_DIM, (sv + 8) * 66,
-                        ICON_AUTO);
-            return;
-        }
-        if (id == EV_VEL) {                            /* a step's VEL (1.5): 1..127, DIM where it does not play; */
-            const step_t *cs = &t->step[step % NSTEP];  /* + ADD: the rows shown or not */
-            int32_t sv = ev_sval(cs, EVK_VEL);
-            if (k == EVK_ADD) {
-                draw_column(3, "ROWS", ui.ev_vel ? "SHOWN" : "HIDDEN", "", T_DIM, -1, ICON_AUTO);
-                return;
+        for (c = 0; c < 4u; c++) {
+            uint32_t id = au_id(c);
+            int pt;
+            int16_t v;
+            const param_desc_t *d;
+            if (id == 0xFFu) {
+                draw_column(c, au_label(c)[0] ? au_label(c) : "--", "--", "", T_DIM, -1, ICON_AUTO);
+                continue;
             }
-            fmt_int(val, sv);
-            draw_column(3, "VALUE", val, "", ev_vel_plays(cs) ? VAL(3u) : T_DIM, sv * 1000 / 127, ICON_LEVEL);
-            return;
+            v = lane_value(t, au_cur(), id, &pt);
+            d = track_desc(t, id);
+            param_format(d, v, val, &unit);
+            card_span_of(d);
+            draw_column(c, d->label, val, unit, pt || (c == ui.hot_col && ui.hot_t) ? VAL(c) : T_MID,
+                        RATIO(d, enum_rank(d, v)), param_icon(d, v));   /* (no point there: the value held, MID) */
         }
-        if (id == EV_CHANCE || id == EV_RATCH) {       /* a step's CHANCE (the die) / RATCH; + ADD: what it adds */
-            const step_t *cs = &t->step[step % NSTEP];
-            uint32_t sk = ev_skind(id), sv = (uint32_t)(k == EVK_ADD ? ev_sadd(sk) : ev_sval(cs, sk));
-            int plays = sk == EVK_CHANCE || (cs->time == ST_NOTE && (cs->n || cs->hit));   /* (RATCH does nothing on a
-                                                                                            * REST, a TIE, empty: DIM) */
-            const char *u = "";
-            if (sk == EVK_CHANCE) {                    /* (1.5.5: a condition, "1:4") */
-                u = ev_chance_fmt(val, (int32_t)sv);
-            } else {
-                val[0] = 'x';                          /* x1 .. x4 */
-                val[1] = (char)('0' + sv);
-                val[2] = 0;
-            }
-            draw_column(3, sk == EVK_CHANCE && sv > 100u ? "COND" : "VALUE", val, u, k != EVK_ADD && plays ? VAL(3u) : T_DIM,
-                        sk == EVK_CHANCE ? (sv > 100u ? (int32_t)(sv - 100u) * 1000 / (int32_t)NCOND : (int32_t)sv * 10) :
-                        ((int32_t)sv - 1) * 333, sk == EVK_CHANCE ? ICON_PROB : ICON_X_REPEAT);
-            return;
-        }
-        v = k == EVK_REC ? motion.event[c & 0xFFu].value : motion_base_value(t, id);
-        d = track_desc(t, id);
-        param_format(d, v, val, &unit);
-        draw_column(3, k == EVK_ADD ? "VALUE" : (motion.event[c & 0xFFu].param & MOTION_LOCK) ? "LOCK" : "AUTO", val, unit,
-                    k != EVK_ADD ? VAL(3u) : T_DIM, RATIO(d, enum_rank(d, v)), param_icon(d, v));
         return;
     }
     if (cur_page()->scope == SC_TRK && mx_master) {   /* (Dah) the MASTER: its COMPRESSOR */

@@ -10,9 +10,8 @@
  *              the next step's negative nudge; QUANTIZE ON (the default) plays every step on its start as before;
  *              OFF plays it nudged, late and early, once per pass, never twice with what live recording sounds
  *              already; a ratcheted step on its start; every nudge 0 (older patterns) plays the same either way;
- *              the controls (1.2 pages, Discussion #153): SEQ > AUTOMATION's QUANTIZE row (KNOB 4 ON / OFF) and NUDGE
- *              rows (+ ADD NUDGE +4/16, KNOB 4 -8..+7, KNOB 2 the step, EDIT 0, SAVE held undoes; "QUANTIZE IS ON"
- *              while it is), and on STEP steps held + the PRESETS knob (let go: the cursor).
+ *              QUANTIZE's strength (50 %: half the nudge), and on STEP steps held + the PRESETS knob (let go: the
+ *              cursor).
  *   MOTION     128 records shared by the four tracks, all played.
  *   FORMATS    FUN10 round trip (nudges, 128 records, the four parameters), FUN9 / FUN8 / FUN7 as 1.1 / 1.0 wrote
  *              them load as before (tests/old_pack.h), a FUN9 claiming more than 64 records or a nudge bit refused, a
@@ -375,68 +374,15 @@ static int nudge(void)
     seq_stop();
     bad += check("REC into a step before its nudged play: 60 at its time, the live 67 not again (2 note-ons)", ok);
 
-    /* the controls: SEQ > AUTOMATION's QUANTIZE and NUDGE rows, STEP with steps held + PRESETS */
+    /* the controls: QUANTIZE's strength (seq.c seq_nudge), STEP with steps held + PRESETS */
     t = seq1(1);
     song.sel = 0;
     note_step(t, 3, 63, 0);
-    {
-        uint16_t rw[EV_ROWS];
-        step_t ref[NSTEP];
-        uint32_t n;
-        go_auto_top(); frame();
-        turn(EN_K1, 1);                                 /* PLAY -> QUANTIZE */
-        ok = auto_cur() == EVC(EVK_QNT, 0) && t->p[P_SQNT] == 1;
-        turn(EN_K4, -1);                                /* (HA HA HE HU) ON 75 % 50 % 25 % OFF */
-        ok &= t->p[P_SQNT] == 4;
-        turn(EN_K4, -3);
-        ok &= t->p[P_SQNT] == 0;
-        turn(EN_K4, 4);
-        ok &= t->p[P_SQNT] == 1;
-        press(B_OCTUP); press(B_EDIT);
-        ok &= t->p[P_SQNT] == 1 && msg_is("NOTHING TO DELETE") && !act_ready() && str_eq(act_name(4), "--");
-        bad += check("AUTOMATION's QUANTIZE row (the second): KNOB 4 OFF 25 % 50 % 75 % ON; OCT+ and EDIT nothing", ok);
-        {   /* (HA HA HE HU) the strength plays part of the NUDGE; APPLY writes it and QUANTIZE goes OFF */
-            int32_t v;
-            step_set_nudge(&t->step[3], 4);
-            t->p[P_SQNT] = 3;                           /* 50 % */
-            v = seq_nudge(t, &t->step[3]);
-            turn(EN_K3, 1);
-            ok = v == 2 && step_nudge(&t->step[3]) == 2 && t->p[P_SQNT] == 0 && msg_is("QUANTIZED 1 STEPS");
-            bad += check("QUANTIZE 50 %: half the NUDGE plays; APPLY (KNOB 3) writes it, QUANTIZE OFF", ok);
-            hold(B_SAVE);
-            bad += check("  .. SAVE held: the steps' timing back (QUANTIZE, a setting, stays)", step_nudge(&t->step[3]) == 4);
-            t->p[P_SQNT] = 1;
-            step_set_nudge(&t->step[3], 0);
-        }
-        memcpy(ref, t->step, sizeof ref);
-        go_auto_add(EV_NUDGE, 3); frame();
-        n = ev_list(rw);
-        press(B_OCTUP);
-        ok = step_nudge(&t->step[3]) == 4 && auto_cur() == EVC(EVK_NUDGE, 3) && msg_is("QUANTIZE IS ON") &&
-             ev_list(rw) == n + 1u && !memcmp(&t->step[4], &ref[4], sizeof ref[4] * (NSTEP - 4u));
-        turn(EN_K4, 1); turn(EN_K4, 1); turn(EN_K4, 1); turn(EN_K4, 1);
-        ok &= step_nudge(&t->step[3]) == 7 && msg_is("QUANTIZE IS ON");
-        for (i = 0; i < 20u; i++) turn(EN_K4, -1);
-        ok &= step_nudge(&t->step[3]) == -8;
-        bad += check("AUTOMATION + ADD NUDGE: step 4 +4/16 (QUANTIZE ON: says so), KNOB 4 -8..+7", ok);
-        frame();
-        t->p[P_SQNT] = 0;
-        ui.msg_t = 0;
-        for (i = 0; i < 11u; i++) turn(EN_K4, 1);
-        bad += check("  QUANTIZE OFF: no message", step_nudge(&t->step[3]) == 3 && !msg_is("QUANTIZE IS ON"));
-        frames(2000);                                   /* (the next turn its own undo) */
-        turn(EN_K2, 1);                                 /* to step 5: step 4 back to 0 */
-        ok = step_nudge(&t->step[3]) == 0 && step_nudge(&t->step[4]) == 3 && auto_cur() == EVC(EVK_NUDGE, 4);
-        hold(B_SAVE);
-        ok &= step_nudge(&t->step[3]) == 3 && step_nudge(&t->step[4]) == 0;
-        hold(B_SAVE);
-        ok &= step_nudge(&t->step[4]) == 3;
-        bad += check("  KNOB 2 moves it to the next step; SAVE held undoes the move, held again redoes it", ok);
-        press(B_EDIT);
-        ok = step_nudge(&t->step[4]) == 0 && msg_is("DELETED");
-        bad += check("  EDIT: back to 0 (the row goes)", ok && ev_list(rw) == n);
-        t->p[P_SQNT] = 1;
-    }
+    step_set_nudge(&t->step[3], 4);
+    t->p[P_SQNT] = 3;                                   /* 50 % */
+    bad += check("QUANTIZE 50 %: half the NUDGE plays", seq_nudge(t, &t->step[3]) == 2);
+    t->p[P_SQNT] = 1;
+    step_set_nudge(&t->step[3], 0);
     {   /* the DRUM grid on STEP: a step key held + the PRESETS knob; let go: the hit stays */
         uint32_t k4;
         song.sel = 3;

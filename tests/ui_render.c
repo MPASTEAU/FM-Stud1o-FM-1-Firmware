@@ -833,6 +833,30 @@ static void step_put(step_t *st, uint32_t time, uint32_t flags, uint32_t n, cons
     st->time = (uint8_t)time; st->flags = (uint8_t)flags; st->n = (uint8_t)n; st->vel = 100;
     for (j = 0; j < n; j++) st->note[j] = notes[j];
 }
+/* (Dah) SEQ > AUTOMATION: points on the track's first three lanes (a low one, a high one, a lock, the lowest), the
+ * fourth bare; the cursor on step c, KNOB hot + 1 just turned (-1: none) */
+static void au_fill(uint32_t c, int hot)
+{
+    track_t *t = TSEL;
+    uint32_t k;
+    for (k = 0; k < 3u; k++) {
+        uint32_t id = au_id(k);
+        const param_desc_t *d;
+        if (id == 0xFFu)
+            continue;
+        d = track_desc(t, id);
+        (void)motion_set_event(t, 1u + k, id, (int16_t)(d->min + (d->max - d->min) / 4));
+        (void)motion_set_event(t, 5u + k, id, (int16_t)(d->max - (d->max - d->min) / 8));
+        (void)motion_set_lock(t, 9u, id, (int16_t)((d->min + d->max) / 2));
+        (void)motion_set_event(t, 12u - k, id, (int16_t)d->min);
+    }
+    go_page(GR_EVENTS);
+    cursor_set((int32_t)c);
+    if (hot >= 0) {
+        ui.hot_col = (uint8_t)hot;
+        ui.hot_t = 30;
+    }
+}
 static void roll_scene(int s)
 {
     static const uint8_t AM7[] = {57, 60, 64, 67}, FM7[] = {53, 57, 60, 64}, CMA[] = {60, 64, 67}, GMA[] = {55, 59, 62, 67};
@@ -1016,17 +1040,13 @@ static void setup(int s)
         ui.song_row = 1; go_page(GR_SONG); sg_fresh(); chain_prepare(); events_block(32);
         break;
     case S_STEP: song.rec = 1; go_page(GR_ROLL); ui.cursor = 6; break;
-    /* 1.2 SEQ > AUTOMATION: a step's CHANCE and RATCH as rows among the locks and events (step 5's CHANCE selected, its
-     * value just turned); + ADD CHANCE on step 4; the first row (PLAY ON, the counts, OCT+ CLEAR) */
-    case S_AUTO_STEPS:
-        step_set_chance(&TSEL->step[0], 65); step_set_chance(&TSEL->step[4], 25); step_set_ratchet(&TSEL->step[4], 3);
-        step_set_ratchet(&TSEL->step[8], 2); motion_set_event(TSEL, 2, P_LRATE, 70); motion_set_lock(TSEL, 4, P_REV, 100);
-        go_page(GR_EVENTS); (void)auto_pick(EVC(EVK_CHANCE, 4)); ui.hot_col = 3; ui.hot_t = 30;
-        break;
-    case S_AUTO_ADD_CHANCE: go_auto_add(EV_CHANCE, 3); break;
+    /* (Dah) SEQ > AUTOMATION: the four lanes with points, the cursor on a lock, KNOB 4 just turned; empty (the cursor on
+     * step 4); points the page's lanes do not show (REV, a lock) */
+    case S_AUTO_STEPS: au_fill(9, 3); break;
+    case S_AUTO_ADD_CHANCE: go_page(GR_EVENTS); cursor_set(3); break;
     case S_MOTION:
         motion_set_event(TSEL, 1, P_REV, 40); motion_set_lock(TSEL, 2, P_REV, 100); step_set_chance(&TSEL->step[3], 50);
-        go_auto_top();
+        go_page(GR_EVENTS);
         break;
     /* 1.1.5, the REC layer (REC held): over HOME, the settings as they come (CLICK OFF, COUNT-IN OFF, LEVEL MID);
      * over STEP armed, CLICK REC, COUNT-IN 2 BARS, LEVEL HIGH (KNOB 2 just turned); a song playing on an empty
@@ -1301,9 +1321,9 @@ static void setup(int s)
     case S_BATT2: usb.config = 0; song.batt_raw = 570; go_home(); break;
     case S_BATT3: usb.config = 0; song.batt_raw = 600; go_home(); break;
     case S_BATT_USB: usb.config = 1; usb.suspended = 0; song.batt_raw = 500; go_home(); break;
-    case S_MOTION_REC: song.rec = 1u << song.sel; go_auto_top(); break;          /* recording into the motion */
-    case S_MOTION_OFF:                                                            /* stopped, PLAY OFF (OCT+ CLEAR) */
-        song.playing = 0; motion_set_event(TSEL, 1, P_REV, 40); motion_set_enabled(TSEL, 0); go_auto_top(); break;
+    case S_MOTION_REC: song.rec = 1u << song.sel; au_fill(2, -1); break;         /* recording into the motion */
+    case S_MOTION_OFF:                                                            /* stopped, PLAY OFF */
+        song.playing = 0; au_fill(0, -1); motion_set_enabled(TSEL, 0); break;
     case S_MOTION_CARD: {                                          /* #63: HOME, MOTION drives KNOB 1 and 3 (3 just turned) */
         const engine_t *en = ENGINES[TSEL->eng_req];
         motion_set_event(TSEL, 2, en->knob[0], TSEL->p[en->knob[0]]);
@@ -1523,14 +1543,14 @@ static void setup(int s)
         roll_scene(S_ROLL_ACID); ui_prefs2 |= PREF_HELP >> 16; go_title_page("DETAIL");
         break;
     /* 1.5.5 (#209): conditions on DETAIL's CHANCE lane (1:2 2:2 1:4 4:4 on ACID, the cursor on 4:4, KNOB 1 just turned;
-     * FILL / !FILL on the DRUM beat, the cursor on !FILL), AUTOMATION's COND rows, GLO with FILL held */
+     * FILL / !FILL on the DRUM beat, the cursor on !FILL), AUTOMATION over them, GLO with FILL held */
     case S_DETAIL_COND: case S_AUTO_COND:
         roll_scene(S_ROLL_ACID);
         detail_values(TSEL, 0);
         step_set_chance_v(&TSEL->step[0], 101); step_set_chance_v(&TSEL->step[2], 102);
         step_set_chance_v(&TSEL->step[6], 106); step_set_chance_v(&TSEL->step[12], 109);
         if (s == S_AUTO_COND) {
-            go_page(GR_EVENTS); (void)auto_pick(EVC(EVK_CHANCE, 12)); ui.hot_col = 3; ui.hot_t = 30;
+            au_fill(12, 0);
             break;
         }
         go_title_page("DETAIL"); ui.cursor = 12; ui.hot_col = 0; ui.hot_t = 30;
@@ -1578,61 +1598,21 @@ static void setup(int s)
         break;
     case S_MOTION_LOCKS:
         motion_set_event(TSEL, 1, P_REV, 40); motion_set_lock(TSEL, 2, P_REV, 100); motion_set_lock(TSEL, 6, P_ATK, 90);
-        go_auto_top();
+        au_fill(6, -1);
         break;
-    /* 1.1.5 AUTO LIST, SEQ > AUTOMATION since 1.2 (ui_events.c): locks and automation events of the track, the 4th selected, its
-     * VALUE just turned; empty (+ ADD LOCK: step 5, the first knob of HOME); a DRUM track's long list, scrolled
-     * (its lane levels, E names, the last row), playing */
-    case S_AUTO_LIST:
-        motion_set_event(TSEL, 0, P_LRATE, 70); motion_set_lock(TSEL, 2, P_REV, 100); motion_set_lock(TSEL, 2, P_ED_FLT, -30);
-        motion_set_lock(TSEL, 6, P_ATK, 90); motion_set_lock(TSEL, 6, P_E4, 20); motion_set_event(TSEL, 8, P_PAN, -40);
-        motion_set_lock(TSEL, 11, P_LD_FLT, 50); motion_set_lock(TSEL, 13, P_DLY, 80); motion_set_lock(TSEL, 15, P_GLIDE, 60);
-        go_page(GR_EVENTS); ui.ev_row = 5; ui.hot_col = 3; ui.hot_t = 30;   /* (row 0: PLAY, 1: QUANTIZE) */
-        break;
+    /* (Dah) SEQ > AUTOMATION: 64 steps, the cursor past the first 16; empty on step 5; a DRUM track playing (the
+     * view following, the step playing lit); CURVE RAMP, stopped and playing; points on a VEL pattern, KNOB 2 turned */
+    case S_AUTO_LIST: TSEL->p[P_SLEN] = 64; au_fill(21, 3); break;
     case S_AUTO_LIST_ADD: ui.cursor = 4; go_page(GR_EVENTS); break;
-    case S_AUTO_LIST_DRUM: {
-        uint32_t i;
-        drum(0); go_page(GR_ROLL);
-        for (i = 0; i < 12u; i++)
-            motion_set_lock(TSEL, i, i & 1u ? P_LN0 + i % 8u : P_E0 + i % 8u, 100);
-        motion_set_event(TSEL, 15, P_REV, 127);
-        go_page(GR_EVENTS); ui.ev_row = 15; song.playing = 1;
-        break;
-    }
-    /* 1.2 (#162): AUTOMATION's NUDGE rows beside CHANCE and RATCH, QUANTIZE OFF, a NUDGE selected (KNOB 4 just
-     * turned; step 9's on a REST: dimmed); QUANTIZE ON, its row selected (every NUDGE dimmed); + ADD NUDGE; LFO 2
-     * (SYNC 1/8, TRIG FREE, POL UNI) */
+    case S_AUTO_LIST_DRUM: drum(0); au_fill(3, -1); song.playing = 1; TSEL->seq_idx = 11; break;
     case S_AUTO_NUDGE:
     case S_AUTO_QNT:
-        step_set_chance(&TSEL->step[0], 65); step_set_ratchet(&TSEL->step[4], 3); step_set_nudge(&TSEL->step[2], 3);
-        step_set_nudge(&TSEL->step[6], -5); step_set_nudge(&TSEL->step[9], 2); TSEL->step[9].time = ST_REST;
-        motion_set_lock(TSEL, 6, P_REV, 100);
-        TSEL->p[P_SQNT] = s == S_AUTO_QNT;
-        go_page(GR_EVENTS);
-        if (s == S_AUTO_QNT) {
-            ui.ev_row = 1;
-        } else {
-            (void)auto_pick(EVC(EVK_NUDGE, 6)); ui.hot_col = 3; ui.hot_t = 30;
-        }
+        trkx[song.sel % NTRK].curve = 1; au_fill(5, 1);
+        if (s == S_AUTO_QNT) { song.playing = 1; TSEL->seq_idx = 7; }
         break;
-    case S_AUTO_ADD_NUDGE: TSEL->p[P_SQNT] = 0; go_auto_add(EV_NUDGE, 3); break;
-    /* 1.5 (#173): AUTOMATION's VEL rows shown (+ ADD VEL's SHOW): every note step's velocity, step 5's just turned, the
-     * ACC step 9's dimmed (it plays 127), among a CHANCE and a lock; + ADD VEL (SHOW) */
-    case S_AUTO_VEL: {
-        static const uint8_t VEL[8] = {100, 0, 64, 112, 100, 40, 127, 90};
-        uint32_t i;
-        track_defaults_steps(TSEL);
-        TSEL->p[P_SLEN] = 16;
-        for (i = 0; i < 16u; i += 2u) {
-            uint8_t n = (uint8_t)(57 + (i * 5u) % 12u);
-            step_put(&TSEL->step[i], ST_NOTE, i == 8u ? SF_ACCENT : 0u, 1, &n);
-            TSEL->step[i].vel = VEL[i / 2u];
-        }
-        step_set_chance(&TSEL->step[2], 70); motion_set_lock(TSEL, 4, P_REV, 100);
-        go_page(GR_EVENTS); ui.ev_vel = 1; (void)auto_pick(EVC(EVK_VEL, 4)); ui.hot_col = 3; ui.hot_t = 30;
-        break;
-    }
-    case S_AUTO_ADD_VEL: go_auto_add(EV_VEL, 3); break;
+    case S_AUTO_ADD_NUDGE: TSEL->p[P_SLEN] = 8; au_fill(7, -1); break;
+    case S_AUTO_VEL: track_defaults_steps(TSEL); TSEL->p[P_SLEN] = 16; au_fill(4, 1); break;
+    case S_AUTO_ADD_VEL: TSEL->p[P_SLEN] = 3; au_fill(1, -1); break;
     case S_LFO2: TSEL->p[P_LSYNC] = 6; TSEL->p[P_LTRIG] = 1; TSEL->p[P_LPOL] = 1; go_title("LFO 2"); break;
     case S_USER_FOOT: song.playing = 0; up_store(3, "MY BASS"); ui.uslot = 3; go_page(GR_USER); break;   /* EDIT NAME lit */
 #if FELUCCA_SLICE

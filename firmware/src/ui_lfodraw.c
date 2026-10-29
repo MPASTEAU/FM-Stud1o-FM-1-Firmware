@@ -6,7 +6,8 @@
  *            The panel: the 16 points as bars from the middle line, the point picked in the track's colour, the LFO's
  *            cycle over them (voice.c lfo_wave DRAW). A VALUE or SHAPE turned sets the LFO's WAVE to DRAW.
  * The other extra, CURVE (STEP: an automation event's value holds to the next, as always; RAMP: it moves in a line to
- * the next event of its parameter, motion.c motion_ramp_*), is KNOB 3 on SEQ > AUTOMATION's PLAY row (ui_events.c).
+ * the next event of its parameter, motion.c motion_ramp_*), the track's (SEQ > AUTOMATION draws its lanes so; no knob
+ * sets it since the lanes replaced the rows, Dah).
  * Not automatable, nor lockable; no undo (a knob back undoes a detent). Included by ui_graph.c (after
  * ui_drumlane.c); the cards: ui_draw.c, the knobs: ui_input.c edit_param, the pages: params.c PAGES. */
 enum { XP_POINT, XP_VALUE, XP_SHAPE, XP_SMOOTH, XP_NONE };

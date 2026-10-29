@@ -208,13 +208,6 @@ static struct {
     uint8_t ppick;               /* SAVE > PHRASES: the pattern picked (pat_count list index) */
     uint8_t song_row;            /* SONG: the section selected, count selects + ADD */
     uint8_t song_trk;            /* SONG: the lane (track) selected, 0..NTRK-1; NTRK: SEC, the whole section (its CUT) */
-    uint16_t ev_row;             /* SEQ > AUTOMATION (ui_events.c ev_*): the row selected (0 PLAY / CLEAR, 1 QUANTIZE, the
-                                  * last + ADD; 1.2: up to EV_ROWS, past 255) */
-    uint8_t ev_step, ev_id;      /* .. + ADD: the step and the parameter (or EV_CHANCE, EV_RATCH, EV_NUDGE, EV_VEL) it
-                                  * adds on */
-    uint16_t ev_keep;            /* .. the CHANCE / RATCH / NUDGE row being edited (its EVC code, 0 none): listed at its default */
-    uint8_t ev_vel;              /* .. 1.5: the VEL rows shown (+ ADD VEL's SHOW / HIDE; off when the page is entered) */
-    uint8_t ev_grid;             /* .. QUANTIZE's GRID for APPLY: 0 the step, 1 1/8 (HA HA HE HU) */
     uint8_t uboot;               /* main.c: seconds left before UPDATE MODE (OCT- + OCT+ held), 0 = none */
     uint32_t ly_t0;              /* the layer button's press time | 1, LY_* bits (ui_layer.c layer_gesture) */
     uint8_t ly;                  /* the layer whose button is down (LAYER_*), 0 = none */
@@ -601,7 +594,7 @@ static uint32_t lock_id(uint32_t k)
     return id < P_COUNT && motion_param(id) ? id : 0xFFu;
 }
 
-static void ev_enter(void);
+static void au_enter(void);
 /* 1.5 (Discussion #156): MENU > HELP ON: a page entered (here, go_home) shows its hint in the footer for ~2 s
  * (ui_help.c, ui_draw.c draw_foot) */
 #define HELP_FRAMES 120u                       /* (~2 s at the UI's ~60 frames a second) */
@@ -626,8 +619,8 @@ static void cards_say(const char *a, const char *b)
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
-    if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
-        ev_enter();
+    if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: the cursor inside LEN */
+        au_enter();
     if (!ui.home && lock_page_ok(ui.page))
         ui.plk_src = (uint8_t)(ui.page + 1u);
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
@@ -1235,7 +1228,7 @@ static void edit_undo_take(track_t *t, uint32_t tag, uint32_t what)
     undo.keep = 0;
 }
 static void motion_undo_take(track_t *t, uint32_t tag) { edit_undo_take(t, tag, UNDO_MOT); }
-/* 1.2: a step's CHANCE / RATCH edited on SEQ > AUTOMATION (ui_events.c): the swap puts back the steps (and LEN DIV
+/* 1.2: a step's CHANCE / RATCH edited (SEQ > DETAIL): the swap puts back the steps (and LEN DIV
  * SWING GATE, as copied) and the motion, the sound stays. motion_undo_done after each, as for a lock */
 static void step_undo_take(track_t *t, uint32_t tag) { edit_undo_take(t, tag, UNDO_MOT | UNDO_PAT); }
 static void motion_undo_done(track_t *t)
@@ -1874,7 +1867,6 @@ static void track_select(uint32_t i)
     song.sel = (uint8_t)i;
     ui.entry_open = 0;
     ui.hot_t = 0;
-    ui.ev_keep = 0;                              /* (AUTOMATION: a row kept at its default was the other track's) */
     ui.cursor = 0;
     ui.bank = 0;
     follow.hold = 0;                             /* (1.6, #242: the roll follows the new track's playhead) */
@@ -1949,11 +1941,11 @@ static void trk_count_changed(void)
 #include "pstore.c"                               /* (HA HA HE HU) each track's patterns */
 
 #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
-#include "ui_events.c"                            /* SEQ > AUTOMATION: locks, events, CHANCE, RATCH as a list (an action page) */
+#include "ui_events.c"                            /* SEQ > AUTOMATION: the four HOME knobs' lanes */
 #include "midi_learn.c"                           /* MIDI LEARN (1.5): GLO + D4, a knob, a CC */
 
 /* ---------------------------------------------------- action pages --- */
-/* Pages whose purpose is an action (SAVE > USER, PHRASES, PROJECT, EDIT > SLICES, SEQ > AUTOMATION): the knobs pick,
+/* Pages whose purpose is an action (SAVE > USER, PHRASES, PROJECT, EDIT > SLICES): the knobs pick,
  * OCT+ does it, OCT- cancels the picked action or goes HOME (ui_input.c). There OCT- / OCT+ do not
  * shift the octave */
 static int go_id(uint32_t id) { return id == G_LOAD || id == G_SAVE; }
@@ -1964,7 +1956,6 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     uint32_t c, m = 0;
     if (ui.home)
         return 0;
-    if (pg->graph == GR_EVENTS) return 16u;     /* AUTOMATION: no knob is an action; OCT+ by the row (ev_oct) */
     if (pg->graph == GR_SONG)
         return 1u;                               /* PLAY / STOP (also the PLAY button) */
     if (pg->graph == GR_PATS)
@@ -1990,7 +1981,6 @@ static uint32_t act_cols(void)                   /* the columns that are actions
 static uint32_t act_col(void)
 {
     if (!ui.home && cur_page()->graph == GR_SONG) return 1u;
-    if (!ui.home && cur_page()->graph == GR_EVENTS) return 5u;
     return !ui.home && cur_page()->graph == GR_PATS ? 2u : ui.act;
 }
 
@@ -1998,7 +1988,6 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
 {
     static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
     uint32_t id = page_id(cur_page(), c);
-    if (cur_page()->graph == GR_EVENTS) return ev_act_name();
     if (cur_page()->graph == GR_SONG)
         return sg_pend == 1u ? "ADD" : sg_pend ? "DELETE" : "HOLD VIEW";   /* (Dah: OCT+ held, the VIEW; a section pending:
                                                          * OCT+ does it) */
@@ -2024,7 +2013,6 @@ static int act_ready(void)
     uint32_t c = act_col(), s = song.sel, id;
     if (!c--)
         return 0;
-    if (cur_page()->graph == GR_EVENTS) return ev_act_ready();
     if (cur_page()->graph == GR_SONG)
         return 1;
     if (cur_page()->graph == GR_PATS)

@@ -1492,9 +1492,8 @@ static uint32_t graph_signature(void)
             h ^= (uint32_t)graph_project_used(i) << (20u + i);
         h += graph_pname_sig + project_current() * 7919u;   /* (HA HA HE HU: the one OPEN) */
     }
-    if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the rows, the one selected, + ADD's place, PLAY,
-                                                      * QUANTIZE */
-        h = (h ^ ev_sig()) * 16777619u;
+    if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the lanes, the view, the cursor */
+        h = (h ^ au_sig()) * 16777619u;
 #if FELUCCA_SLICE
     if (pg->graph == GR_SLICES && slice_page_ok()) h ^= slice_sig();
 #endif
@@ -1747,127 +1746,92 @@ static void graph_dlanes(const track_t *t)
         list_row(LIST_Y(row), l == cur, drum_lane_abbr(t, l), T_MID, nm, v || s ? T_TEXT : T_MID, 232);
     }
 }
-/* the AUTOMATION rows' columns (M): the kind at 14 (LOCK AUTO STEP PLAY, to x 54), the step / PLAY's ON at EV_SX, the
- * name / QUANTIZE's ON at EV_NX (QUANTIZE ends at x 86), the value right at 226 */
-#define EV_SX 60
-#define EV_NX 92
-/* a row's value (M) and its unit (S, on the value's baseline, as a card's) ending at x 226; the value's left x */
-static int32_t ev_value(int32_t y, const char *v, const char *unit, uint16_t fg, uint16_t bg)
-{
-    int32_t x = 226;
-    GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-    if (unit && unit[0]) {
-        GFX_HOOK_ALIGN(0, 0, 0, y + LIST_TY + AF_M.asc, AL_B, "list row unit on its value's baseline");
-        x = cv_text_r(x, y + LIST_TY + AF_M.asc - AF_S.asc, &AF_S, unit, fg, bg) - 2;
-    }
-    return cv_text_r(x, y + LIST_TY, &AF_M, v, fg, bg);
-}
-/* SEQ > AUTOMATION (ui_events.c): the track's rows around the one selected: PLAY first (ON / OFF and the counts),
- * QUANTIZE (ON / OFF and the steps nudged), then a row each: the kind (LOCK in the accent, AUTO; STEP: a step's CHANCE,
- * RATCH, NUDGE or VEL, a NUDGE or VEL that does not play DIM), the step, the name, the value at the right; the last row
- * + ADD (LOCK, CHANCE, RATCH, NUDGE or VEL: what OCT+ adds) */
-static void graph_events(void)
+/* SEQ > AUTOMATION (Dah; ui_events.c): the selected track's HOME knobs, four lanes to the panel's foot: the name at the
+ * left (the knob just turned's in the accent; none motion records: DIM, "--"), the curve over the steps shown (held,
+ * or joined with CURVE RAMP), a dot where a step holds a point (a lock: ACCENT). The ruler on top as HOME's (the whole
+ * pattern a line, the view a bar, the step playing a mark and its number), the step playing's column lit, the cursor
+ * framed through the lanes */
+#define AU_RH 14                                    /* the ruler */
+#define AU_X0 46                                    /* the steps: x 46 .. 232 */
+#define AU_W 186
+static int32_t au_x(uint32_t i, uint32_t n) { return AU_X0 + (int32_t)(i * (uint32_t)AU_W / n); }
+static void graph_auto(void)
 {
     const track_t *t = TSEL;
-    uint16_t rw[EV_ROWS];
-    uint32_t n = ev_list(rw), cur = ev_row(n), k;
-    int32_t ln = (int32_t)list_n(), row, first = clamp((int32_t)cur - ln / 2, 0, (int32_t)n > ln ? (int32_t)n - ln : 0);
-    for (row = 0; row < ln && (uint32_t)(first + row) < n; row++) {
-        int32_t y = LIST_Y(row);
-        int sel;
-        uint16_t bg, c;
-        k = (uint32_t)(first + row);
-        c = rw[k];
-        sel = k == cur;
-        bg = sel ? T_THEME : T_SURF;
-        if (sel)
-            cv_rrect(6, y, 228, 16, 4, T_THEME, T_SURF);
-        if (c >> 8 == EVK_ADD) {
-            ev_fix();
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, ui.ev_id == EV_CHANCE ? "+ ADD CHANCE" : ui.ev_id == EV_RATCH ?
-                       "+ ADD RATCH" : ui.ev_id == EV_NUDGE ? "+ ADD NUDGE" : ui.ev_id == EV_VEL ?
-                       (ui.ev_vel ? "+ HIDE VEL" : "+ SHOW VEL") : "+ ADD LOCK", sel ? T_INK : T_DIM, bg);
-            break;
+    uint32_t p0, n, ph, i, k, len = au_len(t), cur = au_cur();
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, y0 = AU_RH + 3, ybot = full - 4, lh, gap = 3;
+    au_view(t, &p0, &n, &ph);
+    lh = (ybot - y0 - 3 * gap) / 4;
+    {   /* the ruler: the pattern a line, the view on it a bar, the step playing a mark; a tick a step, the beats taller */
+        int32_t x0 = AU_X0 + (int32_t)(p0 * (uint32_t)AU_W / len), x1 = AU_X0 + (int32_t)((p0 + n) * (uint32_t)AU_W / len);
+        cv_rect(AU_X0, 1, AU_W, 1, T_LINE);
+        cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
+        if (ph != 0xFFu)
+            cv_rect(AU_X0 + (int32_t)((p0 + ph) * (uint32_t)AU_W / len), 0, 2, 3, T_ACCENT);
+        for (i = 0; i < n; i++) {
+            int32_t xc = (au_x(i, n) + au_x(i + 1u, n)) / 2, beat = (p0 + i) % 4u == 0u;
+            cv_rect(xc, beat ? 8 : 10, 1, beat ? 3 : 1, beat ? T_MID : T_GRID);
         }
-        if (c >> 8 == EVK_TOP) {                     /* PLAY ON / OFF, the counts: "EVENT 3  LOCK 2" */
-            char b[24];
-            str_cpy(b, "EVENT ", sizeof b);
-            fmt_int(b + str_len(b), (int32_t)(motion_count(t) - motion_lock_count(t)));
-            str_cpy(b + str_len(b), "  LOCK ", sizeof b - str_len(b));
-            fmt_int(b + str_len(b), (int32_t)motion_lock_count(t));
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, "PLAY", sel ? T_INK : T_MID, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(EV_SX, y + LIST_TY, &AF_M, motion_enabled(t) ? "ON" : "OFF",
-                       sel ? T_INK : motion_enabled(t) ? T_TEXT : T_DIM, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_r(226, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
+    }
+    for (k = 0; k < 4u; k++) {
+        uint32_t id = au_id(k);
+        int32_t ly = y0 + (int32_t)k * (lh + gap), a = lh - 8, px = 0, py = 0;
+        int hot = ui.hot_t && ui.hot_col == k;
+        const param_desc_t *d = id != 0xFFu ? track_desc(t, id) : 0;
+        const char *nm = au_label(k);
+        GFX_HOOK_ALIGN(0, ly, 0, ly + lh, AL_V, "automation lane name on its lane");
+        cv_text_fit(8, ly + CAP_IN(S, lh), &AF_S, nm[0] && nm[0] != '-' ? nm : "--", !d ? T_DIM : hot ? T_ACCENT : T_TEXT,
+                    T_SURF, AU_X0 - 12);
+        cv_rect(AU_X0, ly, AU_W, lh, d ? T_LANE : T_RAISE);
+        if (!d) {
+            GFX_HOOK_ALIGN(AU_X0, ly, AU_X0 + AU_W, ly + lh, AL_HV, "automation lane dash centred");
+            cv_text_in(AU_X0, ly + CAP_IN(S, lh), AU_W, &AF_S, "--", T_DIM, T_RAISE);
             continue;
         }
-        if (c >> 8 == EVK_QNT) {                     /* QUANTIZE ON / OFF (1.2), the steps nudged: "NUDGED 3" */
-            char b[16];
-            str_cpy(b, "NUDGED ", sizeof b);
-            fmt_int(b + str_len(b), (int32_t)ev_nudged(t));
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, "QUANTIZE", sel ? T_INK : T_MID, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(EV_NX, y + LIST_TY, &AF_M, t->p[P_SQNT] ? "ON" : "OFF", sel ? T_INK : T_TEXT, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_r(226, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
-            continue;
-        }
-        if (c >> 8 != EVK_REC) {                     /* a step's CHANCE / RATCH / NUDGE: "STEP 05 CHANCE  50%" */
-            uint32_t s = c & 0xFFu, kd = c >> 8;
-            int32_t v = ev_sval(&t->step[s], kd);
-            uint16_t vc = (kd == EVK_NUDGE && !ev_nudge_plays(t, &t->step[s])) ||   /* (QUANTIZE ON ..) */
-                          (kd == EVK_VEL && !ev_vel_plays(&t->step[s])) ? T_DIM : T_TEXT;
-            char b[8];
-            b[0] = (char)('0' + (s + 1u) / 10u);
-            b[1] = (char)('0' + (s + 1u) % 10u);
-            b[2] = 0;
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, "STEP", sel ? T_INK : T_MID, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(EV_SX, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(EV_NX, y + LIST_TY, &AF_M, kd == EVK_CHANCE ? (v > 100 ? "COND" : "CHANCE") : kd == EVK_RATCH ? "RATCH" :
-                       kd == EVK_VEL ? "VEL" : "NUDGE", sel ? T_INK : vc, bg);
-            if (kd == EVK_CHANCE) {                  /* (1.5.5: "STEP 05 COND  1:4") */
-                ev_value(y, b, ev_chance_fmt(b, v), sel ? T_INK : vc, bg);
-                continue;
-            } else if (kd == EVK_VEL) {
-                fmt_int(b, v);
-            } else if (kd == EVK_RATCH) {
-                b[0] = 'x';
-                b[1] = (char)('0' + v);
-                b[2] = 0;
-            } else {                                 /* "+3" "/16" */
-                ev_nudge_fmt(b, v);
+        for (i = 1; i < n; i++)                       /* the beats */
+            if ((p0 + i) % 4u == 0u)
+                cv_rect(au_x(i, n), ly, 1, lh, T_RAISE);
+        if (ph != 0xFFu)                              /* the step playing: its column lit (as HOME's) */
+            cv_rect(au_x(ph, n) + 1, ly, au_x(ph + 1u, n) - au_x(ph, n) - 1, lh, ux_mix(T_LANE, T_TEXT, 22));
+        for (i = 0; i < n; i++) {                     /* the curve: held (a step, a line), or joined (RAMP) */
+            int pt;
+            int32_t v = au_drawn(t, p0 + i, id, &pt), xl = au_x(i, n), xr = au_x(i + 1u, n) - 1, xc = (xl + xr) / 2;
+            int32_t y = ly + 3 + a - (enum_rank(d, v) - d->min) * a / (d->max - d->min);
+            if (trkx[song.sel % NTRK].curve && d->fmt != F_ENUM) {
+                if (i)
+                    cv_line_t(px, py, xc, y, T_THEME, 2);
+                else
+                    cv_rect(xl, y, xc - xl + 1, 2, T_THEME);
+                if (i + 1u == n)
+                    cv_rect(xc, y, xr - xc + 1, 2, T_THEME);
+                px = xc;
+            } else {
+                if (i && y != py)
+                    cv_rect(xl, y < py ? y : py, 2, (y < py ? py - y : y - py) + 2, T_THEME);
+                cv_rect(xl, y, xr - xl + 1, 2, T_THEME);
             }
-            ev_value(y, b, kd == EVK_CHANCE ? "%" : kd == EVK_NUDGE ? "/16" : "", sel ? T_INK : vc, bg);
-            continue;
+            py = y;
         }
-        {
-            const motion_event_t *e = &motion.event[c & 0xFFu];
-            uint32_t id = MOTION_ID(e), lock = (e->param & MOTION_LOCK) != 0u;
-            char b[16], nm[12];
-            const char *unit;
-            const param_desc_t *d = track_desc(t, id);
-            int32_t x;
-            b[0] = (char)('0' + ((e->place & 63u) + 1u) / 10u);
-            b[1] = (char)('0' + ((e->place & 63u) + 1u) % 10u);
-            b[2] = 0;
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(14, y + LIST_TY, &AF_M, lock ? "LOCK" : "AUTO", sel ? T_INK : lock ? T_ACCENT : T_MID, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_on(EV_SX, y + LIST_TY, &AF_M, b, sel ? T_INK : T_MID, bg);
-            param_format(d, e->value, b, &unit);
-            ev_name(t, id, nm);
-            x = ev_value(y, b, unit, sel ? T_INK : T_TEXT, bg);
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_free_text(EV_NX, y + LIST_TY, &AF_M, nm, sel ? T_INK : T_TEXT, bg, x - 8 - EV_NX);
+        for (i = 0; i < n; i++) {                     /* the points over it */
+            int pt;
+            int16_t lv;
+            int32_t v = au_drawn(t, p0 + i, id, &pt), xc = (au_x(i, n) + au_x(i + 1u, n) - 1) / 2;
+            int32_t y = ly + 3 + a - (enum_rank(d, v) - d->min) * a / (d->max - d->min);
+            if (au_point(t, p0 + i, id))
+                cv_rect(xc - 1, y - 1, 4, 4, motion_lock_get(t, p0 + i, id, &lv) ? T_ACCENT : T_TEXT);
         }
+    }
+    if (cur >= p0 && cur < p0 + n)                    /* the cursor: a column framed through the lanes */
+        cv_frame(au_x(cur - p0, n), y0 - 1, au_x(cur - p0 + 1u, n) - au_x(cur - p0, n) + 1, 4 * lh + 3 * gap + 2, T_TEXT);
+    if (ph != 0xFFu) {                                /* the step playing's number on the ruler, centred on it */
+        char nb[4];
+        int32_t w, ib[4], nx;
+        fmt_int(nb, (int32_t)(p0 + ph) + 1);
+        w = text_w(&AF_S, nb);
+        text_ink(&AF_S, nb, ib);
+        nx = clamp((au_x(ph, n) + au_x(ph + 1u, n) - (ib[0] + ib[2])) / 2, AU_X0, 234 - w);
+        cv_rect(nx - 1, 3, w + 2, 11, T_SURF);
+        cv_text_on(nx, 4 - AF_S_CAP_Y, &AF_S, nb, T_ACCENT, T_SURF);
     }
 }
 /* SAVE > PATTERN: the track's patterns, four rows round the one picked: its number (the one played in the track's colour),
@@ -3499,7 +3463,7 @@ lists:
             break;
         case GR_EVENTS:
             cv_oy = 0;
-            graph_events();
+            graph_auto();
             break;
 #if FELUCCA_SLICE
         case GR_SLICES:

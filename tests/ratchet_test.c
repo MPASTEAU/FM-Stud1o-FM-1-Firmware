@@ -8,8 +8,7 @@
  *   PROJECTS   FUN8 round trip of x1..x4 (bit 7 of the velocity and chance bytes), an x1 project packs those bytes
  *              as before, FUN7 / FUN6 images load x1.
  *   PRESETS    a user preset's note pattern keeps it (flags 8 | 16, UP_PUT too); a drum grid record has no room: x1.
- *   UI         SEQ > AUTOMATION RATCH rows, KNOB 4 (x1..x4, clamped, the row's step; dimmed on a REST, a TIE, an empty
- *              step); the piano roll and the DRUM grid draw a ratcheted step in its parts, the roll no slide line
+ *   UI         SEQ > DETAIL's KNOB 2 (x1..x4, clamped, the cursor step; dimmed on a REST, a TIE, an empty step); the piano roll and the DRUM grid draw a ratcheted step in its parts, the roll no slide line
  *              out of one.
  * The editor protocol (STEP_SET / TRACK_STEP, INFO 52 01 04) is in tests/editor_test.c. Built and run by
  * tests/run_tests.sh. */
@@ -297,14 +296,14 @@ static int screens(void)
     uint32_t x, y;
     ui_power_on();
     t = TSEL;
-    go_auto_add(EV_RATCH, 0);                        /* (1.2: SEQ > AUTOMATION, + ADD RATCH: x2, its row) */
-    press(B_OCTUP);
-    turn(EN_K4, 1);
+    t->step[0] = (step_t){{60}, 1, ST_NOTE, 0, 100};
+    go_page(GR_ROLL); cursor_set(0); go_title("DETAIL");   /* (Dah: SEQ > DETAIL's KNOB 2, the cursor step's RATCH) */
+    turn(EN_K2, 1); turn(EN_K2, 1);
     ok = step_ratchet(&t->step[0]) == 3u && step_ratchet(&t->step[1]) == 1u;
-    turn(EN_K4, 100);
+    turn(EN_K2, 100);
     ok &= step_ratchet(&t->step[0]) == 4u;
-    turn(EN_K4, -100);
-    bad += check("SEQ > AUTOMATION's RATCH row, KNOB 4: RATCH of its step, x1..x4", ok && step_ratchet(&t->step[0]) == 1u &&
+    turn(EN_K2, -100);
+    bad += check("SEQ > DETAIL's KNOB 2: RATCH of the cursor step, x1..x4", ok && step_ratchet(&t->step[0]) == 1u &&
                  step_chance(&t->step[0]) == 100u);
     {                                                /* RATCH dimmed where it does nothing: REST, TIE, empty */
         uint32_t dim[4], thm[4], k;
@@ -315,12 +314,12 @@ static int screens(void)
             step_set_ratchet(&t->step[0], 2);
             ui.msg_t = 0;                            /* (Dah: a message's window would hide the cards) */
             memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-            dim[k] = card_px(3, T_DIM); thm[k] = card_px(3, T_THEME);
+            dim[k] = card_px(1, T_DIM); thm[k] = card_px(1, T_THEME);
         }
         t->step[0] = kind[3]; t->step[0].hit = 1u;   /* a NOTE step of lane hits only: it plays */
         step_set_ratchet(&t->step[0], 2);
         memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-        ok = card_px(3, T_DIM) == dim[0] && card_px(3, T_THEME) == thm[0];
+        ok = card_px(1, T_DIM) == dim[0] && card_px(1, T_THEME) == thm[0];
 
         for (k = 1; k < 4u; k++)
             ok &= dim[k] > dim[0] && thm[k] < thm[0];
