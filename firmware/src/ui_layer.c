@@ -332,6 +332,7 @@ static void layer_tap(uint32_t l)
         ui_say("HOLD [", KC[LY_KC[l]].label);
         str_cpy(ui.msg + str_len(ui.msg), "] QUICK", sizeof ui.msg - str_len(ui.msg));
         ui.msg_t = 90;                                  /* ~1.5 s */
+        ly_hint = (uint8_t)l;                           /* (Dah: HOME's look says it whole, over the knobs) */
         lys.dt_hint = 1;
     }
     if (!acted && !name_on() && !ui.confirm && !ui.menu) {   /* a page opened: a second tap soon locks the layer */

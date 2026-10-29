@@ -465,7 +465,7 @@ static void head_home(void)
     str_cpy(bp, "BPM ", sizeof bp);
     fmt_int(bp + 4, song.g[G_BPM]);
     sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
-                         (uint32_t)song.rec * 977u + tc * 13u + (ui.msg_t ? str_hash(5u, ui.msg) : 0u) * 7u +
+                         (uint32_t)song.rec * 977u + tc * 13u +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
                          (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
                          (ui.home ? 0u : ui.page + 1u) * 3141592653u);
@@ -511,11 +511,7 @@ static void head_home(void)
     }
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
     x = cv_text(6, ty, &AF_S, ti, T_MID) + 8;            /* the page (its place in its family: "DIST 2/5") */
-    if (ui.msg_t) {                                     /* a message: over the rest */
-        cv_free_text(x, ty, &AF_S, ui.msg, T_TEXT, T_BG, xr - x);
-        cv_blit(0, Y_HEAD);
-        return;
-    }
+    /* (Dah: a message shows over the knobs, cards_msg; the header keeps its own) */
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
     x = cv_text(x, ty, &AF_S, "PAT", T_MID) + 4;       /* the pattern: "PAT 1" */
     x = cv_text(x, ty, &AF_S, num + 1, sl[0] == '-' ? T_MID : T_THEME) + 8;
@@ -1439,11 +1435,52 @@ static void draw_columns(void)
     draw_columns_in();
     ux_untint();
 }
+/* (Dah) HOME's look: a message over the four knobs while it shows (the header keeps its own); a layer's "HOLD [X]
+ * QUICK" said whole, on two lines. The knobs drawn again after it */
+static int cards_msg(void)
+{
+    static uint32_t msig;
+    uint32_t c, sig;
+    int32_t w = CARD_X(3) + CARD_W - CARD_X(0), h = (int32_t)card_h();
+    const char *a = ui.msg, *b = "";
+    if (!home_bare() || !ui.msg_t) {
+        if (msig && home_bare())                        /* (gone: the gaps between the knobs, BG again) */
+            draw_gaps(card_y(), card_h());
+        msig = 0;
+        return 0;
+    }
+    if (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[' &&
+        ui.msg[str_len(ui.msg) - 1u] == 'K') {          /* ("HOLD [X] QUICK") */
+        a = LY_LONG[ly_hint][0];
+        b = LY_LONG[ly_hint][1];
+    }
+    sig = str_hash(str_hash(9u, a), b) + 1u;
+    for (c = 0; c < 4u; c++)
+        ui.col[c][0] = 0;                               /* (the knobs: all again once it is gone) */
+    if (!ui.force && sig == msig)
+        return 1;
+    msig = sig;
+    cv_begin((uint32_t)w, (uint32_t)h, T_BG);
+    cv_rect(0, 0, w, h, T_SURF);
+    if (b[0]) {
+        GFX_HOOK_ALIGN(0, 4, 0, 4 + KC_H, AL_V | AL_PASS, "cards message first line");
+        cv_free_hint(8, 4 + CAP_IN(S, KC_H), a, T_TEXT, T_SURF, w - 16);
+        GFX_HOOK_ALIGN(0, h - 4 - KC_H, 0, h - 4, AL_V, "cards message second line");
+        cv_free_text(8, h - 4 - KC_H + CAP_IN(S, KC_H), &AF_S, b, T_MID, T_SURF, w - 16);
+    } else {
+        GFX_HOOK_ALIGN(0, 0, 0, h, AL_V | AL_PASS, "cards message on its middle");
+        cv_free_hint(8, CAP_IN(S, h), a, T_TEXT, T_SURF, w - 16);
+    }
+    cv_blit((uint32_t)CARD_X(0), card_y());
+    return 1;
+}
 static void draw_columns_in(void)
 {
     uint32_t c;
     char val[12];
     const char *unit;
+    if (cards_msg())
+        return;
     (void)motion_mask(song.sel, card_mot_mask);       /* (PLAY OFF: no scan) */
     if (ui.home && hvw.on) {                            /* (Dah) HOME's VIEW: MOVE, ZOOM, FOLLOW */
         fmt_int(val, (int32_t)(hv_base(TSEL, 1) / 16u) + 1);

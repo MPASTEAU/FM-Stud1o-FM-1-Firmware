@@ -521,6 +521,14 @@ static void ui_say(const char *a, const char *b)
 }
 
 static void ui_message(const char *s) { ui_say(s, ""); }
+/* (Dah) the layer whose "HOLD [X] QUICK" shows (0 none): HOME's look says what it does, whole (ui_draw.c) */
+static uint8_t ly_hint;
+static const char *const LY_LONG[7][2] = {{"", ""}, {"HOLD [FX]", "PERFORMANCE EFFECTS ON THE KEYS"},
+                                          {"HOLD [GLO]", "MUTES, SOLOS, LEVELS, TAP TEMPO"},
+                                          {"HOLD [SCL]", "ROOT, SCALE AND CHORD ON THE KEYS"},
+                                          {"HOLD [EDIT]", "AN ENGINE ON EACH KEY"},
+                                          {"HOLD [SEQ]", "THE SEQUENCE TOOLS ON THE KEYS"},
+                                          {"HOLD [REC]", "THE RECORDING SETTINGS"}};
 /* a message led by an icon: its first byte (ui_draw.c draw_head draws the icon, then the words) */
 #define MSG_NOFILE "\x01"                      /* the no-file icon (ICON_X_NOFILE) */
 /* a missing sample (ui_input.c sample_notice): NO SAMPLE (SAMPLE NOT FOUND, the SLICES page's, is 4 px too wide
