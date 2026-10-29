@@ -1487,6 +1487,7 @@ static int msg_popup(void)
     int32_t W = 216, H, x0 = 12, y0, nl, ly;
     char ln[2][40];
     const char *a = ui.msg, *b = "";
+    int help = 0;
     int two = (cards_b && str_eq(ui.msg, cards_a)) ||
               (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[');
     if (!ui.msg_t || !(home_bare() || two) || ui.menu || ui.confirm || name_on() || ui.layer ||
@@ -1505,7 +1506,9 @@ static int msg_popup(void)
         ui.msg[str_len(ui.msg) - 1u] == 'K') {          /* ("HOLD [X] QUICK") */
         a = LY_LONG[ly_hint][0];
         b = LY_LONG[ly_hint][1];
+        help = 1;
     }
+    help |= str_eq(a, "ON THE MASTER");                 /* (Dah) HELP's windows: how to have them no more, small */
     int knob = 0;                                       /* (Dah) "\x02" in its first line: a knob drawn there */
     {
         uint32_t i;
@@ -1515,6 +1518,8 @@ static int msg_popup(void)
     nl = b[0] ? pop_wrap(b, W - 28 - (knob ? 2 * KNOB_SMALL_R + 6 : 0), ln) : 0;
     H = 2 * 20 + AF_M_CAP_H + (nl ? 10 + 20 * nl - (20 - AF_M_CAP_H) : 0);   /* (the words' ink, 20 px over and under:
                                                          * centred both ways) */
+    if (help)
+        H += 12 + AF_S_CAP_H - 6;                       /* (its line under the words, 14 px from the frame) */
     y0 = 120 - H / 2;
     sig = str_hash(str_hash(9u, a), b) + 1u;
     if (!ui.force && sig == msig)
@@ -1560,6 +1565,8 @@ static int msg_popup(void)
                 cv_text_in(0, yy - AF_M_CAP_Y, W, &AF_M, ln[k], T_MID, T_SURF);
         }
     }
+    if (help)
+        cv_text_in(0, H - 14 - AF_S_CAP_H - AF_S_CAP_Y, W, &AF_S, "TO DISABLE HELP, HOLD HOME", T_DIM, T_SURF);
     lcd_fill(0, (uint32_t)card_y(), 240, (uint32_t)(240 - (int32_t)card_y()), T_BG);   /* (the page under it, quiet) */
     cv_blit((uint32_t)x0, (uint32_t)y0);
     return 1;
