@@ -647,6 +647,8 @@ static int ka_chain_page(void) { return !ui.home && !ui.menu && cur_page()->id[0
 static void ka_apply(uint32_t k);
 static void ka_start(void)
 {
+    if (ui.home)                                        /* (Dah: not on HOME: its knobs are the ones assigned) */
+        return;
     ka.dst = 0xFFu;
     ka.st = 1;                                          /* (Dah: the panel says it, ui_graph.c graph_assign) */
     ui.force = 1;
@@ -671,9 +673,7 @@ static uint32_t ka_id_of(uint32_t k)
 {
     int16_t *vp = 0;
     const param_desc_t *d;
-    if (ui.home)
-        d = home_param(k, &vp);
-    else if (cur_page()->scope == SC_TRACK || cur_page()->scope == SC_ENGINE || cur_page()->scope == SC_GLOBAL)
+    if (cur_page()->scope == SC_TRACK || cur_page()->scope == SC_ENGINE || cur_page()->scope == SC_GLOBAL)
         d = page_desc(cur_page(), k, &vp);              /* (a global page: its SEND only, below) */
     else
         return 0xFFu;

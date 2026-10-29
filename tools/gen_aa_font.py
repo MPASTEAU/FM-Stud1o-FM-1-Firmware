@@ -48,7 +48,7 @@ HUFF = [("M", "L", "B")]
 # space as its range and the rest as extras
 # (ui_test.c checks that every L string is covered)
 L_CHARS = " #+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXY?acdefhiknorstuw"
-B_CHARS = " #&'+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"   # (Dah) B: M's face, larger: the selectors' row in the middle   # (Dah: "FM Stud1o", the selectors' titles)
+B_CHARS = " +-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"   # (Dah) B: M's face, larger: the selectors' row in the middle   # (Dah: "FM Stud1o", the selectors' titles)
 
 
 def preset(name):
