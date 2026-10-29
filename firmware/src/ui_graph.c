@@ -2024,8 +2024,8 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
     int32_t ty = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), nx = 52;
     if (sel) {                                          /* (Dah: left of the scrollbar) */
         bg = T_RAISE;
-        cv_rect(4, y, 224, h, T_THEME);
-        cv_rect(6, y + 2, 220, h - 4, bg);
+        cv_rrect(4, y, 224, h, 5, T_THEME, T_BG);        /* (Dah: its corners a little round, as the other lists') */
+        cv_rrect(6, y + 2, 220, h - 4, 4, bg, T_THEME);
     }
     if (kind == FL_PAT) {
         uint8_t tmp[PS_NUM];
