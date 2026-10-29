@@ -247,7 +247,7 @@ static void fl_fx_move(int32_t s)
     uint32_t cur, rows = fl_fx_rows(&cur);
     ch_cur = (uint8_t)clamp((int32_t)cur + s, 0, rows ? (int32_t)rows - 1 : 0);
     if (ch_cur != cur)                                  /* (Dah) CHAIN's rows glide to it (graph_chain) */
-        ch_dy = clamp(ch_dy + ((int32_t)ch_cur > (int32_t)cur ? 24 : -24), -96, 96);
+        ch_dy = clamp(ch_dy + ((int32_t)ch_cur > (int32_t)cur ? 26 : -26), -104, 104);
     ui.force = 1;
     fl_fx_at();
 }
@@ -433,7 +433,7 @@ static void graph_chain(const track_t *t, uint16_t c)
 {
     uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(t, u), rows = n < fx_max(t) ? n + 1u : n;
-    int32_t avail = graph_ht + GOY - 4, x0 = PANEL_X0 + 16, bw = PANEL_W - 18, ph = 24, my, vt, dy = glide(&ch_dy), i;
+    int32_t avail = graph_ht + GOY - 4, x0 = PANEL_X0 + 16, bw = PANEL_W - 18, ph = 26, my, vt, dy = glide(&ch_dy), i;
     if (ch_cur >= rows)
         ch_cur = (uint8_t)(rows - 1u);
     vt = tall_view((int32_t)rows, (int32_t)ch_cur, dy, avail - 1, &my, ph - 2) - 1;   /* (Dah) as SAVE > PATTERN's: the
@@ -448,8 +448,10 @@ static void graph_chain(const track_t *t, uint16_t c)
     my += 1;
     cv_rrect(x0 - 2, my, bw + 4, ph - 1, 5, T_ACCENT, T_SURF);   /* (the frame) */
     for (i = 0; i < (int32_t)rows; i++) {
-        int32_t y = i * ph - vt, by = y + 2, bh = ph - 5, ty = by + CAP_IN(S, bh);
-        int sel = y > my - ph / 2 && y < my + ph / 2;
+        int32_t y = i * ph - vt, sel = y > my - ph / 2 && y < my + ph / 2;
+        int32_t in = sel ? 0 : 4, by = y + 2 + (sel ? 0 : 2), bh = ph - 5 - (sel ? 0 : 4);   /* (Dah: the one in the
+                                                         * frame a little bigger, its name in M; the others smaller) */
+        int32_t ty = by + CAP_IN(S, bh);
         if (y < 0 || y + ph > avail)                    /* (cut by an edge: not drawn) */
             continue;
         if (i < (int32_t)n) {
@@ -459,15 +461,23 @@ static void graph_chain(const track_t *t, uint16_t c)
             uint16_t cc = ms || fx_mst(t) ? T_MID : c;   /* (Dah: the MASTER's chain grey: no track's colour) */
             cv_rrect(PANEL_X0, cy, 12, 12, 6, sel ? T_ACCENT : cc, T_SURF);
             cv_text_in(PANEL_X0, cy + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : cc);
-            cv_rrect(x0, by, bw, bh, 4, sel ? cc : T_RAISE, sel ? T_ACCENT : T_SURF);
-            if (ms)
-                nx = cv_text_on(nx, ty, &AF_S, "M", sel ? T_INK : T_THEME, sel ? cc : T_RAISE) + 5;
-            cv_text_on(nx, ty, &AF_S, FXU_N[u[i]], sel ? T_INK : ms ? T_MID : T_TEXT, sel ? cc : T_RAISE);
+            cv_rrect(x0 + in, by, bw - 2 * in, bh, 4, sel ? cc : T_RAISE, sel ? T_ACCENT : T_SURF);
+            if (sel) {
+                int32_t mty = by + CAP_IN(M, bh);
+                if (ms)
+                    nx = cv_text_on(nx, mty, &AF_M, "M", T_INK, cc) + 6;
+                cv_text_on(nx, mty, &AF_M, FXU_N[u[i]], T_INK, cc);
+            } else {
+                nx += in;
+                if (ms)
+                    nx = cv_text_on(nx, ty, &AF_S, "M", T_THEME, T_RAISE) + 5;
+                cv_text_on(nx, ty, &AF_S, FXU_N[u[i]], ms ? T_MID : T_TEXT, T_RAISE);
+            }
             fx_unit_info(t, u[i], inf);
-            cv_text_r(x0 + bw - 6, ty, &AF_S, inf, sel ? T_INK : T_MID, sel ? cc : T_RAISE);
+            cv_text_r(x0 + bw - 6 - in, ty, &AF_S, inf, sel ? T_INK : T_MID, sel ? cc : T_RAISE);
         } else {                                        /* + ADD */
-            cv_rrect(x0, by, bw, bh, 4, T_LINE, sel ? T_ACCENT : T_SURF);
-            cv_rrect(x0 + 1, by + 1, bw - 2, bh - 2, 3, T_SURF, T_LINE);
+            cv_rrect(x0 + in, by, bw - 2 * in, bh, 4, T_LINE, sel ? T_ACCENT : T_SURF);
+            cv_rrect(x0 + in + 1, by + 1, bw - 2 * in - 2, bh - 2, 3, T_SURF, T_LINE);
             cv_text_in(x0, ty, bw, &AF_S, "+ ADD", sel ? T_TEXT : T_MID, T_SURF);
         }
     }
