@@ -1648,17 +1648,6 @@ static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
 /* (Dah) SAVE's tall lists (34 px a row): the frame from the top down to the middle, there the rows go by under it,
  * at the end on down to the foot (as HOME's steps); p the place gliding (cur's, dy back). The view's top, the frame's y
  * (from the room's top, H tall) */
-/* (Dah) more rows above / below the room y0 .. y1: a small arrow at the right, up / down */
-static void list_more(int up, int dn, int32_t y0, int32_t y1)
-{
-    int32_t k;
-    for (k = 0; k < 4; k++) {                          /* (a triangle, 7 px wide) */
-        if (up)
-            cv_rect(230 - k, y0 + 1 + k, 1 + 2 * k, 1, T_TEXT);
-        if (dn)
-            cv_rect(230 - k, y1 - 2 - k, 1 + 2 * k, 1, T_TEXT);
-    }
-}
 static int32_t tall_view(int32_t n, int32_t cur, int32_t dy, int32_t h, int32_t *fy, int32_t rh)   /* (rh: a row's
                                                          * height, 2 px between two) */
 {
@@ -1733,13 +1722,24 @@ static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int3
     cv_rrect(4, y0 + fy - 1, 232, BR_H + 2, 5, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the
                                                          * rows by; Dah: the one in it a little bigger, as CHAIN's) */
     cv_rrect(6, y0 + fy + 1, 228, BR_H - 2, 4, T_RAISE, T_THEME);
+    int16_t c0 = cv_cy0, c1 = cv_cy1;
+    cv_cy0 = (int16_t)clamp(y0 + CV_OY, 0, (int32_t)cv_h);   /* (Dah) the rows cut by the room's edges: shown, fainter
+                                                         * (as the selectors'), clipped to it */
+    cv_cy1 = (int16_t)clamp(y1 + CV_OY, cv_cy0, (int32_t)cv_h);
+    cv_scroll = 1;
     for (k = 0; k < n; k++) {
         int32_t y = y0 + k * (BR_H + 2) - vt;
-        int mid = y > y0 + fy - BR_H / 2 && y < y0 + fy + BR_H / 2;
+        int mid = y > y0 + fy - BR_H / 2 && y < y0 + fy + BR_H / 2, whole = y >= y0 && y + BR_H <= y1;
         uint16_t bg = mid ? T_RAISE : T_SURF;
-        if (y < y0 || y + BR_H > y1)                    /* (cut by an edge: not drawn) */
+        if (y + BR_H <= y0 || y >= y1)
             continue;
-        GFX_HOOK_ALIGN(0, y, 0, y + BR_H, AL_V, "save list row text centred");   /* (the one in the frame in M, the
+        if (!whole) {                                   /* (cut: small, faint) */
+            cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, r[k].tag, ux_mix(T_SURF, T_MID, 55), T_SURF);
+            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, ux_mix(T_SURF, T_MID, 55), T_SURF, 170);
+            continue;
+        }
+        if (y + CV_OY >= 0 && y + BR_H + CV_OY <= (int32_t)cv_h)   /* (a split panel: in this canvas whole) */
+            GFX_HOOK_ALIGN(0, y, 0, y + BR_H, AL_V, "save list row text centred");   /* (the one in the frame in M, the
                                                          * others S: a slight zoom) */
         if (mid)
             cv_text_on(12, y + CAP_IN(M, BR_H), &AF_M, r[k].tag, T_THEME, bg);
@@ -1752,7 +1752,9 @@ static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int3
         if (r[k].note[0])
             cv_text_r(226, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
     }
-    list_more(vt > 0, n * (BR_H + 2) - 2 - vt > y1 - y0, y0, y1);   /* (more above, more below) */
+    cv_scroll = 0;
+    cv_cy0 = c0;
+    cv_cy1 = c1;
 }
 static void graph_user(void)
 {
@@ -2205,7 +2207,17 @@ static void pat_rows(int32_t dy, int add)
             cv_text_on(36, y + CAP_IN(M, 32), &AF_M, "NEW", mid ? T_THEME : T_DIM, bg);
             continue;
         }
-        if (whole) {                                    /* (cut by an edge: its steps alone) */
+        if (!whole) {                                   /* (Dah) cut by an edge: its number small, faint, clipped */
+            int16_t c0 = cv_cy0, c1 = cv_cy1;
+            fmt_int(b, (int32_t)nums[k]);
+            cv_cy0 = (int16_t)clamp(CV_OY, 0, (int32_t)cv_h);
+            cv_cy1 = (int16_t)clamp(avail + CV_OY, cv_cy0, (int32_t)cv_h);
+            cv_scroll = 1;
+            cv_text_on(16, y + CAP_IN(S, 32), &AF_S, b, ux_mix(T_SURF, T_MID, 55), bg);
+            cv_scroll = 0;
+            cv_cy0 = c0;
+            cv_cy1 = c1;
+        } else {
             fmt_int(b, (int32_t)nums[k]);
             GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
             if (mid)
@@ -2218,7 +2230,6 @@ static void pat_rows(int32_t dy, int add)
         else
             pt_mini(nums[k], 38, y + 4, 188, 25, bg);
     }
-    list_more(vt > 2, rows * 34 - 2 - vt > avail - 2, 0, avail);   /* (more above, more below) */
 }
 static void graph_pattern(void)
 {

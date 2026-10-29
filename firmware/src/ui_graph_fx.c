@@ -452,8 +452,21 @@ static void graph_chain(const track_t *t, uint16_t c)
         int32_t in = sel ? 0 : 4, by = y + 2 + (sel ? 0 : 2), bh = ph - 5 - (sel ? 0 : 4);   /* (Dah: the one in the
                                                          * frame a little bigger, its name in M; the others smaller) */
         int32_t ty = by + CAP_IN(S, bh);
-        if (y < 0 || y + ph > avail)                    /* (cut by an edge: not drawn) */
+        if (y + ph <= 0 || y >= avail)
             continue;
+        if (y < 0 || y + ph > avail) {                  /* (Dah) cut by an edge: shown, small and faint, clipped (as the
+                                                         * selectors') */
+            int16_t c0 = cv_cy0, c1 = cv_cy1;
+            uint16_t fc = ux_mix(T_SURF, T_MID, 50);
+            cv_cy0 = (int16_t)clamp(CV_OY, 0, (int32_t)cv_h);
+            cv_cy1 = (int16_t)clamp(avail + CV_OY, cv_cy0, (int32_t)cv_h);
+            cv_scroll = 1;
+            cv_text_on(x0 + 10, ty, &AF_S, i < (int32_t)n ? FXU_N[u[i]] : "+ ADD", fc, T_SURF);
+            cv_scroll = 0;
+            cv_cy0 = c0;
+            cv_cy1 = c1;
+            continue;
+        }
         if (i < (int32_t)n) {
             char d[2] = {(char)('1' + i), 0}, inf[16];
             int32_t cy = y + (ph - 12) / 2, nx = x0 + 6;
@@ -476,12 +489,20 @@ static void graph_chain(const track_t *t, uint16_t c)
             fx_unit_info(t, u[i], inf);
             cv_text_r(x0 + bw - 6 - in, ty, &AF_S, inf, sel ? T_INK : T_MID, sel ? cc : T_RAISE);
         } else {                                        /* + ADD */
-            cv_rrect(x0 + in, by, bw - 2 * in, bh, 4, T_LINE, sel ? T_ACCENT : T_SURF);
-            cv_rrect(x0 + in + 1, by + 1, bw - 2 * in - 2, bh - 2, 3, T_SURF, T_LINE);
-            cv_text_in(x0, ty, bw, &AF_S, "+ ADD", sel ? T_TEXT : T_MID, T_SURF);
+            int32_t k, bx = x0 + in, bw2 = bw - 2 * in;   /* (Dah) a dashed row, as HOME's spare one: what to do, said */
+            uint16_t dc = sel ? T_TEXT : T_DIM;
+            for (k = 0; k < bw2; k += 4) {
+                cv_rect(bx + k, by, 2, 1, dc);
+                cv_rect(bx + k, by + bh - 1, 2, 1, dc);
+            }
+            for (k = 0; k < bh; k += 4) {
+                cv_rect(bx, by + k, 1, 2, dc);
+                cv_rect(bx + bw2 - 1, by + k, 1, 2, dc);
+            }
+            GFX_HOOK_ALIGN(0, by, 0, by + bh, AL_V, "chain add row on its line");
+            cv_free_hint(bx + 8, by + CAP_IN(S, bh), "TURN [K1] TO ADD AN EFFECT", sel ? T_TEXT : T_DIM, T_SURF, bw2 - 12);
         }
     }
-    list_more(vt > 0, (int32_t)rows * ph - vt > avail, 0, avail);   /* (Dah: more above, more below) */
 }
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */
 {
