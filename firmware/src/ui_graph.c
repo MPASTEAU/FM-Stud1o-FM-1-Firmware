@@ -1969,7 +1969,8 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
         }
     }
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
-    cv_text_on(14, ty, f, tag, kind == FL_TRK && i ? tc : sel ? T_THEME : ink, bg);
+    cv_text_on(14, ty, f, tag, kind == FL_TRK && i ? tc : kind == FL_SND ? (dq < 640u ? T_MID : T_DIM) : sel ? T_THEME : ink,
+               bg);                                    /* (Dah: a sound's engine greyed, its name the text) */
     if (14 + (int32_t)text_w(f, tag) + 8 > nx)          /* (a long tag in M: the name after it) */
         nx = 14 + (int32_t)text_w(f, tag) + 8;
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
