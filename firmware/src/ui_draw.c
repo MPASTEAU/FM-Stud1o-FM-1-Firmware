@@ -435,6 +435,8 @@ static int32_t head_batt(int32_t x1, int32_t hh)
 /* (Dah) HOME's header, one size of text (S), lower (HOME_HEAD_H): the page, the pattern, the track (M, 1..8 on its
  * colour) and its sound; the tempo while it is changed, a message over the rest; an armed REC and the battery right */
 static void sound_name(const track_t *t, char *b);
+#define HL_MS 250u                                      /* (Dah) the header's load read this often */
+static struct { uint8_t voices, cpu; uint32_t t; } hld;
 static void head_home(void)
 {
     char pn[16], sl[3], num[4] = {0}, ch[2], bp[12];
@@ -446,6 +448,11 @@ static void head_home(void)
         str_cpy(pn, "FX", sizeof pn);
     else
         sound_name(TSEL, pn);
+    if (fm1_ms - hld.t >= HL_MS) {                       /* (the load, a few times a second: no flicker) */
+        hld.t = fm1_ms;
+        hld.voices = (uint8_t)voices_busy();
+        hld.cpu = (uint8_t)(song.cpu_q8 * 100u / 256u > 99u ? 99u : song.cpu_q8 * 100u / 256u);
+    }
     (void)head_slot(sl);
     if ((seq_off >> k) & 1u && !chain.running)          /* (the track on no pattern) */
         sl[0] = '-', sl[1] = 0;
@@ -459,7 +466,7 @@ static void head_home(void)
     sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
                          (uint32_t)song.rec * 977u + tc * 13u + (ui.msg_t ? str_hash(5u, ui.msg) : 0u) * 7u +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
-                         (uint32_t)song.batt_raw / 4u * 104729u);
+                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u);
     if (!ui.force && sig == ui.head_sig)
         return;
     ui.head_sig = sig;
@@ -470,6 +477,21 @@ static void head_home(void)
         GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
         xr = cv_text_r(xr, ty, &AF_S, "BPM", T_MID, T_BG) - 3;
         cv_text(xr - w, ty, &AF_S, bp + 4, ui.bpm_t ? T_ACCENT : T_TEXT);
+        xr -= w + 8;
+    }
+    {   /* (Dah) the load: the voices sounding of the budget ("6/8"), the audio's CPU ("42%"), read every HL_MS; the
+         * accent when the budget is full or the CPU over 85 % */
+        char lv[8], lc[8];
+        int32_t w;
+        fmt_int(lv, (int32_t)hld.voices);
+        str_cpy(lv + str_len(lv), "/", 2);
+        fmt_int(lv + str_len(lv), NVOICE);
+        fmt_int(lc, (int32_t)hld.cpu);
+        str_cpy(lc + str_len(lc), "%", 2);
+        GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
+        xr = cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG) - 6;
+        w = text_w(&AF_S, lv);
+        cv_text(xr - w, ty, &AF_S, lv, hld.voices >= NVOICE ? T_ACCENT : T_MID);
         xr -= w + 8;
     }
     if (song.rec) {                                     /* REC: a dot, filled the selected track armed, a ring another */

@@ -152,13 +152,26 @@ static void fm1_irq_on(void) {}
 /* ----------------------------------------------------------- the screen --- */
 static uint16_t web_fb[240 * 240];       /* RGB565 as the panel gets it (high byte first) */
 static uint32_t web_draws;
+#ifndef FELUCCA_LCD12
+#define FELUCCA_LCD12 1                  /* (Dah: the device's 12-bit colour, lcd.c: shown as the panel shows it) */
+#endif
+static uint16_t web_px(uint16_t sw)      /* a pixel as drawn (swapped RGB565) -> as the panel shows it, swapped */
+{
+#if FELUCCA_LCD12
+    uint32_t c = (uint16_t)(sw >> 8 | sw << 8), r = c >> 12, g = (c >> 7) & 15u, b = (c >> 1) & 15u;
+    c = (r << 1 | r >> 3) << 11 | (g << 2 | g >> 2) << 5 | (b << 1 | b >> 3);
+    return (uint16_t)(c >> 8 | c << 8);
+#else
+    return sw;
+#endif
+}
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
 {
     uint32_t i, j;
     uint16_t sw = (uint16_t)((c >> 8) | (c << 8));
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++)
-            web_fb[(y + j) * 240u + x + i] = sw;
+            web_fb[(y + j) * 240u + x + i] = web_px(sw);
     web_draws++;
 }
 static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *p)
@@ -166,7 +179,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     uint32_t i, j;
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++)
-            web_fb[(y + j) * 240u + x + i] = p[j * w + i];
+            web_fb[(y + j) * 240u + x + i] = web_px(p[j * w + i]);
     web_draws++;
 }
 static void lcd_sync(void) {}

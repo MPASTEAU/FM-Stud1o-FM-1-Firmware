@@ -10,6 +10,12 @@
 #ifndef LCD_BAUD
 #define LCD_BAUD 4u                /* lsb/(BAUD+1): 4 = 12 MHz */
 #endif
+/* (Dah) 12-bit colour (COLMOD 0x53: RGB444, two pixels in three bytes): a quarter less to send than RGB565 for the
+ * same picture. The canvas stays RGB565 (gfx.c); lcd_blit packs it in place just before it goes (the canvas is
+ * drawn anew before its next blit), lcd_fill packs its pattern. 0: RGB565 as before */
+#ifndef FELUCCA_LCD12
+#define FELUCCA_LCD12 1
+#endif
 
 static uint8_t lcd_small[64];
 static uint8_t lcd_busy;           /* a lcd_data DMA may still run; CS is low */
@@ -66,6 +72,57 @@ static void lcd_window(uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
 
 static uint16_t lcd_fillbuf[240];
 
+#if FELUCCA_LCD12
+/* a pixel (RGB565, as drawn) as its three 4-bit channels: r << 8 | g << 4 | b */
+static inline uint32_t lcd_rgb444(uint32_t c) { return (c >> 12) << 8 | ((c >> 7) & 15u) << 4 | ((c >> 1) & 15u); }
+static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
+{
+    uint8_t *b = (uint8_t *)lcd_fillbuf;
+    uint32_t i, n, k, q = lcd_rgb444(c);
+    if (!w || !h || x >= 240u || y >= 240u)
+        return;
+    if (x + w > 240u)
+        w = 240u - x;
+    if (y + h > 240u)
+        h = 240u - y;
+    lcd_sync();
+    for (i = 0; i + 3u <= sizeof lcd_fillbuf; i += 3u) {   /* two pixels a three bytes, the buffer full of them */
+        b[i] = (uint8_t)(q >> 4);
+        b[i + 1u] = (uint8_t)((q & 15u) << 4 | q >> 8);
+        b[i + 2u] = (uint8_t)q;
+    }
+    k = sizeof lcd_fillbuf / 3u * 2u;                   /* pixels a transfer (even: the pattern's phase kept) */
+    lcd_window(x, y, x + w - 1u, y + h - 1u);
+    for (n = w * h; n; n -= k) {
+        if (k > n)
+            k = n;
+        lcd_data(lcd_fillbuf, (k * 3u + 1u) / 2u);
+    }
+}
+static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint16_t *px)
+{
+    uint8_t *o = (uint8_t *)(uintptr_t)px;              /* (the canvas, RAM: packed where it lies, ahead of the reads) */
+    uint32_t i, k = 0, n = w * h;
+    if (!w || !h)
+        return;
+    lcd_sync();
+    for (i = 0; i + 1u < n; i += 2u) {
+        uint32_t a = lcd_rgb444((uint16_t)(px[i] >> 8 | px[i] << 8)), b = lcd_rgb444((uint16_t)(px[i + 1u] >> 8 | px[i + 1u] << 8));
+        o[k] = (uint8_t)(a >> 4);
+        o[k + 1u] = (uint8_t)((a & 15u) << 4 | b >> 8);
+        o[k + 2u] = (uint8_t)b;
+        k += 3u;
+    }
+    if (n & 1u) {                                       /* an odd count: the last one's 12 bits, then 4 the panel drops */
+        uint32_t a = lcd_rgb444((uint16_t)(px[n - 1u] >> 8 | px[n - 1u] << 8));
+        o[k] = (uint8_t)(a >> 4);
+        o[k + 1u] = (uint8_t)((a & 15u) << 4);
+        k += 2u;
+    }
+    lcd_window(x, y, x + w - 1u, y + h - 1u);
+    lcd_data(px, k);
+}
+#else
 static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)
 {
     uint32_t i, n, k, sw = (uint16_t)((c >> 8) | (c << 8));
@@ -94,6 +151,7 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     lcd_window(x, y, x + w - 1u, y + h - 1u);
     lcd_data(px, w * h * 2u);
 }
+#endif
 
 /* ST7789V init: reset, then 16-bit colour, scan direction and IPS inversion;
  * voltage and gamma stay at the defaults. Format: cmd, n, n data bytes;
@@ -103,7 +161,7 @@ static const uint8_t LCD_SEQ[] = {
     0x00, 1, 150,
     0x11, 0,                     /* SLPOUT */
     0x00, 1, 120,
-    0x3A, 1, 0x55,               /* COLMOD: RGB565 */
+    0x3A, 1, FELUCCA_LCD12 ? 0x53 : 0x55,   /* COLMOD: RGB444 (Dah), RGB565 */
     0x36, 1, 0x00,               /* MADCTL: top-left origin, RGB order */
     0x21, 0,                     /* INVON: IPS panel */
     0x13, 0,                     /* NORON */
