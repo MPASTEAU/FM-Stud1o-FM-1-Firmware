@@ -3178,7 +3178,8 @@ static void graph_song(void)
     int32_t off, px, sp, hi = SG_X0 + SG_W, bx, x0, ly = SG_IY - (AF_M_CAP_Y + AF_M_CAP_H);
     uint32_t i, j, k, c = song_cur(), lane = ui.song_trk, total, bars;   /* (lane NTRK: SEC, no lane picked) */
     char b[24], a[12];
-    sg_lh = ((int32_t)cv_h - SG_Y - 2) / (int32_t)NTRK - SG_LG;   /* (Dah: the eight lanes fill the panel) */
+    sg_lh = ((int32_t)graph_h() - SG_Y - 2) / (int32_t)NTRK - SG_LG;   /* (Dah: the eight lanes fill the panel, to
+                                                         * its foot: drawn in two canvases, draw_graph_in) */
     if (sg_lh < 11)
         sg_lh = 11;
     song_layout(&L);
@@ -3371,6 +3372,27 @@ lists:
     ui.graph_sig = sig;
     gh = graph_h() < CV_MAX / 240u ? graph_h() : CV_MAX / 240u;   /* (Dah: HOME's panel taller than the canvas: its
                                                          * graphs and lists to the canvas' foot, BG under it) */
+    if (gh < graph_h() && !ui.home && pg->graph == GR_SONG && strip_kind() == SK_NONE && !tl_on() && !pl_on()) {
+        /* (Dah) SONG to the panel's foot, taller than the canvas: drawn twice, the top then the rest (cv_oy), cut
+         * between two lanes */
+        int32_t cut, k, tot = (int32_t)graph_h();
+        sg_lh = (tot - SG_Y - 2) / (int32_t)NTRK - SG_LG;
+        if (sg_lh < 11)
+            sg_lh = 11;
+        for (cut = SG_LY(0), k = 1; k < (int32_t)NTRK && SG_LY(k) <= (int32_t)gh; k++)
+            cut = SG_LY(k);
+        for (k = 0; k < 2; k++) {
+            int32_t y0 = k ? cut : 0, h = k ? tot - cut : cut;
+            cv_begin(240, (uint32_t)h, T_BG);
+            cv_oy = -y0;
+            cv_rrect(3, 0, 234, tot, 5, T_SURF, T_BG);
+            cv_bg = T_SURF;
+            graph_song();
+            cv_oy = 0;
+            cv_blit(0, graph_y() + (uint32_t)y0);
+        }
+        return;
+    }
     cv_begin(240, gh, T_BG);
     cv_rrect(3, 0, 234, (int32_t)gh, 5, T_SURF, T_BG);   /* the panel (MENU > LARGE: the strip) */
     graph_ht = 100 + ((int32_t)gh > H_GRAPH && strip_kind() == SK_NONE ? (int32_t)gh - H_GRAPH : 0);   /* (Dah:
