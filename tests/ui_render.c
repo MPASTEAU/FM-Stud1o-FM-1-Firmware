@@ -530,12 +530,12 @@ static uint32_t nsong_txt;
 static void song_bands(void)
 {
     uint32_t i, nl = 0;
-    int32_t py = (int32_t)Y_GRAPH, base = -1;
+    int32_t py = (int32_t)graph_y(), base = -1;   /* (Dah: HOME's look, the panel under the knobs) */
     if (ui.home || ui.menu || ui.layer || ui.confirm || name_on() || cur_page()->graph != GR_SONG) return;
     for (i = 0; i < nscr; i++) {
         const rbox_t *b = &scr[i];
         int32_t k, lane = 0;
-        if (b->y1 <= py || b->y0 >= py + (int32_t)H_GRAPH) continue;   /* (the header, the cards, the footer) */
+        if (b->y1 <= py || b->y0 >= py + (int32_t)graph_h()) continue;   /* (the header, the cards, the footer) */
         nsong_txt++;
         if ((b->flags & 4u) && strcmp(b->s, "icon")) continue;          /* (a keycap: with its hint's words) */
         for (k = 0; k < NTRK; k++)                    /* in one lane, or (+ ADD's, centred on the four) the lanes' */

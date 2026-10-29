@@ -510,6 +510,9 @@ static void head_home(void)
             cv_rrect(xr - 6, (hh - 8) / 2 + 2, 4, 4, 2, T_BG, T_REC);
         xr -= 14;
     }
+    if (6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 > xr && str_len(ti) > 10u &&
+        ti[0] == 'A' && ti[4] == 'M')                   /* (no room: "AUTOMATION 3/3" -> "AUTO 3/3") */
+        str_cpy(ti + 4, ti + 10, sizeof ti - 4);
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
     x = cv_text(6, ty, &AF_S, ti, T_MID) + 8;            /* the page (its place in its family: "DIST 2/5") */
     if (ui.msg_t && (song.playing || chain_busy())) {   /* (Dah) playing: a message small in the header (no window) */
@@ -531,35 +534,111 @@ static void head_home(void)
 /* (Dah) HOME's footer, a band at the screen's foot: the shortcuts left (keycaps: OCT+ held the VIEW, SELECT the
  * pattern), the selected track's preset right (its name alone) */
 static int fx_has_next(void);                           /* (ui_input.c: an effect with a second page) */
+static void foot_hint(char *a, char *b);
+static uint32_t foot_del(void);
+static uint32_t foot_rename(void);
+/* (Dah) the band's keys on a page of its own (not HOME, FX, MIXER): what the old footer's first row said (OCT+ / OCT-,
+ * REC DELETE, EDIT NAME, SONG's, the grid's KEYS), as keycaps; ha hb hold the words. Returns how many, ok a bit each */
+static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
+{
+    *ok = 0;
+    if (act_cols()) {
+        uint32_t rn = foot_rename(), dl = foot_del(), nk;
+        foot_hint(ha, hb);
+        nk = hb[0] ? 2u : 1u;
+        *ok = act_ready() ? 1u : 0u;
+        if (cur_page()->graph == GR_SONG && sg_pend) {
+            kh[0] = (khint_t){KC_OCTDN, "CANCEL"};
+            kh[1] = (khint_t){KC_OCTUP, ha + 5};
+            *ok = 3u;
+            return 2u;
+        }
+        if (cur_page()->graph == GR_SONG) {
+            kh[0] = (khint_t){KC_OCTUP, ha + 5};
+            kh[1] = (khint_t){KC_REC, "ADD"};
+            kh[2] = (khint_t){KC_OCTDN, "DEL"};
+            *ok = 1u | 2u | (dl == 2u ? 4u : 0u);
+            return 3u;
+        }
+        if (nk == 2u) {
+            kh[0] = (khint_t){KC_OCTDN, hb + 5};
+            kh[1] = (khint_t){KC_OCTUP, ha + 5};
+            *ok = 1u | *ok << 1;
+        } else
+            kh[0] = (khint_t){KC_OCTUP, ha + 5};
+        if (dl) {
+            kh[nk] = (khint_t){KC_REC, "DELETE"};
+            *ok |= (dl == 2u ? 1u : 0u) << nk;
+            nk++;
+        } else if (rn) {
+            kh[nk] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
+            *ok |= (rn == 2u ? 1u : 0u) << nk;
+            nk++;
+        }
+        return nk;
+    }
+    if (grid_on() && !detail_on()) {
+        kh[0] = (khint_t){KC_KEYS, grid_write() ? "STEPS" : "PLAY"};
+        *ok = 1u;
+        return 1u;
+    }
+    return 0;
+}
 static void home_foot(void)
 {
     static uint32_t fsig;
-    char pn[16];
+    char pn[16], ha[16], hb[16], ln[24], hp[48];
+    const char *help = ui.help_t && !ui.ml.on ? help_page() : 0;   /* (HELP ON: the page's keys, a while after it opened) */
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
-    uint32_t sig;
+    uint32_t sig, n, ok = 0, i;
+    khint_t kh[3];
     static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_SELECT, "PAT"}},   /* HOME (OCT+ held: the VIEW) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}, {KC_SELECT, "FX"}},      /* an effect's page (FX: back) */
                                      {{KC_FX, "NEXT"}, {KC_SELECT, "FX"}},       /* .. with a second page */
                                      {{KC_SELECT, "TRACK"}, {KC_HOME, "HOME"}}}; /* (Dah) MIXER */
-    uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
+    uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
+                  cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
         str_cpy(pn, "FX", sizeof pn);
     else
         sound_name(TSEL, pn);
-    sig = str_hash(77u + mx_master, pn) + (uint32_t)ux.gen * 31u + hk * 7919u;
+    ln[0] = 0;
+    if (hk < 5u) {
+        kh[0] = KH[hk][0];
+        kh[1] = KH[hk][1];
+        n = 2u;
+        ok = 3u;
+    } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
+        ml_line(ln);
+        n = 0;
+    } else {
+        n = foot_keys(kh, &ok, ha, hb);
+        if (!n && help && (n = help_parse(help, kh, hp, sizeof hp)) != 0u)
+            ok = 7u;
+    }
+    sig = str_hash(str_hash(77u + mx_master, pn), ln) + (uint32_t)ux.gen * 31u + hk * 7919u + ok * 131u + n * 3u;
+    for (i = 0; i < n; i++)
+        sig = str_hash(sig + kh[i].key, kh[i].act);
     if (!ui.force && sig == fsig)
         return;
     fsig = sig;
     lcd_fill(0, (uint32_t)y0 - 2u, 240, 2, T_BG);
     cv_begin(240, HOME_FOOT_H, T_BG);
-    x = cv_key_hint(4, (HOME_FOOT_H - KC_H) / 2, KH[hk][0].key, KH[hk][0].act, 1, T_BG) + 8;
-    x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, KH[hk][1].key, KH[hk][1].act, 1, T_BG) + 10;
-    w = text_w(&AF_S, pn);                              /* (the preset's name alone) */
-    if (w > 236 - x)
-        w = 236 - x;
-    GFX_HOOK_ALIGN(0, 0, 0, HOME_FOOT_H, AL_V, "home footer text on its middle");
-    cv_free_text(236 - w, CAP_IN(S, HOME_FOOT_H), &AF_S, pn, T_TEXT, T_BG, w);
+    x = 4;
+    if (ln[0]) {
+        GFX_HOOK_ALIGN(0, 0, 0, HOME_FOOT_H, AL_V, "home footer text on its middle");
+        x = cv_free_text(4, CAP_IN(S, HOME_FOOT_H), &AF_S, ln, T_ACCENT, T_BG, 150) + 10;
+    }
+    for (i = 0; i < n; i++)
+        x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, kh[i].key, kh[i].act, (int)((ok >> i) & 1u), T_BG) + (i + 1u < n ? 8 : 10);
+    w = text_w(&AF_S, pn);                              /* (the preset's name alone; no room: none, not cut) */
+    if (w <= 236 - x || hk < 5u) {
+        if (w > 236 - x)
+            w = 236 - x;
+        GFX_HOOK_ALIGN(0, 0, 0, HOME_FOOT_H, AL_V, "home footer text on its middle");
+        cv_free_text(236 - w, CAP_IN(S, HOME_FOOT_H), &AF_S, pn, T_TEXT, T_BG, w);
+    }
     cv_blit(0, (uint32_t)y0);
 }
 static void draw_head(void)
@@ -961,12 +1040,12 @@ static int32_t kc_sin(int32_t a)                        /* a: 1/1024 turn */
     return s * KC_SIN[i / 4];
 }
 static uint8_t knob_bip;                                /* (Dah) the next card's knob from its middle (PAN, WIDTH) */
-static void knob_card(uint32_t c, const char *label, const char *val, const char *unit, int32_t ratio, int hot)
+static void knob_card(uint32_t c, const char *label, const char *val, const char *unit, int32_t ratio, int hot, int dim)
 {
     int bip = knob_bip;
     char key[48], nm[20];
     int32_t r = KNOB_HOME_R, bx = (COL_W - 2 * r) / 2, by = 1, cx = bx + r, cy = by + r, a1, mr = r - 1, e = HK_END;
-    uint16_t tc = T_THEME;
+    uint16_t tc = dim ? T_DIM : T_THEME;
     const aafont_t *vf = &AF_M;
     uint32_t n;
     str_cpy(nm, label, 12);                             /* the name, its unit after it ("ATK ms"; too wide: the name
@@ -985,7 +1064,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     key[n + 2] = (char)('A' + ((tc >> 8) & 15u));
     key[n + 3] = (char)('A' + (tc >> 12));
     key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio * 90 / 1000));
-    key[n + 5] = (char)('0' + hot + 2 * bip);
+    key[n + 5] = (char)('0' + hot + 2 * bip + 4 * dim);
     key[n + 6] = 0;
     knob_bip = 0;
     if (!ui.force && str_eq(key, ui.col[c]))
@@ -1025,9 +1104,14 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     {
         int32_t vh = vf == &AF_M ? AF_M_CAP_H : AF_S_CAP_H, ty = cy - 2 - vh / 2, ly = by + 2 * r - AF_S_CAP_H - 1;
         int32_t mw = 2 * (r - 4), w = text_w(vf, val), vy = ty - (vf == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y);
-        if (w <= mw) {                                  /* the value, in the middle */
+        uint32_t kl;
+        int32_t kid = kc_tag(val, &kl);
+        if (kid >= 0 && !val[kl]) {                     /* (a key, "[OCT+]": its keycap in the middle) */
+            int32_t kw = kc_w((uint32_t)kid);
+            cv_keycap(cx - kw / 2, cy - 2 - KC_H / 2, (uint32_t)kid, hot ? T_ACCENT : T_KEY, T_INK, T_SURF);
+        } else if (w <= mw) {                           /* the value, in the middle */
             GFX_HOOK_ALIGN(cx - r, ty, cx + r, ty + vh, AL_H, "knob card value centred");
-            cv_text_in(cx - r, vy, 2 * r, vf, val, T_TEXT, T_SURF);
+            cv_text_in(cx - r, vy, 2 * r, vf, val, dim ? T_DIM : T_TEXT, T_SURF);   /* (DIM: it does nothing there) */
         } else {                                        /* (Dah) too wide even in S: narrowed into the ring (never
                                                          * cut, never over it): each column two of the text's blended */
             int32_t xx, yy, x0 = cx - mw / 2;
@@ -1073,7 +1157,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     if (home_bare()) {                                  /* (Dah) HOME: knobs */
         (void)vc; (void)icon; (void)sp; (void)kn; (void)kid; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
         (void)strip; (void)x; (void)lc; (void)vf; (void)n; (void)named; (void)mot; (void)kind;
-        knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot);
+        knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot, vc == T_DIM);
         return;
     }
     knob_bip = 0;                                       /* (cards: no knob) */

@@ -274,7 +274,7 @@ static uint32_t card_px(uint32_t k, uint16_t c)
 {
     uint32_t n = 0;
     int32_t x, y;
-    for (y = Y_LABEL; y < Y_LABEL + CARD_H; y++)
+    for (y = (int32_t)card_y(); y < (int32_t)(card_y() + card_h()); y++)
         for (x = CARD_X(k); x < CARD_X(k) + CARD_W; x++)
             n += swap16(host_screen[y * 240 + x]) == c;
     return n;
@@ -284,7 +284,7 @@ static uint32_t pr_slide_px(uint32_t i, int32_t lo, int32_t hi)
 {
     uint32_t n = 0;
     int32_t x, y, x0 = PR_X0 + (int32_t)i * PR_CW;
-    for (y = Y_GRAPH + pr_row_y(hi); y <= Y_GRAPH + pr_row_y(lo) + PR_RH; y++)
+    for (y = graph_y() + pr_row_y(hi); y <= graph_y() + pr_row_y(lo) + PR_RH; y++)
         for (x = x0 + 11; x <= x0 + 13; x += 2)          /* (x0 + 12 the step line, x0 + 14 the next bars) */
             n += swap16(host_screen[y * 240 + x]) == T_TEXT;
     return n;
@@ -313,6 +313,7 @@ static int screens(void)
         for (k = 0; k < 4u; k++) {
             t->step[0] = kind[k];
             step_set_ratchet(&t->step[0], 2);
+            ui.msg_t = 0;                            /* (Dah: a message's window would hide the cards) */
             memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
             dim[k] = card_px(3, T_DIM); thm[k] = card_px(3, T_THEME);
         }
@@ -320,6 +321,7 @@ static int screens(void)
         step_set_ratchet(&t->step[0], 2);
         memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
         ok = card_px(3, T_DIM) == dim[0] && card_px(3, T_THEME) == thm[0];
+
         for (k = 1; k < 4u; k++)
             ok &= dim[k] > dim[0] && thm[k] < thm[0];
         bad += check("  RATCH shows dimmed on a REST, a TIE or an empty step (a note or a hit: not)", ok);
@@ -334,7 +336,7 @@ static int screens(void)
     step_set_ratchet(&t->step[1], 2);
     go_page(GR_ROLL); ui.cursor = 8; ui.bank = 0;
     memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-    y = Y_GRAPH + (uint32_t)pr_row_y(60) + 2u;
+    y = graph_y() + (uint32_t)pr_row_y(60) + 2u;
     x = PR_X0 + 1u * PR_CW;
     ok = pr_is_bar(x + 3u, y) && pr_is_bar(x + 9u, y) && !pr_is_bar(x + 6u, y);
     x = PR_X0 + 3u * PR_CW;
@@ -354,7 +356,7 @@ static int screens(void)
     step_set_ratchet(&t->step[1], 3);
     ui.lane = 1;
     memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-    y = Y_GRAPH + 6u + 4u + 6u;                      /* lane 0's hits: y 12 .. 21 of the panel */
+    y = graph_y() + 6u + 4u + 6u;                      /* lane 0's hits: y 12 .. 21 of the panel */
     x = 40u + 12u;
     bad += check("  the DRUM grid draws an x3 hit in three parts", pr_is_bar(x, y) && !pr_is_bar(x + 2u, y) &&
                  pr_is_bar(x + 3u, y) && !pr_is_bar(x + 5u, y) && pr_is_bar(x + 6u, y));

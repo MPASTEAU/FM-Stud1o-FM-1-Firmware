@@ -418,7 +418,8 @@ static uint32_t large_kind(void)
            g == GR_SLICES || g == GR_EVENTS || (g >= GR_DLANE && g <= GR_DSYN5) ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
-#define home_bare() ((ui.home || cur_page()->fam == FAM_FX || cur_page()->graph == GR_TRK) && !ui.layer && large_kind() != LK_TALL)   /* (Dah: HOME's
+static int name_on(void);
+#define home_bare() (!ui.layer && !name_on() && large_kind() != LK_TALL)   /* (Dah: HOME's
                                                          * look, the FX pages too) */   /* (Dah) HOME: no footer, the panel down to the screen's foot,
                                                          * its cards knobs (HOME_CARD_H) */
 #define HOME_CARD_H 40
