@@ -410,6 +410,119 @@ static void head_group(void)
     GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
     cv_text(x + 4, HEAD_MY, &AF_M, b, T_THEME);
 }
+/* (Dah) HOME's header: where one is, plainly, left to right: the page, the pattern, the track (M, 1..8 on its colour)
+ * and its sound (the engine, the preset); an armed REC at the right. A message, a layer or the tempo being changed:
+ * the header of the pages (draw_head) */
+static void sound_name(const track_t *t, char *b);
+/* (Dah) the battery, upright and small: its level filled from the foot (an estimate from ADC ch3 between 510 and
+ * 620; 20 % or less the accent); USB power: full, THEME. Its right end at x1; returns its left */
+static int32_t head_batt(int32_t x1, int32_t hh)
+{
+    char b[8];
+    int32_t bh = 11, bw = 6, by = (hh - bh) / 2 + 1, bx = x1 - bw, pct, f;
+    int usbp = batt_shown() == 4;
+    uint16_t c;
+    pct = clamp(((int32_t)song.batt_raw - 510) * 100 / 110, 0, 100);
+    c = usbp ? T_THEME : pct <= 20 ? T_ACCENT : T_TEXT;
+    cv_rect(bx + 2, by - 2, 2, 2, c);                   /* its cap */
+    cv_frame(bx, by, bw, bh, c);
+    f = usbp ? bh - 4 : (bh - 4) * pct / 100;
+    if (f > 0)
+        cv_rect(bx + 2, by + bh - 2 - f, bw - 4, f, c);
+    (void)b;
+    return bx;                                          /* (Dah: no share written, the battery alone) */
+}
+/* (Dah) HOME's header, one size of text (S), lower (HOME_HEAD_H): the page, the pattern, the track (M, 1..8 on its
+ * colour) and its sound; the tempo while it is changed, a message over the rest; an armed REC and the battery right */
+static void sound_name(const track_t *t, char *b);
+static void head_home(void)
+{
+    char pn[16], sl[3], num[4] = {0}, ch[2], bp[12];
+    uint32_t k = song.sel % NTRK, sig;
+    uint16_t tc = mx_master ? T_TEXT : ux.trk[k];
+    const char *en = mx_master ? "MASTER" : ENGINES[TSEL->eng_req % NENGINES]->name;
+    int32_t x, xr, hh = HOME_HEAD_H, ty = CAP_IN(S, HOME_HEAD_H);
+    if (mx_master)
+        str_cpy(pn, "FX", sizeof pn);
+    else
+        sound_name(TSEL, pn);
+    (void)head_slot(sl);
+    if ((seq_off >> k) & 1u && !chain.running)          /* (the track on no pattern) */
+        sl[0] = '-', sl[1] = 0;
+    num[0] = 'P';
+    num[1] = sl[0];
+    num[2] = sl[1];
+    ch[0] = mx_master ? 'M' : (char)('1' + k);
+    ch[1] = 0;
+    str_cpy(bp, "BPM ", sizeof bp);
+    fmt_int(bp + 4, song.g[G_BPM]);
+    sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
+                         (uint32_t)song.rec * 977u + tc * 13u + (ui.msg_t ? str_hash(5u, ui.msg) : 0u) * 7u +
+                         (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
+                         (uint32_t)song.batt_raw / 4u * 104729u);
+    if (!ui.force && sig == ui.head_sig)
+        return;
+    ui.head_sig = sig;
+    cv_begin(240, (uint32_t)hh, T_BG);
+    xr = head_batt(236, hh) - 8;
+    {   /* (Dah) the tempo: its figures (the accent while it is changed), BPM after them */
+        int32_t w = text_w(&AF_S, bp + 4);
+        GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
+        xr = cv_text_r(xr, ty, &AF_S, "BPM", T_MID, T_BG) - 3;
+        cv_text(xr - w, ty, &AF_S, bp + 4, ui.bpm_t ? T_ACCENT : T_TEXT);
+        xr -= w + 8;
+    }
+    if (song.rec) {                                     /* REC: a dot, filled the selected track armed, a ring another */
+        cv_rrect(xr - 8, (hh - 8) / 2, 8, 8, 4, T_REC, T_BG);
+        if (!((song.rec >> song.sel) & 1u))
+            cv_rrect(xr - 6, (hh - 8) / 2 + 2, 4, 4, 2, T_BG, T_REC);
+        xr -= 14;
+    }
+    GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
+    x = cv_text(6, ty, &AF_S, "HOME", T_MID) + 8;       /* the page */
+    if (ui.msg_t) {                                     /* a message: over the rest */
+        cv_free_text(x, ty, &AF_S, ui.msg, T_TEXT, T_BG, xr - x);
+        cv_blit(0, Y_HEAD);
+        return;
+    }
+    GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
+    x = cv_text(x, ty, &AF_S, num, sl[0] == '-' ? T_MID : T_THEME) + 8;   /* the pattern */
+    cv_rect(x, (hh - 14) / 2, 14, 14, tc);              /* the track (square) */
+    GFX_HOOK_ALIGN(x, (hh - 14) / 2, x + 14, (hh - 14) / 2 + 14, AL_HV, "header track cushion digit centred");
+    cv_text_in(x, (hh - 14) / 2 + CAP_IN(S, 14), 14, &AF_S, ch, T_INK, tc);
+    x += 14 + 7;
+    (void)en;                                           /* (its sound: in the footer, home_foot) */
+    cv_blit(0, Y_HEAD);
+}
+/* (Dah) HOME's footer, a band at the screen's foot: the shortcuts left (keycaps: OCT+ held the VIEW, SELECT the
+ * pattern), the selected track's preset right (its name alone) */
+static void home_foot(void)
+{
+    static uint32_t fsig;
+    char pn[16];
+    const char *en = mx_master ? "MASTER" : ENGINES[TSEL->eng_req % NENGINES]->name;
+    int32_t y0 = 240 - HOME_FOOT_H, x, w;
+    uint32_t sig;
+    static const khint_t KH[2] = {{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}};
+    if (mx_master)
+        str_cpy(pn, "FX", sizeof pn);
+    else
+        sound_name(TSEL, pn);
+    sig = str_hash(str_hash(77u + mx_master, en), pn) + (uint32_t)ux.gen * 31u;
+    if (!ui.force && sig == fsig)
+        return;
+    fsig = sig;
+    lcd_fill(0, (uint32_t)y0 - 2u, 240, 2, T_BG);
+    cv_begin(240, HOME_FOOT_H, T_BG);
+    x = cv_key_hint(4, (HOME_FOOT_H - KC_H) / 2, KH[0].key, KH[0].act, 1, T_BG) + 8;
+    x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, KH[1].key, KH[1].act, 1, T_BG) + 10;
+    w = text_w(&AF_S, pn);                              /* (the preset's name alone) */
+    if (w > 236 - x)
+        w = 236 - x;
+    GFX_HOOK_ALIGN(0, 0, 0, HOME_FOOT_H, AL_V, "home footer text on its middle");
+    cv_free_text(236 - w, CAP_IN(S, HOME_FOOT_H), &AF_S, pn, T_TEXT, T_BG, w);
+    cv_blit(0, (uint32_t)y0);
+}
 static void draw_head(void)
 {
     static int16_t metro_x = -1;                       /* the metronome's ink as drawn (-1: hidden), its beat */
@@ -420,7 +533,12 @@ static void draw_head(void)
     uint32_t rec = (song.rec >> song.sel) & 1u ? 2u : song.rec != 0u;   /* 2 the selected track armed, 1 another */
     char sl[3];
     int slot = head_slot(sl);
-    uint32_t sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
+    uint32_t sig;
+    if (home_bare()) {                                  /* (Dah) HOME: its own, plain */
+        head_home();
+        return;
+    }
+    sig = (uint32_t)song.playing * 3u + rec * 5u + (uint32_t)(song.octave + 8) * 11u + song.sel * 13131u +
                    (ui.msg_t ? str_hash(7u, ui.msg) : ui.layer * 7919u + (uint32_t)layer_locked() * 3u) + (uint32_t)song.g[G_BPM] * 101u + (ui.bpm_t != 0) * 31u +
                    (uint32_t)seq_counting() * 7u + (ui_prefs & PREF_BPM_LOCK) * 4099u +
                    (uint32_t)batt_shown() * 7777u + (chain.running ? (chain.row + 1u) * 104729u : 0u) +
@@ -552,10 +670,10 @@ static void draw_gaps(uint32_t y, uint32_t h)
 static void draw_frame(void)
 {
     uint32_t ch = card_h(), gy = graph_y(), gh = graph_h();   /* (MENU > LARGE: tall cards, a strip) */
-    gap_rows(H_HEAD, Y_LABEL);
-    gap_rows(Y_LABEL + ch, gy);
-    gap_rows(gy + gh, foot_free() ? Y_FOOT + FOOT_GAIN : Y_FOOT);
-    draw_gaps(Y_LABEL, ch);
+    gap_rows(head_h(), card_y());
+    gap_rows(card_y() + ch, gy);
+    gap_rows(gy + gh, home_bare() ? 240u - HOME_FOOT_H : foot_free() ? Y_FOOT + FOOT_GAIN : Y_FOOT);
+    draw_gaps(card_y(), ch);
 }
 
 #ifndef CARD_HOOK
@@ -784,6 +902,108 @@ static void draw_column_tall(uint32_t c, const char *label, const char *val, con
  * the motion icon in place of its own, in the theme colour; a long label moves it left, up to the card's edge;
  * a label with no room for it at all (or FELUCCA_ICONS=0): the label in the theme colour.
  * vc: the value's colour (T_THEME, T_DIM inactive, T_ACCENT the knob just turned) */
+/* (Dah) HOME's card: a knob. Its name on top (TEXT), the ring under it in the track's colour (THEME, tinted: its whole
+ * travel faint, the value's arc full, a TEXT mark where it stands), the value in the middle (TEXT), its unit under it
+ * when it fits; the knob just turned: its mark and name in the accent. 57 x HOME_CARD_H at the card's place */
+#define SQ_W 72                                         /* (Dah) a value too wide for its knob: drawn here first */
+#define SQ_H 14
+#define sq_px (cv_px + CV_MAX - SQ_W * SQ_H)              /* (the canvas' far end: no RAM of its own) */
+static int32_t sq_w;
+#define HK_END 320                                      /* HOME's ring: 225 degrees, open at the bottom for the name */
+static const int16_t KC_SIN[65] = {0, 101, 201, 301, 401, 501, 601, 700, 799, 897, 995, 1092, 1189, 1285, 1380, 1474,
+    1567, 1660, 1751, 1842, 1931, 2019, 2106, 2191, 2276, 2359, 2440, 2520, 2598, 2675, 2751, 2824, 2896, 2967, 3035, 3102,
+    3166, 3229, 3290, 3349, 3406, 3461, 3513, 3564, 3612, 3659, 3703, 3745, 3784, 3822, 3857, 3889, 3920, 3948, 3973, 3996,
+    4017, 4036, 4052, 4065, 4076, 4085, 4091, 4095, 4096};   /* sin, Q12, a quarter turn in 64 */
+static int32_t kc_sin(int32_t a)                        /* a: 1/1024 turn */
+{
+    int32_t q = ((a % 1024) + 1024) % 1024, i = q % 256, s = q < 512 ? 1 : -1;
+    if ((q / 256) & 1)
+        i = 256 - i;
+    return s * KC_SIN[i / 4];
+}
+static void knob_card(uint32_t c, const char *label, const char *val, const char *unit, int32_t ratio, int hot)
+{
+    char key[48], nm[20];
+    int32_t r = KNOB_HOME_R, bx = (COL_W - 2 * r) / 2, by = 1, cx = bx + r, cy = by + r, a1, mr = r - 1, e = HK_END;
+    uint16_t tc = T_THEME;
+    const aafont_t *vf = &AF_M;
+    uint32_t n;
+    str_cpy(nm, label, 12);                             /* the name, its unit after it ("ATK ms") */
+    if (unit[0] && !str_eq(unit, label)) {
+        str_cpy(nm + str_len(nm), " ", 2);
+        str_cpy(nm + str_len(nm), unit, 7);
+    }
+    str_cpy(key, "@", 2);                               /* (its own: the cards of the pages differ) */
+    str_cpy(key + 1, nm, 20);
+    str_cpy(key + str_len(key), "|", 2);
+    str_cpy(key + str_len(key), val, 14);
+    n = str_len(key);
+    key[n] = (char)('A' + (tc & 15u));
+    key[n + 1] = (char)('A' + ((tc >> 4) & 15u));
+    key[n + 2] = (char)('A' + ((tc >> 8) & 15u));
+    key[n + 3] = (char)('A' + (tc >> 12));
+    key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio * 90 / 1000));
+    key[n + 5] = (char)('0' + hot);
+    key[n + 6] = 0;
+    if (!ui.force && str_eq(key, ui.col[c]))
+        return;
+    str_cpy(ui.col[c], key, sizeof ui.col[c]);
+    ui.roll[c].from[0] = 0;                             /* (no rolling digits here) */
+    if (text_w(&AF_M, val) > 2 * (r - 4) && text_w(&AF_S, val) > 2 * (r - 4)) {   /* (Dah) too wide even in S: drawn
+                                                         * apart first, then narrowed into the ring (sq_*) */
+        sq_w = (int32_t)text_w(&AF_S, val) + 2;
+        if (sq_w > SQ_W)
+            sq_w = SQ_W;
+        cv_begin((uint32_t)sq_w, SQ_H, T_SURF);
+        cv_text(1, 0, &AF_S, val, T_TEXT);
+        memmove(sq_px, cv_px, (size_t)sq_w * SQ_H * sizeof cv_px[0]);
+    }
+    cv_begin(COL_W, HOME_CARD_H, T_BG);
+    cv_rrect(0, 0, COL_W, HOME_CARD_H, 4, T_SURF, T_BG);
+    a1 = ratio < 0 ? -e - 1 : -e + clamp(ratio, 0, 1000) * 2 * e / 1000;
+    ka_end = e;
+    knob_arc(bx, by, r, KNOB_HOME_COV, KNOB_HOME_ANG, -e, a1, ux_mix(T_SURF, tc, 30), tc, T_SURF);
+    ka_end = KA_END;
+    if (ratio >= 0) {                                   /* the mark where it stands */
+        int32_t mx = cx + kc_sin(a1) * mr / 4096, my = cy - kc_sin(a1 + 256) * mr / 4096;
+        uint16_t mc = hot ? T_ACCENT : T_TEXT;          /* (a round dot, 4 px) */
+        cv_rect(mx - 1, my - 2, 2, 4, mc);
+        cv_rect(mx - 2, my - 1, 4, 2, mc);
+    }
+    if (text_w(vf, val) > 2 * (r - 4))
+        vf = &AF_S;
+    {
+        int32_t vh = vf == &AF_M ? AF_M_CAP_H : AF_S_CAP_H, ty = cy - 2 - vh / 2, ly = by + 2 * r - AF_S_CAP_H - 1;
+        int32_t mw = 2 * (r - 4), w = text_w(vf, val), vy = ty - (vf == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y);
+        if (w <= mw) {                                  /* the value, in the middle */
+            GFX_HOOK_ALIGN(cx - r, ty, cx + r, ty + vh, AL_H, "knob card value centred");
+            cv_text_in(cx - r, vy, 2 * r, vf, val, T_TEXT, T_SURF);
+        } else {                                        /* (Dah) too wide even in S: narrowed into the ring (never
+                                                         * cut, never over it): each column two of the text's blended */
+            int32_t xx, yy, x0 = cx - mw / 2;
+            for (yy = 0; yy < SQ_H && vy + yy < (int32_t)cv_h; yy++)
+                for (xx = 0; xx < mw; xx++) {
+                    int32_t s0 = xx * sq_w / mw, s1 = (2 * xx + 1) * sq_w / (2 * mw);
+                    uint16_t a0 = swap16(sq_px[yy * sq_w + s0]), a1 = swap16(sq_px[yy * sq_w + (s1 < sq_w ? s1 : s0)]);
+                    if (vy + yy >= 0)
+                        cv_px[(uint32_t)(vy + yy) * cv_w + (uint32_t)(x0 + xx)] = swap16(ux_mix(a0, a1, 50));
+                }
+        }
+        if (text_w(&AF_S, nm) <= COL_W - 4) {          /* the name under it, in the ring's opening (under its ends:
+                                                         * the card's width) */
+            uint32_t nl = str_len(label) < 12u ? str_len(label) : 11u;   /* (Dah: the name TEXT, its unit MID) */
+            int32_t nx = 2 + (COL_W - 4 - text_w(&AF_S, nm)) / 2;
+            if (nl == str_len(nm))                      /* (no unit: the name alone, centred; with one, the pair) */
+                GFX_HOOK_ALIGN(2, ly, COL_W - 2, ly + AF_S_CAP_H, AL_H, "knob card label centred");
+            nm[nl] = 0;
+            nx = cv_text(nx, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : T_TEXT);
+            if (unit[0] && !str_eq(unit, label))
+                cv_text(nx + text_w(&AF_S, " "), ly - AF_S_CAP_Y, &AF_S, unit, T_MID);
+        } else
+            cv_free_text(2, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : T_TEXT, T_SURF, COL_W - 4);
+    }
+    cv_blit((uint32_t)CARD_X(c), card_y());
+}
 static void draw_column(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc,
                         int32_t ratio, uint32_t icon)
 {
@@ -800,6 +1020,12 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     card_span.fn = 0;
     fmt_named = 0;                                      /* (params.c: a name, for this card only) */
     card_mot_next = 0;                                  /* (the same: MOTION, this card only) */
+    if (home_bare()) {                                  /* (Dah) HOME: knobs */
+        (void)vc; (void)icon; (void)sp; (void)kn; (void)kid; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
+        (void)strip; (void)x; (void)lc; (void)vf; (void)n; (void)named; (void)mot; (void)kind;
+        knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot);
+        return;
+    }
     card_mot = (uint8_t)((card_mot & ~(1u << c)) | (uint32_t)mot << c);
     if (str_eq(unit, label))
         unit = "";                                      /* "BPM 124 BPM", "USB OFF USB": the label says it */
@@ -2093,6 +2319,9 @@ static void ui_draw_page(uint32_t counting)
     if (ui.help_t)
         ui.help_t--;
     felucca_dbg.stage = 6;
-    draw_foot();
+    if (!home_bare())                                   /* (Dah: HOME has its own, a band) */
+        draw_foot();
+    else
+        home_foot();
     ui.force = 0;
 }

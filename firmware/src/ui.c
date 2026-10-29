@@ -418,13 +418,24 @@ static uint32_t large_kind(void)
            g == GR_SLICES || g == GR_EVENTS || (g >= GR_DLANE && g <= GR_DSYN5) ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
-static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : CARD_H; }
-static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : Y_GRAPH; }
+#define home_bare() (ui.home && !ui.layer && large_kind() != LK_TALL)   /* (Dah) HOME: no footer, the panel down to the screen's foot,
+                                                         * its cards knobs (HOME_CARD_H) */
+#define HOME_CARD_H 40
+#define HOME_HEAD_H 18                                  /* (Dah) HOME's header: one size of text, lower */
+static uint32_t head_h(void) { return home_bare() ? HOME_HEAD_H : H_HEAD; }
+static uint32_t card_y(void) { return home_bare() ? HOME_HEAD_H + 3u : Y_LABEL; }
+static uint32_t card_h(void) { return large_kind() == LK_TALL ? LG_CARD_H : home_bare() ? HOME_CARD_H : CARD_H; }
+static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : home_bare() ? card_y() + HOME_CARD_H + 4u : Y_GRAPH; }
 /* (Dah) the footer's first row has nothing to show (no OCT+ hint, MIDI LEARN line, DRUM grid page, STEP's lane, no
  * layer, NAME or menu over it): the panel takes its rows, FOOT_GAIN more (graph_h); the footer keeps its second */
 #define FOOT_GAIN 18u
 static int foot_free(void);
-static uint32_t graph_h(void) { return large_kind() == LK_TALL ? LG_H_GRAPH : foot_free() ? H_GRAPH + FOOT_GAIN : H_GRAPH; }
+#define HOME_FOOT_H 17                                  /* (Dah) HOME's footer: its shortcuts, the sound's name */
+#define H_GRAPH_BARE (240u - HOME_FOOT_H - graph_y() - 2u)
+static uint32_t graph_h(void)
+{
+    return large_kind() == LK_TALL ? LG_H_GRAPH : home_bare() ? H_GRAPH_BARE : foot_free() ? H_GRAPH + FOOT_GAIN : H_GRAPH;
+}
 static int large_face_has(const char *s)                /* every glyph of s in the sparse L face */
 {
     for (; *s; s++)

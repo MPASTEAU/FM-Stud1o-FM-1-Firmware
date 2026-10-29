@@ -2035,6 +2035,7 @@ static int32_t meter_px(int32_t a)                   /* |sample| (Q15) -> px: 60
  * Box top-left (x, y), outer radius r. Angles: 1/1024 turn from 12 o'clock, clockwise, -384 .. 384; the value
  * arc is lo .. hi (in vc), the rest of the ring the track (tr); bg lies under the ring */
 #define KA_END 384
+static int32_t ka_end = KA_END;                        /* (Dah: HOME's knobs open wider at the bottom, their name there) */
 static void knob_arc(int32_t x, int32_t y, int32_t r, const uint8_t *cov, const uint8_t *ang, int32_t lo, int32_t hi,
                      uint16_t tr, uint16_t vc, uint16_t bg)
 {
@@ -2049,7 +2050,7 @@ static void knob_arc(int32_t x, int32_t y, int32_t r, const uint8_t *cov, const 
             for (m = 0; m < 4; m++) {                /* top right, bottom right, bottom left, top left */
                 int32_t s = m == 0 ? q : m == 1 ? 512 - q : m == 2 ? q - 512 : -q;
                 int32_t px = m < 2 ? x + r + i : x + r - 1 - i, py = (m == 0 || m == 3 ? y + r - 1 - j : y + r + j) + cv_oy;
-                if (s < -KA_END || s > KA_END || (uint32_t)px >= cv_w || (uint32_t)py >= cv_h)
+                if (s < -ka_end || s > ka_end || (uint32_t)px >= cv_w || (uint32_t)py >= cv_h)
                     continue;
                 cv_px[(uint32_t)py * cv_w + (uint32_t)px] = (s >= lo && s <= hi ? rv : rt)[a];
             }
@@ -2467,147 +2468,236 @@ static void home_track_row(uint32_t c)
     tr_meter(TR_MX, TR_MY, c, cs, sel ? T_INK : T_MID, bg);
     cv_blit(3, (uint32_t)y);
 }
-/* HA HA HE HU: HOME's TRACKS as a channel rack, the eight tracks at once (RK_PITCH apart): the track's cushion in its
- * colour (a muted one DIM), the sound's name, the 16 steps of the page playing (the selected track's: the cursor's) in
- * the track's colour (accented TEXT, a tie half, empty a stub; the step playing ringed), the output meter. The
- * selected row RAISE. Each row redrawn only when it changed (ts.col), its meter alone otherwise */
-#define RK_PITCH (foot_free() ? 17 : 15)                  /* (Dah: taller rows when the footer's first row is the panel's) */
-#define RK_H (RK_PITCH - 1)
-#define RK_SX 32                                       /* the steps: x 32 .. 223, 12 apart (Dah: no name, the colour and the
-                                                        * footer say it; the meter upright at the right end) */
-#define RK_SP 12
-#define RK_CW (RK_SP - 2)                              /* a step's width */
+/* HA HA HE HU: HOME's TRACKS as a channel rack, the eight tracks at once: the track's cushion in its colour (a muted
+ * one DIM), the steps of the page playing (the selected track's: the cursor's) in the track's colour (accented TEXT,
+ * a tie fainter, empty a stub; the step playing its column lit), the output meter. Each row redrawn only when it
+ * changed (ts.col), its meter alone otherwise.
+ * (Dah) The selected track stands out: its row tinted with its colour, framed in it, a band of it at the left, its
+ * number on it; the others' numbers in their colour, their steps a little fainter. Square, the rows filling the panel
+ * to its foot, each with the 1 px gap under it */
+#define RK_SW (RK_MX - 3 - RK_SX)                      /* (Dah) the steps' width, spread over it */
+#define RK_SX 21                                       /* the steps: x 21 .. 222 (Dah: no pattern number, the header says it) */
 #define RK_MX 226                                      /* the meter: upright, x 226 .. 229, the row's height */
 #define RK_MW 4
-/* the output meter, upright: rising from the row's foot (x0: its left in the canvas) */
-static void rack_meter_at(int32_t x0, uint32_t c, int32_t m, uint16_t bg)
+/* (Dah) track t's view: its first step shown (p0) and the column playing (ph, 0xFF none). FOLLOW, playing: the step
+ * playing goes from the left to the middle, the steps then go by under it, at the track's end on to the right (as
+ * STEP's); else HOME's VIEW (hv_base) */
+static void rk_view(const track_t *t, int sel, uint32_t *p0, uint32_t *ph)
 {
-    int32_t hh = RK_H - 4;
-    (void)c;
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nc = hv_cols();
+    if (song.playing && !hvw.nofollow) {
+        uint32_t si = t->seq_idx % len;
+        *p0 = si > nc / 2u ? si - nc / 2u : 0u;
+        if (len > nc && *p0 + nc > len)
+            *p0 = len - nc;
+        if (len <= nc)
+            *p0 = 0;
+        *ph = si - *p0;
+    } else {
+        *p0 = hv_base(t, sel);
+        *ph = song.playing && t->seq_idx >= *p0 && t->seq_idx < *p0 + nc ? t->seq_idx - *p0 : 0xFFu;
+    }
+}
+#define RK_RH 14                                       /* (Dah) the step ruler over the rows */
+static int rk_sel(void) { return !mx_master && song.sel < trk_count() ? (int)song.sel : -1; }
+/* row c's top (panel y) and height (the gap under it not counted) */
+static void rk_geo(uint32_t c, int32_t *y, int32_t *h)
+{
+    int32_t tot = (int32_t)graph_h() - RK_RH, p = tot / (int32_t)NTRK, yy = (int32_t)c * p;
+    *y = (int32_t)graph_y() + RK_RH + yy;
+    *h = p - 1;                                         /* (the rows alike; what is left under the last: BG) */
+}
+/* the output meter, upright: rising from the row's foot (x0: its left in the canvas) */
+static void rack_meter_at(int32_t x0, int32_t rh, int32_t m, uint16_t bg)
+{
+    int32_t hh = rh - 4;
     meter_up(x0, 2, RK_MW, hh, m * hh / (TS_MH - 2), 0, bg);
 }
-static void rack_meter(uint32_t c, uint16_t bg) { rack_meter_at(RK_MX, c, ts.meter[c], bg); }
 static void rack_row(uint32_t c)
 {
     track_t *t = &trk[c];
     const step_t *s = seq_steps(t);
-    uint32_t sel = c == song.sel, mute = t->p[P_MUTE] != 0, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
-    uint32_t np = (len + 15u) / 16u, pg, p0, ph, i, sig, carry = 0, nc = hv_cols();
-    int32_t y = Y_GRAPH + 1 + (int32_t)c * RK_PITCH, m, sp = 192 / (int32_t)nc, cw = sp > 3 ? sp - 2 : sp - 1;
-    int off = (seq_off >> (c % NTRK)) & 1u && !chain.running;   /* (Dah: on no pattern: "-", its steps dim) */
-    uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute || off ? T_DIM : ux.trk[c % NTRK];
+    uint32_t sel = (int)c == rk_sel(), mute = t->p[P_MUTE] != 0, len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+    uint32_t pg, p0, ph, i, sig, carry = 0, nc = hv_cols();
+    const step_t *src = 0;
+    int32_t y, rh, m, sp = RK_SW / (int32_t)nc, cw, top, sh;
+    int off = (seq_off >> (c % NTRK)) & 1u && !chain.running;   /* (Dah: on no pattern: its steps dim) */
+    uint16_t tc0 = ux.trk[c % NTRK], tc = mute || off ? T_DIM : sel ? tc0 : ux_mix(T_SURF, tc0, 72);
+    uint16_t bg = sel ? ux_mix(T_SURF, tc0, 16) : T_SURF;
     char b[16], d[2] = {(char)('1' + c), 0};
-    p0 = hv_base(t, (int)sel);                         /* (Dah: HOME's VIEW: where, how many steps across) */
-    pg = p0 / nc;
-    ph = song.playing && t->seq_idx >= p0 && t->seq_idx < p0 + nc ? t->seq_idx - p0 : 0xFFu;
-    (void)np;
+    rk_geo(c, &y, &rh);
+    rk_view(t, (int)sel, &p0, &ph);                    /* (Dah: where, how many steps across) */
+    pg = p0;
     trk_short_name(c, b);
     m = mute ? 0 : meter_px(t->peak);
     t->peak = 0;
     if (m < ts.meter[c] - 1)
         m = ts.meter[c] - 1;
     sig = str_hash(1u + sel + mute * 2u + t->eng_req * 8u, b) + steps_hash(t) * 31u + pg * 7919u + ph * 104729u +
-          len * 1299709u + tc * 3u + nc * 4099u + (uint32_t)off * 7u + (chain.running ? chain.lane[c % NTRK] : ps_num(c)) * 15485863u;
+          len * 1299709u + tc * 3u + bg * 5u + nc * 4099u + (uint32_t)off * 7u + (uint32_t)(y * 131 + rh) * 2654435761u;
     if (!ui.force && sig == ts.col[c]) {
         if (m != ts.meter[c]) {                        /* the meter alone */
             ts.meter[c] = (uint8_t)m;
-            cv_begin(RK_MW, RK_H, bg);
+            cv_begin(RK_MW, (uint32_t)rh - 2u, bg);     /* (Dah: inside the row, its frame untouched) */
             cv_oy = 0;
-            rack_meter_at(0, c, m, bg);
-            cv_blit(3 + RK_MX, (uint32_t)y);
+            meter_up(0, 1, RK_MW, rh - 4, m * (rh - 4) / (TS_MH - 2), 0, bg);
+            cv_blit(3 + RK_MX, (uint32_t)y + 1u);
         }
         return;
     }
     ts.col[c] = sig;
     ts.meter[c] = (uint8_t)m;
-    cv_begin(TR_W, RK_H, T_BG);
-    cv_rrect(0, 0, TR_W, RK_H, 3, bg, T_BG);
-    cv_rrect(2, 1, 12, 12, 3, tc, bg);                 /* the cushion */
-    GFX_HOOK_ALIGN(2, 1, 14, 13, AL_HV, "rack cushion digit centred");
-    cv_text_in(2, 1 + CAP_IN(S, 12), 12, &AF_S, d, T_INK, tc);
-    {                                                  /* (Dah) the pattern it plays, its number before the steps */
-        char pn[4];
-        uint32_t pnum = chain.running ? chain.lane[c % NTRK] : ps_num(c);
-        if (pnum == CHAIN_SILENT || off)
-            str_cpy(pn, "-", sizeof pn);
-        else
-            fmt_int(pn, (int32_t)pnum);
-        cv_text_r(RK_SX - 4, CAP_IN(S, RK_H), &AF_S, pn, mute ? T_DIM : tc, bg);
+    cv_begin(TR_W, (uint32_t)rh + 1u, T_BG);           /* (its gap under it, BG) */
+    cv_rect(0, 0, TR_W, rh, bg);                       /* (Dah: square, as the rest) */
+    if (sel) {                                         /* (Dah) the selected: framed in its colour, a band of it at
+                                                         * the left */
+        cv_frame(0, 0, TR_W, rh, tc0);
+        cv_rect(0, 0, 3, rh, tc0);
     }
-    for (i = p0; i-- > 0u;)                            /* a TIE at the page's start: carried from a note before it? */
-        if (s[i].time != ST_TIE) {
-            carry = s[i].time == ST_NOTE && (s[i].n || s[i].hit);
+    {   /* the number: the selected's on its colour (INK), the others' in their colour on the row */
+        int32_t cx = 5, cyy = (rh - 13) / 2;
+        uint16_t nc0 = mute || off ? T_DIM : tc0;
+        if (sel)
+            cv_rect(cx, cyy, 13, 13, nc0);
+        GFX_HOOK_ALIGN(cx, cyy, cx + 13, cyy + 13, AL_HV, "rack cushion digit centred");
+        cv_text_in(cx, cyy + CAP_IN(S, 13), 13, &AF_S, d, sel ? T_INK : nc0, sel ? nc0 : bg);
+    }
+    top = 2;                                           /* the steps' band */
+    sh = rh - 4;
+    for (i = 1; i <= p0; i++) {                        /* a TIE at the view's start: carried from a note before it? */
+        const step_t *q = &s[(p0 + len - i) % len];
+        if (q->time != ST_TIE) {
+            carry = q->time == ST_NOTE && (q->n || q->hit);
+            if (carry && s[p0 % len].time == ST_TIE)
+                src = q;                                /* (Dah: its notes, every one, carried into the view) */
             break;
         }
-    {   /* (Dah) a melodic track: a mini piano roll, each note at its height between the page's lowest and highest
-         * (a chord: its notes), a TIE on at the height carried; DRUM: its hits as before */
-        int32_t lo = 127, hi = 0, cy[4] = {RK_H / 2 - 1, 0, 0, 0}, ncy = 1, j;   /* (Dah: a chord's notes carried, each) */
+    }
+    {   /* (Dah) a melodic track: a mini piano roll, each note at its height between the view's lowest and highest
+         * (a chord: its notes), a TIE on at the height carried; DRUM: its hits as blocks */
+        int32_t lo = 127, hi = 0, cy[4] = {0, 0, 0, 0}, ncy = 1, j, nh = 3;
         int roll = !drum_track(&trk[c % NTRK]);
-        for (i = 0; roll && i < nc && p0 + i < len; i++)
-            for (j = 0; j < s[p0 + i].n && j < 4; j++) {
-                lo = s[p0 + i].note[j] < lo ? s[p0 + i].note[j] : lo;
-                hi = s[p0 + i].note[j] > hi ? s[p0 + i].note[j] : hi;
+        cy[0] = top + sh / 2 - 1;
+        for (i = 0; roll && i <= nc; i++) {             /* (i == nc: the chord carried in) */
+            const step_t *q = i < nc ? (p0 + i < len ? &s[p0 + i] : 0) : src;
+            for (j = 0; q && j < q->n && j < 4; j++) {
+                lo = q->note[j] < lo ? q->note[j] : lo;
+                hi = q->note[j] > hi ? q->note[j] : hi;
             }
+        }
+        if (roll && src && src->n && hi >= lo) {      /* (Dah) a chord held into the view: each of its lines */
+            for (j = 0; j < src->n && j < 4; j++)
+                cy[j] = hi > lo ? top + sh - nh - (src->note[j] - lo) * (sh - nh) / (hi - lo) : top + sh / 2 - 1;
+            ncy = j;
+        }
         for (i = 0; i < nc && p0 + i < len; i++) {
             const step_t *st = &s[p0 + i];
-            int32_t bx = RK_SX + (int32_t)i * sp;
+            int32_t bx = RK_SX + (int32_t)i * RK_SW / (int32_t)nc;
             uint16_t under = bg;
-            if (i == ph) {                             /* the step playing: ringed */
-                cv_rrect(bx - 1, 1, cw + 2, RK_H - 2, 2, T_TEXT, bg);
-                cv_rrect(bx, 2, cw, RK_H - 4, 2, bg, T_TEXT);
+            cw = RK_SX + (int32_t)(i + 1u) * RK_SW / (int32_t)nc - bx - (sp > 3 ? 2 : 1);   /* (Dah: the steps spread
+                                                         * over the row's width) */
+            if (i == ph) {                             /* the step playing: its column lit (Dah: no ring) */
+                under = ux_mix(bg, T_TEXT, 22);
+                cv_rect(bx - 1, top - 1, cw + 2, sh + 2, under);
             }
             if (st->time == ST_NOTE && (st->n || st->hit)) {
                 int acc = (st->flags & SF_ACCENT) || (st->acc & st->hit);
                 if (roll && st->n && hi >= lo) {
                     for (j = 0; j < st->n && j < 4; j++) {
-                        int32_t ny = hi > lo ? (RK_H - 4) - (st->note[j] - lo) * (RK_H - 6) / (hi - lo) : RK_H / 2 - 1;
-                        cv_rect(bx, ny, cw, 2, acc && !mute ? T_TEXT : tc);
+                        int32_t ny = hi > lo ? top + sh - nh - (st->note[j] - lo) * (sh - nh) / (hi - lo) : top + sh / 2 - 1;
+                        cv_rect(bx, ny, cw, nh, acc && !mute ? T_TEXT : tc);
                         cy[j] = ny;
                     }
                     ncy = j;
                 } else
-                    cv_rrect(bx, 3, cw, RK_H - 6, 2, acc && !mute ? T_TEXT : tc, under);
+                    cv_rrect(bx, top + 1, cw, sh - 2, 2, acc && !mute ? T_TEXT : tc, under);
                 carry = 1;
                 continue;
             }
-            if (st->time == ST_TIE && carry) {         /* carried on: half the colour (the roll: each note at its
-                                                         * height, a chord held: its lines) */
+            if (st->time == ST_TIE && carry) {         /* carried on: fainter (the roll: each note at its height) */
                 for (j = 0; j < (roll ? ncy : 1); j++)
-                    cv_rect(bx - 1, roll ? cy[j] : RK_H / 2 - 1, cw + 2, 2, ux_mix(bg, tc, 55));
+                    cv_rect(bx - 1, roll ? cy[j] : top + sh / 2 - 1, cw + 2, roll ? nh : 2, ux_mix(under, tc, 55));
             } else
-                cv_rect(bx, RK_H - 2, cw, 1, T_LINE);
+                cv_rect(bx, top + sh - 1, cw, 1, T_LINE);
             carry = st->time == ST_TIE && carry;
         }
     }
-    rack_meter(c, bg);
+    rack_meter_at(RK_MX, rh, ts.meter[c], bg);
     cv_blit(3, (uint32_t)y);
+}
+/* (Dah) a row past the project's tracks: the first says how to add one, the others empty (BG) */
+static void rack_spare(uint32_t c)
+{
+    int32_t y, rh;
+    uint32_t sig;
+    rk_geo(c, &y, &rh);
+    sig = 0x5A5Au + (uint32_t)(y * 131 + rh) * 2654435761u + (c == trk_count()) * 7u;
+    if (!ui.force && sig == ts.col[c])
+        return;
+    ts.col[c] = sig;
+    cv_begin(TR_W, (uint32_t)rh + 1u, T_BG);
+    if (c == trk_count()) {
+        cv_rrect(0, 0, TR_W, rh, 3, T_LINE, T_BG);
+        cv_rrect(1, 1, TR_W - 2, rh - 2, 2, T_BG, T_LINE);
+        GFX_HOOK_ALIGN(0, 0, 0, rh, AL_V, "rack add row on its line");
+        cv_free_hint(18, CAP_IN(S, rh), "[ALGO] TURN RIGHT: ADD A TRACK", T_DIM, T_BG, TR_W - 24);   /* (Dah: what to do, said) */
+    }
+    cv_blit(3, (uint32_t)y);
+}
+/* (Dah) the step ruler over the rows, the selected track's view: on top the whole track (a line) with the window shown
+ * on it (a bar: where the view is, how much of it) and the step playing (a mark); under it a tick a step, longer a
+ * beat; the step playing's number (the accent) over its column, nothing else written */
+static void rack_ruler(void)
+{
+    static uint32_t rsig;
+    const track_t *t = &trk[rk_sel() >= 0 ? (uint32_t)rk_sel() : 0u];
+    uint32_t p0, ph, i, nc = hv_cols(), len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), sig, vn;
+    int32_t x0, x1;
+    char b[4];
+    rk_view(t, 1, &p0, &ph);
+    sig = p0 * 7u + ph * 131u + nc * 4099u + len * 104729u + (uint32_t)graph_y() * 3u + ux.gen;
+    if (!ui.force && sig == rsig)
+        return;
+    rsig = sig;
+    cv_begin(TR_W, RK_RH, T_BG);
+    vn = p0 + nc < len ? nc : len - p0;                /* the overview: the track, the window on it */
+    cv_rect(RK_SX, 1, RK_SW, 1, T_LINE);
+    x0 = RK_SX + (int32_t)p0 * RK_SW / (int32_t)len;
+    x1 = RK_SX + (int32_t)(p0 + vn) * RK_SW / (int32_t)len;
+    cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
+    if (ph != 0xFFu)
+        cv_rect(RK_SX + (int32_t)(p0 + ph) * RK_SW / (int32_t)len, 0, 2, 3, T_ACCENT);
+    for (i = 0; i < nc && p0 + i < len; i++) {         /* the ticks */
+        int32_t x = RK_SX + (int32_t)i * RK_SW / (int32_t)nc, beat = (p0 + i) % 4u == 0u;
+        cv_rect(x, RK_RH - (beat ? 3 : 1), 1, beat ? 3 : 1, beat ? T_MID : T_LINE);
+    }
+    if (ph != 0xFFu) {                                 /* the step playing: its number, where it lands */
+        int32_t cx = RK_SX + (int32_t)(2u * ph + 1u) * RK_SW / (int32_t)(2u * nc), w;
+        fmt_int(b, (int32_t)(p0 + ph) + 1);
+        w = text_w(&AF_S, b);
+        x0 = clamp(cx - w / 2, 0, TR_W - w);
+        cv_rect(x0 - 1, 4, w + 2, RK_RH - 4, T_BG);
+        cv_text(x0, 4 - AF_S_CAP_Y, &AF_S, b, T_ACCENT);
+    }
+    cv_blit(3, graph_y());
 }
 static void draw_home_tracks(void)
 {
     uint32_t c;
-    if (ui.force) {                                    /* the BG round the rows only, they cover the rest (#181) */
-        lcd_fill(0, Y_GRAPH, 3, (int32_t)graph_h(), T_BG);
-        lcd_fill(3 + TR_W, Y_GRAPH, 240 - 3 - TR_W, (int32_t)graph_h(), T_BG);
-        lcd_fill(3, Y_GRAPH, TR_W, 1, T_BG);
-        for (c = 0; c < NTRK; c++) {
-            uint32_t y = (uint32_t)(Y_GRAPH + 1 + (int32_t)c * RK_PITCH + RK_H);
-            lcd_fill(3, y, TR_W, c + 1u < NTRK ? RK_PITCH - RK_H : (uint32_t)(Y_GRAPH + (int32_t)graph_h()) - y, T_BG);
+    if (ui.force) {                                    /* the BG either side of the rows, they cover the rest (#181) */
+        int32_t p = ((int32_t)graph_h() - RK_RH) / (int32_t)NTRK, used = RK_RH + p * (int32_t)NTRK;
+        lcd_fill(0, (int32_t)graph_y(), 3, (int32_t)graph_h(), T_BG);
+        lcd_fill(3 + TR_W, (int32_t)graph_y(), 240 - 3 - TR_W, (int32_t)graph_h(), T_BG);
+        lcd_fill(3, (int32_t)graph_y() + used, TR_W, (int32_t)graph_h() - used, T_BG);   /* (under the last row) */
+        for (c = 0; c < NTRK; c++)
             ts.meter[c] = 0;
-        }
     }
-    for (c = 0; c < trk_count(); c++)
-        rack_row(c);
-    if (ui.force && trk_count() < NTRK) {              /* (HA HA HE HU) the row after the project's tracks: how to add one */
-        int32_t y = Y_GRAPH + 1 + (int32_t)trk_count() * RK_PITCH;
-        cv_begin(TR_W, RK_H, T_BG);
-        cv_rrect(0, 0, TR_W, RK_H, 3, T_LINE, T_BG);
-        cv_rrect(1, 1, TR_W - 2, RK_H - 2, 2, T_BG, T_LINE);
-        GFX_HOOK_ALIGN(0, 0, 0, RK_H, AL_V, "rack add row on its line");
-        cv_free_hint(18, CAP_IN(S, RK_H), "[ALGO] TURN RIGHT: ADD A TRACK", T_DIM, T_BG, TR_W - 24);   /* (Dah: what to do, said) */
-        cv_blit(3, (uint32_t)y);
-        for (c = trk_count() + 1u; c < NTRK; c++)
-            lcd_fill(3, (uint32_t)(Y_GRAPH + 1 + (int32_t)c * RK_PITCH), TR_W, RK_H, T_BG);
-    }
+    rack_ruler();
+    for (c = 0; c < NTRK; c++)
+        if (c < trk_count())
+            rack_row(c);
+        else
+            rack_spare(c);
 }
 static void draw_home_tracks_old(void)
 {
@@ -2982,7 +3072,7 @@ static void draw_graph_in(void)
     const page_t *pg = cur_page();
     const track_t *t = TSEL;
     uint16_t c = ACC;
-    uint32_t sig;
+    uint32_t sig, gh;
     if (!ui.home && pg->graph == GR_TRK && !pl_on() && !tl_on()) {
         draw_tracks();
         return;
@@ -3006,9 +3096,11 @@ lists:
     if (!ui.force && sig == ui.graph_sig)
         return;
     ui.graph_sig = sig;
-    cv_begin(240, graph_h(), T_BG);
-    cv_rrect(3, 0, 234, graph_h(), 5, T_SURF, T_BG);   /* the panel (MENU > LARGE: the strip) */
-    graph_ht = 100 + ((int32_t)graph_h() > H_GRAPH && strip_kind() == SK_NONE ? (int32_t)graph_h() - H_GRAPH : 0);   /* (Dah:
+    gh = graph_h() < CV_MAX / 240u ? graph_h() : CV_MAX / 240u;   /* (Dah: HOME's panel taller than the canvas: its
+                                                         * graphs and lists to the canvas' foot, BG under it) */
+    cv_begin(240, gh, T_BG);
+    cv_rrect(3, 0, 234, (int32_t)gh, 5, T_SURF, T_BG);   /* the panel (MENU > LARGE: the strip) */
+    graph_ht = 100 + ((int32_t)gh > H_GRAPH && strip_kind() == SK_NONE ? (int32_t)gh - H_GRAPH : 0);   /* (Dah:
                                                       * the panel taller, the 100 px scale's graphs stretched with it) */
     cv_bg = T_SURF;                                  /* (text drawn with cv_text lands on it) */
     cv_oy = GOY;                                     /* graphs on a 100 px scale */
@@ -3168,5 +3260,7 @@ lists:
     }
     cv_oy = 0;
     cv_blit(0, graph_y());
+    if (gh < graph_h())
+        lcd_fill(0, graph_y() + gh, 240, graph_h() - gh, T_BG);
     graph_ht = 100;
 }
