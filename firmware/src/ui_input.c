@@ -2036,20 +2036,26 @@ static int page_tap(uint32_t b)
  * a message already showing (LOADED) as the second message. Not on notes: nothing in the audio path */
 static void sample_notice(void)
 {
+    static char why[40];
     uint32_t k, code;
+    const char *nm;
     for (k = 0; k < NTRK; k++) {
         code = 0;
-        if (!snd_missing(&trk[k], &code)) {
+        if (!(nm = snd_missing(&trk[k], &code))) {
             snd_said[k] = 0;
             continue;
         }
         if (snd_said[k] == code)
             continue;
+        if (ui.msg_t)                                   /* (Dah: after the one showing, whole) */
+            return;
         snd_said[k] = (uint8_t)code;
-        if (ui.msg_t)
-            str_cpy(ui.msg2, MSG_NO_SAMPLE, sizeof ui.msg2);
-        else
-            ui_message(MSG_NO_SAMPLE);
+        str_cpy(why, nm, 16);                           /* (Dah) which one, where, and what is heard instead */
+        str_cpy(why + str_len(why), " ON TRACK ", 12);
+        why[str_len(why) + 1u] = 0;
+        why[str_len(why)] = (char)('1' + k);
+        str_cpy(why + str_len(why), "\nA SINE INSTEAD", 18);
+        cards_say(MSG_NO_SAMPLE, why);
         return;
     }
 }
