@@ -256,15 +256,15 @@ static int presets(void)
     memset(&r, 0, sizeof r);
     bad += check("  UP_PUT keeps a pattern's ratchet", !up_parse(a, n, &r, &slot) && r.flags[2] == 2u << SF_RATCH_SH &&
                  r.flags[5] == (SF_ACCENT | 3u << SF_RATCH_SH));
-    set_engine_of(t, ENGI_DRUM);                     /* a drum grid record: no room, x1 */
+    set_engine_of(t, ENGI_DRUM);                     /* a drum grid record: no room, x1 (Dah: stored only; its loader,
+                                                      * SAVE > PHRASES, gone) */
     t->engine = t->eng_req;
     track_defaults_steps(t);
     t->step[0] = (step_t){{0}, 0, ST_NOTE, 0, 100, 1u << DV_KICK};
     step_set_ratchet(&t->step[0], 2);
     up_store(4, "GRID");
-    up_pat_load(t, 4);
-    bad += check("  a DRUM grid record loads its hits x1", up_grid(up_rec(4)) && t->step[0].hit == 1u << DV_KICK &&
-                 step_ratchet(&t->step[0]) == 1u);
+    bad += check("  a DRUM grid record: its hits, no ratchet", up_grid(up_rec(4)) && up_rec(4)->note[0] == 1u << DV_KICK &&
+                 up_rec(4)->flags[0] == 0u);
     return bad;
 }
 

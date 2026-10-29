@@ -343,7 +343,7 @@ static void head_msg(int32_t x, int32_t maxw)
 /* the slot letter after the track's cushion (1.2): the PROJECT slot of the pattern the selected track plays or edits.
  * A song playing: its section's slot for the track ("-" silent there); else the slot the working pattern came from
  * (ui.c pat_from: the last PROJECT load or save), with a mark ("A*") once it was edited since (its steps, LEN DIV SWING
- * GATE, QUANTIZE or automation: ui.c pat_from_sig); none at power-on, after a PHRASES pattern or the editor's restore.
+ * GATE, QUANTIZE or automation: ui.c pat_from_sig); none at power-on or after the editor's restore.
  * b: the letter (b[1] '*' or 0); 0 = none */
 static int head_slot(char *b)
 {
@@ -623,6 +623,13 @@ static void home_foot(void)
         kh[1] = KH[hk][1];
         n = 2u;
         ok = 3u;
+        if (eq_page(cur_page())) {                      /* (Dah) EQ: REC takes the band picked out (one stays) */
+            eqc_t e;
+            eq_get(fx_tsel(), &e);
+            kh[2] = (khint_t){KC_REC, "DEL"};
+            n = 3u;
+            ok |= e.n > 1u ? 4u : 0u;
+        }
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
         n = 0;
@@ -895,6 +902,26 @@ static void span_fxrow(const card_span_t *sp, int32_t v, char *val)     /* (Dah)
         return;
     }
     val[0] = (char)('1' + v); val[1] = '/'; val[2] = '9'; val[3] = 0;
+}
+static const char *const EQ_TN[EQT_N] = {"HP", "LP", "LSH", "HSH", "BELL"};   /* (Dah) the EQ's TYPEs, short */
+static void span_eqb(const card_span_t *sp, int32_t v, char *val)       /* (Dah) the EQ's BAND: n / 4, or + */
+{
+    (void)sp;
+    if (v >= 4) {
+        str_cpy(val, "+", 2);
+        return;
+    }
+    val[0] = (char)('1' + v); val[1] = '/'; val[2] = '4'; val[3] = 0;
+}
+static void span_eqt(const card_span_t *sp, int32_t v, char *val)       /* (Dah) .. its TYPE */
+{
+    (void)sp;
+    str_cpy(val, EQ_TN[(uint32_t)v % EQT_N], 6);
+}
+static void span_eqs(const card_span_t *sp, int32_t v, char *val)       /* (Dah) .. a cut's SLOPE */
+{
+    (void)sp;
+    str_cpy(val, v <= 0 ? "6" : v == 1 ? "12" : "24", 4);
 }
 static void card_span_by(void (*fn)(const card_span_t *, int32_t, char *), const void *p, int32_t lo, int32_t hi, int32_t ctx)
 {
@@ -1329,7 +1356,7 @@ static void foot_hint(char *a, char *b)
     uint32_t c = act_col();
     str_cpy(a, "OCT+ ", 8);
     str_cpy(a + 5, c ? act_name(c - 1u) : "--", 11);   /* (Dah: "HOLD VIEW") */
-    str_cpy(b, ui.act && cur_page()->graph != GR_PATS ? "OCT- CANCEL" : "", 16);   /* (Dah: no BACK) */
+    str_cpy(b, ui.act ? "OCT- CANCEL" : "", 16);   /* (Dah: no BACK) */
 }
 
 /* SAVE > USER / PROJECT: EDIT renames the selected slot (ui_name.c); 0 = not such a page, 1 an empty slot, 2 used */
@@ -1532,7 +1559,7 @@ static void draw_foot_in(void)
     } else if (lane_shown(t)) {
         draw_lane(t);
     }                                                 /* (Dah: no step strip elsewhere: the pages show the steps) */
-    {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, PHRASES, SONG,
+    {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, SONG,
          * AUTOMATION); icons: their ink on the names' capitals */
         uint32_t pi = ui.home ? ICON_NONE : page_icon(pg), ei = FELUCCA_ICONS ? engine_icon(ename) : ICON_NONE;
         int32_t r = 232, tx, ex, need = text_w(&AF_S, pn), ew = text_w(&AF_S, ename);
@@ -1850,20 +1877,10 @@ static void draw_columns_in(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_PATS) {                  /* PAT, then LOAD (a GO button) */
-        uint32_t n = pat_count(), k = pat_pick();
-        char tag[4], nm[13];
-        pat_label(k, tag, nm);
-        draw_column(0, "PAT", tag, "", VAL(0u), (int32_t)k * 1000 / (int32_t)(n > 1u ? n - 1u : 1u), ICON_X_PATTERN);
-        draw_act_column(1, "LOAD", T_THEME, ICON_AUTO);
-        draw_column(2, "", "", "", T_THEME, -1, ICON_AUTO);
-        draw_column(3, "", "", "", T_THEME, -1, ICON_AUTO);
-        return;
-    }
     if (cur_page()->graph == GR_USER) {                  /* SLOT, then three GO buttons */
         int used = up_used(ui.uslot);
         up_slot_label(val, ui.uslot);
-        draw_column(0, "SLOT", val, "", VAL(0u), (int32_t)ui.uslot * 1000 / (int32_t)(UP_SLOTS - 1u), ICON_AUTO);
+        draw_column(0, "PRESET", val, "", VAL(0u), (int32_t)ui.uslot * 1000 / (int32_t)(UP_SLOTS - 1u), ICON_AUTO);
         draw_act_column(1, "LOAD", used ? T_THEME : T_DIM, ICON_AUTO);
         draw_act_column(2, "ERASE", used ? T_THEME : T_DIM, ICON_AUTO);
         draw_act_column(3, "SAVE", T_THEME, ICON_AUTO);
@@ -2105,6 +2122,50 @@ static void draw_columns_in(void)
                         (int32_t)s2 * 1000 / NTRK, ICON_AUTO);
             continue;
         }
+        if (eq_page(cur_page())) {                      /* (Dah) EQ: BAND n/N ("+": one more asked), TYPE, FREQ, SLOPE /
+                                                         * GAIN of the band picked */
+            const track_t *ft = fx_tsel();
+            eqc_t e;
+            uint32_t k, j, y;
+            int32_t fv;
+            eq_get(ft, &e);
+            k = eq_pick(&e); j = eq_slot(&e, k); y = eq_type(&e, k);
+            if (c == 0u) {
+                char pl[6] = {(char)('1' + k), '/', (char)('0' + e.n), 0};
+                if (ui.confirm == CF_ADD_EQ)
+                    str_cpy(pl, "+", 6);
+                card_span_by(span_eqb, 0, 0, 4, 0);
+                draw_column(0, "BAND", pl, "", VAL(0u), e.n > 1u ? (int32_t)k * 1000 / (int32_t)(e.n - 1u) : -1, ICON_AUTO);
+            } else if (c == 1u) {
+                card_span_by(span_eqt, 0, 0, EQT_N - 1, 0);
+                draw_column(1, "TYPE", EQ_TN[y], "", VAL(1u), (int32_t)y * 1000 / (EQT_N - 1), ICON_AUTO);
+            } else if (c == 2u) {
+                const param_desc_t *fd = &TP[EQ_FID[j]];
+                fv = ft->p[EQ_FID[j]];
+                param_format(fd, fv, val, &unit);
+                if ((y == EQT_HP && fv <= 0) || (y == EQT_LP && fv >= EQ_TOP)) {   /* (a cut at rest) */
+                    str_cpy(val, "OFF", 4);
+                    unit = "";
+                }
+                card_mot_of(&ft->p[EQ_FID[j]]);
+                card_span_of(fd);
+                draw_column(2, "FREQ", val, unit, VAL(2u), RATIO(fd, fv), ICON_AUTO);
+            } else if (y <= EQT_LP) {
+                fv = (int32_t)eq_slope(ft->p[EQ_SID[j]]);
+                span_eqs(0, fv, val);
+                card_mot_of(&ft->p[EQ_SID[j]]);
+                card_span_by(span_eqs, 0, 0, 2, 0);
+                draw_column(3, "SLOPE", val, "dB", VAL(3u), fv * 500, ICON_AUTO);
+            } else {
+                const param_desc_t *gd = &TP[EQ_SID[j]];
+                fv = ft->p[EQ_SID[j]];
+                param_format(gd, fv, val, &unit);
+                card_mot_of(&ft->p[EQ_SID[j]]);
+                card_span_of(gd);
+                draw_column(3, "GAIN", val, unit, VAL(3u), RATIO(gd, fv), ICON_AUTO);
+            }
+            continue;
+        }
         if (cur_page()->fam == FAM_FX && str_eq(cur_page()->title, "COMP")) {   /* (Dah) COMP: AMOUNT RELEASE, the GR */
             int32_t ca = (int32_t)fx_camt(fx_tsel()), cr = (int32_t)fx_crel(fx_tsel());
             if (c == 0u) {
@@ -2154,15 +2215,6 @@ static void draw_columns_in(void)
             continue;
         }
         param_format(d, *vp, val, &unit);
-        if (((vp == &TSEL->p[P_EQ1F] || vp == &TSEL->p[P_EQ1G]) && !TSEL->p[P_EQ1G]) ||
-            ((vp == &TSEL->p[P_EQ2F] || vp == &TSEL->p[P_EQ2G]) && !TSEL->p[P_EQ2G]) ||
-            ((vp == &TSEL->p[P_EQ3F] || vp == &TSEL->p[P_EQ3G]) && !TSEL->p[P_EQ3G])) {
-            if (!(ui.hot_t && ui.hot_col == c)) {       /* (Dah) an EQ band at 0 dB: OFF, FREQ and GAIN; its value while
-                                                         * its knob turns, OFF again a moment after */
-                str_cpy(val, "OFF", 4);
-                unit = "";
-            }
-        }
         card_mot_of(vp);                                /* (a global: never) */
         card_span_of(d);
         if (vp == &TSEL->p[P_LRATE] && TSEL->p[P_LSYNC]) {   /* LFO 2 SYNC on: RATE does nothing, DIM (1.2) */
@@ -2325,6 +2377,15 @@ static void confirm_text(char *a, char *b)
         str_cpy(b, "TRACK 1", 24);
         b[6] = (char)('1' + song.sel % NTRK);
         break;
+    case CF_ADD_EQ:                                  /* (Dah) FX > EQ: KNOB 1 past the last band */
+        str_cpy(a, "ADD A FILTER?", 24);
+        str_cpy(b, "BAND 1: A BELL, FLAT", 24);
+        {
+            eqc_t e;
+            eq_get(fx_tsel(), &e);
+            b[5] = (char)('1' + e.n % 9u);
+        }
+        break;
     case CF_ADD_FX:                                  /* (Dah) FX > CHAIN: + ADD reached */
         str_cpy(a, "ADD AN EFFECT?", 24);
         str_cpy(b, "LAST IN THE CHAIN", 24);
@@ -2378,13 +2439,6 @@ static void confirm_text(char *a, char *b)
         str_cpy(a + str_len(a), "?", 2);
         up_name(k, b);
         break;
-    case CF_LOAD_PAT: {
-        char tag[4];
-        str_cpy(a, "REPLACE T1 SEQUENCE?", 24);
-        a[9] = (char)('1' + k % NTRK);
-        pat_label(pat_pick(), tag, b);               /* with the pattern picked */
-        break;
-    }
     default:                                         /* (Dah: CLEAR T1 SEQUENCE?, TRACK?: SAVE > TOOLS', gone) */
         a[0] = 0;
         break;

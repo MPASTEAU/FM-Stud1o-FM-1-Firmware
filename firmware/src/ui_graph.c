@@ -1445,7 +1445,7 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ ui.frame / 2u;                    /* scope: every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
-    h ^= (uint32_t)tl_dy * 40503u;   /* (Dah: a list gliding: each step drawn) */
+    h ^= (uint32_t)tl_dy * 40503u + (uint32_t)pp_dy * 2246822519u;   /* (Dah: a list gliding: each step drawn) */
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
@@ -1457,8 +1457,7 @@ static uint32_t graph_signature(void)
         h ^= ui.frame * 2654435761u + prv.zoom * 7u + (uint32_t)prv.at * 131u + prv.nofollow * 3u;   /* (Dah: FX's: live) */
     for (i = 0; i < P_COUNT; i++)
         h = (h ^ (uint32_t)t->p[i]) * 16777619u;
-    h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u +
-         ui.ppick * 1299709u;
+    h ^= (uint32_t)TSEL->preset * 7u + (uint32_t)song.g[G_SLOT] * 13u + TSEL->user * 257u + up_gen * 7919u + ui.uslot * 104729u;
     if (pg->graph == GR_CHORD) {                     /* the last chord played */
         h = (h ^ (chord_last[song.sel].root + 131u * chord_last[song.sel].mask)) * 16777619u;
         for (i = 0; i < CHORD_MAX; i++)
@@ -1548,7 +1547,7 @@ static const char *eng_abbr(const char *name)
     return name;
 }
 
-/* a list row (17 px), in M as every list's (PRESETS, USER, PHRASES, PROJECT, AUTOMATION, MOD, the MENU): the selected
+/* a list row (17 px), in M as every list's (PRESETS, USER, PROJECT, AUTOMATION, MOD, the MENU): the selected
  * one a THEME bar with INK text; tag at x 14 (the widest, DRUM, to x 57), free text from x LIST_NX to x1 */
 #define LIST_Y(k) (3 + 17 * (int32_t)(k))
 #define LIST_TY CAP_IN(M, 16)                           /* a row's text: its capitals rows 2 .. 12 of the row */
@@ -1702,7 +1701,17 @@ static void engine_sound_row(int32_t y)
 /* user preset slots around the selected one: "U07  NAME" / EMPTY */
 static void graph_user(void)
 {
-    int32_t n = (int32_t)list_n(), row, first = clamp((int32_t)ui.uslot - n / 2, 0, UP_SLOTS - n);
+    int32_t n = (int32_t)list_n() - 1, row, first = clamp((int32_t)ui.uslot - n / 2, 0, UP_SLOTS - n);
+    {   /* (Dah) on top, what SAVE puts in a slot: the selected track's sound ("TRACK 1  ACID") */
+        char nm[16], tl[10] = "TRACK ";
+        int32_t x;
+        tl[6] = (char)('1' + song.sel % NTRK);
+        tl[7] = 0;
+        sound_name(TSEL, nm);
+        GFX_HOOK_ALIGN(0, 4, 0, 14, AL_V, "user presets: the track's sound line");
+        x = cv_text_on(14, 4 - AF_S_CAP_Y, &AF_S, tl, ux.trk[song.sel % NTRK], T_SURF) + 8;
+        cv_free_text(x, 4 - AF_S_CAP_Y, &AF_S, nm[0] ? nm : "--", T_TEXT, T_SURF, 226 - x);
+    }
     for (row = 0; row < n; row++) {
         uint32_t k = (uint32_t)(first + row);
         char tag[4], nm[13];
@@ -1711,20 +1720,8 @@ static void graph_user(void)
         if (used)
             up_name(k, nm);
         else
-            str_cpy(nm, "--", sizeof nm);
-        list_row(LIST_Y(row), k == ui.uslot, tag, T_MID, nm, used ? T_TEXT : T_DIM, 232);
-    }
-}
-/* SAVE > PHRASES: the pattern list around the one picked ("03  MELODY", "U07  MY BASS") */
-static void graph_pats(void)
-{
-    uint32_t n = pat_count(), cur = pat_pick();
-    int32_t ln = (int32_t)list_n(), row, first = clamp((int32_t)cur - ln / 2, 0, (int32_t)n > ln ? (int32_t)n - ln : 0);
-    for (row = 0; row < ln && (uint32_t)(first + row) < n; row++) {
-        uint32_t k = (uint32_t)(first + row);
-        char tag[4], nm[13];
-        pat_label(k, tag, nm);
-        list_row(LIST_Y(row), k == cur, tag, T_MID, nm, T_TEXT, 232);
+            str_cpy(nm, "EMPTY", sizeof nm);           /* (Dah: said, not "--") */
+        list_row(LIST_Y(row) + 17, k == ui.uslot, tag, T_MID, nm, used ? T_TEXT : T_DIM, 232);
     }
 }
 /* DRUM's lane pages (ui_drumlane.c): the lanes around the one picked, each with its lane name, its VOICE (KIT: the kit's
@@ -2137,7 +2134,8 @@ static void pat_rows(int32_t dy, int add)
         int32_t k = at + row, y = my + row * 34 + dy;
         int mid = y > my - 17 && y < my + 17;
         uint16_t bg = mid ? T_RAISE : T_SURF;
-        if (k < 0 || k > n || (k == n && (!add || n >= (int32_t)PS_NUM)) || y < 0 || y + 32 > avail)
+        if (k < 0 || k > n || (k == n && (!add || n >= (int32_t)PS_NUM)) || y + 32 <= 0 || y >= avail)   /* (Dah: the
+                                                         * ones round it too, cut by the edges) */
             continue;
         if (k == n) {                                   /* + NEW */
             GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
@@ -2153,7 +2151,9 @@ static void pat_rows(int32_t dy, int add)
 }
 static void graph_pattern(void)
 {
-    pat_rows(0, 0);
+    pat_rows(glide(&pp_dy) * 2, 0);                     /* (Dah: gliding, as the lists) */
+    cv_rect(8, (int32_t)graph_h() - 18, 224, 18, T_SURF);   /* (the rows cut over the memory line; they lie in x 8 ..
+                                                         * 232: the panel's round corners untouched) */
     {
         char m[32] = "MEMORY ";                         /* (Dah: the memory; which one of how many: KNOB 1's card) */
         fmt_int(m + str_len(m), (int32_t)pt_mem_pct());
@@ -3513,10 +3513,6 @@ lists:
         case GR_SONG:
             cv_oy = 0;
             graph_song();
-            break;
-        case GR_PATS:
-            cv_oy = 0;
-            graph_pats();
             break;
         case GR_EVENTS:
             cv_oy = 0;

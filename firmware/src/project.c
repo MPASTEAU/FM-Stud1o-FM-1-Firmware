@@ -1421,6 +1421,8 @@ static int project_restore_runtime(const project_t *input)
             const param_desc_t *d = param_desc_of(e, i);
             t->p[i] = (int16_t)param_fit(d, s->p[i]);
         }
+        if (!trkx[k].eq.n || trkx[k].eq.n > EQ_NB)      /* (Dah) its EQ before bands (LOW CUT, HIGH CUT, bells): as bands */
+            eq_adopt(t->p, s->p, &trkx[k].eq);
         t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
         memcpy(t->step, s->step, sizeof t->step);
         proj_steps(t->step);
@@ -1453,7 +1455,6 @@ static int project_restore_runtime(const project_t *input)
                 t->p[i] = TP[i].def;
             fm1_irq_on();
         }
-        pat_sig[k] = ~steps_sig(t);                     /* a project's steps are the user's */
     }
     undo_depth--;
     sync_reload = 1;

@@ -382,7 +382,7 @@ async function editorSamplePresets() {
 }
 
 /* the mock's tables == the firmware's (build/host/desc.json from tests/descdump.c, written by run_tests.sh):
-   parameter descriptors, engines (titles, EDIT, presets), factory patterns, power-on sounds */
+   parameter descriptors, engines (titles, EDIT, presets), power-on sounds */
 function mockTables() {
   {
     const m0 = E.makeMockDevice({ auto: false }), ph = m0.tables.ENG[9], dr = m0.tables.ENG[10];
@@ -420,13 +420,8 @@ function mockTables() {
       if (mp) cmp(`${fe.name} ${p.name}`, { e: mp.e, env: mp.env, mono: mp.mono, pat: mp.pat }, { e: p.e, env: p.env, mono: p.mono, pat: p.pat });
     });
   });
-  cmp("PATTERNS", T.PATTERNS, fw.PATTERNS);
   const m2 = E.makeMockDevice({ auto: false });   /* the mock's power-on sounds: its parts 1..4, track 4's beat */
-  cmp("power-on sounds", m2.state.tracks.map((t) => [t.engine, t.preset]), fw.TRK_DEF.map((x) => x.slice(0, 2)));
-  fw.TRK_DEF.forEach((x, k) => {
-    if (x[2]) cmp(`power-on pattern of track ${k + 1}`, m2.state.tracks[k].step.slice(0, 16).map((s) => (s.n ? s.notes[0] : 0)),
-      fw.PATTERNS[x[2] - 1][0]);
-  });
+  cmp("power-on sounds", m2.state.tracks.map((t) => [t.engine, t.preset]), fw.TRK_DEF);
   m2.stop();
   cmp("firmware: G_ENGSEL names == engine names", fw.GP[fw.G_ENGSEL].names, fw.ENG.map((e) => e.name));
   cmp("FM6 patches (init, factory, bank size)", T.FM6, fw.FM6);

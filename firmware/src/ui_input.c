@@ -82,7 +82,7 @@ static int mom_turn(uint32_t k, int32_t s)
     } else {
         if (act_cols() || lock_held() || !(pg->scope == SC_TRACK || pg->scope == SC_ENGINE || pg->scope == SC_GLOBAL) ||
             pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_USER ||
-            pg->graph == GR_PATS || (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u))
+            (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u))
             return 0;
         d = page_desc(pg, k, &vp);
     }
@@ -146,7 +146,7 @@ static uint32_t oct_leds(void)
     if (ui.confirm)
         return 1u | OCT_BREATH;
     if (act_cols())                                     /* (Dah) OCT- lit only when it cancels (no BACK) */
-        return (ui.act && cur_page()->graph != GR_PATS ? 1u : 0u) | (act_ready() ? OCT_BREATH : 0u);
+        return (ui.act ? 1u : 0u) | (act_ready() ? OCT_BREATH : 0u);
     if (mom.n && mom_down())                            /* MOMENTARY: OCT+ keeps the changes */
         return (song.octave < 0 ? 1u : 0u) | OCT_BREATH;
     return (song.octave < 0 ? 1u : 0u) | (song.octave > 0 ? 2u : 0u);
@@ -727,6 +727,10 @@ static int rec_tap(void)                                /* 1: the arming changed
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
         if (chain_busy()) ui_message("STOP TO EDIT");
         else confirm_open(CF_DEL_PAT, ps_num(song.sel));
+        return 0;
+    }
+    if (!ui.home && !ui.menu && !ui.confirm && eq_page(cur_page())) {   /* (Dah) EQ: the band picked out */
+        eq_del();
         return 0;
     }
     if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
@@ -1352,8 +1356,7 @@ static void edit_param(uint32_t slot, int32_t steps)
     }
 #endif
     if ((act_cols() >> slot) & 1u) {                      /* an action's knob picks it (right) or drops it (left); */
-        if (pg->graph != GR_PATS)                         /* OCT+ does it (act_do) */
-            ui.act = steps > 0 ? (uint8_t)(slot + 1u) : ui.act == slot + 1u ? 0u : ui.act;
+        ui.act = steps > 0 ? (uint8_t)(slot + 1u) : ui.act == slot + 1u ? 0u : ui.act;   /* OCT+ does it (act_do) */
         return;
     }
     if (pg->graph == GR_PATTERN) {                        /* (Dah) KNOB 1 the pattern, every track on it */
@@ -1364,11 +1367,6 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (pg->graph == GR_USER) {                           /* KNOB 1 the slot */
         if (slot == 0u)
             ui.uslot = (uint8_t)clamp((int32_t)ui.uslot + steps, 0, UP_SLOTS - 1);
-        return;
-    }
-    if (pg->graph == GR_PATS) {                          /* KNOB 1 the pattern */
-        if (slot == 0u)
-            ui.ppick = (uint8_t)clamp((int32_t)pat_pick() + steps, 0, (int32_t)pat_count() - 1);
         return;
     }
     if (fop_page(pg->graph)) {                           /* FM6's operators: KNOB 1 OP, 2..4 its bytes (ui_fm6op.c) */
@@ -1428,6 +1426,8 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
+    if (eq_page(pg) && eq_knob(slot, steps))           /* (Dah) EQ: the band, its TYPE, a cut's SLOPE */
+        return;
     if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 moves the effect, 2 its TYPE, 3 its
                                                          * MIX (the effect: SELECT's), 4 nothing */
         uint8_t u[FXU_N_ALL];
@@ -1463,6 +1463,15 @@ static void edit_param(uint32_t slot, int32_t steps)
                                                          * REC takes it out), its type or amount at its least */
         v = 1;
         ui_message("REMOVE IT IN CHAIN");
+    }
+    if (eq_page(pg)) {                                  /* (Dah) EQ: its last band doing something stays so */
+        int16_t o = *vp;
+        *vp = (int16_t)v;
+        if (!eq_units(fx_tsel())) {
+            v = o;
+            ui_message("REMOVE IT IN CHAIN");
+        }
+        *vp = o;
     }
     *vp = (int16_t)v;
     if (vp >= TSEL->p && vp < TSEL->p + P_COUNT) {      /* (Dah: a track's value, a send on a global page too) */
@@ -1504,14 +1513,6 @@ static void act_do(void)
             ui_message("HOLD OCT+: VIEW");
         sg_pend = 0;
         ui.force = 1;
-        return;
-    }
-    if (cur_page()->graph == GR_PATS) {
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
-        if (pat_needs_confirm(TSEL))                      /* the user's steps: the dialog */
-            confirm_open(CF_LOAD_PAT, song.sel);
-        else                                              /* empty, or a pattern loaded and untouched */
-            pat_load_ui(TSEL, pat_pick());
         return;
     }
 #if FELUCCA_SLICE
@@ -1718,7 +1719,7 @@ static void seq_entry(uint32_t pressed)
 
 /* Discussions #92 / #94: the PRESETS knob by page (the menu, a dialog, NAME and the layers: ui_input before this).
  *   the list / action pages USER,
- *     PHRASES, PROJECT, SONG: as their KNOB 1 (the SEQ pages: a sound load there would drop the track's motion: never).
+ *     PROJECT, SONG: as their KNOB 1 (the SEQ pages: a sound load there would drop the track's motion: never).
  *     1.2: with PATTERN, CHANCE and the old AUTOMATION gone, KNOB 1 is the cursor or the row on every SEQ page, so
  *     the PRESETS knob is no longer a second cursor where KNOB 1 was something else; TOOLS and SLICES: nothing
  *   HOME, PRESETS and every other page (EDIT, ENV, LFO, FX, SCL, ARP, MIXER, CLOCK, ...): the selected track's
@@ -1739,7 +1740,7 @@ static void presets_turn(int32_t s)
         edit_param(0, s);
     } else if (g == GR_PATTERN || g == GR_FILE) {          /* (Dah) the list (its knobs are the actions) */
         g == GR_PATTERN ? pt_move(s) : file_move(s);
-    } else if (g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG) {
+    } else if (g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_SONG) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
@@ -1861,7 +1862,7 @@ static void fx_sel_turn(int32_t s)
     tl_pat = 2;
 }
 /* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
- * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, PHRASES, SONG's sections, STEP's
+ * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, SONG's sections, STEP's
  * cursor. On HOME and on a page with no list (ENV, LFO, ARP, SCL ..) the tempo (Dah) */
 static int sel_is_list(void)                           /* (Dah) the page shown has a list SELECT moves down */
 {
@@ -2279,6 +2280,8 @@ static void ui_input(void)
                 pt_delete();
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
+            } else if (kind == CF_ADD_EQ) {        /* (Dah) FX > EQ: a filter more, picked */
+                eq_add();
             } else if (kind == CF_ADD_FX) {        /* (Dah) FX > CHAIN: an effect more: which, picked next */
                 fxp_cur = 0;
                 confirm_open(CF_PICK_FX, 0);
@@ -2305,9 +2308,6 @@ static void ui_input(void)
                 name_open(NK_ARCH_SAVE, 0);
             } else if (kind == CF_ERASE_PROJ) {
                 (void)project_erase(ui.confirm_trk & 3u);
-            } else if (kind == CF_LOAD_PAT) {
-                pat_load_ui(&trk[ui.confirm_trk % NTRK], pat_pick());
-                str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);
             } else if (kind == CF_CLEAR_MOTION) {
                 track_t *t = &trk[ui.confirm_trk % NTRK];
                 if (!chain_busy()) { load_begin(t, UNDO_PAT); motion_clear(t); load_end(t); ui_message("AUTOMATION CLEARED"); }
@@ -2327,7 +2327,7 @@ static void ui_input(void)
                                                          * off: SAVE > TOOLS', gone) */
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
                    (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
-                   (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0)) {
+                   (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0) || (ui.confirm == CF_ADD_EQ && panel_enc(EN_K1) < 0)) {
             if ((ui.confirm == CF_ADD_FX || ui.confirm == CF_PICK_FX) && ch_cur)   /* (Dah: no effect added: off
                                                          * + ADD, the last effect) */
                 ch_cur--;   /* (Dah: ADD TRACK: ALGO
@@ -2402,8 +2402,7 @@ static void ui_input(void)
             ui.force = 1;
             ui_message("CANCELLED");
         }
-        if (cur_page()->graph != GR_PATS && ui.act)
-            ui.act = 0;
+        ui.act = 0;
     } else if (ui.ml.on && oct) {                          /* MIDI LEARN: OCT- clears the picked CC, OCT+ done */
         ml_oct(oct);
     }
@@ -2592,7 +2591,7 @@ static void ui_input(void)
             continue;
         }
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
-            ((pg->graph == GR_USER || pg->graph == GR_MOD || pg->graph == GR_PATS) && k == 0u)
+            ((pg->graph == GR_USER || pg->graph == GR_MOD) && k == 0u)
             || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph) || dln_page(pg->graph) ||
             (xp_page(pg->graph) && xp_field(k) != XP_NONE)) {   /* (not an empty
                                                                                                           * column) */

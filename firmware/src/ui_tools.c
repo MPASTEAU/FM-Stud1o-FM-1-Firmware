@@ -42,10 +42,8 @@ static void tl_undo_take(track_t *t)
     memcpy(undo.step, t->step, sizeof undo.step);
     memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
     undo.fm6_slot = fm6_slot[i];
-    undo.pat = pat_sig[i];
     undo.from = pat_from[i];
     undo.from_h = pat_from_h[i];
-    undo.patn = pat_last[i];
     motion_snapshot_track(t, &undo.motion_backup);
 }
 

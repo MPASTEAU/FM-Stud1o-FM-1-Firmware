@@ -609,7 +609,7 @@ static void slice_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const
     }
 }
 
-/* two factory sounds, both on BREAK (always there). PATTERNS (engines.c): CHOP suggests
+/* two factory sounds, both on BREAK (always there). PAT(): the editor's patterns (web/editor.html): CHOP suggests
  * 9 CHOP (16 slices re-ordered), STUTTER 10 STUTTER (8 slices, repeats); 11 SLICES plays 0..15 in order */
 static const preset_t SLICE_PRESETS[] = {
     {"CHOP", {0, 2, 0, 0, SLC_ONE, 0, 127, 127}, {0, 127, 127, 30}, 0, 0, FX(0, 0, 0, 12), PAT(9)},

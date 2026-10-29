@@ -192,16 +192,16 @@ static const param_desc_t TP[P_COUNT] = {
     [P_FXORD] = PE("ORDER", N_FXORD, 0),          /* D I S: as before */
     [P_DKSRC] = PE("SRC", N_DKSRC, 0),            /* OFF: as before (Dah: SIDECHAIN's source) */
     [P_DKAMT] = PD("DEPTH", F_PCT, 0, 127, 100),
-    /* Dah: the EQ (fx_eq.c): LOW CUT OFF (0) / 32 Hz .., HIGH CUT .. 10.2 kHz / OFF (118), the bells' FREQ and GAIN
-     * (-15 .. +15 dB, 0: off); param_format names them */
-    [P_EQLO] = PD("LOCUT", F_CUTOFF, 0, 118, 0),
-    [P_EQHI] = PD("HICUT", F_CUTOFF, 0, 118, 118),
-    [P_EQ1F] = PD("FREQ1", F_CUTOFF, 0, 118, 40),
-    [P_EQ1G] = PD("GAIN1", F_BIPCT, -64, 63, 0),
-    [P_EQ2F] = PD("FREQ2", F_CUTOFF, 0, 118, 90),
-    [P_EQ2G] = PD("GAIN2", F_BIPCT, -64, 63, 0),
-    [P_EQ3G] = PD("GAIN3", F_BIPCT, -64, 63, 0),
-    [P_EQ3F] = PD("FREQ3", F_CUTOFF, 0, 118, 110),
+    /* Dah: the EQ's four slots (fx_eq.c): each a FREQ (32 Hz .. 10.2 kHz) and a GAIN (-15 .. +15 dB; a cut's SLOPE:
+     * -1 6, 0 12, 1 24 dB an octave); the EQ page shows them as its bands (param_format names them) */
+    [P_EQLO] = PD("FREQA", F_CUTOFF, 0, 118, 0),
+    [P_EQHI] = PD("FREQB", F_CUTOFF, 0, 118, 118),
+    [P_EQ1F] = PD("FREQC", F_CUTOFF, 0, 118, 40),
+    [P_EQ1G] = PD("GAINC", F_BIPCT, -64, 63, 0),
+    [P_EQ2F] = PD("FREQD", F_CUTOFF, 0, 118, 90),
+    [P_EQ2G] = PD("GAIND", F_BIPCT, -64, 63, 0),
+    [P_EQ3G] = PD("GAINA", F_BIPCT, -64, 63, 0),
+    [P_EQ3F] = PD("GAINB", F_BIPCT, -64, 63, 0),
     [P_DOUT] = PD("OUT", F_BIPCT, -64, 63, 0),      /* (Dah) DIST's output gain (param_format: dB) */
     [P_DCOL] = PD("COLOR", F_BIPCT, -64, 63, 0),    /* .. its tone: darker / brighter */
 };
@@ -363,12 +363,8 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 {
     *unit = "";
     fmt_named = d->fmt == F_ENUM;
-    if ((d == &TP[P_EQLO] && v <= 0) || (d == &TP[P_EQHI] && v >= 118)) {   /* (Dah) the EQ's cuts at rest (a band at
-                                                         * 0 dB: its cards, ui_draw.c eq_band_off) */
-        str_cpy(val, "OFF", 6);
-        return;
-    }
-    if (d == &TP[P_EQ1G] || d == &TP[P_EQ2G] || d == &TP[P_EQ3G] || d == &TP[P_DOUT]) {         /* (Dah) the bells' GAIN: dB, a tenth */
+    if (d == &TP[P_EQ1G] || d == &TP[P_EQ2G] || d == &TP[P_EQ3G] || d == &TP[P_EQ3F] || d == &TP[P_DOUT]) {   /* (Dah) the
+                                                         * EQ's GAIN: dB, a tenth (a cut's SLOPE: ui_draw.c's card) */
         int32_t t = v * 150 / 64;
         fmt_fix(val + (t > 0), t, 1);
         if (t > 0)
@@ -485,7 +481,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
        FAM_COUNT };
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_SLOTS, GR_USER, GR_TRK,
-       GR_SLCR, GR_MOD, GR_PATS, GR_SONG, GR_CHORD, GR_SLICES, GR_EVENTS,
+       GR_SLCR, GR_MOD, GR_SONG, GR_CHORD, GR_SLICES, GR_EVENTS,
        GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DLANE, GR_DLANE2, GR_DSYN, GR_DSYN2, GR_DSYN3, GR_DSYN4, GR_DSYN5,
        GR_LDRAW, GR_FILE, GR_PATTERN };   /* (GR_PATTERN: a track's patterns, ui_pattern.c) */   /* (HA HA HE HU: LFO DRAW, ui_lfodraw.c; FILE, the projects: projfs.c) */   /* (GR_DLANE..: DRUM's lane
                                  * pages, ui_drumlane.c; GR_DSYN..: a SYN lane's layer set) */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
@@ -514,8 +510,8 @@ static const page_t PAGES[] = {
     {"INSERT", FAM_FX, SC_TRACK, GR_INS, {P_ITYPE, P_IA, P_IB, P_IC}},   /* 1.5: the track's INSERT (fx.c) */
     {"INSERT 2", FAM_FX, SC_TRACK, GR_INS, {P_IMIX, 0xFF, 0xFF, 0xFF}},  /* .. its dry / wet */
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
-    {"EQ", FAM_FX, SC_TRACK, GR_NONE, {P_EQLO, P_EQHI, P_EQ1F, P_EQ1G}},   /* (Dah) the EQ (fx_eq.c): its spectrum */
-    {"EQ 2", FAM_FX, SC_TRACK, GR_NONE, {P_EQ2F, P_EQ2G, P_EQ3F, P_EQ3G}},   /* BAND 2, BAND 3 */
+    {"EQ", FAM_FX, SC_TRACK, GR_NONE, {P_EQLO, 0xFF, 0xFF, 0xFF}},   /* (Dah) the EQ (fx_eq.c): KNOB 1 the band (past the
+                                                         * last: one more), 2 its TYPE, 3 FREQ, 4 SLOPE / GAIN (eq_page) */
     {"SIDECHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (HA HA HE HU, fx.c duck_part) */
     {"COMP", FAM_FX, SC_TRACK, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (Dah) the COMPRESSOR: AMOUNT RELEASE (trkx, fx_comp.c) */
     /* (Dah) the send effects, as the others: the track's SEND (PS_TRK: a track parameter on a global page) and the
@@ -555,14 +551,13 @@ static const page_t PAGES[] = {
     /* 1.2 (Discussion #153): a family's pages go round in this order, a tap of its button each (ui.c open_family) */
     /* SAVE's taps (1.5, #173): USER (SAVE from another page: the quick save, SAVE OCT+ OCT+), PRESETS (the engines and
      * sounds one tap on; up to 1.4.1 the last), PHRASES, PROJECT, TOOLS. (Dah) PRESETS and TOOLS gone: the PRESETS knob
-     * picks the sound from any page (its list full screen); INIT / CLEAN INIT in the EDIT layer */
+     * picks the sound from any page (its list full screen); INIT / CLEAN INIT in the EDIT layer; PHRASES (the factory
+     * patterns' loader) gone too */
     {"FILE", FAM_SAVE, SC_GLOBAL, GR_FILE, {0xFF, 0xFF, 0xFF, 0xFF}},       /* (HA HA HE HU) SAVE's first: the projects
                                                                              * (projfs.c): the projects */
     {"PATTERN", FAM_SAVE, SC_TRACK, GR_PATTERN, {0xFF, 0xFF, 0xFF, 0xFF}},  /* (HA HA HE HU) the selected track's patterns:
                                                                              * PATTERN, OPEN, COPY, NEW (ui_pattern.c) */
-    {"USER", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
-    {"PHRASES", FAM_SAVE, SC_GLOBAL, GR_PATS, {0xFF, 0xFF, 0xFF, 0xFF}},    /* pattern loader: PAT LOAD (ui.c pat_load);
-                                                                             * the tap after PRESETS (up to 1.1.5 SEQ's) */
+    {"MY PRESETS", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},
     {"ARP 2", FAM_ARP, SC_TRACK, GR_NONE, {P_ASWING, P_APROB, P_AHOLD, P_AORDER}},
     {"STEP", FAM_SEQ, SC_STEP, GR_ROLL, {0, 1, 2, 3}},
@@ -582,9 +577,12 @@ static uint32_t fx_knob_id(const track_t *t, uint32_t c)
     (void)t;
     return ID[c & 3u];
 }
+static int eq_page(const page_t *pg) { return pg->fam == FAM_FX && pg->scope == SC_TRACK && pg->id[0] == P_EQLO; }
+static uint8_t eq_ui_band;        /* (Dah) the EQ page: the band picked (ui_graph_eq.c) */
+static uint32_t eq_ui_id(uint32_t c);                   /* (Dah) ui_graph_eq.c: the EQ page's knob c, the band picked's */
 static uint32_t page_id(const page_t *pg, uint32_t c)
 {
-    return pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : pg->id[c & 3u];
+    return pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : eq_page(pg) ? eq_ui_id(c) : pg->id[c & 3u];
 }
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
@@ -624,6 +622,10 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     if (pg->scope == SC_GLOBAL) {
         *valp = &song.g[id];
         return &GP[id];
+    }
+    if (eq_page(pg) && (id = eq_ui_id(slot)) == 0xFFu) {   /* (Dah) the EQ: FREQ, GAIN of the band picked */
+        *valp = 0;
+        return 0;
     }
     if (pg->graph == GR_MOD)                          /* SRC DST AMT of the slot shown */
         id += 3u * mod_ui_slot;

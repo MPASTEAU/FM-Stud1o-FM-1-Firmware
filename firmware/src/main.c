@@ -376,8 +376,6 @@ static void felucca_demo(void)                /* (Dah: the trip-hop song: DAH_DE
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = 1;
     }
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #elif DAH_DEMO_SONG == 2
 /* (Dah) the deep house: 122 BPM in 1/16, A minor (Am7 Fmaj7 Cmaj7 G6, then Dm7 Em7 Fmaj7 G6), sixteen sections of four
@@ -576,8 +574,6 @@ static void felucca_demo(void)
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = 1;
     }
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #elif DAH_DEMO_SONG == 3
 /* (Dah) slow and dark, after Archive (the sounds alive: LFOs and MOD slots on every synth): 80 BPM in 1/16, E minor, sixteen sections of four bars from the SONG; big held
@@ -782,8 +778,6 @@ static void felucca_demo(void)
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = 1;
     }
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #elif DAH_DEMO_SONG == 4
 /* (Dah) the long chords: 76 BPM in 1/16, E minor, sixteen sections of four bars from the SONG. A chord held for
@@ -977,8 +971,6 @@ static void felucca_demo(void)
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = 1;
     }
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #elif DAH_DEMO_SONG == 5
 /* (Dah) the dark one: 72 BPM in 1/16, B minor, sixteen sections of four bars from the SONG. Huge chords (two pads, eight
@@ -1170,8 +1162,6 @@ static void felucca_demo(void)
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = 1;
     }
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #elif DAH_DEMO_SONG == 6
 /* (Dah) after Hans Zimmer's Time (its chords from a MIDI file): 140 BPM in 1/16, A minor, Am Em G D two bars each
@@ -1328,8 +1318,6 @@ static void felucca_demo(void)
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = 1;
     }
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #else
 /* (Dah) the FX test, the power-on sound for now: four tracks, one pattern of four bars looping (86 BPM, E minor), every
@@ -1420,8 +1408,6 @@ static void felucca_demo(void)
     for (i = 0; i < NTRK; i++)
         chain_config.row[0].slot[i] = i < 4u ? 1u : (uint8_t)CHAIN_SILENT;
     chain_config.row[0].repeat = 1;
-    for (i = 0; i < NTRK; i++)
-        pat_sig[i] = steps_sig(&trk[i]);
 }
 #endif
 #endif
@@ -1449,13 +1435,14 @@ static void felucca_init(void)
         t->engine = t->eng_req;
         eng_mem_claim(t);                     /* (zeros already: no note can come before) */
         track_defaults_steps(t);              /* (a sound load never touches them) */
-        if (TRK_DEF[i][2])
-            load_pat16(t, PATTERNS[TRK_DEF[i][2] - 1u].note, PATTERNS[TRK_DEF[i][2] - 1u].flags);
-        pat_sig[i] = steps_sig(t);            /* a default pattern, not the user's */
-        pat_last[i] = TRK_DEF[i][2];
     }
 #if FELUCCA_DEMO
     felucca_demo();
+    for (i = 0; i < NTRK; i++)                /* (Dah: its EQs as LOW CUT, HIGH CUT and bells: as bands, fx_eq.c) */
+        if (!trkx[i].eq.n)
+            eq_adopt(trk[i].p, trk[i].p, &trkx[i].eq);
+    if (!eq_mc.n)
+        eq_adopt(mtrk.p, mtrk.p, &eq_mc);
 #endif
     undo_depth--;
     song.sel = 0;

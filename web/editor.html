@@ -1808,7 +1808,7 @@ function makeMockDevice(opt = {}) {
         P("GRIT", [0, 2, 110, 100, 64, 50, 127, 50], [0, 60, 127, 10], 1, 8)] },
   ];
   const FM6_E = ENG.findIndex((e) => e.name === "FM6"), FM6_OWN = FM6.FACTORY_PK.length, DRUM_E = ENG.findIndex((e) => e.name === "DRUM");
-  /* factory PATTERNS[] (engines.c; the device loads them from SAVE > PHRASES, presets only suggest one): absolute
+  /* the mock's patterns (the factory ones of before, the device's SAVE > PHRASES gone; presets only suggest one): absolute
      notes, 0 rest; flags 1 accent, 2 slide, 4 tie (holds the previous note) */
   const T_ = 4;
   const PATTERNS = [
@@ -1849,9 +1849,9 @@ function makeMockDevice(opt = {}) {
                 "SCDEI", "SCDIE", "SCEDI", "SCEID", "SCIDE", "SCIED", "SDCEI", "SDCIE", "SDECI", "SDICE",
                 "SECDI", "SECID", "SEDCI", "SEICD", "SICDE", "SICED", "SIDCE", "SIECD"], 0),   /* HA HA HE HU: FX ORDER (103; Dah: EQ, SIDECHAIN), its source, */
     E("SRC", ["OFF", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"], 0), D("DEPTH", F.PCT, 0, 127, 100),   /* depth (104, 105) */
-    D("LOCUT", F.CUTOFF, 0, 118, 0), D("HICUT", F.CUTOFF, 0, 118, 118), D("FREQ1", F.CUTOFF, 0, 118, 40),   /* Dah: the EQ (106..111), */
-    D("GAIN1", F.BIPCT, -64, 63, 0), D("FREQ2", F.CUTOFF, 0, 118, 90), D("GAIN2", F.BIPCT, -64, 63, 0),
-    D("GAIN3", F.BIPCT, -64, 63, 0), D("FREQ3", F.CUTOFF, 0, 118, 110), D("OUT", F.BIPCT, -64, 63, 0), D("COLOR", F.BIPCT, -64, 63, 0));   /* the EQ's band 3 (112, 113), DIST's OUT, COLOR (114, 115) */
+    D("FREQA", F.CUTOFF, 0, 118, 0), D("FREQB", F.CUTOFF, 0, 118, 118), D("FREQC", F.CUTOFF, 0, 118, 40),   /* Dah: the EQ's four slots (106..113: */
+    D("GAINC", F.BIPCT, -64, 63, 0), D("FREQD", F.CUTOFF, 0, 118, 90), D("GAIND", F.BIPCT, -64, 63, 0),   /* FREQ, GAIN / a cut's SLOPE), */
+    D("GAINA", F.BIPCT, -64, 63, 0), D("GAINB", F.BIPCT, -64, 63, 0), D("OUT", F.BIPCT, -64, 63, 0), D("COLOR", F.BIPCT, -64, 63, 0));   /* DIST's OUT, COLOR (114, 115) */
   const P_COUNT = 124, G_COUNT = 27, NSTEP = 64, P_E0 = 116, G_ENGSEL = 20, P_SLCR = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const enumOrig = (d, v) => d.fmt === F.ENUM && d.names ? aliasOf(d.names, v - d.min) + d.min : v;   /* params.c enum_orig */
@@ -1972,7 +1972,7 @@ function makeMockDevice(opt = {}) {
   /* the power-on sounds (engines.c TRK_DEF): ACID, PAD, PULSE LD, DRUM KIT; HA HA HE HU's BELL, PLUCK, CHOIR AAH, PERC KIT */
   [[1, FM6_E, 4], [2, 3, 0], [3, 10, 0], [4, FM6_E, 1], [5, 0, 8], [6, 5, 0], [7, 10, 3], [0, 0, 4]].forEach(([i, e, p]) => { st.sel = i; setEngine(e); applyPreset(p); });
   /* the device powers on with its sequencers empty; the mock starts as a little demo to look at: track 1 with
-     the ACID pattern, track 4 with BEAT (as SAVE > PHRASES would load them), pads left, lead right */
+     the ACID pattern, track 4 with BEAT, pads left, lead right */
   st.sel = 3; loadPattern(11);
   st.sel = 0; loadPattern(0);
   st.tracks[1].p[39] = -24; st.tracks[2].p[39] = 20; st.tracks[2].p[0] = 92;
@@ -2649,7 +2649,7 @@ const TEXT = {
     savedLib: "ライブラリに保存しました: ", copiedLib: "ライブラリにコピーしました: ", imported: "読み込みました: ",
     skippedN: " 件（読めないもの {n} 件）", patchesN: " 件",
     putDone: "本体に書き込みました: スロット ", storedSlot: "本体に保存しました: スロット ", erasedSlot: "消去しました: スロット ",
-    loadedUser: "音色を読み込みました（シーケンスはそのまま。パターンは本体の SAVE > PHRASES から。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
+    loadedUser: "音色を読み込みました（シーケンスはそのまま。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
     installer: "Felucca インストーラー",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
@@ -2752,7 +2752,7 @@ const TEXT = {
     savedLib: "Saved to the library: ", copiedLib: "Copied to the library: ", imported: "Imported: ",
     skippedN: " ({n} unreadable)", patchesN: " patches",
     putDone: "Written to the device: slot ", storedSlot: "Stored on the device: slot ", erasedSlot: "Erased slot ",
-    loadedUser: "Sound loaded (the sequence stays; its pattern is on the device under SAVE > PHRASES; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
+    loadedUser: "Sound loaded (the sequence stays; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
     installer: "Felucca installer",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",

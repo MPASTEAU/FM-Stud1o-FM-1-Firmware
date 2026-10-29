@@ -5,8 +5,6 @@
  *   SOUNDS     a sound load (PRESETS knob / page, TOOLS INIT, user preset) changes the sound only: the
  *              steps, LEN DIV SWING GATE, ARP, SCL, the SLICER and the mix stay the track's. Power-on:
  *              every sequencer empty.
- *   PATTERNS   SAVE > PHRASES: KNOB 1 PAT (factory patterns, then user presets that hold one), OCT+
- *              LOAD; over the user's steps the REPLACE? dialog (OCT- / OCT+); the PRESETS hint.
  *   UNDO       a load keeps a copy of the track; SAVE held swaps back what the loads changed (again:
  *              redo); browsing keeps the copy from before the first load; power-on and projects: none.
  *   REC        a tap on every screen arms the selected track and starts PLAY, without navigation.
@@ -14,15 +12,15 @@
  *              cursor step. With the ARP on, the arp's notes are recorded, not the keys.
  *   MIDI IN    MENU > MIDI > MIDI IN (ROUT): CH1-4 (channels 5..16 ignored) / SEL, note-offs follow their note-ons.
  *   SAVE       refused while playing ("STOP TO SAVE"); a used slot asks OVERWRITE? (OCT+ / OCT-).
- *   ACTIONS    PATTERNS, USER, PROJECT, TOOLS: the knobs pick, OCT+ does it, OCT- cancels or goes
+ *   ACTIONS    USER, PATTERN, FILE: the knobs pick, OCT+ does it, OCT- cancels or goes
  *              HOME, on release, never both together; the OCT LEDs (OCT- lit, OCT+ blinks).
  *   TRACKS     the PRESETS knob does nothing there; KNOB 1 is MUTE.
  *   GRID       SEQ > STEP on a DRUM track: white keys toggle the selected lane's steps of the page, black
  *              keys 1..8 select the lane (and only they play), 9 held = ACC, 10 / 11 the page; KNOB 1..4 STEP
  *              LANE HIT ACC; the key LEDs (hits, the playhead inverted, the lane, ACC, the page keys); a step's
  *              GM notes shown on their lanes and made the lane's own by an edit; live recording into the grid
- *              (lane keys on the grid, GM keys elsewhere; other GM drums as notes; no TIE holds); 12 BEAT from
- *              PATTERNS fills the grid (undo); sound loads keep it, and other engines play it as GM notes.
+ *              (lane keys on the grid, GM keys elsewhere; other GM drums as notes; no TIE holds); 12 BEAT:
+ *              its notes fill the grid; sound loads keep it, and other engines play it as GM notes.
  *   ROLL       the rolling digits of the card values and the header BPM: strips only, the last frame static,
  *              direction, retarget, the snaps (fast turn, names, shape, page, track, palette, force).
  *   SOAK       #63: 150000 random frames (turns, pages, transport, REC / motion, wrapping clocks): no roll
@@ -157,6 +155,26 @@ static struct { uint32_t stage; } felucca_dbg;
 #include "../firmware/src/ui_layer.c"
 #include "../firmware/src/upreset.c"
 #include "../firmware/src/project.c"
+/* (Dah) a 16-step pattern (hostsim.c PATTERNS[] format, a user preset's) into steps 1..16, the rest empty, LEN 16: as
+ * SAVE > PHRASES loaded one (ui.c load_pat16, gone with it) */
+static void load_pat16(track_t *t, const uint8_t *note, const uint8_t *flags)
+{
+    uint32_t i;
+    for (i = 0; i < NSTEP; i++) {
+        step_t *s = &t->step[i];
+        uint8_t n = i < 16u ? note[i] : 0, fl = i < 16u ? flags[i] : 0;
+        s->note[0] = n;
+        s->n = n ? 1 : 0;
+        s->time = (fl & 4u) ? ST_TIE : n ? ST_NOTE : ST_REST;
+        s->flags = n ? (fl & (SF_ACCENT | SF_SLIDE | SF_RATCH)) : 0;
+        s->vel = n ? 96 : 0;
+        s->hit = s->acc = 0;
+        s->probability = 0;
+        if (drum_track(t))                           /* a DRUM track: the lanes' notes as its grid */
+            step_to_grid(s);
+    }
+    t->p[P_SLEN] = 16;
+}
 /* HA HA HE HU: a FUN10 record holds tracks 1..4 (5..8: the FUNX, project.c proj_pack_x): a round trip through it alone
  * is the same project but for tracks 5..8 (their sounds, steps, patches, channels, sections' slots) */
 static int proj_same(const project_t *a, const project_t *b)
@@ -213,7 +231,6 @@ static void ui_power_on(void)
     ml_off();                                     /* (MIDI LEARN off, nothing learned) */
     memset(&undo, 0, sizeof undo);
     fop_op = fop_stg = 0;                         /* (FM6's operator pages: OP 1, stage 1, as at power-on) */
-    memset(pat_last, 0, sizeof pat_last);
     memset(pat_from, 0, sizeof pat_from);                /* (the header's slot letter: none) */
     memset(proj_slot, 0, sizeof proj_slot);
     memset(up_bank, 0, sizeof up_bank);
@@ -227,10 +244,6 @@ static void ui_power_on(void)
         apply_preset_to(t, TRK_DEF[i][1]);
         t->engine = t->eng_req;
         track_defaults_steps(t);
-        if (TRK_DEF[i][2])
-            load_pat16(t, PATTERNS[TRK_DEF[i][2] - 1u].note, PATTERNS[TRK_DEF[i][2] - 1u].flags);
-        pat_sig[i] = steps_sig(t);
-        pat_last[i] = TRK_DEF[i][2];
     }
     undo_depth--;
     song.sel = 0;
@@ -399,16 +412,6 @@ static void go_page(uint32_t graph)               /* the page that draws graph *
     ui.page = (uint8_t)i;
     page_entered();
 }
-static int steps_are(const track_t *t, uint32_t n)  /* steps 1..16 = PATTERNS[n], 17..64 empty, LEN 16 */
-{
-    uint32_t i;
-    for (i = 0; i < NSTEP; i++) {
-        uint8_t want = i < 16u ? PATTERNS[n].note[i] : 0u;
-        if (t->step[i].note[0] != want || t->step[i].n != (want ? 1u : 0u))
-            return 0;
-    }
-    return t->p[P_SLEN] == 16;
-}
 /* the sound of a track: engine, preset and the parameters that are not the track's own (param_kept) */
 static int same_sound(const track_t *a, const track_t *b)
 {
@@ -489,8 +492,7 @@ static int test_sound_loads(void)
     t->p[P_AMODE] = 0;
     t->preset = (uint8_t)(i - 1u);
     turn(EN_PRESET, 1);
-    bad += check("RAVE (an ARP preset) leaves the arp off; it suggests pattern 13 ARP", t->preset == i && t->p[P_AMODE] == 0 &&
-                 preset_pat_hint() == 12 && ui.ppick == 12 && str_eq(PATTERNS[12].name, "ARP"));
+    bad += check("RAVE (an ARP preset) leaves the arp off", t->preset == i && t->p[P_AMODE] == 0);
     t->p[P_AMODE] = 2;
     before = *t;
     for (i = 0; i < 6u; i++)                      /* several loads, into the next engine */
@@ -526,7 +528,8 @@ static int test_sound_loads(void)
     my_steps(&trk[0]);
     trk[0].p[P_SDIV] = 2;
     up_store(3, "MINE");
-    bad += check("a user preset keeps its pattern in the record (format unchanged)", up_has_pat(3) && up_rec(3)->note[0] == 40);
+    bad += check("a user preset keeps its pattern in the record (format unchanged)", up_used(3) && !up_pat_empty(up_rec(3)) &&
+                 up_rec(3)->note[0] == 40);
     trk[0].p[P_SDIV] = 0;
     track_defaults_steps(&trk[0]);
     trk[0].step[5].note[0] = 33;
@@ -644,76 +647,6 @@ static int test_sound_loads(void)
     bad += check("  their GM hits play as drums", gm_hits_play(&trk[3]));
     bad += check("  its old drum channel (10, in id 24) loads as REVERB TYPE ROOM", song.g[G_RTYPE] == 0);
     printf("ui: undo copy %u bytes\n", (unsigned)sizeof undo);
-    return bad;
-}
-
-/* SAVE > PHRASES: K1 PAT, OCT+ LOAD; the dialog over the user's steps; undo */
-static int test_patterns(void)
-{
-    int bad = 0;
-    track_t *t = &trk[0], before;
-    ui_power_on();
-    go_page(GR_PATS);
-    bad += check("1.2: PHRASES is a SAVE page (SAVE > PHRASES)", cur_page()->fam == FAM_SAVE &&
-                 str_eq(cur_page()->title, "PHRASES") && !song.seq_mode);
-    before = *t;
-    turn(EN_K2, 1);
-    bad += check("KNOB 2 loads nothing (the knobs only pick)", seq_is_empty(t) && ui.confirm == CF_NONE);
-    press(B_OCTUP);                               /* LOAD 01 ACID into the empty sequencer */
-    bad += check("LOAD into an empty sequencer: at once, LOADED 01 ACID", ui.confirm == CF_NONE && steps_are(t, 0) &&
-                 msg_is("LOADED 01 ACID"));
-    bad += check("..the sound and the track's settings untouched", same_sound(t, &before) && t->p[P_SDIV] == before.p[P_SDIV] &&
-                 t->p[P_AMODE] == before.p[P_AMODE]);
-    turn(EN_K1, 2);
-    press(B_OCTUP);
-    bad += check("a loaded pattern, untouched: the next one without asking (03 MELODY)", ui.confirm == CF_NONE && steps_are(t, 2) &&
-                 msg_is("LOADED 03 MELODY"));
-    hold(B_SAVE);
-    bad += check("SAVE held: back past both loads (empty again), the sound untouched", seq_is_empty(t) && same_sound(t, &before) &&
-                 t->p[P_SLEN] == before.p[P_SLEN]);
-    hold(B_SAVE);                                 /* redo */
-    t->step[3].note[0] = 70;                      /* an edit: the user's steps now */
-    t->step[3].n = 1;
-    t->step[3].time = ST_NOTE;
-    press(B_OCTUP);
-    bad += check("edited steps: the REPLACE T1 SEQUENCE? dialog", ui.confirm == CF_LOAD_PAT && ui.confirm_trk == 0u &&
-                 t->step[3].note[0] == 70);
-    press(B_OCTDN);
-    bad += check("OCT- keeps them", ui.confirm == CF_NONE && t->step[3].note[0] == 70);
-    my_steps(t);
-    before = *t;
-    turn(EN_K1, 9);                               /* 12 BEAT */
-    press(B_OCTUP);
-    press(B_OCTUP);
-    bad += check("OCT+ loads (12 BEAT), then HOLD SAVE: UNDO", ui.confirm == CF_NONE && steps_are(t, 11) &&
-                 msg_is("LOADED 12 BEAT") && str_eq(ui.msg2, "[SAVE] HOLD TO UNDO"));
-    hold(B_SAVE);
-    bad += check("SAVE held: the user's steps and LEN back", !memcmp(t->step, before.step, sizeof t->step) && t->p[P_SLEN] == 32);
-    /* a user preset's pattern: listed after the factory ones as U06, with its LEN DIV SWING GATE */
-    t->p[P_SDIV] = 2;
-    t->p[P_SSWING] = 40;
-    up_store(5, "UPAT");
-    t->p[P_SDIV] = 0;
-    t->p[P_SSWING] = 0;
-    up_store(6, "NOPAT");
-    memset(up_rec(6)->note, 0, sizeof up_rec(6)->note);   /* .. a record with no pattern: not listed */
-    bad += check("user presets with a pattern are listed after the factory ones", pat_count() == NPATTERNS + 1u);
-    track_defaults_steps(t);
-    turn(EN_K1, 20);                              /* (to the end of the list) */
-    press(B_OCTUP);
-    bad += check("LOAD U06: its 16 steps, LEN 16 (at most), DIV and SWING", msg_is("LOADED U06 UPAT") && t->step[0].note[0] == 40 &&
-                 t->step[3].note[0] == 43 && !t->step[30].n && t->p[P_SLEN] == 16 && t->p[P_SDIV] == 2 && t->p[P_SSWING] == 40);
-    /* a project's steps count as the user's */
-    project_save(2);
-    project_load(2);
-    press(B_OCTUP);
-    bad += check("over a project's steps: the dialog", ui.confirm == CF_LOAD_PAT);
-    press(B_OCTDN);
-    /* the hint: a load (the PRESETS knob) moves the pick there */
-    go_home();
-    turn(EN_PRESET, 1);
-    bad += check("PRESETS: a factory preset's suggested pattern becomes the pick", preset_pat_hint() >= 0 &&
-                 ui.ppick == (uint8_t)preset_pat_hint());
     return bad;
 }
 
@@ -940,9 +873,8 @@ static int test_save(void)
                      !name_on() && up_used(0) && up_value(up_rec(0), P_E0) == 5 && ui.act == 0u && str_eq(nmb, au));
     }
     press(B_SAVE);
-    bad += check("1.2: SAVE again: PHRASES (the patterns; Dah: PRESETS gone)", cur_page()->graph == GR_PATS);
     press(B_SAVE);
-    bad += check("SAVE again: FILE again (round; Dah: TOOLS gone)", cur_page()->graph == GR_FILE);
+    bad += check("SAVE again: FILE again (round; Dah: PRESETS, TOOLS, PHRASES gone)", cur_page()->graph == GR_FILE);
     go_home();
     press(B_SAVE);
     bad += check("SAVE from HOME returns directly to FILE", cur_page()->graph == GR_FILE && ui.act == 0u);
@@ -1047,19 +979,22 @@ static int test_actions(void)
     ui_power_on();
     press(B_OCTUP);
     bad += check("HOME: OCT+ shifts the octave (lit)", song.octave == 1 && oct_leds() == 2u);
-    go_page(GR_PATS);
-    bad += check("PATTERNS: OCT+ breathes (a pattern to load), OCT- dark (Dah: no BACK)", oct_leds_seen(0) == OCT_BREATH &&
-                 oct_leds_seen(1) == OCT_BREATH);
-    press(B_OCTUP);
-    bad += check("..OCT+ loads it, the octave stays", steps_are(t, 0) && song.octave == 1 && !ui.home);
-    bad += check("..the same pattern again would change nothing: OCT+ dark", oct_leds_seen(0) == 0u);
-    turn(EN_K1, 1);
-    bad += check("..another one picked: OCT+ breathes again", oct_leds_seen(0) == OCT_BREATH);
+    up_store(0, "ACT");                           /* (Dah: PHRASES gone: MY PRESETS' LOAD the action) */
+    t->user = 0;
+    go_page(GR_USER);
+    ui.uslot = 0;
+    bad += check("MY PRESETS, nothing picked: OCT+ and OCT- dark (Dah: no BACK)", oct_leds_seen(0) == 0u);
+    turn(EN_K2, 1);
+    bad += check("..LOAD picked: OCT+ breathes (a sound to load), OCT- lit (cancels)", oct_leds_seen(0) == (1u | OCT_BREATH) &&
+                 oct_leds_seen(1) == (1u | OCT_BREATH));
     {
         char a[16], b[16];
         foot_hint(a, b);
-        bad += check("..the footer: OCT+ LOAD (Dah: no OCT- BACK)", str_eq(a, "OCT+ LOAD") && !b[0]);
+        bad += check("..the footer: OCT+ LOAD, OCT- CANCEL", str_eq(a, "OCT+ LOAD") && str_eq(b, "OCT- CANCEL"));
     }
+    press(B_OCTUP);
+    bad += check("..OCT+ loads it, the octave stays", t->user == 1u && msg_is("LOADED U01") && song.octave == 1 && !ui.home);
+    t->user = 0;
     fm1_in.buttons |= 1u << panel.btn[B_OCTUP];   /* both together (the UPDATE MODE hold): nothing */
     host_pressed |= 1u << panel.btn[B_OCTUP];
     frame();
@@ -1071,19 +1006,22 @@ static int test_actions(void)
     fm1_in.buttons &= ~(1u << panel.btn[B_OCTDN]);
     frame();
     bad += check("OCT- + OCT+ together: no load, no HOME, no octave change (Dah: ASSIGN, a HOME knob)",
-                 steps_are(t, 0) && !ui.home && song.octave == 1 && ka.st == 1u);
+                 !t->user && !ui.home && song.octave == 1 && ka.st == 1u);
     press(B_OCTDN);
     bad += check("  OCT-: ASSIGN off", !ka.st && song.octave == 1);
     go_home();
-    fm1_in.buttons |= 1u << panel.btn[B_OCTUP];   /* pressed on HOME, let go on PATTERNS: no load */
+    fm1_in.buttons |= 1u << panel.btn[B_OCTUP];   /* pressed on HOME, let go on MY PRESETS: no load */
     host_pressed |= 1u << panel.btn[B_OCTUP];
     frame();
-    go_page(GR_PATS);
+    go_page(GR_USER);
+    ui.act = 2;                                   /* (LOAD picked) */
     fm1_in.buttons &= ~(1u << panel.btn[B_OCTUP]);
     frame();
-    bad += check("a press that began elsewhere does not load", steps_are(t, 0) && song.octave == 2);
+    bad += check("a press that began elsewhere does not load", !t->user && song.octave == 2);
     press(B_OCTDN);
-    bad += check("PATTERNS: OCT- does nothing (Dah: no BACK; the octave stays)", !ui.home && song.octave == 2);
+    bad += check("MY PRESETS: OCT- cancels the pick (Dah: no BACK; the octave stays)", !ui.home && !ui.act && song.octave == 2);
+    press(B_OCTDN);
+    bad += check("..again: nothing (the octave stays)", !ui.home && song.octave == 2);
     /* the dialogs and the menu */
     open_family(FAM_SEQ);
     my_steps(t);
@@ -1289,19 +1227,16 @@ static int test_grid(void)
     song.rec = 0;
     song.playing = 0;
     bad += check("REC on HOME: GM keys quantised into the grid (35 a note on the KICK lane)", ok);
-    /* SAVE > PHRASES: 12 BEAT into the DRUM track fills the grid */
+    /* 12 BEAT's notes into the DRUM track fill the grid (step_to_grid; Dah: as SAVE > PHRASES did, gone) */
     track_defaults_steps(t);
-    pat_sig[0] = steps_sig(t);
-    go_page(GR_PATS);
-    ui.ppick = 11;
-    press(B_OCTUP);
-    ok = msg_is("LOADED 12 BEAT") && t->p[P_SLEN] == 16 && lane_steps(t, DV_KICK) == ((1u << 0) | (1u << 6) | (1u << 8) | (1u << 11)) &&
+    load_pat16(t, PATTERNS[11].note, PATTERNS[11].flags);
+    ok = t->p[P_SLEN] == 16 && lane_steps(t, DV_KICK) == ((1u << 0) | (1u << 6) | (1u << 8) | (1u << 11)) &&
          lane_steps(t, DV_SNARE) == ((1u << 4) | (1u << 12)) && lane_steps(t, DV_HATO) == 1u << 14 &&
          lane_steps(t, DV_HATC) == 0xA6AEu && t->step[0].acc == 1u << DV_KICK && t->step[4].acc == 1u << DV_SNARE &&
          t->step[1].acc == 0u && t->step[16].time == ST_REST;
     for (i = 0; i < 16u; i++)
         ok &= t->step[i].n == 0u && !(t->step[i].flags & SF_ACCENT);
-    bad += check("PATTERNS 12 BEAT into a DRUM track: the grid (hits, the accents on 1 5 9 13)", ok);
+    bad += check("12 BEAT's notes into a DRUM track: the grid (hits, the accents on 1 5 9 13)", ok);
     open_family(FAM_SEQ);
     ui.lane = DV_KICK;
     cursor_set(0);
@@ -1328,14 +1263,6 @@ static int test_grid(void)
         set_engine_of(t, ENGI_DRUM);
         t->engine = t->eng_req;
     }
-    my_steps(t);
-    go_page(GR_PATS);
-    ui.ppick = 11;
-    press(B_OCTUP);
-    press(B_OCTUP);
-    hold(B_SAVE);
-    bad += check("BEAT over the user's steps: the dialog, then SAVE held brings them back", t->step[0].note[0] == 40 &&
-                 !t->step[0].hit && t->p[P_SLEN] == 32);
     /* the menu: the keys play again */
     go_page(GR_ROLL);
     song.rec = (uint8_t)(1u << song.sel);               /* (Dah: armed, the grid's) */
@@ -2552,7 +2479,7 @@ static int test_presets_knob(void)
     uint32_t i, n_snd = 0, n_cur = 0, n_else = 0;
     for (i = 0; i < NPAGES; i++) {
         track_t before;
-        uint32_t g = PAGES[i].graph, uslot, ppick;
+        uint32_t g = PAGES[i].graph, uslot;
         int16_t slot;
         ui_power_on();
         song.sel = 0;
@@ -2562,8 +2489,8 @@ static int test_presets_knob(void)
             continue;
         frame();
         before = *TSEL;
-        uslot = ui.uslot; ppick = pat_pick(); slot = song.g[G_SLOT];
-        (void)uslot; (void)ppick; (void)slot;
+        uslot = ui.uslot; slot = song.g[G_SLOT];
+        (void)uslot; (void)slot;
         turn(EN_PRESET, 1);
         {                                               /* (Dah) PRESETS: the next sound on every page, the steps stay */
             int same_snd = TSEL->preset == before.preset && TSEL->eng_req == before.eng_req &&
@@ -2602,21 +2529,22 @@ static int test_presets_knob(void)
 }
 
 /* 1.2 (Discussion #153): the pages by button. HOME: HOME > MIXER > CLOCK; SEQ: STEP <-> AUTOMATION, held SEQ TOOLS
- * everywhere; GLO: SONG (GLOBAL became CLOCK, SYSTEM the MENU's); SAVE: USER -> PRESETS -> PHRASES -> PROJECT -> TOOLS (1.5);
+ * everywhere; GLO: SONG (GLOBAL became CLOCK, SYSTEM the MENU's); SAVE: USER -> PRESETS -> PHRASES -> PROJECT -> TOOLS (1.5;
+ * Dah: FILE -> PATTERN -> MY PRESETS);
  * a remembered page that left its family. (Dah) AUTOMATION: HOME's four knobs as lanes, the roll's controls */
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[5] = {"FILE", "PATTERN", "USER", "PHRASES", "FILE"};   /* (1.5, #173;
+    static const char *const SAVE_CYC[4] = {"FILE", "PATTERN", "MY PRESETS", "FILE"};   /* (1.5, #173;
                                                      * HA HA HE HU: FILE, the projects, then PATTERN, A..D) */
     int bad = 0, ok = 1;
     uint32_t i;
     /* the cycles: each button's taps, in order */
     ui_power_on();
-    for (i = 0; i < 5u; i++) {
+    for (i = 0; i < 4u; i++) {
         press(B_SAVE); frames(320);
         ok &= !ui.home && cur_page()->fam == FAM_SAVE && str_eq(cur_page()->title, SAVE_CYC[i]);
     }
-    bad += check("1.5 (#173): SAVE cycles FILE > PATTERN > USER > PHRASES > FILE (Dah: PRESETS, TOOLS gone)", ok);
+    bad += check("1.5 (#173): SAVE cycles FILE > PATTERN > USER > FILE (Dah: PRESETS, TOOLS, PHRASES gone)", ok);
     ok = 1;
     for (i = 0; i < NPAGES; i++) {                       /* every page in a family its button reaches, and its LED */
         uint32_t f = PAGES[i].fam;
@@ -2632,7 +2560,7 @@ static int test_page_cycles(void)
     for (i = 0; i < NPAGES; i++)
         ok &= (!str_eq(PAGES[i].title, "PATTERN") || PAGES[i].fam == FAM_SAVE) && !str_eq(PAGES[i].title, "CHANCE") &&
               !str_eq(PAGES[i].title, "AUTO LIST");   /* (HA HA HE HU: PATTERN is SAVE's, the slots A..D) */
-    bad += check("1.2: SEQ has STEP and AUTOMATION only; SONG is GLO's only page, PHRASES SAVE's, MIXER and CLOCK HOME's "
+    bad += check("1.2: SEQ has STEP and AUTOMATION only; SONG is GLO's only page, MIXER and CLOCK HOME's "
                  "(their LED HOME)", ok);
     {   /* 1.2: GLOBAL and SYSTEM are gone; their knobs: BPM SWG CLK on HOME > CLOCK, TUNE and ROUT on no page (the MENU's),
          * MIDI SYNC CPU on none (INFO shows the USB state and the CPU) */
@@ -2655,7 +2583,7 @@ static int test_page_cycles(void)
     ui_power_on();
     for (i = 0; i < NPAGES; i++)
         if (PAGES[i].graph == GR_TRK) ui.fam_last[FAM_GLO] = (uint8_t)i;
-        else if (PAGES[i].graph == GR_PATS) ui.fam_last[FAM_SEQ] = (uint8_t)i;
+        else if (PAGES[i].graph == GR_USER) ui.fam_last[FAM_SEQ] = (uint8_t)i;
     ui.fam_last[FAM_SAVE] = 200u;
     ui.fam_last[FAM_ENV] = 250u;
     open_family(FAM_GLO); ok = str_eq(cur_page()->title, "SONG");
@@ -7165,7 +7093,7 @@ static void rec_up(void) { btn_up(B_REC); frame(); }
 static uint32_t menu_rec(uint32_t r) { return menu_get(r == 0u ? MI_CLICK : r == 1u ? MI_COUNTIN : MI_CLKLVL); }
 static int test_rec_layer(void)
 {
-    static const uint8_t G[8] = {GR_ROLL, GR_EVENTS, GR_USER, GR_PATS, GR_SONG, GR_FILE, GR_ADSR, GR_TRK};
+    static const uint8_t G[8] = {GR_ROLL, GR_EVENTS, GR_USER, GR_PATTERN, GR_SONG, GR_FILE, GR_ADSR, GR_TRK};
     int bad = 0, ok = 1;
     uint32_t k, i, n;
     step_t before[NSTEP];
@@ -7185,7 +7113,7 @@ static int test_rec_layer(void)
         ok &= !ui.layer && !ui.confirm && song.rec == 0u && !transport_req && ui.page == n && (k < 8u ? !ui.home : ui.home) &&
               !memcmp(trk[1].step, before, sizeof before);
     }
-    bad += check("REC layer: REC held on STEP AUTOMATION USER PHRASES SONG TOOLS ENV MIXER HOME opens it", ok);
+    bad += check("REC layer: REC held on STEP AUTOMATION USER PATTERN SONG FILE ENV MIXER HOME opens it", ok);
     bad += check("  no CLEAR dialog any more, nothing armed, cleared or started (#91's hold replaced)", ok);
     ok = 1;
     for (k = 0; k < 4u; k++) {                          /* the menu's HOLD time, as the other layers */
@@ -7805,11 +7733,11 @@ static int test_knob_accel(void)
 /* #51 ("a melody appears when I change presets"): browsing every sound in the list (every engine's presets, then user
  * presets, one of them holding a pattern), on HOME and the PRESETS page, stopped and playing, on an empty track: no
  * step is written, the ARP stays off, nothing is held, the transport is not started, no message about a pattern. (In
- * 0.9 a preset carried a 16-step pattern and replaced the steps; since 1.0 only SEQ > PHRASES loads one.) */
+ * 0.9 a preset carried a 16-step pattern and replaced the steps; from 1.0 only SEQ > PHRASES loaded one, now none.) */
 static int test_browse_no_pattern(void)
 {
     int bad = 0, ok = 1;
-    uint32_t pass, n, total, loads = 0, pat_hints = 0;
+    uint32_t pass, n, total, loads = 0;
     track_t *t;
     for (pass = 0; pass < 4u; pass++) {
         ui_power_on();
@@ -7818,14 +7746,13 @@ static int test_browse_no_pattern(void)
         up_store(3, "MINE");                          /* a user preset that holds a pattern */
         up_store(5, "PLAIN");
         track_defaults_steps(t);
-        ok &= seq_is_empty(t) && up_has_pat(3);
+        ok &= seq_is_empty(t) && !up_pat_empty(up_rec(3));
         if (pass & 1u) song.playing = 1;              /* playing: the other tracks run, this one is empty */
         if (pass & 2u) go_page(GR_USER);
         preset_all_pos(&total);
         for (n = 0; n < total + 2u; n++) {
             turn(EN_PRESET, 1);
             loads++;
-            pat_hints += preset_pat_hint() >= 0;
             if (!seq_is_empty(t) || t->p[P_AMODE] || t->nheld || (!(pass & 1u) && (song.playing || transport_req))) {
                 printf("  pass %u, sound %u (%s %u): steps %d ARP %d held %u playing %d\n", pass, n,
                        ENGINES[t->eng_req % NENGINES]->name, t->preset, !seq_is_empty(t), t->p[P_AMODE], t->nheld,
@@ -7835,9 +7762,9 @@ static int test_browse_no_pattern(void)
             }
         }
     }
-    if (!ok || loads < 200u || pat_hints <= 10u) printf("  ok %d loads %u hints %u\n", ok, loads, pat_hints);
+    if (!ok || loads < 200u) printf("  ok %d loads %u\n", ok, loads);
     bad += check("#51 every sound browsed (HOME, PRESETS; stopped, playing): no step, ARP off, nothing held, no start",
-                 ok && loads >= 200u && pat_hints > 10u);
+                 ok && loads >= 200u);
     return bad;
 }
 
@@ -8939,7 +8866,7 @@ static int test_song_pictures(void)
 }
 
 /* the header's slot letter (ui_draw.c head_slot): the PROJECT slot of the selected track's pattern; "A*" edited since;
- * none at power-on and after a PHRASES pattern; a song playing: its section's slot ("-" silent); a message hides it */
+ * none at power-on; a song playing: its section's slot ("-" silent); a message hides it */
 static uint32_t head_ink_cols(int32_t x0, int32_t x1)  /* header columns x0..x1 with anything not BG */
 {
     uint32_t n = 0;
@@ -9938,7 +9865,6 @@ int main(void)
     int bad = 0;
     bad += test_large_face();
     bad += test_sound_loads();
-    bad += test_patterns();
     bad += test_rec();
     bad += test_step_rec();
     bad += test_step_rec();

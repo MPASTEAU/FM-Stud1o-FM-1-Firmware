@@ -358,7 +358,7 @@ static void edit_load(uint32_t e, int32_t step)
         if (e == TSEL->eng_req % NENGINES)
             return;                                     /* its engine already: the sound stays */
         select_engine(e);
-        preset_hinted();
+        ui.force = 1;
     } else {
         eng_list_step(step);
     }

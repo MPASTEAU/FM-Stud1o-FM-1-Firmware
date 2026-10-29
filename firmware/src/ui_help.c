@@ -26,8 +26,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"INSERT", "[K1]TYPE[FX]DRY / WET"},
     {"INSERT 2", "[K1]DRY / WET[FX]SLICER"},
     {"SLICER", "[K1]ON[K2]PATTERN[FX]EQ"},
-    {"EQ", "[K1]LOW CUT[K2]HIGH CUT[K3]BAND 1"},
-    {"EQ 2", "[K1]BAND 2[K3]BAND 3[FX]NEXT"},
+    {"EQ", "[K1]BAND / ADD[K2]TYPE[REC]DEL"},       /* (Dah: KNOB 1 past the last: one more) */
     {"SIDECHAIN", "[K1]SOURCE[K2]DEPTH[K3]RELEASE"},
     {"COMP", "[K1]AMOUNT[K2]RELEASE[FX]NEXT"},
     {"DELAY", "[K1]SEND[K2]TIME[K3]FEEDBACK"},
@@ -56,8 +55,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
     {"SONG", "[K1]SECTION[K3]PATTERN[REC]DELETE"},
-    {"USER", "[K2]LOAD[K4]SAVE[REC]ERASE"},
-    {"PHRASES", "[K1]PHRASE[OCT+]LOAD[SAVE]PROJECT"},
+    {"MY PRESETS", "[K2]LOAD[K4]SAVE[REC]ERASE"},
     {"FILE", "[PRESETS]PROJECT[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: the projects; REC deletes, EDIT renames) */
     {"PATTERN", "[PRESETS]PATTERN[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: a track's patterns; REC deletes) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},

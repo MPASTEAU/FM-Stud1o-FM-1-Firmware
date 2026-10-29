@@ -758,14 +758,14 @@ static void sg_fresh(void)
  * OP LEVEL pages and the algorithm charts, exist only there: fm4_screen) */
 #define E_FM (FELUCCA_FM4 ? ENGI_DIGITAL : ENGI_FM6)
 
-enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, S_PHRASES, S_PROJECT,
+enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, S_PROJECT,
        S_SONG_EMPTY, S_SONG, S_STEP, S_AUTO_STEPS, S_AUTO_ADD_CHANCE, S_MOTION, S_DRUM, S_DRUM_HAND, S_DRUM_CYM, S_MIXER,
        S_MIXER_HOME, S_MIXER_PAN,
        S_ENV, S_ENVDEST, S_LFO, S_MOD, S_FX, S_SLICER, S_DLY, S_SCL, S_CHORD, S_CHORD_WIDE, S_CHORD_OFF, S_CHORD_KIT, S_ARP, S_VOICE, S_CLOCK, S_MENU_MIDI,
        S_EDIT_ANALOG, S_EDIT_DIGITAL, S_OP_ENV, S_EDIT_WHEEL, S_EDIT_SAMPLE, S_EDIT_GRAIN, S_EDIT_PHYS,
        S_ALG1, S_ALG2, S_ALG3, S_ALG4, S_ALG5, S_ALG6, S_ALG7, S_ALG8, S_OP_LEVEL,
        S_FM6_ALG1, S_FM6_ALG5, S_FM6_ALG22, S_FM6_ALG32, S_FM6_OP, S_FM6_OP_FIXED, S_FM6_OP2, S_FM6_OP_ENV, S_FM6_OP_ENV_REL,
-       S_CONFIRM_PROJ, S_CONFIRM_USER, S_CONFIRM_PAT, S_CONFIRM_MOTION, S_CONFIRM_ERASE,
+       S_CONFIRM_PROJ, S_CONFIRM_USER, S_CONFIRM_MOTION, S_CONFIRM_ERASE,
        S_MENU, S_MENU_SPEAKER, S_ABOUT, S_ABOUT_REC, S_ABOUT_CREDITS, S_ABOUT_END, S_UBOOT, S_CALIBRATION, S_SPLASH,
        S_BATT0, S_BATT1, S_BATT2, S_BATT3, S_BATT_USB, S_MOTION_REC, S_MOTION_OFF, S_MOTION_CARD, S_SONG_HOME,
        S_FX_PEEK, S_FX_HELD, S_FX_WAIT, S_FX_HARM, S_FX_MOD, S_FX_ASSIGN, S_MENU_HOLD, S_MENU_LEDS, S_MENU_END, S_MENU_SYSTEM, S_MENU_SLIDE, S_REVERB,
@@ -789,12 +789,12 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, 
        S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL,
        S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_EUCLID, S_SEQ_EUCLID_DRUM, S_SEQ_EUCLID_64,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_CONFIRM_CLEAN,
-       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_SENDS, S_FX_SC, S_FX_COMP, S_COUNT };
+       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_EQ_ADD, S_FX_SENDS, S_FX_SC, S_FX_COMP, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "user",
-    "phrases", "project", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
+    "project", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
     "voice", "clock", "menu_midi", "edit_analog", FELUCCA_FM4 ? "edit_digital" : "edit_fm6", "op_env", "edit_wheel", "edit_sample",
-    "edit_grain", "edit_phys", "alg_1", "alg_2", "alg_3", "alg_4", "alg_5", "alg_6", "alg_7", "alg_8", "op_level", "fm6_alg_01", "fm6_alg_05", "fm6_alg_22", "fm6_alg_32", "fm6_op", "fm6_op_fixed", "fm6_op2", "fm6_op_env", "fm6_op_env_rel", "confirm_project", "confirm_user", "confirm_pattern",
+    "edit_grain", "edit_phys", "alg_1", "alg_2", "alg_3", "alg_4", "alg_5", "alg_6", "alg_7", "alg_8", "op_level", "fm6_alg_01", "fm6_alg_05", "fm6_alg_22", "fm6_alg_32", "fm6_op", "fm6_op_fixed", "fm6_op2", "fm6_op_env", "fm6_op_env_rel", "confirm_project", "confirm_user",
     "confirm_motion", "confirm_erase", "menu", "menu_speaker", "about", "about_rec", "about_credits", "about_end", "uboot", "calibration", "splash",
     "batt_0", "batt_1", "batt_2", "batt_3", "batt_usb", "motion_rec", "motion_off", "motion_card", "song_home",
     "perform_peek", "perform_held", "perform_wait", "perform_harm", "perform_mod", "perform_assign", "menu_hold", "menu_leds", "menu_end", "menu_system", "menu_slide", "reverb_spring",
@@ -820,7 +820,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_euclid", "layer_seq_euclid_drum",
     "layer_seq_euclid_64",
     "menu_select", "project_erase", "confirm_erase_project", "confirm_clean",
-    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq2", "fx_sends", "fx_sc", "fx_comp"};
+    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq_bands", "fx_eq_add", "fx_sends", "fx_sc", "fx_comp"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1032,7 +1032,6 @@ static void setup(int s)
     case S_MESSAGE_NOFILE:                          /* a missing sample (ui_input.c sample_notice): USR2 */
         eng(ENGI_SAMPLE); TSEL->p[P_E0] = (int16_t)(SMP_NSETS + 1); memset(snd_said, 0, sizeof snd_said); sample_notice(); break;
     case S_USER: song.playing = 0; up_store(3, "MY LONG BASS NAME"); up_store(4, "PAD"); ui.uslot = 3; go_page(GR_USER); break;
-    case S_PHRASES: go_page(GR_PATS); break;
     case S_PROJECT: song.playing = 0; pattern_new(0, 1); pattern_new(0, 0); go_page(GR_PATTERN); ui.act = 3; break;   /* (HA HA HE HU: PATTERN) */
     case S_SONG_EMPTY: song.playing = 0; go_page(GR_SONG); break;
     case S_SONG:
@@ -1163,8 +1162,26 @@ static void setup(int s)
             eq_ring[i] = (int16_t)((int32_t)((i * 110u * 65536u / 44100u) & 0xFFFFu) / 4 - 8192);
         eq_wn++;
     }
-        TSEL->p[P_EQLO] = 30; TSEL->p[P_EQHI] = 100; TSEL->p[P_EQ1G] = 40; go_title("EQ"); break;
-    case S_FX_EQ2: TSEL->p[P_EQ2F] = 70; TSEL->p[P_EQ2G] = -50; TSEL->p[P_EQ3F] = 104; TSEL->p[P_EQ3G] = 30; go_title("EQ 2"); ui.hot_col = 1; ui.hot_t = 30; break;
+        memset(&trkx[song.sel].eq, 0, sizeof(eqc_t));   /* (Dah: the two cuts, as at power-on) */
+        eq_ui_band = 0;
+        TSEL->p[P_EQLO] = 30; TSEL->p[P_EQHI] = 100; go_title("EQ"); break;
+    case S_FX_EQ2: case S_FX_EQ_ADD: {                  /* (Dah) four bands: HP 24 dB, LP, a LOW SHELF, a BELL; the
+                                                         * shelf picked; ADD A FILTER? asked */
+        static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}};
+        trkx[song.sel].eq = E4;
+        TSEL->p[P_EQLO] = 20; TSEL->p[P_EQ3G] = 1; TSEL->p[P_EQHI] = 104; TSEL->p[P_EQ3F] = 0;
+        TSEL->p[P_EQ1F] = 34; TSEL->p[P_EQ1G] = 30; TSEL->p[P_EQ2F] = 80; TSEL->p[P_EQ2G] = -44;
+        go_title("EQ");
+        eq_ui_band = 2;
+        if (s == S_FX_EQ_ADD) {                         /* (three: a fourth asked) */
+            trkx[song.sel].eq.n = 3;
+            ui.confirm = CF_ADD_EQ;
+        } else {
+            ui.hot_col = 3;
+            ui.hot_t = 30;
+        }
+        break;
+    }
     case S_FX_SENDS: TSEL->p[P_CHOR] = 30; TSEL->p[P_DLY] = 90; TSEL->p[P_REV] = 60; go_title("CHORUS"); break;
     case S_SCL: TSEL->p[P_SCALE] = 2; go_title("SCL"); break;
     case S_CHORD:                                    /* A minor DIA7, the last chord on B: Bm7b5 */
@@ -1307,7 +1324,6 @@ static void setup(int s)
     case S_FM6_OP_ENV_REL: eng(ENGI_FM6); fop_op = 5; fop_stg = 3; go_title("OP ENV"); break;
     case S_CONFIRM_PROJ: ui.confirm = CF_OVR_PROJ; ui.confirm_trk = 0; break;
     case S_CONFIRM_USER: song.playing = 0; up_store(6, "A VERY LONG SOUND NAME"); ui.confirm = CF_OVR_USER; ui.confirm_trk = 6; break;
-    case S_CONFIRM_PAT: ui.confirm = CF_LOAD_PAT; ui.confirm_trk = 0; ui.ppick = 4; break;
     case S_CONFIRM_MOTION: ui.confirm = CF_CLEAR_MOTION; ui.confirm_trk = 3; break;
     case S_CONFIRM_ERASE: song.playing = 0; up_store(6, "A VERY LONG SOUND NAME"); ui.confirm = CF_ERASE_USER; ui.confirm_trk = 6; break;
     case S_MENU: ui.menu = 1; ui.menu_sel = 0; song.rec = 1; break;

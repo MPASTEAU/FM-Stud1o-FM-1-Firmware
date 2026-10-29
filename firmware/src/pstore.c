@@ -333,7 +333,6 @@ static int pattern_go(uint32_t k, uint32_t num)
     if (at < 0 || !ps_decode(&trk[k], ps_heap + at + 4u, ps_rlen((uint32_t)at)))
         ps_blank(k);
     ps_del(k, num);                                     /* (the one played lives on the track: no stale copy) */
-    pat_sig[k] = steps_sig(&trk[k]);
     ui.force = 1;
     return 0;
 }
@@ -475,7 +474,6 @@ static void pattern_del(uint32_t k, uint32_t num)
         ps_cur[k] = 1;
         ps_blank(k);
     }
-    pat_sig[k] = steps_sig(&trk[k]);
     ui.force = 1;
 }
 static uint32_t ps_size(uint32_t k, uint32_t num)       /* its bytes in the heap (the one played: as it is now) */
