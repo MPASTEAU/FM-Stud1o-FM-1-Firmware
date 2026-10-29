@@ -643,19 +643,6 @@ static uint32_t song_leds(void)
 /* (Dah) ASSIGN, HOME's four knobs: OCT- and OCT+ together, then a knob turned on any page (its parameter: the source),
  * OCT+ (OK), then one of the four (HOME's knob that drives it from now on: the track's, trkx home). OCT+ before a
  * source: a HOME knob back to its engine's. OCT- leaves. The header says what is asked */
-static const char *ka_say(void)
-{
-    static char m[24];
-    switch (ka.st) {
-    case 1: return "TURN THE SOURCE";
-    case 2:
-        str_cpy(m, track_desc(TSEL, ka.src)->label, 8);
-        str_cpy(m + str_len(m), ": OCT+ OK", 10);
-        return m;
-    case 3: return "TURN A HOME KNOB";
-    default: return "KNOB TO RESET";
-    }
-}
 static int ka_chain_page(void) { return !ui.home && !ui.menu && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX; }
 static void ka_apply(uint32_t k);
 static void ka_start(void)
@@ -2405,7 +2392,6 @@ static void ui_input(void)
     for (id = 0; b; id++, b >>= 1)
         if (b & 1u)
             page_tap(panel_btn_of(id));
-    (void)ka_say;                                       /* (Dah) ASSIGN: the panel says what it asks (graph_assign) */
     if (oct & 4u && !ui.menu && !ui.confirm && !name_on()) {   /* (Dah) OCT- and OCT+ together: ASSIGN a HOME knob */
         ka_start();
     } else if (ka.st && (oct & 0x33u)) {

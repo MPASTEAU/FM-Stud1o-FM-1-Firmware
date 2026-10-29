@@ -1565,37 +1565,8 @@ static void list_row(int32_t y, int sel, const char *tag, uint16_t tc, const cha
     cv_free_text(LIST_NX, y + LIST_TY, &AF_M, name, sel ? T_INK : nc, bg, x1 - LIST_NX);
 }
 /* (Dah) a gliding list's row: its text only (the bar stays in the middle, the row under it in INK) */
-static void list_text(int32_t y, int sel, const char *tag, uint16_t tc, const char *name, uint16_t nc, int32_t x1)
-{
-    uint16_t bg = sel ? T_THEME : T_SURF;
-    cv_text_on(14, y + LIST_TY, &AF_M, tag, sel ? T_INK : tc, bg);
-    cv_free_text(LIST_NX, y + LIST_TY, &AF_M, name, sel ? T_INK : nc, bg, x1 - LIST_NX);
-}
 /* (Dah) a gliding list: rows' (y, tag, its colour, name) under a bar fixed in the middle: drawn plain, the bar over
  * them, then again in INK inside the bar only (the text clip) */
-typedef struct { int32_t y; char tag[6]; uint16_t tc, nc; char nm[28]; } glrow_t;   /* (nc: the name's, 0 TEXT) */
-static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
-{
-    uint32_t i;
-    int32_t by = LIST_Y(list_n() / 2u);
-    int16_t c0 = cv_cy0, c1 = cv_cy1;
-    if (n && (r[0].y - 3) % 17 == 0) {                 /* (still, on the rows: plain ones, as any list) */
-        for (i = 0; i < n; i++)
-            list_row(r[i].y, r[i].y == by, r[i].tag, r[i].tc, r[i].nm, r[i].nc ? r[i].nc : T_TEXT, x1);
-        return;
-    }
-    for (i = 0; i < n; i++)
-        list_text(r[i].y, 0, r[i].tag, r[i].tc, r[i].nm, r[i].nc ? r[i].nc : T_TEXT, x1);
-    cv_rrect(6, by, 228, 16, 4, T_THEME, T_SURF);
-    cv_cy0 = (int16_t)clamp(by + CV_OY, 0, (int32_t)cv_h);   /* (Dah: inside the canvas: a split panel's second one
-                                                         * may not hold the bar at all) */
-    cv_cy1 = (int16_t)clamp(by + 16 + CV_OY, cv_cy0, (int32_t)cv_h);
-    for (i = 0; i < n; i++)
-        if (r[i].y > by - 16 && r[i].y < by + 16)
-            list_text(r[i].y, 1, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
-    cv_cy0 = c0;
-    cv_cy1 = c1;
-}
 static int32_t glide(int32_t *dy)                       /* (Dah) a step of the glide: a quarter of the way, a px at least */
 {
     if (!cv_py)                                         /* (a split panel's next canvases: the same step) */
@@ -1706,39 +1677,6 @@ static int32_t tall_view(int32_t n, int32_t cur, int32_t dy, int32_t h, int32_t 
     return vt;
 }
 static void pat_rows(int32_t dy, int add);
-static void graph_patlist(void)                         /* (Dah) SELECT, GLO + ALGORITHM: the patterns, each its steps (every
-                                                         * track a line, as HOME's), + NEW after the last; gliding */
-{
-    pat_rows(glide(&tl_dy) * 2, 1);
-}
-static void graph_trklist(void)
-{
-    int32_t row, cur = mx_master ? -1 : (int32_t)song.sel, n = (int32_t)trk_count();
-    int32_t dy = glide(&tl_dy), h = (int32_t)list_n() / 2;
-    glrow_t r[13] = {{0}};
-    uint32_t m = 0;
-    for (row = -h - 1; row <= h + 1; row++) {        /* (the bar fixed in the middle, the tracks gliding) */
-        int32_t i = cur + row;
-        glrow_t *g = &r[m];
-        if (i < -1 || i > n || (i == n && n >= NTRK))
-            continue;                               /* (Dah: after the last track, + ADD TRACK: ALGORITHM on) */
-        m++;
-        g->y = LIST_Y(row + h) + dy;
-        g->tag[0] = i < 0 ? 'M' : 'T';
-        g->tag[1] = i < 0 ? 0 : (char)('1' + i);
-        g->tag[2] = 0;
-        g->tc = i < 0 || i == n ? T_MID : ux.trk[i];
-        if (i < 0)
-            str_cpy(g->nm, "MASTER", sizeof g->nm);
-        else if (i == n) {
-            g->tag[0] = '+';
-            g->tag[1] = 0;
-            str_cpy(g->nm, "ADD TRACK", sizeof g->nm);
-        } else
-            sound_name(&trk[i], g->nm);
-    }
-    glide_rows(r, m, 232);
-}
 /* the EDIT layer (ui_layer.c): the sound loaded, as a list's selected row: "03" (its place in KNOB 2's list,
  * the engine's sounds) or "U07", the name */
 static void engine_sound_row(int32_t y)
@@ -3578,12 +3516,6 @@ lists:
         else if (k == SK_LFO) graph_lfo(t, c);
         else graph_title();
         graph_ht = 100;
-    } else if (tl_on()) {
-        cv_oy = 0;
-        if (tl_pat)
-            graph_patlist();                         /* (Dah) GLO + ALGORITHM: the patterns, ~1 s */
-        else
-            graph_trklist();                         /* (Dah) ALGORITHM just turned: the tracks, ~1 s */
     } else if (ui.home) {                            /* (Dah: PRESETS turned: its list full screen, ui_draw.c
                                                       * draw_list_full) */
         cv_oy = 0;
