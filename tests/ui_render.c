@@ -542,7 +542,7 @@ static void song_bands(void)
             lane |= b->y0 >= py + SG_LY(k) && b->y1 <= py + SG_LY(k) + SG_LH;
         lane |= !strcmp(b->s, "+") && b->y0 >= py + SG_Y && b->y1 <= py + SG_Y + SG_H;
         if (lane && b->x0 >= SG_TX && b->x1 <= SG_X0 + SG_W) continue;
-        if (b->y0 > py + SG_RY && b->y1 <= py + SG_RY + 16 && b->x0 >= SG_X0) continue;   /* the ruler's numbers */
+        if (b->y0 >= py + SG_RY && b->y1 <= py + SG_RH && b->x0 >= SG_X0) continue;   /* the ruler's number (Dah: on top) */
         if (b->y0 >= py + SG_RY + 14 && b->y1 <= py + SG_IY + 2 && b->x0 >= SG_X0 && b->x1 <= SG_X0 + SG_W) {
             nl++;                                     /* the line: one baseline, two texts at most */
             if (base < 0) base = b->y1;

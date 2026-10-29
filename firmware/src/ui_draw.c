@@ -555,8 +555,8 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
         }
         if (cur_page()->graph == GR_SONG) {
             kh[0] = (khint_t){KC_OCTUP, ha + 5};
-            kh[1] = (khint_t){KC_REC, "ADD"};
-            kh[2] = (khint_t){KC_OCTDN, "DEL"};
+            kh[1] = (khint_t){KC_OCTDN, "ADD"};             /* (held: "HOLD" has no room) */
+            kh[2] = (khint_t){KC_REC, "DEL"};
             *ok = 1u | 2u | (dl == 2u ? 4u : 0u);
             return 3u;
         }
@@ -1459,8 +1459,8 @@ static void draw_foot_in(void)
             cv_key_left(8, 2, kh, 2u, 3u, T_BG);
         } else if (cur_page()->graph == GR_SONG) {    /* (Dah) SONG: OCT+ held the VIEW, REC adds, OCT- held deletes */
             kh[0] = (khint_t){KC_OCTUP, ha + 5};
-            kh[1] = (khint_t){KC_REC, "ADD"};
-            kh[2] = (khint_t){KC_OCTDN, "DEL"};             /* (held: the room for "HOLD" there is not) */
+            kh[1] = (khint_t){KC_OCTDN, "ADD"};             /* (Dah: OCT- held adds, REC deletes) */
+            kh[2] = (khint_t){KC_REC, "DEL"};
             cv_key_row(8, 232, 2, kh, 3u, 1u | 2u | (dl == 2u ? 4u : 0u), T_BG);
         } else if (dl) {                              /* (Dah) FILE, PATTERN: "REC DELETE" after them */
             kh[nk] = (khint_t){KC_REC, "DELETE"};

@@ -1089,8 +1089,10 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
  * playing one. + ADD's slot (count < CHAIN_ROWS) at the end. Content px: 0 .. the width. Four lanes, T1 at the top */
 #define SG_X0 24                                       /* the strip: x 24 .. 234 (the lanes' cushions left of it) */
 #define SG_W 210
-#define SG_Y 3                                         /* the lanes: y 3 .. 104 */
-#define SG_LH 11                                       /* a lane's height (its letter, the pattern's picture), SG_LG between two */
+#define SG_RH 14                                       /* (Dah) the ruler on top, as HOME's: the whole song, the bars */
+#define SG_Y (SG_RH + 2)                               /* the lanes: under it, to the panel's foot */
+static int32_t sg_lh = 11;                             /* (Dah) a lane's height: the panel shared by the eight (graph_song) */
+#define SG_LH sg_lh                                    /* (its number, the pattern's picture), SG_LG between two */
 #define SG_LG 2                                        /* (Dah: airier) */
 #define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)         /* (HA HA HE HU: the eight lanes at once, thin) */
 #define SG_LY(k) (SG_Y + (int32_t)(k) * (SG_LH + SG_LG))   /* lane k's top */
@@ -1102,7 +1104,7 @@ static const char *graph_project_name(uint32_t slot)  /* (after graph_project_us
 #define SG_FITBAR SG_BAR                               /* fitted: at least this many px a bar (Dah: never smaller than
                                                          * scrolled: no song squeezed) */
 #define SG_BARU 192u                                   /* a 4/4 bar in 1/48 quarters */
-#define SG_RY (SG_Y + SG_H + 2)                        /* the ruler's line (107); its ticks and numbers under it (Dah: thin) */
+#define SG_RY 0                                        /* (Dah) the ruler's top: over the lanes */
 typedef struct {
     uint32_t n, add, fit;                              /* the rows, + ADD shown, fitted (no scrolling) */
     uint32_t u0[CHAIN_ROWS + 1u];                      /* each row's start in 1/48 quarters; u0[n]: the song's length */
@@ -3061,7 +3063,7 @@ static int32_t sg_letter(int32_t x, int32_t x1, int32_t y, uint32_t s, uint16_t 
     int32_t w = text_w(f, a);
     if (x + w + SG_PAD > x1)
         return 0;
-    cv_text_on(x, y - AF_S_CAP_Y, f, a, ink, bg);     /* (its capitals from the lane's top: 10 px, the ink 9 and C's overshoot) */
+    cv_text_on(x, y + HALF_UP(SG_LH - AF_S_CAP_H) - AF_S_CAP_Y, f, a, ink, bg);   /* (Dah: in the lane's middle) */
     return w;
 }
 /* the picture of slot s's track k over sections i .. j - 1 (columns x0 .. x1 on screen), but for the letters'
@@ -3176,19 +3178,29 @@ static void graph_song(void)
     int32_t off, px, sp, hi = SG_X0 + SG_W, bx, x0, ly = SG_IY - (AF_M_CAP_Y + AF_M_CAP_H);
     uint32_t i, j, k, c = song_cur(), lane = ui.song_trk, total, bars;   /* (lane NTRK: SEC, no lane picked) */
     char b[24], a[12];
+    sg_lh = ((int32_t)cv_h - SG_Y - 2) / (int32_t)NTRK - SG_LG;   /* (Dah: the eight lanes fill the panel) */
+    if (sg_lh < 11)
+        sg_lh = 11;
     song_layout(&L);
     off = song_follow(&L);
     px = song_playx(&L);
     sp = px >= 0 ? SG_X0 + px - off : -100;
     total = L.u0[L.n];
     bars = (total + SG_BARU - 1u) / SG_BARU;
-    for (k = 0; k < trk_count(); k++) {                       /* the lanes' numbers in their colours (the lane picked: a cushion) */
+    for (k = 0; k < trk_count(); k++) {                /* (Dah) the lanes as HOME's rows: the one picked tinted with
+                                                         * its colour, framed in it, a band of it at the left, its number
+                                                         * on it; the others' numbers in their colour */
         char d[2] = {(char)('1' + k), 0};
         uint16_t tc = ux.trk[k];
-        if (k == lane)
-            cv_rrect(SG_TX, SG_LY(k), 14, SG_LH, 2, tc, T_SURF);
-        GFX_HOOK_ALIGN(SG_TX, SG_LY(k), SG_TX + 14, SG_LY(k) + SG_LH, AL_HV, "song lane number centred");
-        cv_text_in(SG_TX, SG_LY(k) + CAP_IN(S, SG_LH), 14, &AF_S, d, k == lane ? T_INK : tc, k == lane ? tc : T_SURF);
+        int32_t cyy = SG_LY(k) + HALF_UP(SG_LH - 13);
+        if (k == lane) {
+            cv_rect(3, SG_LY(k), 234, SG_LH, ux_mix(T_SURF, tc, 16));
+            cv_frame(3, SG_LY(k), 234, SG_LH, tc);
+            cv_rect(3, SG_LY(k), 3, SG_LH, tc);
+            cv_rect(SG_TX + 1, cyy, 13, 13, tc);
+        }
+        GFX_HOOK_ALIGN(SG_TX + 1, cyy, SG_TX + 14, cyy + 13, AL_HV, "song lane number centred");
+        cv_text_in(SG_TX + 1, cyy + CAP_IN(S, 13), 13, &AF_S, d, k == lane ? T_INK : tc, k == lane ? tc : T_SURF);
     }
     for (i = 1; i < L.n; i++) {                       /* the sections' boundaries, faint, behind the blocks */
         int32_t x = SG_X0 + L.x[i] - off - 1;
@@ -3245,7 +3257,15 @@ static void graph_song(void)
         uint32_t bar, lb[24], nl = 0;
         r0 = r0 > SG_X0 ? r0 : SG_X0;
         r1 = r1 < hi ? r1 : hi;
-        if (r1 > r0) cv_rect(r0, SG_RY, r1 - r0, 1, T_LINE);
+        {                                              /* (Dah) the overview, as HOME's: the whole song a line, the
+                                                         * view on it a bar, the playhead a mark */
+            int32_t wt = L.x[L.n + 1u] > SG_W ? L.x[L.n + 1u] : SG_W, v0 = SG_X0 + off * SG_W / wt;
+            int32_t v1 = SG_X0 + (off + SG_W < wt ? off + SG_W : wt) * SG_W / wt;
+            cv_rect(SG_X0, 1, SG_W, 1, T_LINE);
+            cv_rect(v0, 0, v1 - v0 > 2 ? v1 - v0 : 2, 3, T_MID);
+            if (px >= 0)
+                cv_rect(SG_X0 + px * SG_W / wt, 0, 2, 3, T_ACCENT);
+        }
         if (sg_pend && ((ui.frame / 6u) & 1u)) {       /* (Dah) the section to add (a bar where it goes), to delete
                                                          * (framed), blinking */
             uint32_t r = sg_prow < L.n ? sg_prow : L.n;
@@ -3270,7 +3290,6 @@ static void graph_song(void)
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
                 cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < trk_count() ? SG_LG : 0), on ? T_INK : T_ACCENT);
             }
-            cv_rect(sp, SG_Y + SG_H, 2, SG_RY - SG_Y - SG_H + 4, T_ACCENT);
         }
         for (i = 0; i < L.n; i++) {
             uint32_t u1 = L.u0[i + 1u], w = (uint32_t)(L.x[i + 1u] - L.x[i]);
@@ -3289,19 +3308,22 @@ static void graph_song(void)
                     break;
                 if (x < SG_X0)
                     continue;
-                cv_rect(x, SG_RY + 1, 1, lg ? 3 : 1, lg ? T_MID : T_DIM);
+                cv_rect(x, SG_RH - (lg ? 3 : 1), 1, lg ? 3 : 1, lg ? T_MID : T_LINE);   /* (a tick a bar, longer every 4) */
                 if (lg && bar * SG_BARU < total && nl < 24u) {
                     lx[nl] = x;
                     lb[nl++] = bar + 1u;
                 }
             }
         }
-        for (k = 0; k < nl; k++) {                     /* each number right of its tick, where it has room */
-            int32_t w;
-            fmt_int(a, (int32_t)lb[k]);
+        (void)lx; (void)lb; (void)last;
+        if (sp >= SG_X0 && sp < hi) {                  /* (Dah) the bar playing: its number on the playhead, as HOME's */
+            int32_t pu = song_playu(&L), w, ib[4];
+            fmt_int(a, pu >= 0 ? pu / (int32_t)SG_BARU + 1 : 1);
             w = text_w(&AF_S, a);
-            if (lx[k] + 3 > last + 4 && lx[k] + 3 + w <= hi && (sp + 2 <= lx[k] + 2 || sp > lx[k] + 4 + w))
-                last = cv_text_on(lx[k] + 3, SG_RY + 2 - AF_S_CAP_Y, &AF_S, a, T_DIM, T_SURF);
+            text_ink(&AF_S, a, ib);
+            x0 = clamp((2 * sp + 2 - (ib[0] + ib[2])) / 2, SG_X0, hi - w);
+            cv_rect(x0 - 1, 4, w + 2, SG_RH - 4, T_SURF);
+            cv_text(x0, 4 - AF_S_CAP_Y, &AF_S, a, T_ACCENT);
         }
     }
     /* (Dah: no line of the cell's pattern nor the song's length: the PAT card and the ruler say them) */

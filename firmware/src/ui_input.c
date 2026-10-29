@@ -754,14 +754,14 @@ static int rec_tap(void)                                /* 1: the arming changed
         else confirm_open(CF_ERASE_USER, ui.uslot);
         return 0;
     }
-    if (g == GR_SONG) {                                 /* (Dah) SONG: REC adds a section before the one picked (a
-                                                         * copy of it); on + ADD, at the end. OCT- held: the one picked out */
+    if (g == GR_SONG) {                                 /* (Dah) SONG: REC the section picked out; OCT- held adds one
+                                                         * before it (a copy of it), on + ADD at the end */
         if (chain_busy()) ui_message("STOP TO EDIT");
-        else if (chain_config.count >= CHAIN_ROWS) ui_message("SONG FULL");
-        else {                                          /* (shown blinking: OCT+ adds it) */
-            sg_pend = 1;
+        else if (ui.song_row >= chain_config.count) ui_message("NO SECTION THERE");
+        else {                                          /* (shown blinking: OCT+ deletes it) */
+            sg_pend = 2;
             sg_prow = (uint8_t)ui.song_row;
-            ui_message("ADD? OCT+ YES");
+            ui_message("DELETE? OCT+ YES");
         }
         ui.force = 1;
         return 0;
@@ -2520,7 +2520,7 @@ static void ui_input(void)
         ho = (uint8_t)(held && home_view_page());       /* (Dah: HOME's tracks, the same VIEW) */
         if (so | ro | ho)
             oct_up_used = 1;                            /* (the VIEW opened: its release no octave) */
-        {                                               /* (Dah) SONG: OCT- held 0.5 s, the section picked out */
+        {                                               /* (Dah) SONG: OCT- held 0.5 s, a section added */
             static uint32_t dn_ms;
             int dn = ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm &&
                      cur_page()->graph == GR_SONG && !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
@@ -2531,11 +2531,11 @@ static void ui_input(void)
             else if (!oct_dn_used && (int32_t)(fm1_ms - dn_ms) >= 500) {
                 oct_dn_used = 1;
                 if (chain_busy()) ui_message("STOP TO EDIT");
-                else if (ui.song_row >= chain_config.count) ui_message("NO SECTION THERE");
-                else {                                  /* (shown blinking: OCT+ deletes it) */
-                    sg_pend = 2;
+                else if (chain_config.count >= CHAIN_ROWS) ui_message("SONG FULL");
+                else {                                  /* (shown blinking: OCT+ adds it) */
+                    sg_pend = 1;
                     sg_prow = (uint8_t)ui.song_row;
-                    ui_message("DELETE? OCT+ YES");
+                    ui_message("ADD? OCT+ YES");
                     ui.force = 1;
                 }
             }
