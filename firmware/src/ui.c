@@ -430,7 +430,7 @@ static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : ho
  * layer, NAME or menu over it): the panel takes its rows, FOOT_GAIN more (graph_h); the footer keeps its second */
 #define FOOT_GAIN 18u
 static int foot_free(void);
-#define HOME_FOOT_H 17                                  /* (Dah) HOME's footer: its shortcuts, the sound's name */
+#define HOME_FOOT_H 26                                  /* (Dah) HOME's footer: its shortcuts, the sound's name */
 #define H_GRAPH_BARE (240u - HOME_FOOT_H - graph_y() - 2u)
 static uint32_t graph_h(void)
 {
@@ -1859,11 +1859,14 @@ static int pl_on(void) { return pl_ms && (uint32_t)((int32_t)(fm1_ms - pl_ms) + 
 static void preset_step(int32_t direction)
 {
     uint32_t total, cur = preset_pos(&total);
+    int32_t d = clamp(direction, -(int32_t)total + 1, (int32_t)total - 1);   /* (Dah: every detent a sound) */
     pl_ms = fm1_ms | 1u;
     pl_dy = clamp(pl_dy + (direction > 0 ? 17 : -17), -68, 68);
     if (!total) { ui_message(list_mode() == 1u ? "NO FAVORITES" : "NO SOUNDS IN LIST"); return; }
+    if (!d)
+        d = direction > 0 ? 1 : -1;
     preset_go(cur >= total ? (direction > 0 ? 0 : total - 1) :
-              (cur + (direction > 0 ? 1u : total - 1u)) % total);
+              (uint32_t)(((int32_t)cur + d + (int32_t)total * 8) % (int32_t)total));
 }
 
 /* Seven display rows. FAV and a category use a bounded window, not a repeating carousel.

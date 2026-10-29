@@ -1896,6 +1896,134 @@ static void pt_mini(uint32_t num, int32_t x0, int32_t y0, int32_t w, int32_t h, 
 }
 /* (Dah) the patterns as rows of 34 px, the one playing in the middle (framed), dy px on its way (gliding); add: + NEW after
  * the last (SELECT turned past it makes one) */
+/* (Dah) a list just turned (SELECT / GLO + ALGORITHM the patterns, PRESETS the sounds, ALGORITHM the tracks), the
+ * whole screen ~1 s: its name and place on top, the one picked in the middle, large and framed, the others smaller and
+ * fainter the further they are (a fisheye). Drawn in two halves (the canvas holds 142 rows) */
+enum { FL_PAT, FL_SND, FL_TRK };
+#define FL_TOP 18                                      /* the title's band */
+static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
+static uint32_t fl_kind(void) { return tl_on() ? (tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
+/* the list: how many rows, the one picked (its index) */
+static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
+{
+    uint32_t n, i;
+    if (kind == FL_PAT) {
+        n = ps_list_all(nums);
+        for (i = *cur = 0; i < n; i++)
+            if (nums[i] == ps_num(song.sel)) *cur = i;
+        return n + (n < PS_NUM);                        /* (+ NEW after the last) */
+    }
+    if (kind == FL_TRK) {
+        *cur = mx_master ? 0u : song.sel + 1u;          /* (the MASTER first, then the tracks, + ADD TRACK) */
+        return 1u + trk_count() + (trk_count() < NTRK);
+    }
+    *cur = preset_pos(&n);
+    return n;
+}
+static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, int32_t y, int32_t h, uint32_t dist)
+{
+    char tag[6] = {0}, nm[16] = {0};
+    int sel = dist == 0u;
+    const aafont_t *f = dist <= 1u ? &AF_M : &AF_S;
+    uint16_t ink = dist == 0u ? T_TEXT : dist == 1u ? T_TEXT : dist == 2u ? T_MID : T_DIM, tc = T_MID, bg = T_BG;
+    int32_t ty = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), nx = 52;
+    if (sel) {
+        bg = T_RAISE;
+        cv_rect(4, y, 232, h, T_THEME);
+        cv_rect(6, y + 2, 228, h - 4, bg);
+    }
+    if (kind == FL_PAT) {
+        uint8_t tmp[PS_NUM];
+        (void)n;
+        if (i >= ps_list_all(tmp)) {                    /* + NEW */
+            GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
+            cv_text_on(14, ty, f, "+ NEW", sel ? T_THEME : ink, bg);
+            return;
+        }
+        fmt_int(tag, nums[i]);
+        GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
+        cv_text_on(14, ty, f, tag, sel ? T_THEME : ink, bg);
+        pt_mini(nums[i], 44, y + (sel ? 5 : 3), 188, h - (sel ? 10 : 6), bg);
+        return;
+    }
+    if (kind == FL_TRK) {
+        if (i == 0u) {
+            str_cpy(tag, "M", sizeof tag);
+            str_cpy(nm, "MASTER", sizeof nm);
+        } else if (i - 1u < trk_count()) {
+            tag[0] = (char)('0' + i);
+            sound_name(&trk[i - 1u], nm);
+            tc = ux.trk[(i - 1u) % NTRK];
+        } else {
+            str_cpy(tag, "+", sizeof tag);
+            str_cpy(nm, "ADD TRACK", sizeof nm);
+        }
+        nx = 40;
+    } else {
+        uint32_t k, e = preset_at(i, &k);
+        if (e == NENGINES) {
+            up_slot_label(tag, k);
+            up_name(k, nm);
+        } else {
+            str_cpy(tag, eng_abbr(ENGINES[e]->name), sizeof tag);
+            str_cpy(nm, ENGINES[e]->presets[k].name, sizeof nm);
+        }
+    }
+    GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
+    cv_text_on(14, ty, f, tag, kind == FL_TRK && i ? tc : sel ? T_THEME : ink, bg);
+    if (14 + (int32_t)text_w(f, tag) + 8 > nx)          /* (a long tag in M: the name after it) */
+        nx = 14 + (int32_t)text_w(f, tag) + 8;
+    GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
+    cv_free_text(nx, ty, f, nm, ink, bg, 230 - nx);
+}
+static uint32_t fl_sig(void)                           /* what the full list shows */
+{
+    uint8_t nums[PS_NUM];
+    uint32_t cur, kind = fl_kind(), n = fl_count(kind, &cur, nums);
+    return kind * 7919u + cur * 131u + n * 104729u + ps_gen * 31u + ux.gen * 3u + TSEL->eng_req * 977u +
+           TSEL->preset * 1009u + trk_count() * 15485863u + mx_master * 2u;
+}
+static void draw_list_full(void)
+{
+    uint8_t nums[PS_NUM];
+    uint32_t kind = fl_kind(), cur, n = fl_count(kind, &cur, nums), half, d;
+    int32_t mid = FL_TOP + (240 - FL_TOP) / 2;
+    char t[24];
+    str_cpy(t, kind == FL_PAT ? "PATTERN " : kind == FL_TRK ? "TRACK " : "SOUND ", sizeof t);
+    fmt_int(t + str_len(t), (int32_t)cur + 1);
+    str_cpy(t + str_len(t), "/", 2);
+    fmt_int(t + str_len(t), (int32_t)n);
+    for (half = 0; half < 2u; half++) {
+        cv_begin(240, 120, T_BG);
+        cv_oy = -120 * (int32_t)half;
+        GFX_HOOK_ALIGN(0, 0, 0, FL_TOP, AL_V, "full list title on its middle");
+        cv_text(10, CAP_IN(S, FL_TOP), &AF_S, t, T_MID);
+        if (!n) {
+            GFX_HOOK_ALIGN(0, mid - 10, 0, mid + 10, AL_V, "full list row on its middle");
+            cv_text(14, mid - 10 + CAP_IN(S, 20), &AF_S, "NOTHING IN THIS LIST", T_MID);
+        } else {
+            int32_t y = mid - FL_H[0] / 2;
+            fl_row(kind, cur, n, nums, y, FL_H[0], 0);
+            for (d = 1; ; d++) {                         /* above it */
+                int32_t h = FL_H[d < 5u ? d : 4u];
+                y -= h + 1;
+                if (y < FL_TOP || d > cur)
+                    break;
+                fl_row(kind, cur - d, n, nums, y, h, d);
+            }
+            y = mid + FL_H[0] / 2 + 1;
+            for (d = 1; ; d++) {                         /* under it */
+                int32_t h = FL_H[d < 5u ? d : 4u];
+                if (y + h > 240 || cur + d >= n)
+                    break;
+                fl_row(kind, cur + d, n, nums, y, h, d);
+                y += h + 1;
+            }
+        }
+        cv_oy = 0;
+        cv_blit(0, 120u * half);
+    }
+}
 static void pat_rows(int32_t dy, int add)
 {
     uint8_t nums[PS_NUM];

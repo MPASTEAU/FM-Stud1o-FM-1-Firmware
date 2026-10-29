@@ -1216,7 +1216,11 @@ static void pattern_turn_ui(int32_t s)
         ui_message("STOP THE SONG");
         return;
     }
-    pattern_turn(s);
+    {                                                   /* (Dah: every detent a pattern; past the last: asked once) */
+        int32_t k;
+        for (k = s > 0 ? s : -s; k-- > 0 && !ui.confirm;)
+            pattern_turn(s > 0 ? 1 : -1);
+    }
     tl_ms = fm1_ms | 1u;
     tl_pat = 1;
     if (ps_num(song.sel) != was)
@@ -2451,7 +2455,7 @@ static void ui_input(void)
         } else if (s > 0 && song.sel + 1u >= trk_count() && trk_count() < NTRK && !ui.confirm && !name_on() && !ui.menu)
             confirm_open(CF_ADD_TRACK, trk_count());
         else if (!mx_master)
-            track_select((uint32_t)clamp((int32_t)song.sel + (s > 0 ? 1 : -1), 0, (int32_t)trk_count() - 1));
+            track_select((uint32_t)clamp((int32_t)song.sel + s, 0, (int32_t)trk_count() - 1));
         if ((mx_master ? NTRK : song.sel) != was)
             tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
     }
