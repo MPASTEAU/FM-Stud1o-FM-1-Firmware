@@ -189,6 +189,8 @@ static void ui_power_on(void)
     ka.st = 0;                                    /* (Dah: no ASSIGN going on) */
     chain_from_row = 0;                           /* (Dah: SONG's GRID at the top) */
     chain_from_u = 0;
+    prv.on = prv.nofollow = 0; prv.zoom = 1; prv.at = -1;   /* (Dah: STEP's / AUTOMATION's VIEW as at power-on) */
+    au_lane = 0;
     memset(trk, 0, sizeof trk);
     memset(&song, 0, sizeof song);
     for (i = 0; i < NTRK; i++)                    /* (HA HA HE HU: the tracks' extras as at power-on) */
@@ -2601,7 +2603,7 @@ static int test_presets_knob(void)
 
 /* 1.2 (Discussion #153): the pages by button. HOME: HOME > MIXER > CLOCK; SEQ: STEP <-> AUTOMATION, held SEQ TOOLS
  * everywhere; GLO: SONG (GLOBAL became CLOCK, SYSTEM the MENU's); SAVE: USER -> PRESETS -> PHRASES -> PROJECT -> TOOLS (1.5);
- * a remembered page that left its family. (Dah) AUTOMATION: HOME's four knobs as lanes, SELECT KNOB 1..4 REC */
+ * a remembered page that left its family. (Dah) AUTOMATION: HOME's four knobs as lanes, the roll's controls */
 static int test_page_cycles(void)
 {
     static const char *const SAVE_CYC[5] = {"FILE", "PATTERN", "USER", "PHRASES", "FILE"};   /* (1.5, #173;
@@ -2672,9 +2674,10 @@ static int test_page_cycles(void)
     bad += check("1.2: a remembered page no longer in its family (or none) lands on the family's first; GLO always SONG, "
                  "HOME always the MIXER first", ok);
 
-    {   /* (Dah) AUTOMATION: HOME's four knobs as lanes; SELECT the cursor, KNOB k lane k's point there, REC deletes */
+    {   /* (Dah) AUTOMATION, as STEP's roll: KNOB 1 STEP, 2 LANE, 3 VALUE (the lane's point), 4 CURVE; EDIT clears the
+         * point, the cursor on; REC arms; OCT+ held the roll's VIEW */
         track_t *t;
-        uint32_t k, k0 = 4u, k1 = 4u, id0 = 0xFFu, id1 = 0xFFu;
+        uint32_t k, l0 = 4u, l1 = 4u, id0 = 0xFFu, id1 = 0xFFu;
         int32_t v0;
         int pt;
         ui_power_on(); t = TSEL;
@@ -2684,41 +2687,60 @@ static int test_page_cycles(void)
             uint32_t id = au_id(k);
             ok &= id == 0xFFu || id == ENGINES[t->eng_req % NENGINES]->knob[k];
             if (id != 0xFFu && track_desc(t, id)->fmt != F_ENUM) {
-                if (k0 == 4u) k0 = k, id0 = id;
-                else if (k1 == 4u) k1 = k, id1 = id;
+                if (l0 == 4u) l0 = k, id0 = id;
+                else if (l1 == 4u) l1 = k, id1 = id;
             }
         }
-        ok &= k1 < 4u;
-        turn(EN_SELECT, 3); ok &= ui.cursor == 3u;
-        turn(EN_SELECT, -10); ok &= ui.cursor == 0u;
-        turn(EN_SELECT, 200); ok &= ui.cursor == (uint32_t)t->p[P_SLEN] - 1u;
-        bad += check("AUTOMATION: the lanes are HOME's four knobs; no action column; SELECT the cursor inside LEN", ok);
+        ok &= l1 < 4u;
+        memset(ui.enc_t, 0, sizeof ui.enc_t); turn(EN_K1, 3); ok &= ui.cursor == 3u;
+        bad += check("AUTOMATION: the lanes are HOME's four knobs; KNOB 1 the cursor", ok);
         cursor_set(4); frame();
+        turn(EN_K2, -3); ok = au_lane == 0u;
+        for (k = 0; k < l0; k++) turn(EN_K2, 1);
+        ok &= au_lane == l0;
         v0 = lane_value(t, 4, id0, &pt);
-        turn(EN_K1 + k0, 3);
-        ok = motion_find(t, 4, id0) >= 0 && lane_value(t, 4, id0, &pt) != v0 && pt && motion_enabled(t) &&
-             !(motion.event[motion_find(t, 4, id0)].param & MOTION_LOCK) && ui.hot_col == k0 && motion_count(t) == 1u;
-        ok &= lane_value(t, 5, id0, &pt) == lane_value(t, 4, id0, &pt) && lane_value(t, 3, id0, &pt) == v0;
+        turn(EN_K3, 3);
+        ok &= motion_find(t, 4, id0) >= 0 && lane_value(t, 4, id0, &pt) != v0 && pt && motion_enabled(t) &&
+              !(motion.event[motion_find(t, 4, id0)].param & MOTION_LOCK) && ui.hot_col == 2u && motion_count(t) == 1u;
+        v0 = lane_value(t, 4, id0, &pt);
+        ok &= lane_value(t, 5, id0, &pt) == v0 && !pt && motion_find(t, 3, id0) < 0;
         hold(B_SAVE);
         ok &= motion_find(t, 4, id0) < 0;
         hold(B_SAVE);
         ok &= motion_find(t, 4, id0) >= 0;
-        bad += check("  KNOB k: an event on lane k at the cursor from the lane's value, held after it; one undo", ok);
+        bad += check("  KNOB 2 the lane, KNOB 3 an event on it at the cursor from the lane's value, held after it; one undo", ok);
+        turn(EN_K4, 1); ok = trkx[song.sel % NTRK].curve == 1;
+        turn(EN_K4, -1); ok &= trkx[song.sel % NTRK].curve == 0;
+        bad += check("  KNOB 4 CURVE: RAMP / STEP", ok);
+        for (k = l0; k < l1; k++) turn(EN_K2, 1);
         (void)motion_set_lock(t, 4, id1, track_desc(t, id1)->min);
-        ui.hot_t = 0; frame();
-        press(B_REC);
-        ok = motion_find(t, 4, id0) < 0 && motion_find(t, 4, id1) < 0 && msg_is("POINTS DELETED") && !song.rec;
-        press(B_REC);
-        ok &= msg_is("NO POINT HERE");
-        bad += check("  REC: the points at the cursor go (an event, a lock), none there: NO POINT HERE", ok);
-        (void)motion_set_event(t, 4, id1, track_desc(t, id1)->min);
-        turn(EN_K1 + k0, 1);
-        press(B_REC);
-        ok = motion_find(t, 4, id0) < 0 && motion_find(t, 4, id1) >= 0 && msg_is("POINT DELETED");
-        bad += check("  REC after a knob turned: that lane's point only", ok);
+        press(B_EDIT);
+        ok = au_lane == l1 && motion_find(t, 4, id1) < 0 && motion_find(t, 4, id0) >= 0 && msg_is("POINT CLEARED") &&
+             ui.cursor == 5u && cur_page()->graph == GR_EVENTS;
+        press(B_EDIT);
+        ok &= msg_is("NO POINT HERE") && ui.cursor == 6u;
+        bad += check("  EDIT: the lane's point at the cursor (a lock) cleared, the cursor on (STEP's EDIT CLEAR)", ok);
+        cursor_set(4);
+        press(B_REC); frames(800);
+        ok = song.rec != 0u && motion_find(t, 4, id0) >= 0;
+        press(B_REC); frames(800);
+        ok &= !song.rec;
+        transport_req = 2; frame();
+        bad += check("  REC arms and disarms as on STEP (no point deleted)", ok);
+        prv.zoom = 1; prv.at = -1; prv.nofollow = 0;
+        btn_down(B_OCTUP); frames(700);
+        ok = prv.on;
+        turn(EN_K2, -1);
+        ok &= prv_cols() == 32u;
+        btn_up(B_OCTUP); frame();
+        ok &= !prv.on && prv_cols() == 32u;
+        prv.zoom = 1; prv.at = -1;
+        bad += check("  OCT+ held: the roll's VIEW (KNOB 2 ZOOM out: 32 steps)", ok);
         chain.running = 1;
-        turn(EN_K1 + k0, 2);
-        ok = motion_find(t, 4, id0) < 0 && msg_is("STOP TO EDIT");
+        cursor_set(7);
+        for (k = l1; k > l0; k--) turn(EN_K2, -1);
+        turn(EN_K3, 2);
+        ok = motion_find(t, 7, id0) < 0 && msg_is("STOP TO EDIT");
         chain.running = 0;
         bad += check("  while a song plays: STOP TO EDIT, nothing changes", ok);
     }

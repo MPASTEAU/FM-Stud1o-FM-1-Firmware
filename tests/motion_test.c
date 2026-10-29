@@ -751,7 +751,8 @@ static int lock_undo(void)
         motion_lock_count(t) == 1u);
     return bad;
 }
-/* (Dah) SEQ > AUTOMATION (ui_events.c): HOME's four knobs as lanes; KNOB k an event at the cursor, REC deletes */
+/* (Dah) SEQ > AUTOMATION (ui_events.c): HOME's four knobs as lanes; KNOB 2 the lane, KNOB 3 its event at the cursor,
+ * EDIT clears it; armed and playing: recorded where it plays */
 static int auto_list(void)
 {
     int bad = 0, ok, pt;
@@ -770,39 +771,49 @@ static int auto_list(void)
     for (k = 0; k < 4u && k0 == 4u; k++)
         if (au_id(k) != 0xFFu && track_desc(t, au_id(k))->fmt != F_ENUM)
             k0 = k, id0 = au_id(k);
-    ok = k0 < 4u && ui.cursor == 4u && !act_cols() && !motion_count(t);
-    turn(EN_K1 + k0, 3);
+    turn(EN_K2, -3);
+    for (k = 0; k < k0; k++) turn(EN_K2, 1);
+    ok = k0 < 4u && au_lane == k0 && ui.cursor == 4u && !act_cols() && !motion_count(t);
+    turn(EN_K3, 3);
     ok &= motion_find(t, 4, id0) >= 0 && !motion_lock_count(t) && motion_enabled(t) && motion_count(t) == 1u &&
           lane_value(t, 4, id0, &pt) == motion.event[0].value && pt;
-    bad += check("AUTOMATION: the SEQ cursor kept; KNOB k an automation event on lane k there", ok);
+    bad += check("AUTOMATION: the SEQ cursor kept; KNOB 3 an automation event on the lane there", ok);
     frames(2000);
     v = motion.event[0].value;
-    turn(EN_K1 + k0, 2); turn(EN_K1 + k0, 2); turn(EN_K1 + k0, 2);
+    turn(EN_K3, 2); turn(EN_K3, 2); turn(EN_K3, 2);
     ok = motion.event[0].value != v;
     hold(B_SAVE);
-    bad += check("  KNOB turned on (three turns): one undo", ok && motion.event[0].value == v);
+    bad += check("  KNOB 3 turned on (three turns): one undo", ok && motion.event[0].value == v);
     (void)motion_set_lock(t, 4, id0, 10);
-    turn(EN_K1 + k0, 1);
+    turn(EN_K3, 1);
     bad += check("  a lock there becomes an event, from the lock's value", motion_lock_count(t) == 0u &&
         motion.event[motion_find(t, 4, id0)].value > 10);
     chain.running = 1;
     v = motion.event[motion_find(t, 4, id0)].value;
-    turn(EN_K1 + k0, 1);
+    turn(EN_K3, 1);
     bad += check("  a song playing: STOP TO EDIT", motion.event[motion_find(t, 4, id0)].value == v &&
         str_eq(ui.msg, "STOP TO EDIT"));
     chain.running = 0;
     for (i = 0; motion.count < MOTION_MAX; i++)          /* the 128 used (track 2) */
         motion_set_event(&trk[1], i % NSTEP, i < NSTEP ? P_REV : P_DLY, 10);
     cursor_set(7);
-    turn(EN_K1 + k0, 1);
+    turn(EN_K3, 1);
     bad += check("  the 128 used: nothing added, AUTOMATION FULL", motion_find(t, 7, id0) < 0 &&
         str_eq(ui.msg, "AUTOMATION FULL"));
     motion_clear(&trk[1]);
     cursor_set(4);
-    press(B_REC);
-    ok = motion_find(t, 4, id0) < 0 && str_eq(ui.msg, "POINT DELETED");
+    press(B_EDIT);
+    ok = motion_find(t, 4, id0) < 0 && str_eq(ui.msg, "POINT CLEARED") && ui.cursor == 5u;
     hold(B_SAVE);
-    bad += check("  REC deletes the point at the cursor; SAVE held: back", ok && motion_find(t, 4, id0) >= 0);
+    bad += check("  EDIT clears the lane's point at the cursor, the cursor on; SAVE held: back", ok && motion_find(t, 4, id0) >= 0);
+    motion_clear(t);
+    song.rec = 1u << song.sel;
+    seq_start();
+    turn(EN_K3, 2);
+    ok = motion_count(t) == 1u && MOTION_ID(&motion.event[0]) == id0;
+    song.rec = 0;
+    seq_stop();
+    bad += check("  armed and playing: KNOB 3 records the lane where it plays (motion_capture)", ok);
     ui_prefs |= PREF_LARGE;
     bad += check("  MENU > LARGE: the list layout with labels in M (as the other lists)", large_kind() == LK_LABEL);
     ui_prefs &= ~PREF_LARGE;

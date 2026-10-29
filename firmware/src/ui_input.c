@@ -724,10 +724,6 @@ static int rec_tap(void)                                /* 1: the arming changed
         ui.force = 1;                                   /* (Dah: no message, the header's dot says it) */
         return 1;
     }
-    if (g == GR_EVENTS) {                               /* (Dah) AUTOMATION: the point(s) at the cursor out */
-        au_delete();
-        return 0;
-    }
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
         if (chain_busy()) ui_message("STOP TO EDIT");
         else confirm_open(CF_DEL_PAT, ps_num(song.sel));
@@ -1279,7 +1275,8 @@ static void home_view_knob(uint32_t slot, int32_t steps)   /* (Dah) HOME's VIEW:
 static int home_view_page(void) { return ui.home && !ui.menu && !ui.confirm && home_tracks(); }
 static int roll_view_page(void)
 {
-    return !ui.home && !ui.menu && !ui.confirm && cur_page()->graph == GR_ROLL && !drum_track(TSEL) && !detail_on();
+    return !ui.home && !ui.menu && !ui.confirm && ((cur_page()->graph == GR_ROLL && !drum_track(TSEL) && !detail_on()) ||
+                                                   cur_page()->graph == GR_EVENTS);   /* (Dah: AUTOMATION, the roll's VIEW) */
 }
 static void edit_param(uint32_t slot, int32_t steps)
 {
@@ -1955,6 +1952,11 @@ static int page_tap(uint32_t b)
         ui_message("STEP CLEARED");
         return 1;
     }
+    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION: as STEP's, EDIT clears the
+                                                         * lane's point at the cursor, the cursor on */
+        au_clear();
+        return 1;
+    }
     if (b == B_EDIT && !ui.home && cur_page()->graph == GR_FILE) {   /* (HA HA HE HU) FILE: EDIT renames the project open */
         if (ui.fsel && ui.fsel != pfs_cur())
             ui_message("OPEN IT TO RENAME");
@@ -2520,9 +2522,6 @@ static void ui_input(void)
             ui.bpm_t = 40;
         } else if (!glo && sel_mode() < SEL_MODW && roll_on() && !lay && lane_turn(s)) {
             /* (Dah: STEP's piano roll: SELECT edits the automation lane at the cursor) */
-        } else if (!glo && sel_mode() < SEL_MODW && !lay && !ui.home && !ui.menu && !ui.confirm &&
-                   cur_page()->graph == GR_EVENTS) {
-            au_select(s);                               /* (Dah) AUTOMATION: SELECT the step cursor */
         } else if (!glo && sel_mode() >= SEL_MODW) {         /* MENU > SELECT MODW / VEL (1.5.6, #84): it plays */
             sel_play(sel_mode(), s);
         } else if (!glo && !ui.home && sel_is_list() && (sel_mode() == SEL_PAGE || cur_page()->graph == GR_FILE ||

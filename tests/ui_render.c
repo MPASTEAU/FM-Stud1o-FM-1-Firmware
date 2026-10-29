@@ -834,7 +834,7 @@ static void step_put(step_t *st, uint32_t time, uint32_t flags, uint32_t n, cons
     for (j = 0; j < n; j++) st->note[j] = notes[j];
 }
 /* (Dah) SEQ > AUTOMATION: points on the track's first three lanes (a low one, a high one, a lock, the lowest), the
- * fourth bare; the cursor on step c, KNOB hot + 1 just turned (-1: none) */
+ * fourth bare; the cursor on step c, lane hot picked and its VALUE just turned (-1: none, lane 1) */
 static void au_fill(uint32_t c, int hot)
 {
     track_t *t = TSEL;
@@ -852,8 +852,10 @@ static void au_fill(uint32_t c, int hot)
     }
     go_page(GR_EVENTS);
     cursor_set((int32_t)c);
-    if (hot >= 0) {
-        ui.hot_col = (uint8_t)hot;
+    au_lane = 0;
+    if (hot >= 0) {                                     /* (lane hot picked, its VALUE just turned) */
+        au_lane = (uint8_t)hot;
+        ui.hot_col = 2;
         ui.hot_t = 30;
     }
 }
@@ -1610,7 +1612,7 @@ static void setup(int s)
         trkx[song.sel % NTRK].curve = 1; au_fill(5, 1);
         if (s == S_AUTO_QNT) { song.playing = 1; TSEL->seq_idx = 7; }
         break;
-    case S_AUTO_ADD_NUDGE: TSEL->p[P_SLEN] = 8; au_fill(7, -1); break;
+    case S_AUTO_ADD_NUDGE: TSEL->p[P_SLEN] = 64; au_fill(7, -1); prv.on = 1; prv.zoom = 3; break;   /* (the VIEW, 64 steps) */
     case S_AUTO_VEL: track_defaults_steps(TSEL); TSEL->p[P_SLEN] = 16; au_fill(4, 1); break;
     case S_AUTO_ADD_VEL: TSEL->p[P_SLEN] = 3; au_fill(1, -1); break;
     case S_LFO2: TSEL->p[P_LSYNC] = 6; TSEL->p[P_LTRIG] = 1; TSEL->p[P_LPOL] = 1; go_title("LFO 2"); break;

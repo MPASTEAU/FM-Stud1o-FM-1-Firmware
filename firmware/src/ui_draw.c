@@ -550,10 +550,10 @@ static uint32_t foot_rename(void);
 static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
 {
     *ok = 0;
-    if (!ui.home && cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION: SELECT the step, REC its point(s) out */
-        kh[0] = (khint_t){KC_SELECT, "STEP"};
-        kh[1] = (khint_t){KC_REC, "DEL"};
-        *ok = 1u | (au_del_mask() ? 2u : 0u);
+    if (!ui.home && cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION, as STEP: OCT+ held the VIEW, EDIT clears */
+        kh[0] = (khint_t){KC_OCTUP, "(HOLD) VIEW"};
+        kh[1] = (khint_t){KC_EDIT, "CLEAR"};
+        *ok = 1u | (au_del_ready() ? 2u : 0u);
         return 2u;
     }
     if (act_cols()) {
@@ -1742,7 +1742,8 @@ static void draw_columns_in(void)
         }
         return;
     }
-    if (cur_page()->graph == GR_ROLL && prv.on) {   /* (Dah) STEP's VIEW: MOVE, ZOOM, FOLLOW */
+    if ((cur_page()->graph == GR_ROLL || cur_page()->graph == GR_EVENTS) && prv.on) {   /* (Dah) STEP's VIEW (AUTOMATION's
+                                                         * too): MOVE, ZOOM, FOLLOW */
         fmt_int(val, (int32_t)(prv_base(TSEL) / 16u) + 1);
         draw_column(0, "MOVE", val, "BAR", VAL(0u), -1, ICON_AUTO);
         fmt_int(val, (int32_t)prv_cols());
@@ -1786,24 +1787,28 @@ static void draw_columns_in(void)
         draw_column(3, "REPS", val, "", used ? VAL(3u) : T_DIM, -1, ICON_AUTO);
         return;
     }
-    if (cur_page()->graph == GR_EVENTS) {              /* (Dah) AUTOMATION: the four lanes' values at the cursor */
+    if (cur_page()->graph == GR_EVENTS && !prv.on) {   /* (Dah) AUTOMATION, as STEP's roll: STEP LANE VALUE CURVE */
         const track_t *t = TSEL;
-        for (c = 0; c < 4u; c++) {
-            uint32_t id = au_id(c);
+        uint32_t id = au_id(au_lane);
+        char sl[8];
+        fmt_int(val, (int32_t)au_cur() + 1);
+        str_cpy(sl, "/", 8);
+        fmt_int(sl + 1, (int32_t)au_len(t));
+        draw_column(0, "STEP", val, sl, VAL(0u), -1, ICON_AUTO);
+        draw_column(1, "LANE", au_label(au_lane)[0] ? au_label(au_lane) : "--", "", id != 0xFFu ? VAL(1u) : T_DIM, -1,
+                    ICON_AUTO);
+        if (id == 0xFFu)
+            draw_column(2, "VALUE", "--", "", T_DIM, -1, ICON_AUTO);
+        else {
             int pt;
-            int16_t v;
-            const param_desc_t *d;
-            if (id == 0xFFu) {
-                draw_column(c, au_label(c)[0] ? au_label(c) : "--", "--", "", T_DIM, -1, ICON_AUTO);
-                continue;
-            }
-            v = lane_value(t, au_cur(), id, &pt);
-            d = track_desc(t, id);
+            int16_t v = lane_value(t, au_cur(), id, &pt);
+            const param_desc_t *d = track_desc(t, id);
             param_format(d, v, val, &unit);
             card_span_of(d);
-            draw_column(c, d->label, val, unit, pt || (c == ui.hot_col && ui.hot_t) ? VAL(c) : T_MID,
+            draw_column(2, "VALUE", val, unit, pt || (ui.hot_col == 2u && ui.hot_t) ? VAL(2u) : T_MID,
                         RATIO(d, enum_rank(d, v)), param_icon(d, v));   /* (no point there: the value held, MID) */
         }
+        draw_column(3, "CURVE", trkx[song.sel % NTRK].curve ? "RAMP" : "STEP", "", VAL(3u), -1, ICON_AUTO);
         return;
     }
     if (cur_page()->scope == SC_TRK && mx_master) {   /* (Dah) the MASTER: its COMPRESSOR */

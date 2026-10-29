@@ -1434,6 +1434,7 @@ static void graph_title(void)
     cv_text_in(0, y, 240, f, ti, T_THEME, T_SURF);
 }
 
+static uint32_t au_sig(void);
 static uint32_t graph_signature(void)
 {
     const page_t *pg = cur_page();
@@ -1746,57 +1747,113 @@ static void graph_dlanes(const track_t *t)
         list_row(LIST_Y(row), l == cur, drum_lane_abbr(t, l), T_MID, nm, v || s ? T_TEXT : T_MID, 232);
     }
 }
-/* SEQ > AUTOMATION (Dah; ui_events.c): the selected track's HOME knobs, four lanes to the panel's foot: the name at the
- * left (the knob just turned's in the accent; none motion records: DIM, "--"), the curve over the steps shown (held,
- * or joined with CURVE RAMP), a dot where a step holds a point (a lock: ACCENT). The ruler on top as HOME's (the whole
- * pattern a line, the view a bar, the step playing a mark and its number), the step playing's column lit, the cursor
- * framed through the lanes */
+/* SEQ > AUTOMATION (Dah; ui_events.c): the selected track's HOME knobs, four lanes to the panel's foot, the one picked
+ * (KNOB 2) as HOME's track row (tinted, framed, a band at its left); at the left each lane's value at the cursor (its
+ * name small over it; none motion records: DIM, "--"), over the steps its curve (held, or joined with CURVE RAMP), a
+ * dot where a step holds a point (a lock: ACCENT). The steps as STEP's roll shows them (prv: its VIEW, MOVE ZOOM
+ * FOLLOW), its ruler on top (the pattern a line, the view a bar, the step playing a mark and its number), the step
+ * playing's column lit, the cursor framed through the lanes */
 #define AU_RH 14                                    /* the ruler */
-#define AU_X0 46                                    /* the steps: x 46 .. 232 */
-#define AU_W 186
-static int32_t au_x(uint32_t i, uint32_t n) { return AU_X0 + (int32_t)(i * (uint32_t)AU_W / n); }
+#define AU_X0 60                                    /* the steps: x 60 .. 232 */
+#define AU_W 172
+static int32_t au_x(uint32_t i) { return AU_X0 + (int32_t)(i * (uint32_t)AU_W / prv_cols()); }
+/* the view: its first step p0, n columns shown, the column playing ph (0xFF none) */
+static void au_view(const track_t *t, uint32_t *p0, uint32_t *n, uint32_t *ph)
+{
+    uint32_t len = au_len(t), nc = prv_cols();
+    *p0 = prv_base(t);
+    *n = *p0 < len ? (len - *p0 < nc ? len - *p0 : nc) : 0u;
+    *ph = song.playing && t->seq_idx >= *p0 && t->seq_idx < *p0 + *n ? t->seq_idx - *p0 : 0xFFu;
+}
+/* what the page shows (graph_signature): the track's motion, the view, the cursor, the lane, the four ids, CURVE, the
+ * knob just turned */
+static uint32_t au_sig(void)
+{
+    const track_t *t = TSEL;
+    uint32_t p0, n, ph, k, h;
+    au_view(t, &p0, &n, &ph);
+    h = motion_sig(t) ^ (p0 * 131u + n * 7u + ph * 7919u + au_cur() * 104729u + au_lane * 613u + prv_cols() * 31u);
+    for (k = 0; k < 4u; k++)
+        h = (h ^ (au_raw(k) * 4u + k)) * 16777619u;
+    return h ^ (trkx[song.sel % NTRK].curve ? 0x51EDu : 0u) ^ (ui.hot_t ? ui.hot_col + 1u : 0u) * 2654435761u;
+}
+/* lane k's value at the cursor at x 8 .. AU_X0 - 4 (its unit in S after it; too wide: in S, then no unit), its name over
+ * it when the lane has room */
+static void au_value(const track_t *t, uint32_t k, int32_t ly, int32_t lh, uint16_t bg, int sel)
+{
+    uint32_t id = au_id(k);
+    const char *nm = au_label(k), *unit = "";
+    const aafont_t *f = &AF_M;
+    char val[16];
+    int32_t w = AU_X0 - 12, two = lh >= 26, y, x;
+    int pt = 0;
+    uint16_t vc;
+    if (two)
+        cv_text_fit(8, ly + 4 - AF_S_CAP_Y, &AF_S, nm[0] && nm[0] != '-' ? nm : "--", sel ? T_THEME : T_MID, bg, w);
+    if (id == 0xFFu) {
+        str_cpy(val, "--", sizeof val);
+        vc = T_DIM;
+    } else {
+        int16_t v = lane_value(t, au_cur(), id, &pt);
+        param_format(track_desc(t, id), v, val, &unit);
+        vc = sel && ui.hot_t && ui.hot_col == 2u ? T_ACCENT : pt ? T_TEXT : T_MID;
+    }
+    if (text_w(f, val) + (unit[0] ? 2 + text_w(&AF_S, unit) : 0) > w)
+        f = &AF_S;
+    if (text_w(f, val) + (unit[0] ? 2 + text_w(&AF_S, unit) : 0) > w)
+        unit = "";
+    y = two ? ly + 4 + AF_S_CAP_H + 4 : ly + (lh - (f == &AF_M ? AF_M_CAP_H : AF_S_CAP_H)) / 2;
+    x = cv_text_fit(8, y - (f == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y), f, val, vc, bg, w);
+    if (unit[0])
+        cv_text_on(x + 2, y - (f == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y) + f->asc - AF_S.asc, &AF_S, unit, T_MID, bg);
+}
 static void graph_auto(void)
 {
     const track_t *t = TSEL;
-    uint32_t p0, n, ph, i, k, len = au_len(t), cur = au_cur();
-    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, y0 = AU_RH + 3, ybot = full - 4, lh, gap = 3;
+    uint32_t p0, n, ph, i, k, len = au_len(t), cur = au_cur(), nc = prv_cols();
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, y0 = AU_RH + 3, ybot = full - 4, lh, gap = 3, cw = AU_W / (int32_t)nc;
     au_view(t, &p0, &n, &ph);
     lh = (ybot - y0 - 3 * gap) / 4;
-    {   /* the ruler: the pattern a line, the view on it a bar, the step playing a mark; a tick a step, the beats taller */
+    {   /* the ruler: the pattern a line, the view on it a bar, the step playing a mark; a tick a step (zoomed out: the
+         * beats), the beats taller */
         int32_t x0 = AU_X0 + (int32_t)(p0 * (uint32_t)AU_W / len), x1 = AU_X0 + (int32_t)((p0 + n) * (uint32_t)AU_W / len);
         cv_rect(AU_X0, 1, AU_W, 1, T_LINE);
         cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
-        if (ph != 0xFFu)
-            cv_rect(AU_X0 + (int32_t)((p0 + ph) * (uint32_t)AU_W / len), 0, 2, 3, T_ACCENT);
+        if (song.playing && t->seq_idx < len)
+            cv_rect(AU_X0 + (int32_t)(t->seq_idx * (uint32_t)AU_W / len), 0, 2, 3, T_ACCENT);
         for (i = 0; i < n; i++) {
-            int32_t xc = (au_x(i, n) + au_x(i + 1u, n)) / 2, beat = (p0 + i) % 4u == 0u;
-            cv_rect(xc, beat ? 8 : 10, 1, beat ? 3 : 1, beat ? T_MID : T_GRID);
+            int32_t xc = (au_x(i) + au_x(i + 1u)) / 2, beat = (p0 + i) % 4u == 0u;
+            if (beat || cw >= 4)
+                cv_rect(xc, beat ? 8 : 10, 1, beat ? 3 : 1, beat ? T_MID : T_GRID);
         }
     }
     for (k = 0; k < 4u; k++) {
         uint32_t id = au_id(k);
-        int32_t ly = y0 + (int32_t)k * (lh + gap), a = lh - 8, px = 0, py = 0;
-        int hot = ui.hot_t && ui.hot_col == k;
+        int32_t ly = y0 + (int32_t)k * (lh + gap), a = lh - 10, px = 0, py = 0;
+        int sel = k == au_lane;
         const param_desc_t *d = id != 0xFFu ? track_desc(t, id) : 0;
-        const char *nm = au_label(k);
-        GFX_HOOK_ALIGN(0, ly, 0, ly + lh, AL_V, "automation lane name on its lane");
-        cv_text_fit(8, ly + CAP_IN(S, lh), &AF_S, nm[0] && nm[0] != '-' ? nm : "--", !d ? T_DIM : hot ? T_ACCENT : T_TEXT,
-                    T_SURF, AU_X0 - 12);
-        cv_rect(AU_X0, ly, AU_W, lh, d ? T_LANE : T_RAISE);
-        if (!d) {
-            GFX_HOOK_ALIGN(AU_X0, ly, AU_X0 + AU_W, ly + lh, AL_HV, "automation lane dash centred");
-            cv_text_in(AU_X0, ly + CAP_IN(S, lh), AU_W, &AF_S, "--", T_DIM, T_RAISE);
-            continue;
+        uint16_t row = sel ? ux_mix(T_SURF, T_THEME, 16) : T_SURF;
+        if (sel) {                                    /* the lane picked as HOME's track: tinted, framed, a band */
+            cv_rect(3, ly, 234, lh, row);
+            cv_frame(3, ly, 234, lh, T_THEME);
+            cv_rect(3, ly, 3, lh, T_THEME);
         }
+        au_value(t, k, ly, lh, row, sel);
+        cv_rect(AU_X0, ly + 1, au_x(n) - AU_X0, lh - 2, d ? T_LANE : T_RAISE);
+        if (!d)
+            continue;
         for (i = 1; i < n; i++)                       /* the beats */
             if ((p0 + i) % 4u == 0u)
-                cv_rect(au_x(i, n), ly, 1, lh, T_RAISE);
+                cv_rect(au_x(i), ly + 1, 1, lh - 2, T_RAISE);
         if (ph != 0xFFu)                              /* the step playing: its column lit (as HOME's) */
-            cv_rect(au_x(ph, n) + 1, ly, au_x(ph + 1u, n) - au_x(ph, n) - 1, lh, ux_mix(T_LANE, T_TEXT, 22));
+            cv_rect(au_x(ph) + 1, ly + 1, au_x(ph + 1u) - au_x(ph) - 1 > 1 ? au_x(ph + 1u) - au_x(ph) - 1 : 1, lh - 2,
+                    ux_mix(T_LANE, T_TEXT, 22));
         for (i = 0; i < n; i++) {                     /* the curve: held (a step, a line), or joined (RAMP) */
             int pt;
-            int32_t v = au_drawn(t, p0 + i, id, &pt), xl = au_x(i, n), xr = au_x(i + 1u, n) - 1, xc = (xl + xr) / 2;
-            int32_t y = ly + 3 + a - (enum_rank(d, v) - d->min) * a / (d->max - d->min);
+            int32_t v = au_drawn(t, p0 + i, id, &pt), xl = au_x(i), xr = au_x(i + 1u) - 1, xc = (xl + xr) / 2;
+            int32_t y = ly + 4 + a - (enum_rank(d, v) - d->min) * a / (d->max - d->min);
+            if (xr < xl)
+                xr = xl;
             if (trkx[song.sel % NTRK].curve && d->fmt != F_ENUM) {
                 if (i)
                     cv_line_t(px, py, xc, y, T_THEME, 2);
@@ -1815,21 +1872,21 @@ static void graph_auto(void)
         for (i = 0; i < n; i++) {                     /* the points over it */
             int pt;
             int16_t lv;
-            int32_t v = au_drawn(t, p0 + i, id, &pt), xc = (au_x(i, n) + au_x(i + 1u, n) - 1) / 2;
-            int32_t y = ly + 3 + a - (enum_rank(d, v) - d->min) * a / (d->max - d->min);
+            int32_t v = au_drawn(t, p0 + i, id, &pt), xc = (au_x(i) + au_x(i + 1u) - 1) / 2;
+            int32_t y = ly + 4 + a - (enum_rank(d, v) - d->min) * a / (d->max - d->min);
             if (au_point(t, p0 + i, id))
                 cv_rect(xc - 1, y - 1, 4, 4, motion_lock_get(t, p0 + i, id, &lv) ? T_ACCENT : T_TEXT);
         }
     }
     if (cur >= p0 && cur < p0 + n)                    /* the cursor: a column framed through the lanes */
-        cv_frame(au_x(cur - p0, n), y0 - 1, au_x(cur - p0 + 1u, n) - au_x(cur - p0, n) + 1, 4 * lh + 3 * gap + 2, T_TEXT);
+        cv_frame(au_x(cur - p0), y0 - 1, au_x(cur - p0 + 1u) - au_x(cur - p0) + 1, 4 * lh + 3 * gap + 2, T_TEXT);
     if (ph != 0xFFu) {                                /* the step playing's number on the ruler, centred on it */
         char nb[4];
         int32_t w, ib[4], nx;
         fmt_int(nb, (int32_t)(p0 + ph) + 1);
         w = text_w(&AF_S, nb);
         text_ink(&AF_S, nb, ib);
-        nx = clamp((au_x(ph, n) + au_x(ph + 1u, n) - (ib[0] + ib[2])) / 2, AU_X0, 234 - w);
+        nx = clamp((au_x(ph) + au_x(ph + 1u) - (ib[0] + ib[2])) / 2, AU_X0, 234 - w);
         cv_rect(nx - 1, 3, w + 2, 11, T_SURF);
         cv_text_on(nx, 4 - AF_S_CAP_Y, &AF_S, nb, T_ACCENT, T_SURF);
     }

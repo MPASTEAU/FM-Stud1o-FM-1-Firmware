@@ -4,11 +4,11 @@
  * engine's four) as four lanes, each its curve over the steps (ui.c lane_value: a lock, else the last automation event
  * at or before the step, else the sound's own value; CURVE RAMP, trkx[].curve: joined as motion.c plays it) and a dot
  * where a step holds a point; the ruler and the step playing as HOME's (ui_graph.c graph_auto).
- *   SELECT    the step cursor (ui.cursor, inside LEN)
- *   KNOB 1..4 lane 1..4's value at the cursor: an automation event there (motion_set_event; a lock there becomes one),
- *             from the value the lane has there. One undo a knob turned on (SAVE held). AUTOMATION FULL past the 128
- *   REC       the point(s) at the cursor go (a lock or an event): the lane of the knob just turned, else all four;
- *             armed, REC disarms first (as on the list pages)
+ * The piano roll's controls: KNOB 1 STEP (the cursor), 2 LANE, 3 VALUE (the lane's point at the cursor: an automation
+ * event, motion_set_event; a lock there becomes one; one undo a knob turned on; AUTOMATION FULL past the 128), 4 CURVE
+ * STEP / RAMP; OCT+ held the roll's VIEW (MOVE ZOOM FOLLOW, the same prv state); EDIT the lane's point at the cursor out,
+ * the cursor on (STEP's EDIT CLEAR); REC arms as on STEP (armed and playing, VALUE records where it plays, motion_capture,
+ * as HOME's knobs). Left of each lane its value at the cursor
  * A parameter motion cannot record: its lane greyed, "--". Not while a song plays (STOP TO EDIT). The steps' CHANCE,
  * RATCH, NUDGE, VEL: SEQ > DETAIL (their helpers below) */
 static int32_t accel(uint32_t role, int32_t s, int32_t range);
@@ -74,7 +74,8 @@ static int sd_takes(const step_t *s, uint32_t k) { return step_on(s) || (k == EV
 
 
 /* ---- (Dah) the page: four lanes ---- */
-#define AU_N 16u                                        /* the steps shown (fewer: LEN) */
+static uint8_t au_lane;                                 /* the lane picked (KNOB 2), 0..3 */
+static void cursor_move(int32_t c);                     /* (ui_input.c: the roll's cursor) */
 static uint32_t au_len(const track_t *t) { return (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP); }
 static uint32_t au_cur(void) { return ui.cursor < au_len(TSEL) ? ui.cursor : au_len(TSEL) - 1u; }
 static uint32_t au_raw(uint32_t k)                       /* HOME's KNOB k's id on the selected track (home_param's) */
@@ -96,17 +97,6 @@ static const char *au_label(uint32_t k)                  /* lane k's name ("" no
     uint32_t id = au_raw(k);
     const param_desc_t *d = id < P_COUNT ? track_desc(TSEL, id) : 0;
     return d && d->label ? d->label : "";
-}
-/* the view: its first step p0, n of them, the column playing ph (0xFF none). Playing: the step playing from the left to
- * the middle, the steps then under it, at the end to the right (HOME's rk_view); stopped: the cursor's 16 */
-static void au_view(const track_t *t, uint32_t *p0, uint32_t *n, uint32_t *ph)
-{
-    uint32_t len = au_len(t), nc = len < AU_N ? len : AU_N, si = t->seq_idx % len;
-    *n = nc;
-    *p0 = song.playing ? (si > nc / 2u ? si - nc / 2u : 0u) : au_cur() / nc * nc;
-    if (*p0 + nc > len)
-        *p0 = len - nc;
-    *ph = song.playing && t->seq_idx < len ? si - *p0 : 0xFFu;
 }
 static int au_point(const track_t *t, uint32_t si, uint32_t id) { return id != 0xFFu && motion_find(t, si, id) >= 0; }
 /* the value lane id draws at step si: lane_value's; CURVE RAMP: an event's value in a line to the next event (none:
@@ -133,32 +123,35 @@ static int32_t au_drawn(const track_t *t, uint32_t si, uint32_t id, int *pt)
         nv = fv, ns = len;
     return ns > ps ? pv + ((int32_t)nv - pv) * (int32_t)(si - ps) / (int32_t)(ns - ps) : pv;
 }
-/* REC's: the lanes it would clear at the cursor (the knob just turned's, else the four), a bit each */
-static uint32_t au_del_mask(void)
-{
-    uint32_t k, m = 0, c = au_cur();
-    for (k = 0; k < 4u; k++)
-        if ((!ui.hot_t || k == (ui.hot_col & 3u)) && au_point(TSEL, c, au_id(k)))
-            m |= 1u << k;
-    return m;
-}
+static int au_del_ready(void) { return au_point(TSEL, au_cur(), au_id(au_lane)); }   /* REC would delete */
 static void au_enter(void)
 {
+    au_lane &= 3u;
     if (ui.cursor >= au_len(TSEL))
         cursor_set((int32_t)au_len(TSEL) - 1);
 }
-static void au_select(int32_t s)                        /* SELECT: the cursor, not past the ends */
-{
-    cursor_set(clamp((int32_t)au_cur() + s, 0, (int32_t)au_len(TSEL) - 1));
-}
-static void au_knob(uint32_t k, int32_t s)              /* KNOB k: lane k's point at the cursor */
+/* KNOB slot as on the roll: 1 STEP (the cursor), 2 LANE, 3 VALUE (the lane's point at the cursor: an automation event,
+ * a lock there becomes one; one undo a knob turned on), 4 CURVE STEP / RAMP (trkx[].curve) */
+static void au_knob(uint32_t slot, int32_t s)
 {
     track_t *t = TSEL;
-    uint32_t id = au_id(k), c = au_cur();
+    uint32_t id = au_id(au_lane), c = au_cur();
     const param_desc_t *d;
     int pt, r;
-    ui.hot_col = (uint8_t)k;
+    ui.hot_col = (uint8_t)slot;
     ui.hot_t = 40;
+    if (slot == 0u) {
+        cursor_move((int32_t)c + s);
+        return;
+    }
+    if (slot == 1u) {
+        au_lane = (uint8_t)clamp((int32_t)au_lane + (s > 0 ? 1 : -1), 0, 3);
+        return;
+    }
+    if (slot == 3u) {
+        trkx[song.sel % NTRK].curve = s > 0;
+        return;
+    }
     if (id == 0xFFu) {
         ui_message("NOT AUTOMATABLE");
         return;
@@ -168,44 +161,36 @@ static void au_knob(uint32_t k, int32_t s)              /* KNOB k: lane k's poin
         return;
     }
     d = track_desc(t, id);
-    motion_undo_take(t, 0x200u | k);                    /* (a knob turned on: one) */
+    if (rec_on(t) && song.playing) {                    /* armed, playing: recorded where it plays (as HOME's knobs) */
+        t->p[id] = (int16_t)param_turn(d, t->p[id], accel(EN_K1 + slot, s, d->fmt == F_ENUM ? 0 : d->max - d->min));
+        if (motion_capture(t, id, t->p[id]) == 2)
+            ui_message("AUTOMATION FULL");
+        return;
+    }
+    motion_undo_take(t, 0x200u | au_lane);              /* (a knob turned on: one) */
     r = motion_set_event(t, c, id, (int16_t)param_turn(d, lane_value(t, c, id, &pt),
-                                                         accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min)));
+                                                         accel(EN_K1 + slot, s, d->fmt == F_ENUM ? 0 : d->max - d->min)));
     motion_undo_done(t);
     if (r == 2)
         ui_message("AUTOMATION FULL");
     else if (!motion_enabled(t))
         motion_set_enabled(t, 1);
 }
-static void au_delete(void)                             /* REC: the point(s) at the cursor */
+static void au_clear(void)                              /* EDIT: the lane's point at the cursor (an event or a lock)
+                                                         * out, the cursor on (as STEP's EDIT) */
 {
     track_t *t = TSEL;
-    uint32_t k, m = au_del_mask(), n = 0;
+    uint32_t c = au_cur();
     if (chain_busy()) {
         ui_message("STOP TO EDIT");
         return;
     }
-    if (!m) {
+    if (au_del_ready()) {
+        motion_undo_take(t, 0);
+        motion_delete_event(t, c, au_id(au_lane));
+        motion_undo_done(t);
+        ui_message("POINT CLEARED");
+    } else
         ui_message("NO POINT HERE");
-        return;
-    }
-    motion_undo_take(t, 0);
-    for (k = 0; k < 4u; k++)
-        if ((m >> k) & 1u && au_point(t, au_cur(), au_id(k))) {   /* (two knobs on one id: once) */
-            motion_delete_event(t, au_cur(), au_id(k));
-            n++;
-        }
-    motion_undo_done(t);
-    ui_message(n > 1u ? "POINTS DELETED" : "POINT DELETED");
-}
-/* what the page shows (graph_signature): the track's motion, the view, the cursor, the four ids, CURVE, the hot lane */
-static uint32_t au_sig(void)
-{
-    const track_t *t = TSEL;
-    uint32_t p0, n, ph, k, h;
-    au_view(t, &p0, &n, &ph);
-    h = motion_sig(t) ^ (p0 * 131u + n * 7u + ph * 7919u + au_cur() * 104729u);
-    for (k = 0; k < 4u; k++)
-        h = (h ^ (au_raw(k) * 4u + k)) * 16777619u;
-    return h ^ (trkx[song.sel % NTRK].curve ? 0x51EDu : 0u) ^ (ui.hot_t ? ui.hot_col + 1u : 0u) * 2654435761u;
+    cursor_set((int32_t)c + 1);
 }

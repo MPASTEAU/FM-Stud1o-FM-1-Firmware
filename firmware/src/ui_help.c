@@ -64,7 +64,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
     {"STEP", "[KEYS]WRITE[K1]STEP[EDIT]CLEAR"},   /* (1.5.1: SEQ to DETAIL; Dah: EDIT clears the step) */
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
-    {"AUTOMATION", "[SELECT]STEP[K1-4]POINT[REC]DELETE"},
+    {"AUTOMATION", "[K1]STEP[K2]LANE[K3]VALUE"},
     {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},
 };
 #define H_HOME "[ALGO]+ TRACK[HOME]HOLD: MENU"
