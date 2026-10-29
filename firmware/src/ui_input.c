@@ -1447,24 +1447,23 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.force = 1;
         return;
     }
-    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 the row, 2 moves it, 3 its effect */
+    if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK) {   /* (Dah) CHAIN: KNOB 1 moves the effect, 2 its TYPE, 3 its
+                                                         * MIX (the effect: SELECT's), 4 nothing */
         uint8_t u[FXU_N_ALL];
         track_t *ft = fx_tsel();
-        uint32_t n = fx_list(ft, u), rows = n < fx_max(ft) ? n + 1u : n;
-        if (slot == 0u) {
-            ch_cur = (uint8_t)clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, (int32_t)rows - 1);
-            fl_fx_at();                                 /* (Dah: on + ADD, asked) */
-        }
-        else if (slot == 2u)                            /* (KNOB 3 the TYPE, KNOB 2 MOVE) */
+        uint32_t n = fx_list(ft, u);
+        if (slot == 3u)
+            return;
+        if (slot == 1u)
             fx_chain_type(ft, steps);
-        else if (slot == 1u)
+        else if (slot == 0u)
             fx_chain_move(ft, steps);
         else if (ch_cur < n && u[ch_cur] == FXU_COMP)   /* (COMP's MIX: its AMOUNT) */
             fx_cset(ft, clamp((int32_t)fx_camt(ft) + steps, 1, 127), -1);
         else if (ch_cur < n && FXU_MIX[u[ch_cur]] != 0xFFu) {   /* MIX: the effect's presence (it stays in) */
             uint32_t id = FXU_MIX[u[ch_cur]];
             const param_desc_t *md = track_desc(ft, id);
-            int32_t w = param_turn(md, ft->p[id], accel(EN_K4, steps, md->max - md->min));
+            int32_t w = param_turn(md, ft->p[id], accel(EN_K3, steps, md->max - md->min));
             ft->p[id] = (int16_t)(w < 1 && id != P_DOUT ? 1 : w);
             if (!fx_mst(ft))
                 motion_capture(ft, id, ft->p[id]);
@@ -2341,7 +2340,7 @@ static void ui_input(void)
             }
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
                    (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
-                   (ui.confirm == CF_ADD_FX && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_K1) < 0))) {
+                   (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0)) {
             if ((ui.confirm == CF_ADD_FX || ui.confirm == CF_PICK_FX) && ch_cur)   /* (Dah: no effect added: off
                                                          * + ADD, the last effect) */
                 ch_cur--;   /* (Dah: ADD TRACK: ALGO
