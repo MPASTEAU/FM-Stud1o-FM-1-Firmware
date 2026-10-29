@@ -1336,7 +1336,8 @@ static void draw_act_column(uint32_t c, const char *label, uint16_t vc, uint32_t
 {
     int picked = act_col() == c + 1u;
     (void)act_card;                                     /* (Dah: the knobs kept, the user's choice) */
-    draw_column(c, label, picked ? "[OCT+]" : "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc, -1, icon);
+    draw_column(c, label, picked && cur_page()->graph != GR_USER ? "[OCT+]" : "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc,
+                -1, icon);                              /* (Dah: MY PRESETS: no OCT+ keycap, the footer says it) */
 }
 
 /* action pages: the footer's first row says what OCT+ and OCT- do ("OCT+ LOAD   OCT- BACK") */
