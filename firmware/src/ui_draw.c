@@ -1601,15 +1601,19 @@ static void draw_columns(void)
 {
     static uint8_t kb;
     ux_tint(ui.home || ui.layer || cur_page()->fam == FAM_TRK ? ux.trk[song.sel % NTRK] : ux.fam[cur_page()->fam % 12u]);
-    if ((uint8_t)ka_blink() != kb) {                    /* (Dah) ASSIGN: the four knobs blink (a turn of one asked) */
+    static uint8_t ks;
+    uint8_t want = (uint8_t)(ka.st >= 2u ? 0x10u | ka.srck : 0u);
+    if ((uint8_t)ka_blink() != kb || want != ks) {      /* (Dah) ASSIGN: the four knobs blink (a source asked), then
+                                                         * the source's card framed */
         kb = (uint8_t)ka_blink();
+        ks = want;
         ui.force = 1;
     }
     draw_columns_in();
     ux_untint();
-    if (kb) {
+    if (kb || ks) {
         uint32_t c;
-        for (c = 0; c < 4u; c++) {
+        for (c = ks ? (uint32_t)(ks & 3u) : 0u; c < (ks ? (uint32_t)(ks & 3u) + 1u : 4u); c++) {
             uint32_t x = (uint32_t)CARD_X(c), y = card_y(), w = COL_W, h = card_h();
             lcd_fill(x, y, w, 2, T_ACCENT);
             lcd_fill(x, y + h - 2u, w, 2, T_ACCENT);

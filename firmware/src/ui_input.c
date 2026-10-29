@@ -689,6 +689,7 @@ static void ka_knob(uint32_t k)
             return;
         }
         ka.src = (uint8_t)id;
+        ka.srck = (uint8_t)(k & 3u);
         ka.st = 2;
         ui.force = 1;
         return;
