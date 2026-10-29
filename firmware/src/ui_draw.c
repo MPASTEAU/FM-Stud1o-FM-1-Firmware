@@ -1457,7 +1457,7 @@ static int cards_msg(void)
         msig = 0;
         return 0;
     }
-    if (cards_b && ui.msg[0] == 'O' && ui.msg[1] == 'N' && ui.msg[2] == 'E') {   /* (a send's page: its two lines) */
+    if (cards_b && str_eq(ui.msg, cards_a)) {          /* (a message of two lines: cards_say) */
         a = ui.msg;
         b = cards_b;
     } else if (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[' &&
@@ -1987,7 +1987,8 @@ static void draw_columns_in(void)
             track_t *ft = fx_tsel();
             uint32_t n = fx_list(ft, u);
             char pl[6] = {(char)('1' + ch_cur % 9u), '/', (char)('0' + n), 0};
-            int on = ch_cur < n;
+            int on = ch_cur < n && !fx_ret_fixed(ft, u[ch_cur % FXU_N_ALL]);   /* (Dah: a MASTER's return: nothing to
+                                                         * move, change or mix here) */
             if (c == 1u && on) {
                 card_span_by(span_fxu, 0, 0, FXU_N_ALL - 1, 0);
                 draw_column(1, "TYPE", FXU_N[u[ch_cur % FXU_N_ALL]], "", VAL(1u), -1, ICON_AUTO);
@@ -2049,10 +2050,10 @@ static void draw_columns_in(void)
  * the picture and the lines that fall in it. In the saved palette (settings_init before it) */
 #include "ui_splash.h"
 #define SPL_STRIP 120                               /* rows per canvas (two make the screen) */
-#define SPL_PY 16                                   /* the picture's top */
-#define SPL_NAME_Y (SPL_PY + 128 + 10)              /* the name's top (a picture of 128: the layout's) */
-#define SPL_VER_Y (SPL_NAME_Y + 22)
-#define SPL_BASED_Y (SPL_VER_Y + 26)
+#define SPL_PY 6                                    /* the picture's top */
+#define SPL_NAME_Y (SPL_PY + 144 + 4)               /* the name's top, in L (Dah: a picture of 144: the layout's) */
+#define SPL_VER_Y (SPL_NAME_Y + 37)
+#define SPL_BASED_Y (SPL_VER_Y + 21)
 static const char *const SPLASH_LINES[] = {FW_NAME, FELUCCA_VERSION, "based on Felucca"};
 static uint32_t splash_ix(uint32_t i)              /* (Dah) pixel i's colour, the runs from the start (the tests') */
 {
@@ -2087,7 +2088,7 @@ static void draw_splash(void)
         }
         if (SPL_NAME_Y >= y0 && SPL_BASED_Y + AF_S.h <= y0 + SPL_STRIP) {
             GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(3), "splash lines centred");
-            cv_text_in(0, SPL_NAME_Y - y0, 240, &AF_M, SPLASH_LINES[0], T_TEXT, T_BG);
+            cv_text_in(0, SPL_NAME_Y - y0, 240, &AF_L, SPLASH_LINES[0], T_TEXT, T_BG);   /* (Dah: the name large) */
             cv_text_in(0, SPL_VER_Y - y0, 240, &AF_M, SPLASH_LINES[1], T_THEME, T_BG);
             cv_text_in(0, SPL_BASED_Y - y0, 240, &AF_S, SPLASH_LINES[2], T_MID, T_BG);
         }

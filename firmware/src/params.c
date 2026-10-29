@@ -589,6 +589,7 @@ static uint32_t page_id(const page_t *pg, uint32_t c)
 static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
 static track_t *fx_tsel(void);                         /* (Dah) ui.c: FX's track, or the MASTER (fx.c mtrk) */
+static uint8_t mx_master;                               /* (ui.c: the MASTER picked) */
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
     uint32_t id = pg->id[slot];
@@ -600,6 +601,21 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     if (pg->scope == SC_STEP || pg->scope == SC_TRK) {
         *valp = 0;
         return 0;
+    }
+    if (pg->fam == FAM_FX && pg->scope == SC_GLOBAL && (pg->id[0] & PS_TRK)) {   /* (Dah) CHORUS DELAY REVERB: on the
+                                                         * MASTER (their returns) their own settings, from KNOB 1
+                                                         * (DELAY's MIX the fourth); on a track its send alone */
+        static const uint8_t RET[3][4] = {{G_CRATE, G_CDEPTH, 0xFF, 0xFF}, {G_DTIME, G_DFDBK, G_DCOLOR, G_DMIX},
+                                          {G_RTYPE, G_RSIZE, G_RDAMP, 0xFF}};
+        uint32_t k = pg->id[0] == (PS_TRK | P_CHOR) ? 0u : pg->id[0] == (PS_TRK | P_DLY) ? 1u : 2u;
+        if (mx_master)
+            id = RET[k][slot & 3u];
+        else if (slot)
+            id = 0xFFu;
+        if (id == 0xFFu) {
+            *valp = 0;
+            return 0;
+        }
     }
     if (pg->scope == SC_GLOBAL && (id & PS_TRK)) {   /* (Dah) a send effect's SEND: the track's */
         *valp = &ft->p[id & ~PS_TRK];

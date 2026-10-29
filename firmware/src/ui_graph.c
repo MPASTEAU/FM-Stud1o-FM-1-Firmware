@@ -1904,6 +1904,7 @@ static uint32_t fl_pick_rows(uint32_t *cur);            /* (ui_graph_fx.c: ADD's
 static void fl_pick_label(uint32_t i, char *tag, char *nm);
 static uint32_t fl_fx_rows(uint32_t *cur);              /* (ui_graph_fx.c: CHAIN's effects) */
 static void fl_fx_label(uint32_t i, char *tag, char *nm);
+static const char *fl_fx_note(uint32_t i);
 #define FL_TOP 24                                      /* the title's band (its name in M, its place in S) */
 static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
 static uint32_t fl_kind(void) { return ui.confirm == CF_PICK_FX ? FL_PICK : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
@@ -1988,6 +1989,12 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
     if (14 + (int32_t)text_w(f, tag) + 8 > nx)          /* (a long tag in M: the name after it) */
         nx = 14 + (int32_t)text_w(f, tag) + 8;
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
+    if (kind == FL_FX && fl_fx_note(i)[0]) {           /* (Dah) a track's send: the note small and grey after it */
+        int32_t ex = cv_text_on(nx, ty, f, nm, ink, bg) + 6;
+        int32_t sy = ty + (f == &AF_M ? AF_M_CAP_Y + AF_M_CAP_H : AF_S_CAP_Y + AF_S_CAP_H) - AF_S_CAP_Y - AF_S_CAP_H;
+        cv_free_text(ex, sy, &AF_S, fl_fx_note(i), T_MID, bg, 222 - ex);
+        return;
+    }
     cv_free_text(nx, ty, f, nm, ink, bg, 222 - nx);
 }
 static uint32_t fl_sig(void)                           /* what the full list shows */
@@ -2030,8 +2037,8 @@ static void draw_list_full(int fresh)
         int32_t h0 = fl_h(f), h1 = fl_h(256 - f);
         top0 = mid - f * ((h0 + h1) / 2 + 1) / 256 - h0 / 2;
     }
-    str_cpy(t, kind == FL_PAT ? "PATTERN" : kind == FL_TRK ? "TRACK" : kind == FL_FX ? "EFFECT" :
-               kind == FL_PICK ? "ADD WHICH EFFECT?" : "PRESET", sizeof t);
+    str_cpy(t, kind == FL_PAT ? "Pattern" : kind == FL_TRK ? "Track" : kind == FL_FX ? "Effect" :
+               kind == FL_PICK ? "Add which effect?" : "Preset", sizeof t);
     if (kind != FL_PICK) {                              /* (its place after it: "1/N", small) */
         fmt_int(pl, (int32_t)cur + 1);
         str_cpy(pl + str_len(pl), "/", 2);
@@ -2042,6 +2049,8 @@ static void draw_list_full(int fresh)
         cv_oy = -120 * (int32_t)half;
         {   /* (Dah) the list's name large and white, its place small and grey, on one baseline */
             int32_t x = cv_text(10, CAP_IN(M, FL_TOP), &AF_M, t, T_TEXT);
+            cv_text(11, CAP_IN(M, FL_TOP), &AF_M, t, T_TEXT);   /* (bold: once more a pixel on) */
+            x++;
             int32_t by = CAP_IN(M, FL_TOP) + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;
             if (pl[0])
                 cv_text(x + 6, by, &AF_S, pl, T_MID);

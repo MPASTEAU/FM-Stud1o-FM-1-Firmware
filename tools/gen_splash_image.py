@@ -12,7 +12,7 @@ SPLASH_W 0 (ui_draw.c draw_splash draws none).
 import sys
 from pathlib import Path
 
-SPLASH_SIZE = 128
+SPLASH_SIZE = 144                       # (Dah: the fruit larger)
 KEEP = [(40, 215, 60), (25, 150, 40)]   # (Dah) gen_logo.py's leaf greens
 ROOT = Path(__file__).resolve().parent.parent
 

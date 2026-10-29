@@ -730,7 +730,9 @@ static int rec_tap(void)                                /* 1: the arming changed
     if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
                                                          * CHAIN: the effect picked out of the chain */
         uint8_t u[FXU_N_ALL];
-        if (ch_cur < fx_list(fx_tsel(), u)) {
+        if (ch_cur < fx_list(fx_tsel(), u) && fx_ret_fixed(fx_tsel(), u[ch_cur]))
+            ui_message("ALWAYS ON THE MASTER");         /* (Dah: its returns stay) */
+        else if (ch_cur < fx_list(fx_tsel(), u)) {
             fx_chain_remove(fx_tsel());
             ui_message("EFFECT REMOVED");
             ui.force = 1;
@@ -1805,6 +1807,16 @@ static void chain_open(void)
                                           PS_TRK | P_REV, 0xFF};   /* (COMP: by its title) */
     uint8_t l[FXU_N_ALL];
     uint32_t n = fx_list(fx_tsel(), l), u, i;
+    if (ch_cur < n && fx_send(l[ch_cur]) && !mx_master) {   /* (Dah) a track's send: the effect is the MASTER's, its
+                                                         * settings there (its return, in the MASTER's chain) */
+        uint32_t want = l[ch_cur];
+        mx_master = 1;
+        n = fx_list(fx_tsel(), l);
+        for (i = 0; i < n; i++)
+            if (l[i] == want)
+                ch_cur = (uint8_t)i;
+        ui.force = 1;
+    }
     if (ch_cur >= n) {                                  /* (Dah: + ADD asks by itself, fl_fx_at; OCT+ there nothing) */
         fl_fx_at();
         return;
@@ -1860,10 +1872,19 @@ static void fx_tap(void)
 static void fx_sel_turn(int32_t s)
 {
     uint8_t u[FXU_N_ALL];
-    uint32_t n = fx_list(fx_tsel(), u);
+    uint32_t n = fx_list(fx_tsel(), u), k;
+    int32_t c = (int32_t)(ch_cur < n ? ch_cur : 0u), d = s > 0 ? 1 : -1;
     if (!n)
         return;
-    ch_cur = (uint8_t)clamp((int32_t)(ch_cur < n ? ch_cur : 0u) + s, 0, (int32_t)n - 1);
+    for (k = (uint32_t)(s > 0 ? s : -s); k; k--) {      /* (Dah: a track's sends skipped: the MASTER's effects) */
+        int32_t j = c + d;
+        while (j >= 0 && j < (int32_t)n && !mx_master && fx_send(u[j]))
+            j += d;
+        if (j < 0 || j >= (int32_t)n)
+            break;
+        c = j;
+    }
+    ch_cur = (uint8_t)c;
     chain_open();
     tl_ms = fm1_ms | 1u;
     tl_pat = 2;
@@ -2131,7 +2152,7 @@ static void ui_input(void)
         if (!ui.home && cur_page()->fam == FAM_FX)
             ok |= 1u << panel.btn[B_OCTUP] | 1u << panel.btn[B_OCTDN] | 1u << panel.btn[B_REC];
         if ((pressed & ~ok) || notes)
-            ui_message("MASTER: FX ONLY");
+            cards_say("MASTER: FX ONLY", "TURN ALGO FOR A TRACK");
         pressed &= ok;
         notes = 0;
         if (ui.home_t0) ui.home_t0 |= 2u;               /* (held: no tap, no hold) */
@@ -2498,7 +2519,7 @@ static void ui_input(void)
     }
     if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
         if (mx_master)
-            ui_message("MASTER: FX ONLY");              /* (Dah: no sound to load there) */
+            cards_say("MASTER: FX ONLY", "TURN ALGO FOR A TRACK");              /* (Dah: no sound to load there) */
         else if (detail_on() && !chain_busy())
             cursor_move(ui.cursor + s);                 /* (DETAIL: the cursor, its KNOB 1 CHANCE) */
         else if (lock_held())
@@ -2588,7 +2609,7 @@ static void ui_input(void)
             continue;
         }
         if (mx_master && (ui.home || (pg->fam != FAM_FX && pg->graph != GR_TRK))) {   /* (Dah) the MASTER: FX's pages */
-            ui_message("MASTER: PRESS FX");
+            cards_say("MASTER: PRESS FX", "OR TURN ALGO FOR A TRACK");
             continue;
         }
         if (mom_down())                                 /* (LFO + a knob, MOMENTARY or not: LFO's release opens no page) */

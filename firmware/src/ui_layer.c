@@ -333,7 +333,8 @@ static void layer_tap(uint32_t l)
         (ui.home || cur_page()->fam != was)) {          /* (Dah: only arriving from elsewhere, not a tap within) */
         ui_say("HOLD [", KC[LY_KC[l]].label);
         str_cpy(ui.msg + str_len(ui.msg), "] QUICK", sizeof ui.msg - str_len(ui.msg));
-        ui.msg_t = 120;                                 /* ~2 s (Dah: a sentence to read; the knobs act under it) */
+        ui.msg_t = (uint8_t)clamp(60 + 4 * (int32_t)(str_len(LY_LONG[l < 7u ? l : 0][0]) + str_len(LY_LONG[l < 7u ? l : 0][1])),
+                                  90, 250);             /* (Dah: by its sentence's length; the knobs act under it) */
         ly_hint = (uint8_t)l;                           /* (Dah: HOME's look says it whole, over the knobs) */
         lys.dt_hint = 1;
     }

@@ -475,6 +475,8 @@ static int page_visible(uint32_t i)
         if (id == P_DKSRC) return fx_unit_on(fx_tsel(), 4);
         if (str_eq(PAGES[i].title, "COMP")) return fx_unit_on(fx_tsel(), 8);
     }
+    if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_GLOBAL && PAGES[i].id[0] == G_DMIX)
+        return 0;                                       /* (Dah: DELAY 2's MIX: the MASTER's DELAY's fourth knob) */
     if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_GLOBAL) {   /* (Dah) CHORUS DELAY REVERB: the same */
         uint32_t id = PAGES[i].id[0];
         return fx_unit_on(fx_tsel(), id == (PS_TRK | P_CHOR) ? 5u : id == (PS_TRK | P_REV) ? 7u : 6u);
@@ -516,7 +518,8 @@ static void ui_say(const char *a, const char *b)
     str_cpy(ui.msg, a, sizeof ui.msg);
     n = str_len(ui.msg);
     str_cpy(ui.msg + n, b, sizeof ui.msg - n);
-    ui.msg_t = 40;
+    ui.msg_t = (uint8_t)(40u + 3u * str_len(ui.msg));   /* (Dah: the longer, the longer it stays: ~0.7 s + 50 ms a
+                                                         * letter) */
     ui.msg2[0] = 0;
 }
 
@@ -604,20 +607,18 @@ static int midi_lit(uint32_t k) { return midi_lit_ms[k % NTRK] && (fm1_ms | 1u) 
 static void help_start(void) { ui.help_t = (uint8_t)(help_on() ? HELP_FRAMES : 0u); }
 /* (Dah) a message over HOME's look's knobs on two lines (ui_draw.c cards_msg): the first as ui.msg, the second here */
 static const char *cards_b;
+static char cards_a[24];
 static void cards_say(const char *a, const char *b)
 {
     ui_message(a);
+    str_cpy(cards_a, ui.msg, sizeof cards_a);
     cards_b = b;
-    ui.msg_t = 150;                                     /* (~2.5 s: two lines to read) */
+    ui.msg_t = (uint8_t)clamp(60 + 4 * (int32_t)(str_len(a) + str_len(b)), 90, 250);   /* (Dah: by what there is to read:
+                                                         * 1 s + 65 ms a letter, 4 s at most) */
 }
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
-    if (!ui.home && pg->fam == FAM_FX && (str_eq(pg->title, "CHORUS") || str_eq(pg->title, "DELAY") ||
-                                          str_eq(pg->title, "REVERB")))   /* (Dah) a send's page: what it touches */
-        cards_say(str_eq(pg->title, "CHORUS") ? "ONE CHORUS, ALL TRACKS" : str_eq(pg->title, "DELAY") ?
-                  "ONE DELAY, ALL TRACKS" : "ONE REVERB, ALL TRACKS",
-                  "KNOB 1 THIS TRACK, REST SHARED");
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
         ev_enter();
     if (!ui.home && lock_page_ok(ui.page))
