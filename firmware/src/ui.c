@@ -598,7 +598,7 @@ static void ev_enter(void);
 /* 1.5 (Discussion #156): MENU > HELP ON: a page entered (here, go_home) shows its hint in the footer for ~2 s
  * (ui_help.c, ui_draw.c draw_foot) */
 #define HELP_FRAMES 120u                       /* (~2 s at the UI's ~60 frames a second) */
-static int help_on(void) { return (ui_prefs2 & (PREF_HELP >> 16)) != 0u; }
+static int help_on(void) { return (ui_prefs2 & (PREF_HELP >> 16)) == 0u; }   /* (Dah: the bit OFF; ON by default) */
 /* 1.5.5 (#208): a MIDI IN note into track k lights its number cushion for MLIT_MS (the header's for the selected track,
  * HOME TRACKS / LEVELS, the MIXER); midi_lit_ms[k]: fm1_ms | 1 of the last (ui_input.c midi_take), 0 none */
 #define MLIT_MS 90u

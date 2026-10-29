@@ -1816,7 +1816,7 @@ static void chain_open(void)
         fx_back = (int8_t)(song.sel % NTRK);            /* (Dah: FX on its page again: back to this track's chain) */
         fx_back_row = ch_cur;
         mx_master = 1;
-        if (!song.playing && !chain_busy()) {           /* (Dah) said, stopped: where one is now and why */
+        if (!song.playing && !chain_busy() && help_on()) {   /* (Dah) said (HELP, stopped): where one is now and why */
             str_cpy(why, FXU_N[want % FXU_N_ALL], 12);
             str_cpy(why + str_len(why), " IS SHARED\nBY ALL TRACKS", 26);
             cards_say("ON THE MASTER", why);
