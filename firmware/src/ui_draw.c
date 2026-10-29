@@ -1457,7 +1457,10 @@ static int cards_msg(void)
         msig = 0;
         return 0;
     }
-    if (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[' &&
+    if (cards_b && ui.msg[0] == 'O' && ui.msg[1] == 'N' && ui.msg[2] == 'E') {   /* (a send's page: its two lines) */
+        a = ui.msg;
+        b = cards_b;
+    } else if (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[' &&
         ui.msg[str_len(ui.msg) - 1u] == 'K') {          /* ("HOLD [X] QUICK") */
         a = LY_LONG[ly_hint][0];
         b = LY_LONG[ly_hint][1];

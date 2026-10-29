@@ -602,9 +602,22 @@ static int help_on(void) { return (ui_prefs2 & (PREF_HELP >> 16)) != 0u; }
 static uint32_t midi_lit_ms[NTRK];
 static int midi_lit(uint32_t k) { return midi_lit_ms[k % NTRK] && (fm1_ms | 1u) - midi_lit_ms[k % NTRK] < MLIT_MS; }
 static void help_start(void) { ui.help_t = (uint8_t)(help_on() ? HELP_FRAMES : 0u); }
+/* (Dah) a message over HOME's look's knobs on two lines (ui_draw.c cards_msg): the first as ui.msg, the second here */
+static const char *cards_b;
+static void cards_say(const char *a, const char *b)
+{
+    ui_message(a);
+    cards_b = b;
+    ui.msg_t = 150;                                     /* (~2.5 s: two lines to read) */
+}
 static void page_entered(void)
 {
     const page_t *pg = cur_page();
+    if (!ui.home && pg->fam == FAM_FX && (str_eq(pg->title, "CHORUS") || str_eq(pg->title, "DELAY") ||
+                                          str_eq(pg->title, "REVERB")))   /* (Dah) a send's page: what it touches */
+        cards_say(str_eq(pg->title, "CHORUS") ? "ONE CHORUS, ALL TRACKS" : str_eq(pg->title, "DELAY") ?
+                  "ONE DELAY, ALL TRACKS" : "ONE REVERB, ALL TRACKS",
+                  "KNOB 1 THIS TRACK, REST SHARED");
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: + ADD on the SEQ cursor's step */
         ev_enter();
     if (!ui.home && lock_page_ok(ui.page))
