@@ -1502,7 +1502,7 @@ typedef struct { int32_t y; char tag[6]; uint16_t tc; char nm[16]; uint8_t star;
 static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
 {
     uint32_t i;
-    int32_t by = LIST_Y(3);
+    int32_t by = LIST_Y(list_n() / 2u);
     int16_t c0 = cv_cy0, c1 = cv_cy1;
     if (n && (r[0].y - 3) % 17 == 0) {                 /* (still, on the rows: plain ones, as any list) */
         for (i = 0; i < n; i++) {
@@ -1518,8 +1518,8 @@ static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
             cv_icon_in(214, r[i].y, 0, 16, 12, ICON_X_STAR, T_ACCENT, T_SURF);
     }
     cv_rrect(6, by, 228, 16, 4, T_THEME, T_SURF);
-    cv_cy0 = (int16_t)(by + cv_oy);
-    cv_cy1 = (int16_t)(by + 16 + cv_oy);
+    cv_cy0 = (int16_t)(by + CV_OY);
+    cv_cy1 = (int16_t)(by + 16 + CV_OY);
     for (i = 0; i < n; i++)
         if (r[i].y > by - 16 && r[i].y < by + 16)
             list_text(r[i].y, 1, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
@@ -1591,12 +1591,12 @@ static void graph_browse(void)
         return;
     }
     if (!list_mode() && pl_dy) {                    /* (Dah) the bar fixed in the middle, the sounds gliding under it */
-        int32_t dy = glide(&pl_dy);
-        glrow_t r[9];
-        for (row = -4; row <= 4; row++) {
-            glrow_t *g = &r[row + 4];
+        int32_t dy = glide(&pl_dy), h = (int32_t)list_n() / 2;
+        glrow_t r[13];
+        for (row = -h - 1; row <= h + 1; row++) {
+            glrow_t *g = &r[row + h + 1];
             uint32_t i = (cur + total * 8u + (uint32_t)(row + 8) - 8u) % total;
-            g->y = LIST_Y(row + 3) + dy;
+            g->y = LIST_Y(row + h) + dy;
             g->tc = T_DIM;
             e = preset_at(i, &k);
             if (e == NENGINES) {
@@ -1608,14 +1608,14 @@ static void graph_browse(void)
             }
             g->star = (uint8_t)favorite_has(e, k);
         }
-        glide_rows(r, 9, 212);
+        glide_rows(r, (uint32_t)(2 * h + 3), 212);
         if (dy)
             return;                                 /* (gliding: the suggested pattern once there) */
     }
-    for (row = -3; row <= 3; row++) {
-        int32_t y = LIST_Y(row + 3), x1 = 212;
+    for (row = 0; row < (int32_t)list_n(); row++) {
+        int32_t y = LIST_Y(row), x1 = 212;
         char tag[6], nm[13], pt[4], pn[13];
-        uint32_t index = preset_visible(cur, total, (uint32_t)(row + 3));
+        uint32_t index = preset_visible(cur, total, (uint32_t)row);
         int sel = index == cur;
         int32_t hint = sel ? preset_pat_hint() : -1;    /* the suggested pattern */
         if (index >= total) continue;
@@ -1654,16 +1654,16 @@ static void graph_patlist(void)                         /* (Dah) SELECT, GLO + A
 static void graph_trklist(void)
 {
     int32_t row, cur = mx_master ? -1 : (int32_t)song.sel, n = (int32_t)trk_count();
-    int32_t dy = glide(&tl_dy);
-    glrow_t r[9];
+    int32_t dy = glide(&tl_dy), h = (int32_t)list_n() / 2;
+    glrow_t r[13];
     uint32_t m = 0;
-    for (row = -4; row <= 4; row++) {                /* (the bar fixed in the middle, the tracks gliding) */
+    for (row = -h - 1; row <= h + 1; row++) {        /* (the bar fixed in the middle, the tracks gliding) */
         int32_t i = cur + row;
         glrow_t *g = &r[m];
         if (i < -1 || i > n || (i == n && n >= NTRK))
             continue;                               /* (Dah: after the last track, + ADD TRACK: ALGORITHM on) */
         m++;
-        g->y = LIST_Y(row + 3) + dy;
+        g->y = LIST_Y(row + h) + dy;
         g->star = 0;
         g->tag[0] = i < 0 ? 'M' : 'T';
         g->tag[1] = i < 0 ? 0 : (char)('1' + i);
@@ -1707,8 +1707,8 @@ static void engine_sound_row(int32_t y)
 /* user preset slots around the selected one: "U07  NAME" / EMPTY */
 static void graph_user(void)
 {
-    int32_t row, first = clamp((int32_t)ui.uslot - 3, 0, UP_SLOTS - 7);
-    for (row = 0; row < 7; row++) {
+    int32_t n = (int32_t)list_n(), row, first = clamp((int32_t)ui.uslot - n / 2, 0, UP_SLOTS - n);
+    for (row = 0; row < n; row++) {
         uint32_t k = (uint32_t)(first + row);
         char tag[4], nm[13];
         int used = up_used(k);
@@ -1724,8 +1724,8 @@ static void graph_user(void)
 static void graph_pats(void)
 {
     uint32_t n = pat_count(), cur = pat_pick();
-    int32_t row, first = clamp((int32_t)cur - 3, 0, (int32_t)n > 7 ? (int32_t)n - 7 : 0);
-    for (row = 0; row < 7 && (uint32_t)(first + row) < n; row++) {
+    int32_t ln = (int32_t)list_n(), row, first = clamp((int32_t)cur - ln / 2, 0, (int32_t)n > ln ? (int32_t)n - ln : 0);
+    for (row = 0; row < ln && (uint32_t)(first + row) < n; row++) {
         uint32_t k = (uint32_t)(first + row);
         char tag[4], nm[13];
         pat_label(k, tag, nm);
@@ -1737,8 +1737,8 @@ static void graph_pats(void)
 static void graph_dlanes(const track_t *t)
 {
     uint32_t tr = (uint32_t)(t - trk) % NTRK, cur = ui.lane % NLANE;
-    int32_t row, first = clamp((int32_t)cur - 3, 0, NLANE - 7);
-    for (row = 0; row < 7; row++) {
+    int32_t ln = (int32_t)list_n() < NLANE ? (int32_t)list_n() : NLANE, row, first = clamp((int32_t)cur - ln / 2, 0, NLANE - ln);
+    for (row = 0; row < ln; row++) {
         uint32_t l = (uint32_t)(first + row), v = dl_get(tr, l, DL_VOICE), s = dl_get(tr, l, DL_STACK);
         char nm[24];
         if (v)
@@ -1776,8 +1776,8 @@ static void graph_events(void)
     const track_t *t = TSEL;
     uint16_t rw[EV_ROWS];
     uint32_t n = ev_list(rw), cur = ev_row(n), k;
-    int32_t row, first = clamp((int32_t)cur - 3, 0, (int32_t)n > 7 ? (int32_t)n - 7 : 0);
-    for (row = 0; row < 7 && (uint32_t)(first + row) < n; row++) {
+    int32_t ln = (int32_t)list_n(), row, first = clamp((int32_t)cur - ln / 2, 0, (int32_t)n > ln ? (int32_t)n - ln : 0);
+    for (row = 0; row < ln && (uint32_t)(first + row) < n; row++) {
         int32_t y = LIST_Y(row);
         int sel;
         uint16_t bg, c;
@@ -2111,15 +2111,17 @@ static void pat_rows(int32_t dy, int add)
     int32_t n = (int32_t)pt_list(nums), at = 0, i, row;
     uint32_t cur = ps_num(song.sel);
     char b[4];
+    int32_t avail = (int32_t)graph_h() - (add ? 0 : 18), my = (avail - 32) / 2;   /* (Dah: the panel's height; the
+                                                         * PATTERN page: its memory line under them) */
     for (i = 0; i < n; i++)
         if (nums[i] == cur) at = i;
-    cv_rrect(6, 38, 228, 32, 4, T_THEME, T_SURF);       /* (the frame stays, the rows glide through it) */
-    cv_rrect(8, 40, 224, 28, 3, T_RAISE, T_THEME);
-    for (row = -2; row <= 2; row++) {
-        int32_t k = at + row, y = 38 + row * 34 + dy;
-        int mid = y > 38 - 17 && y < 38 + 17;
+    cv_rrect(6, my, 228, 32, 4, T_THEME, T_SURF);       /* (the frame stays, the rows glide through it) */
+    cv_rrect(8, my + 2, 224, 28, 3, T_RAISE, T_THEME);
+    for (row = -3; row <= 3; row++) {
+        int32_t k = at + row, y = my + row * 34 + dy;
+        int mid = y > my - 17 && y < my + 17;
         uint16_t bg = mid ? T_RAISE : T_SURF;
-        if (k < 0 || k > n || (k == n && (!add || n >= (int32_t)PS_NUM)) || y < 0 || y + 32 > 106)
+        if (k < 0 || k > n || (k == n && (!add || n >= (int32_t)PS_NUM)) || y < 0 || y + 32 > avail)
             continue;
         if (k == n) {                                   /* + NEW */
             GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
@@ -2140,8 +2142,9 @@ static void graph_pattern(void)
         char m[32] = "MEMORY ";                         /* (Dah: the memory; which one of how many: KNOB 1's card) */
         fmt_int(m + str_len(m), (int32_t)pt_mem_pct());
         str_cpy(m + str_len(m), " %", 4);
-        GFX_HOOK_ALIGN(0, 110, 0, 120, AL_V, "pattern memory line");   /* (its "/": 2 px higher) */
-        cv_text_on(14, 110 - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
+        int32_t my = (int32_t)graph_h() - 14;           /* (Dah: at the panel's foot) */
+        GFX_HOOK_ALIGN(0, my, 0, my + 10, AL_V, "pattern memory line");   /* (its "/": 2 px higher) */
+        cv_text_on(14, my - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
     }
 }
 /* HA HA HE HU: SAVE > FILE's projects (projfs.c), read again when one changed (proj_wire_gen: a save, an open, a delete):
@@ -2172,18 +2175,20 @@ static void graph_file(void)
     graph_file_read();
     fmt_int(m + 7, (int32_t)pfs_mem_pct());
     str_cpy(m + str_len(m), " %", 4);
-    GFX_HOOK_ALIGN(0, 112, 0, 122, AL_V, "file memory line");
-    cv_text_on(14, 112 - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
+    uint32_t rn = list_n() - 1u;                         /* (Dah: the panel's rows, the memory line under them) */
+    int32_t my = (int32_t)graph_h() - 14;
+    GFX_HOOK_ALIGN(0, my, 0, my + 10, AL_V, "file memory line");
+    cv_text_on(14, my - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
     if (!gfile.n) {
-        list_row(12, 0, "", T_MID, "NO PROJECT YET", T_DIM, 232);
+        list_row(LIST_Y(0), 0, "", T_MID, "NO PROJECT YET", T_DIM, 232);
         return;
     }
     for (i = 0; i < gfile.n; i++)
         if (gfile.ids[i] == ui.fsel) at = i;
-    first = gfile.n <= 4u ? 0u : at < 2u ? 0u : at + 2u > gfile.n ? gfile.n - 4u : at - 1u;
-    for (i = 0; i < 4u && first + i < gfile.n; i++) {
+    first = gfile.n <= rn ? 0u : at < rn / 2u ? 0u : at + (rn - rn / 2u) > gfile.n ? gfile.n - rn : at - rn / 2u;
+    for (i = 0; i < rn && first + i < gfile.n; i++) {
         uint32_t k = first + i;
-        int32_t y = 12 + (int32_t)i * 26;
+        int32_t y = LIST_Y(i);
         char b[4], nm[28];
         fmt_int(b, (int32_t)gfile.ids[k]);
         str_cpy(nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);

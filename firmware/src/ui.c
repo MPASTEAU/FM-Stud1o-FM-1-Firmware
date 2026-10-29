@@ -438,6 +438,13 @@ static uint32_t graph_h(void)
 {
     return large_kind() == LK_TALL ? LG_H_GRAPH : home_bare() ? H_GRAPH_BARE : foot_free() ? H_GRAPH + FOOT_GAIN : H_GRAPH;
 }
+/* (Dah) the list pages' rows: as many as the panel holds (17 px a row), an odd count (the one picked in the middle) */
+static uint32_t list_n(void)
+{
+    int32_t n = ((int32_t)graph_h() - 6) / 17;
+    n = n < 7 ? 7 : n > 11 ? 11 : n;
+    return (uint32_t)(n | 1);
+}
 static int large_face_has(const char *s)                /* every glyph of s in the sparse L face */
 {
     for (; *s; s++)
@@ -1902,12 +1909,12 @@ static void preset_step(int32_t direction)
  * Return total for an empty row; a current sound not in the list shows the start. */
 static uint32_t preset_visible(uint32_t cur, uint32_t total, uint32_t row)
 {
-    uint32_t first, last;
-    if (!total || row >= 7u) return total;
+    uint32_t first, last, n = list_n(), h = n / 2u;
+    if (!total || row >= n) return total;
     if (!list_mode())
-        return (cur + total * 4u + row - 3u) % total;
-    first = cur < total && cur > 3u ? cur - 3u : 0u;
-    last = total > 7u ? total - 7u : 0u;
+        return (cur + total * (h + 1u) + row - h) % total;
+    first = cur < total && cur > h ? cur - h : 0u;
+    last = total > n ? total - n : 0u;
     if (first > last) first = last;
     return first + row < total ? first + row : total;
 }

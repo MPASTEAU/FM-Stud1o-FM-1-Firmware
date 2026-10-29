@@ -1271,9 +1271,44 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
 }
 
 /* an action's column (act_cols): picked, the OCT+ keycap (accent while it would do something); else "--" */
+/* (Dah) HOME's look: an action's card, no knob: its name in the middle; the one picked filled (THEME; OCT+ would not
+ * act: outlined DIM), OCT+'s keycap under its name */
+static void act_card(uint32_t c, const char *label, int picked, int ready)
+{
+    char key[24];
+    uint16_t bg = picked && ready ? T_THEME : T_SURF, ink = picked ? (ready ? T_INK : T_DIM) : T_TEXT;
+    int32_t ny = picked ? 7 : HALF_UP(HOME_CARD_H - AF_M_CAP_H);
+    const aafont_t *f = text_w(&AF_M, label) <= COL_W - 6 ? &AF_M : &AF_S;
+    str_cpy(key, "#", 2);
+    str_cpy(key + 1, label, 16);
+    key[str_len(key) + 2] = 0;
+    key[str_len(key) + 1] = (char)('0' + ready);
+    key[str_len(key)] = (char)('0' + picked);
+    if (!ui.force && str_eq(key, ui.col[c]))
+        return;
+    str_cpy(ui.col[c], key, sizeof ui.col[c]);
+    ui.roll[c].from[0] = 0;
+    cv_begin(COL_W, HOME_CARD_H, T_BG);
+    cv_rrect(0, 0, COL_W, HOME_CARD_H, 4, bg, T_BG);
+    if (picked && !ready)
+        cv_frame(0, 0, COL_W, HOME_CARD_H, T_DIM);
+    if (f == &AF_S)
+        ny += (AF_M_CAP_H - AF_S_CAP_H) / 2;
+    GFX_HOOK_ALIGN(0, 0, COL_W, 0, AL_H, "action card name centred");
+    cv_text_in(0, ny - (f == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y), COL_W, f, label, ink, bg);
+    if (picked) {
+        int32_t kw = kc_w(KC_OCTUP);
+        cv_keycap((COL_W - kw) / 2, HOME_CARD_H - KC_H - 5, KC_OCTUP, ready ? T_INK : T_DIM, ready ? T_THEME : T_SURF, bg);
+    }
+    cv_blit((uint32_t)CARD_X(c), card_y());
+}
 static void draw_act_column(uint32_t c, const char *label, uint16_t vc, uint32_t icon)   /* icon: ICON_AUTO = by label */
 {
     int picked = act_col() == c + 1u;
+    if (home_bare()) {
+        act_card(c, label, picked, act_ready());
+        return;
+    }
     draw_column(c, label, picked ? "[OCT+]" : "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc, -1, icon);
 }
 
