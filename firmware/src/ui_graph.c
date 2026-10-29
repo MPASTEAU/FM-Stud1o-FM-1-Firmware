@@ -1904,7 +1904,7 @@ static uint32_t fl_pick_rows(uint32_t *cur);            /* (ui_graph_fx.c: ADD's
 static void fl_pick_label(uint32_t i, char *tag, char *nm);
 static uint32_t fl_fx_rows(uint32_t *cur);              /* (ui_graph_fx.c: CHAIN's effects) */
 static void fl_fx_label(uint32_t i, char *tag, char *nm);
-#define FL_TOP 18                                      /* the title's band */
+#define FL_TOP 24                                      /* the title's band (its name in M, its place in S) */
 static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
 static uint32_t fl_kind(void) { return ui.confirm == CF_PICK_FX ? FL_PICK : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
 /* the list: how many rows, the one picked (its index) */
@@ -1934,10 +1934,10 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
     const aafont_t *f = dq < 384u ? &AF_M : &AF_S;      /* (dq: its distance from the middle, 1/256 rows) */
     uint16_t ink = dq < 384u ? T_TEXT : dq < 640u ? T_MID : T_DIM, tc = T_MID, bg = T_BG;
     int32_t ty = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), nx = 52;
-    if (sel) {
+    if (sel) {                                          /* (Dah: left of the scrollbar) */
         bg = T_RAISE;
-        cv_rect(4, y, 232, h, T_THEME);
-        cv_rect(6, y + 2, 228, h - 4, bg);
+        cv_rect(4, y, 224, h, T_THEME);
+        cv_rect(6, y + 2, 220, h - 4, bg);
     }
     if (kind == FL_PAT) {
         uint8_t tmp[PS_NUM];
@@ -1950,7 +1950,7 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
         fmt_int(tag, nums[i]);
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
         cv_text_on(14, ty, f, tag, sel ? T_THEME : ink, bg);
-        pt_mini(nums[i], 44, y + (sel ? 5 : 3), 188, h - (sel ? 10 : 6), bg);
+        pt_mini(nums[i], 44, y + (sel ? 5 : 3), 178, h - (sel ? 10 : 6), bg);
         return;
     }
     if (kind == FL_FX || kind == FL_PICK) {
@@ -1988,7 +1988,7 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
     if (14 + (int32_t)text_w(f, tag) + 8 > nx)          /* (a long tag in M: the name after it) */
         nx = 14 + (int32_t)text_w(f, tag) + 8;
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
-    cv_free_text(nx, ty, f, nm, ink, bg, 230 - nx);
+    cv_free_text(nx, ty, f, nm, ink, bg, 222 - nx);
 }
 static uint32_t fl_sig(void)                           /* what the full list shows */
 {
@@ -2013,7 +2013,7 @@ static void draw_list_full(int fresh)
     uint8_t nums[PS_NUM];
     uint32_t kind = fl_kind(), cur, n = fl_count(kind, &cur, nums), half;
     int32_t mid = FL_TOP + (240 - FL_TOP) / 2, c0, f, d, top0;
-    char t[24];
+    char t[24], pl[12] = {0};
     fl_tgt = (int32_t)cur * 256;
     if (fresh || kind != fl_last || fl_pos < 0 || fl_pos > (int32_t)n * 256)
         fl_pos = fl_tgt;
@@ -2030,18 +2030,22 @@ static void draw_list_full(int fresh)
         int32_t h0 = fl_h(f), h1 = fl_h(256 - f);
         top0 = mid - f * ((h0 + h1) / 2 + 1) / 256 - h0 / 2;
     }
-    str_cpy(t, kind == FL_PAT ? "PATTERN " : kind == FL_TRK ? "TRACK " : kind == FL_FX ? "EFFECT " :
-               kind == FL_PICK ? "ADD WHICH EFFECT?" : "SOUND ", sizeof t);
-    if (kind != FL_PICK) {
-        fmt_int(t + str_len(t), (int32_t)cur + 1);
-        str_cpy(t + str_len(t), "/", 2);
-        fmt_int(t + str_len(t), (int32_t)n);
+    str_cpy(t, kind == FL_PAT ? "PATTERN" : kind == FL_TRK ? "TRACK" : kind == FL_FX ? "EFFECT" :
+               kind == FL_PICK ? "ADD WHICH EFFECT?" : "PRESET", sizeof t);
+    if (kind != FL_PICK) {                              /* (its place after it: "1/N", small) */
+        fmt_int(pl, (int32_t)cur + 1);
+        str_cpy(pl + str_len(pl), "/", 2);
+        fmt_int(pl + str_len(pl), (int32_t)n);
     }
     for (half = 0; half < 2u; half++) {
         cv_begin(240, 120, T_BG);
         cv_oy = -120 * (int32_t)half;
-        GFX_HOOK_ALIGN(0, 0, 0, FL_TOP, AL_V, "full list title on its middle");
-        cv_text(10, CAP_IN(S, FL_TOP), &AF_S, t, T_MID);
+        {   /* (Dah) the list's name large and white, its place small and grey, on one baseline */
+            int32_t x = cv_text(10, CAP_IN(M, FL_TOP), &AF_M, t, T_TEXT);
+            int32_t by = CAP_IN(M, FL_TOP) + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;
+            if (pl[0])
+                cv_text(x + 6, by, &AF_S, pl, T_MID);
+        }
         if (!n) {
             GFX_HOOK_ALIGN(0, mid - 10, 0, mid + 10, AL_V, "full list row on its middle");
             cv_text(14, mid - 10 + CAP_IN(S, 20), &AF_S, "NOTHING IN THIS LIST", T_MID);
@@ -2065,6 +2069,12 @@ static void draw_list_full(int fresh)
                 fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)dq, (uint32_t)i == cur);
                 y += h + 1;
             }
+        }
+        if (n > 1u) {                                   /* (Dah) the scrollbar at the right: where in the list */
+            int32_t ty0 = FL_TOP + 2, th = 240 - 4 - ty0, bh = th / (int32_t)n > 10 ? th / (int32_t)n : 10, by;
+            by = ty0 + (int32_t)(fl_pos * (th - bh) / ((int32_t)(n - 1u) * 256));
+            cv_rect(234, ty0, 2, th, T_LINE);
+            cv_rect(233, by, 4, bh, T_MID);
         }
         if (kind == FL_PICK) {                          /* (its keys, at the foot) */
             static const khint_t KH[2] = {{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD"}};   /* (OCT- first, as on the panel) */
