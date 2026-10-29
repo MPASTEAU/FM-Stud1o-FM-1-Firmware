@@ -2102,6 +2102,11 @@ static void ui_notices(void)
 static void ui_input(void)
 {
     uint32_t pressed = fm1_input_edges(0), notes = fm1_input_note_edges(), now = fm1_ticks(), id, b, k;
+    if ((pressed || notes) && msig && ui.msg_t) {       /* (Dah) a message's window: any button or key away with it
+                                                         * (what it does, done too) */
+        ui.msg_t = 0;
+        ui.msg2[0] = 0;
+    }
     uint32_t home, rec, save;
     uint32_t oct, oct_plain;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;

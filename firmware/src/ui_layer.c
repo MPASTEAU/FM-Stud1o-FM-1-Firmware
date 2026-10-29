@@ -329,8 +329,8 @@ static void layer_tap(uint32_t l)
         acted = page_tap(LAYERS[l].btn);
     }
     lys.dt_hint = 0;
-    if (!((layer_seen >> l) & 1u) && ui.msg_t == m && !name_on() && !ui.confirm && !ui.menu &&
-        (ui.home || cur_page()->fam != was)) {          /* (Dah: only arriving from elsewhere, not a tap within) */
+    if (l != LAYER_REC && ui.msg_t == m && !name_on() && !ui.confirm && !ui.menu && !song.playing && !chain_busy() &&
+        (ui.home || cur_page()->fam != was)) {          /* (Dah: arriving from elsewhere, every time; not a tap within) */
         ui_say("HOLD [", KC[LY_KC[l]].label);
         str_cpy(ui.msg + str_len(ui.msg), "] QUICK", sizeof ui.msg - str_len(ui.msg));
         ui.msg_t = (uint8_t)clamp(60 + 4 * (int32_t)(str_len(LY_LONG[l < 7u ? l : 0][0]) + str_len(LY_LONG[l < 7u ? l : 0][1])),

@@ -466,6 +466,7 @@ static void head_home(void)
     fmt_int(bp + 4, song.g[G_BPM]);
     sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
                          (uint32_t)song.rec * 977u + tc * 13u +
+                         (ui.msg_t && (song.playing || chain_busy()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
                          (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
                          (ui.home ? 0u : ui.page + 1u) * 3141592653u);
@@ -511,7 +512,12 @@ static void head_home(void)
     }
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
     x = cv_text(6, ty, &AF_S, ti, T_MID) + 8;            /* the page (its place in its family: "DIST 2/5") */
-    /* (Dah: a message shows over the knobs, cards_msg; the header keeps its own) */
+    if (ui.msg_t && (song.playing || chain_busy())) {   /* (Dah) playing: a message small in the header (no window) */
+        const char *m = ui.msg[0] == MSG_NOFILE[0] ? ui.msg + 1 : ui.msg;
+        cv_free_hint(x, ty, m, T_ACCENT, T_BG, xr - x);
+        cv_blit(0, Y_HEAD);
+        return;
+    }
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
     x = cv_text(x, ty, &AF_S, "PAT", T_MID) + 4;       /* the pattern: "PAT 1" */
     x = cv_text(x, ty, &AF_S, num + 1, sl[0] == '-' ? T_MID : T_THEME) + 8;
@@ -1474,14 +1480,19 @@ static int32_t pop_wrap(const char *b, int32_t w, char out[2][40])   /* b on two
     }
     return (int32_t)n;
 }
+static uint32_t msig;                                   /* (Dah) the message window shown (0: none) */
 static int msg_popup(void)
 {
-    static uint32_t msig;
     uint32_t sig;
     int32_t W = 216, H, x0 = 12, y0, nl, ly;
     char ln[2][40];
     const char *a = ui.msg, *b = "";
-    if (!home_bare() || !ui.msg_t) {
+    int two = (cards_b && str_eq(ui.msg, cards_a)) ||
+              (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[');
+    if (!ui.msg_t || !(home_bare() || two) || ui.menu || ui.confirm || name_on() || ui.layer ||
+        song.playing || chain_busy()) {                 /* (Dah: playing, none: the header says it, small) */   /* (Dah: HOME's
+                                                         * look, every message; elsewhere the long ones: a layer's
+                                                         * hint, a two-part message) */
         if (msig)                                       /* (gone: the page again, all of it) */
             ui.force = 1;
         msig = 0;
@@ -1496,7 +1507,8 @@ static int msg_popup(void)
         b = LY_LONG[ly_hint][1];
     }
     nl = b[0] ? pop_wrap(b, W - 28, ln) : 0;
-    H = 22 + 20 + (nl ? 8 + 20 * nl : 0) + 18;
+    H = 2 * 20 + AF_M_CAP_H + (nl ? 10 + 20 * nl - (20 - AF_M_CAP_H) : 0);   /* (the words' ink, 20 px over and under:
+                                                         * centred both ways) */
     y0 = 120 - H / 2;
     sig = str_hash(str_hash(9u, a), b) + 1u;
     if (!ui.force && sig == msig)
@@ -1505,7 +1517,7 @@ static int msg_popup(void)
     cv_begin((uint32_t)W, (uint32_t)H, T_BG);
     cv_rrect(0, 0, W, H, 8, T_THEME, T_BG);              /* (a window: its frame the colour, inside SURF) */
     cv_rrect(2, 2, W - 4, H - 4, 6, T_SURF, T_THEME);
-    ly = 22;
+    ly = 20;                                            /* (the first line's capitals from here) */
     if (a[0] == MSG_NOFILE[0])                          /* (an icon's byte first: the words) */
         a++;
     {
@@ -1513,15 +1525,16 @@ static int msg_popup(void)
         for (i = 0; a[i]; i++)
             key |= a[i] == '[';
         if (key) {                                      /* a key in it: its keycap */
-            GFX_HOOK_ALIGN(0, ly - 6, 0, ly - 6 + KC_H, AL_V | AL_PASS, "message window key line");
-            cv_free_hint((W - head_hint_w(a, W - 28)) / 2, ly - 6 + CAP_IN(S, KC_H), a, T_TEXT, T_SURF, W - 28);   /* (centred) */
+            int32_t ky = ly + AF_M_CAP_H / 2 - KC_H / 2;
+            GFX_HOOK_ALIGN(0, ky, 0, ky + KC_H, AL_V | AL_PASS, "message window key line");
+            cv_free_hint((W - head_hint_w(a, W - 28)) / 2, ky + CAP_IN(S, KC_H), a, T_TEXT, T_SURF, W - 28);   /* (centred) */
         } else
-            cv_text_in(0, ly - AF_M_CAP_Y - 2, W, &AF_M, a, T_TEXT, T_SURF);
+            cv_text_in(0, ly - AF_M_CAP_Y, W, &AF_M, a, T_TEXT, T_SURF);
     }
     if (nl) {
         int32_t k;
         for (k = 0; k < nl; k++)
-            cv_text_in(0, ly + 26 + 20 * k - AF_M_CAP_Y, W, &AF_M, ln[k], T_MID, T_SURF);
+            cv_text_in(0, ly + AF_M_CAP_H + 10 + 20 * k - AF_M_CAP_Y, W, &AF_M, ln[k], T_MID, T_SURF);
     }
     lcd_fill(0, (uint32_t)card_y(), 240, (uint32_t)(240 - (int32_t)card_y()), T_BG);   /* (the page under it, quiet) */
     cv_blit((uint32_t)x0, (uint32_t)y0);
