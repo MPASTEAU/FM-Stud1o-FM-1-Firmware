@@ -1719,17 +1719,25 @@ typedef struct { char tag[6]; char nm[20]; char note[12]; uint16_t tc, nc; } big
 static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int32_t y0, int32_t y1)
 {
     int32_t fy, vt = tall_view(n, cur, dy, y1 - y0, &fy, BR_H), k;   /* (Dah: taller than a list's, less than PATTERN's) */
-    cv_rrect(6, y0 + fy, 228, BR_H, 4, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the rows by) */
-    cv_rrect(8, y0 + fy + 2, 224, BR_H - 4, 3, T_RAISE, T_THEME);
+    cv_rrect(4, y0 + fy - 1, 232, BR_H + 2, 5, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the
+                                                         * rows by; Dah: the one in it a little bigger, as CHAIN's) */
+    cv_rrect(6, y0 + fy + 1, 228, BR_H - 2, 4, T_RAISE, T_THEME);
     for (k = 0; k < n; k++) {
         int32_t y = y0 + k * (BR_H + 2) - vt;
         int mid = y > y0 + fy - BR_H / 2 && y < y0 + fy + BR_H / 2;
         uint16_t bg = mid ? T_RAISE : T_SURF;
         if (y < y0 || y + BR_H > y1)                    /* (cut by an edge: not drawn) */
             continue;
-        GFX_HOOK_ALIGN(0, y, 0, y + BR_H, AL_V, "save list row text centred");
-        cv_text_on(14, y + CAP_IN(M, BR_H), &AF_M, r[k].tag, mid ? T_THEME : r[k].tc ? r[k].tc : T_MID, bg);
-        cv_free_text(56, y + CAP_IN(M, BR_H), &AF_M, r[k].nm, r[k].nc ? r[k].nc : T_TEXT, bg, r[k].note[0] ? 120 : 170);
+        GFX_HOOK_ALIGN(0, y, 0, y + BR_H, AL_V, "save list row text centred");   /* (the one in the frame in M, the
+                                                         * others S: a slight zoom) */
+        if (mid)
+            cv_text_on(12, y + CAP_IN(M, BR_H), &AF_M, r[k].tag, T_THEME, bg);
+        else
+            cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, r[k].tag, r[k].tc ? r[k].tc : T_MID, bg);
+        if (mid)
+            cv_free_text(54, y + CAP_IN(M, BR_H), &AF_M, r[k].nm, r[k].nc ? r[k].nc : T_TEXT, bg, r[k].note[0] ? 122 : 172);
+        else
+            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, r[k].nc ? r[k].nc : T_MID, bg, r[k].note[0] ? 120 : 170);
         if (r[k].note[0])
             cv_text_r(226, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
     }
@@ -2168,8 +2176,9 @@ static void pat_rows(int32_t dy, int add)
         if (nums[i] == cur) at = i;
     rows = n + (add && n < (int32_t)PS_NUM);
     vt = tall_view(rows, at, dy, avail - 2, &fy, 32);
-    cv_rrect(6, 2 + fy, 228, 32, 4, T_THEME, T_SURF);   /* (the frame: down to the middle, the rows by, on down) */
-    cv_rrect(8, 4 + fy, 224, 28, 3, T_RAISE, T_THEME);
+    cv_rrect(4, 1 + fy, 232, 34, 5, T_THEME, T_SURF);   /* (the frame: down to the middle, the rows by, on down; Dah:
+                                                         * the one in it a little bigger, as CHAIN's) */
+    cv_rrect(6, 3 + fy, 228, 30, 4, T_RAISE, T_THEME);
     for (k = 0; k < rows; k++) {
         int32_t y = 2 + k * 34 - vt;
         int mid = y > 2 + fy - 17 && y < 2 + fy + 17, whole = y >= 0 && y + 32 <= avail;
@@ -2187,9 +2196,15 @@ static void pat_rows(int32_t dy, int add)
         if (whole) {                                    /* (cut by an edge: its steps alone) */
             fmt_int(b, (int32_t)nums[k]);
             GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
-            cv_text_on(14, y + CAP_IN(M, 32), &AF_M, b, mid ? T_THEME : T_MID, bg);
+            if (mid)
+                cv_text_on(12, y + CAP_IN(M, 32), &AF_M, b, T_THEME, bg);
+            else
+                cv_text_on(16, y + CAP_IN(S, 32), &AF_S, b, T_MID, bg);
         }
-        pt_mini(nums[k], 36, y + 4, 192, 25, bg);
+        if (mid)
+            pt_mini(nums[k], 34, y + 3, 196, 27, bg);   /* (its steps a little bigger) */
+        else
+            pt_mini(nums[k], 38, y + 4, 188, 25, bg);
     }
 }
 static void graph_pattern(void)
