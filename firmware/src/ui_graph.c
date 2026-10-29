@@ -1905,7 +1905,7 @@ static void fl_pick_label(uint32_t i, char *tag, char *nm);
 static uint32_t fl_fx_rows(uint32_t *cur);              /* (ui_graph_fx.c: CHAIN's effects) */
 static void fl_fx_label(uint32_t i, char *tag, char *nm);
 static const char *fl_fx_note(uint32_t i);
-#define FL_TOP 24                                      /* the title's band (its name in M, its place in S) */
+#define FL_TOP 34                                      /* the title's band (its name in L, its place in S) */
 static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
 static uint32_t fl_kind(void) { return ui.confirm == CF_PICK_FX ? FL_PICK : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
 /* the list: how many rows, the one picked (its index) */
@@ -2038,7 +2038,7 @@ static void draw_list_full(int fresh)
         top0 = mid - f * ((h0 + h1) / 2 + 1) / 256 - h0 / 2;
     }
     str_cpy(t, kind == FL_PAT ? "Pattern" : kind == FL_TRK ? "Track" : kind == FL_FX ? "Effect" :
-               kind == FL_PICK ? "Add which effect?" : "Preset", sizeof t);
+               kind == FL_PICK ? "Add effect" : "Preset", sizeof t);
     if (kind != FL_PICK) {                              /* (its place after it: "1/N", small) */
         fmt_int(pl, (int32_t)cur + 1);
         str_cpy(pl + str_len(pl), "/", 2);
@@ -2048,10 +2048,8 @@ static void draw_list_full(int fresh)
         cv_begin(240, 120, T_BG);
         cv_oy = -120 * (int32_t)half;
         {   /* (Dah) the list's name large and white, its place small and grey, on one baseline */
-            int32_t x = cv_text(10, CAP_IN(M, FL_TOP), &AF_M, t, T_TEXT);
-            cv_text(11, CAP_IN(M, FL_TOP), &AF_M, t, T_TEXT);   /* (bold: once more a pixel on) */
-            x++;
-            int32_t by = CAP_IN(M, FL_TOP) + AF_M_CAP_Y + AF_M_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;
+            int32_t x = cv_text(10, CAP_IN(L, FL_TOP), &AF_L, t, T_TEXT);   /* (L: large and bold) */
+            int32_t by = CAP_IN(L, FL_TOP) + AF_L_CAP_Y + AF_L_CAP_H - AF_S_CAP_Y - AF_S_CAP_H;
             if (pl[0])
                 cv_text(x + 6, by, &AF_S, pl, T_MID);
         }
