@@ -172,6 +172,35 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
         break;
     }
 }
+/* (Dah) CHAIN's list for the full screen list (SELECT): its rows (+ ADD after the effects), the one picked; a row's
+ * number and name; SELECT a row a detent */
+static uint32_t fl_fx_rows(uint32_t *cur)
+{
+    uint8_t u[FXU_N_ALL];
+    track_t *t = fx_tsel();
+    uint32_t n = fx_list(t, u), rows = n < fx_max(t) ? n + 1u : n;
+    *cur = ch_cur < rows ? ch_cur : rows ? rows - 1u : 0u;
+    return rows;
+}
+static void fl_fx_label(uint32_t i, char *tag, char *nm)
+{
+    uint8_t u[FXU_N_ALL];
+    uint32_t n = fx_list(fx_tsel(), u);
+    if (i < n) {
+        tag[0] = (char)('1' + i);
+        tag[1] = 0;
+        str_cpy(nm, FXU_N[u[i]], 16);
+    } else {
+        str_cpy(tag, "+", 6);
+        str_cpy(nm, "ADD AN EFFECT", 16);
+    }
+}
+static void fl_fx_move(int32_t s)
+{
+    uint32_t cur, rows = fl_fx_rows(&cur);
+    ch_cur = (uint8_t)clamp((int32_t)cur + s, 0, rows ? (int32_t)rows - 1 : 0);
+    ui.force = 1;
+}
 /* CHAIN's actions on the row picked: ADD (a free effect, last: Dah), REMOVE, TYPE (another free one in its
  * place), MOVE (in series only: the sends are after them) */
 static void fx_chain_add(track_t *t)
@@ -335,7 +364,8 @@ static void graph_chain(const track_t *t, uint16_t c)
     uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(t, u), i, rows = n < fx_max(t) ? n + 1u : n;
     uint32_t vis = rows < 5u ? rows : 5u, first;        /* (Dah: five rows at most, the one picked among them) */
-    int32_t rh = (graph_ht - 16) / 5, y0 = 2, x0 = PANEL_X0 + 14, bw = 150;
+    int32_t rh = (graph_ht - 16) / 5, y0 = 2, x0 = PANEL_X0 + 14, bw = PANEL_W - 16;   /* (Dah: the panel's width, no
+                                                         * OUT beside it) */
     if (ch_cur >= rows)
         ch_cur = (uint8_t)(rows - 1u);
     first = ch_cur + 3u > vis ? ch_cur + 3u - vis : 0u;   /* (the picked one with a row after it, when there is one) */
@@ -363,11 +393,6 @@ static void graph_chain(const track_t *t, uint16_t c)
             cv_rrect(x0 + 1, y + 3, bw - 2, rh - 8, 3, T_SURF, T_LINE);
             cv_text_in(x0, y + 2 + CAP_IN(S, rh - 6), bw, &AF_S, "+ ADD", sel ? T_TEXT : T_MID, T_SURF);
         }
-    }
-    {                                                   /* the sound out */
-        int32_t wx = x0 + bw + 8, ww = PANEL_X0 + PANEL_W - wx;
-        cv_text_in(wx, y0 + 2, ww, &AF_S, "OUT", T_MID, T_SURF);
-        fx_wave(wx, ww, y0 + 50, 30, ux_mix(c, T_SURF, 70));
     }
     cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : n < fx_max(t) ? "[OCT+] ADD AN EFFECT" : "",
                T_MID, T_SURF);

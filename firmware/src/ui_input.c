@@ -2481,6 +2481,10 @@ static void ui_input(void)
                                                          * letting go, LFO is held (MOMENTARY) or steps are held */
             for (k = (uint32_t)(s > 0 ? s : -s); k && !lay && !kq && !mom_down() && !lock_held(); k--)
                 sel_list(s > 0 ? 1 : -1);
+        } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] == P_FXORD) {
+            fl_fx_move(s);                              /* (Dah) FX > CHAIN: SELECT the effect, its list the screen */
+            tl_ms = fm1_ms | 1u;
+            tl_pat = 2;
         } else if (!glo && !lay) {                      /* (Dah) SELECT: the pattern, every track's, on any page without
                                                          * a list (its list ~1 s); the tempo: GLO + SELECT */
             pattern_turn_ui(s);

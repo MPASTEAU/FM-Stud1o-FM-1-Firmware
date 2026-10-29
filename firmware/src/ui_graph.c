@@ -1899,10 +1899,12 @@ static void pt_mini(uint32_t num, int32_t x0, int32_t y0, int32_t w, int32_t h, 
 /* (Dah) a list just turned (SELECT / GLO + ALGORITHM the patterns, PRESETS the sounds, ALGORITHM the tracks), the
  * whole screen ~1 s: its name and place on top, the one picked in the middle, large and framed, the others smaller and
  * fainter the further they are (a fisheye). Drawn in two halves (the canvas holds 142 rows) */
-enum { FL_PAT, FL_SND, FL_TRK };
+enum { FL_PAT, FL_SND, FL_TRK, FL_FX };
+static uint32_t fl_fx_rows(uint32_t *cur);              /* (ui_graph_fx.c: CHAIN's effects) */
+static void fl_fx_label(uint32_t i, char *tag, char *nm);
 #define FL_TOP 18                                      /* the title's band */
 static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
-static uint32_t fl_kind(void) { return tl_on() ? (tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
+static uint32_t fl_kind(void) { return tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
 /* the list: how many rows, the one picked (its index) */
 static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
 {
@@ -1913,6 +1915,8 @@ static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
             if (nums[i] == ps_num(song.sel)) *cur = i;
         return n + (n < PS_NUM);                        /* (+ NEW after the last) */
     }
+    if (kind == FL_FX)
+        return fl_fx_rows(cur);
     if (kind == FL_TRK) {
         *cur = mx_master ? 0u : song.sel + 1u;          /* (the MASTER first, then the tracks, + ADD TRACK) */
         return 1u + trk_count() + (trk_count() < NTRK);
@@ -1945,7 +1949,10 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
         pt_mini(nums[i], 44, y + (sel ? 5 : 3), 188, h - (sel ? 10 : 6), bg);
         return;
     }
-    if (kind == FL_TRK) {
+    if (kind == FL_FX) {
+        fl_fx_label(i, tag, nm);
+        nx = 40;
+    } else if (kind == FL_TRK) {
         if (i == 0u) {
             str_cpy(tag, "M", sizeof tag);
             str_cpy(nm, "MASTER", sizeof nm);
@@ -2016,7 +2023,7 @@ static void draw_list_full(int fresh)
         int32_t h0 = fl_h(f), h1 = fl_h(256 - f);
         top0 = mid - f * ((h0 + h1) / 2 + 1) / 256 - h0 / 2;
     }
-    str_cpy(t, kind == FL_PAT ? "PATTERN " : kind == FL_TRK ? "TRACK " : "SOUND ", sizeof t);
+    str_cpy(t, kind == FL_PAT ? "PATTERN " : kind == FL_TRK ? "TRACK " : kind == FL_FX ? "EFFECT " : "SOUND ", sizeof t);
     fmt_int(t + str_len(t), (int32_t)cur + 1);
     str_cpy(t + str_len(t), "/", 2);
     fmt_int(t + str_len(t), (int32_t)n);
