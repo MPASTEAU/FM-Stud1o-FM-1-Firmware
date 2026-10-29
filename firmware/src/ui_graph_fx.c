@@ -444,7 +444,7 @@ static void graph_chain(const track_t *t, uint16_t c)
             char d[2] = {(char)('1' + i), 0}, inf[16];
             int32_t dy = y + (rh - 12) / 2 - 1, nx = x0 + 6;
             int ms = fx_send(u[i]) && !fx_mst(t);       /* (Dah) a send: the MASTER's effect, greyed, "M" */
-            uint16_t cc = ms ? T_MID : c;
+            uint16_t cc = ms || fx_mst(t) ? T_MID : c;   /* (Dah: the MASTER's chain grey: no track's colour) */
             cv_rrect(PANEL_X0, dy, 12, 12, 6, sel ? T_ACCENT : cc, T_SURF);
             cv_text_in(PANEL_X0, dy + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : cc);
             if (sel)
