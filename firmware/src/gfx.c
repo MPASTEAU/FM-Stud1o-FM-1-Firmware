@@ -73,6 +73,13 @@ static uint32_t cv_w, cv_h;
 static uint16_t cv_bg;           /* what cv_begin cleared the canvas to */
 static uint8_t cv_scroll;        /* 1: drawing a scrolled view (its text may run past the canvas) */
 static int32_t cv_oy;            /* y offset for graph drawing */
+static int32_t cv_py, cv_split_h;   /* (Dah) a panel taller than the canvas (ui_graph.c draw_graph_in): this canvas' rows
+                                     * start cv_py up it, cv_split_h tall in all */
+static uint8_t cv_split;
+#define CV_OY (cv_oy + cv_py)
+/* (Dah) the host's hooks: split, only what starts in this canvas (y: its row) */
+#define CV_HK(y0, y1) (!cv_split || ((int32_t)(y1) > 0 && (int32_t)(y0) < (int32_t)cv_h))   /* (one across two: in both,
+                                                         * cut, the host pairs them) */
 static int16_t cv_cy0, cv_cy1;   /* text clip: canvas rows cv_cy0 .. cv_cy1 - 1 (cv_begin: the whole canvas) */
 static uint8_t cv_flip;          /* cv_alpha_hc: the cell mirrored left <-> right (the header's metronome, ui_draw.c) */
 
@@ -276,16 +283,16 @@ static void cv_blit_from(uint32_t x, uint32_t y, uint32_t r0)
 
 static inline void cv_pset(int32_t x, int32_t y, uint16_t c)
 {
-    y += cv_oy;
+    y += CV_OY;
     if ((uint32_t)x < cv_w && (uint32_t)y < cv_h)
         cv_px[(uint32_t)y * cv_w + (uint32_t)x] = swap16(c);
 }
 
 static void cv_rect(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)
 {
-    int32_t x1 = x + w, y1 = y + h + cv_oy, i;
+    int32_t x1 = x + w, y1 = y + h + CV_OY, i;
     uint16_t sc = swap16(c);
-    y += cv_oy;                             /* clipped once, then filled row by row */
+    y += CV_OY;                             /* clipped once, then filled row by row */
     if (x < 0)
         x = 0;
     if (y < 0)
@@ -302,7 +309,7 @@ static void cv_rect(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c)
 /* a divider (LINE): a 1 px T_RULE line on the canvas, a cell edge for the host lint */
 static void cv_rule(int32_t x, int32_t y, int32_t w, int32_t h)
 {
-    GFX_HOOK_CELL(x, y + cv_oy, x + w, y + h + cv_oy);
+    if (CV_HK(y + CV_OY, y + h + CV_OY)) GFX_HOOK_CELL(x, y + CV_OY, x + w, y + h + CV_OY);
     cv_rect(x, y, w, h, T_RULE);
 }
 
@@ -360,7 +367,7 @@ static uint32_t rr_cov(int32_t r, int32_t i, int32_t j)
 static void cv_rrect(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, uint16_t c, uint16_t under)
 {
     int32_t i, j;
-    GFX_HOOK_CELL(x, y + cv_oy, x + w, y + h + cv_oy);   /* (the lint: what is drawn on it stays inside it) */
+    if (CV_HK(y + CV_OY, y + h + CV_OY)) GFX_HOOK_CELL(x, y + CV_OY, x + w, y + h + CV_OY);   /* (the lint: what is drawn on it stays inside it) */
     if (r < 0) r = -r;                           /* (-r: rounded in every style: a keycap-like cushion) */
     else if (ux.style == ST_LINE) r = 0;         /* LINE: square cursors, selections and fills (FLAT: rounded) */
     if (r > w / 2) r = w / 2;
@@ -438,7 +445,7 @@ static const uint16_t *ramp(uint16_t fg, uint16_t bg)
 static void cv_alpha(int32_t x, int32_t y, uint32_t w, uint32_t h, const uint8_t *d, const uint16_t *rv)
 {
     uint32_t k = 0, gx, gy;
-    y += cv_oy;
+    y += CV_OY;
     for (gy = 0; gy < h; gy++) {
         int32_t py = y + (int32_t)gy;
         uint16_t *row;
@@ -488,7 +495,7 @@ static void cv_alpha_hc(int32_t x, int32_t y, uint32_t w, uint32_t h, const uint
 {
     const uint16_t *lut = hc_lut(hc);
     uint32_t gy, v = 0, run = 0, acc = 0, nb = 0;
-    y += cv_oy;
+    y += CV_OY;
     for (gy = 0; gy < h; gy++) {
         int32_t py = y + (int32_t)gy;
         uint16_t *row = py < cv_cy0 || py >= cv_cy1 ? 0 : cv_px + (uint32_t)py * cv_w;
@@ -656,15 +663,16 @@ static int32_t cv_text_flags(int32_t x, int32_t y, const aafont_t *f, const char
     int32_t b[4], pen = text_run(x, y, f, s, ramp(fg, bg), b);
     if (GFX_HOOKS && b[2] > b[0]) {
         int32_t y0 = b[1], y1 = b[3];
-        if (b[0] < 0 || b[2] > (int32_t)cv_w || y0 + cv_oy < cv_cy0 || y1 + cv_oy > cv_cy1)
+        if (b[0] < 0 || b[2] > (int32_t)cv_w || y0 + CV_OY < cv_cy0 || y1 + CV_OY > cv_cy1)
             flags |= 2u;                             /* cut by the canvas */
         if (cv_scroll) {                             /* a scrolled view: what lands on the screen is its visible part */
             flags |= 32u;
-            if (y0 + cv_oy < cv_cy0) y0 = cv_cy0 - cv_oy;
-            if (y1 + cv_oy > cv_cy1) y1 = cv_cy1 - cv_oy;
+            if (y0 + CV_OY < cv_cy0) y0 = cv_cy0 - CV_OY;
+            if (y1 + CV_OY > cv_cy1) y1 = cv_cy1 - CV_OY;
         }
         GFX_HOOK_PEN(y, f);
-        GFX_HOOK_TEXT(b[0], y0 + cv_oy, b[2], y1 + cv_oy, s, flags);
+        if (CV_HK(y0 + CV_OY, y1 + CV_OY))
+            GFX_HOOK_TEXT(b[0], y0 + CV_OY, b[2], y1 + CV_OY, s, flags);
     }
     (void)flags;
     return x + ((pen + 8) >> 4);
@@ -794,10 +802,12 @@ static int32_t cv_keycap(int32_t x, int32_t y, uint32_t id, uint16_t fill, uint1
     const kc_t *k = &KC[id < KC_COUNT ? id : 0u];
     const uint16_t *rv = kc_ramp(under, fill, ink);
     cv_alpha(x, y, k->w, KC_H, KC_DATA + k->off, rv);
-    if (x < 0 || x + k->w > (int32_t)cv_w || y + cv_oy < 0 || y + KC_H + cv_oy > (int32_t)cv_h)
-        GFX_HOOK_TEXT(x, y + cv_oy, x + k->w, y + KC_H + cv_oy, k->label, 6u);      /* cut by the canvas */
+    if (!CV_HK(y + CV_OY, y + KC_H + CV_OY))
+        ;
+    else if (x < 0 || x + k->w > (int32_t)cv_w || y + CV_OY < 0 || y + KC_H + CV_OY > (int32_t)cv_h)
+        GFX_HOOK_TEXT(x, y + CV_OY, x + k->w, y + KC_H + CV_OY, k->label, 6u);      /* cut by the canvas */
     else
-        GFX_HOOK_TEXT(x, y + cv_oy, x + k->w, y + KC_H + cv_oy, k->label, 4u);
+        GFX_HOOK_TEXT(x, y + CV_OY, x + k->w, y + KC_H + CV_OY, k->label, 4u);
     return x + k->w;
 }
 

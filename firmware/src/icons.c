@@ -79,7 +79,8 @@ static int32_t cv_icon_on(int32_t x, int32_t y, uint32_t size, uint32_t id, uint
     cv_alpha_hc(x, y, size, size, size == 24u ? AI24_DATA + AI24_OFF[k] : size == 16u ? AI16_DATA + AI16_OFF[k] :
                 AI12_DATA + AI12_OFF[k], AI_HC, ramp(fg, bg));
     GFX_HOOK_ICON(x, y, size, id);
-    GFX_HOOK_TEXT(x, y + cv_oy, x + (int32_t)size, y + cv_oy + (int32_t)size, "icon", 4u);
+    if (CV_HK(y + CV_OY, y + CV_OY + (int32_t)size))
+        GFX_HOOK_TEXT(x, y + CV_OY, x + (int32_t)size, y + CV_OY + (int32_t)size, "icon", 4u);
     return (int32_t)size;
 }
 /* the same, its ink centred across x .. x + w (w 0: the cell at x) and up and down in y .. y + h (h 0: the cell at y);

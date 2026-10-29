@@ -2246,7 +2246,7 @@ static void knob_arc(int32_t x, int32_t y, int32_t r, const uint8_t *cov, const 
                 continue;
             for (m = 0; m < 4; m++) {                /* top right, bottom right, bottom left, top left */
                 int32_t s = m == 0 ? q : m == 1 ? 512 - q : m == 2 ? q - 512 : -q;
-                int32_t px = m < 2 ? x + r + i : x + r - 1 - i, py = (m == 0 || m == 3 ? y + r - 1 - j : y + r + j) + cv_oy;
+                int32_t px = m < 2 ? x + r + i : x + r - 1 - i, py = (m == 0 || m == 3 ? y + r - 1 - j : y + r + j) + CV_OY;
                 if (s < -ka_end || s > ka_end || (uint32_t)px >= cv_w || (uint32_t)py >= cv_h)
                     continue;
                 cv_px[(uint32_t)py * cv_w + (uint32_t)px] = (s >= lo && s <= hi ? rv : rt)[a];
@@ -2978,7 +2978,7 @@ static void graph_scope(uint16_t c)
 {
     int16_t *snap = ui_tmp;                          /* (Dah: fx.c's scratch) */
     uint32_t w = scope_w, i, trig = 0;
-    int32_t cy = (int32_t)cv_h / 2, py = cy, x, peak = 1500, a = cv_h >= H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
+    int32_t fh = cv_split ? cv_split_h : (int32_t)cv_h, cy = fh / 2, py = cy, x, peak = 1500, a = fh >= (int32_t)H_GRAPH ? 46 : cy - 6;   /* (LARGE: the strip) */
     for (i = 0; i < SCOPE_N; i++) {
         snap[i] = scope_buf[(w + i) & (SCOPE_N - 1u)];
         if (snap[i] > peak)
@@ -3372,30 +3372,17 @@ lists:
     ui.graph_sig = sig;
     gh = graph_h() < CV_MAX / 240u ? graph_h() : CV_MAX / 240u;   /* (Dah: HOME's panel taller than the canvas: its
                                                          * graphs and lists to the canvas' foot, BG under it) */
-    if (gh < graph_h() && !ui.home && pg->graph == GR_SONG && strip_kind() == SK_NONE && !tl_on() && !pl_on()) {
-        /* (Dah) SONG to the panel's foot, taller than the canvas: drawn twice, the top then the rest (cv_oy), cut
-         * between two lanes */
-        int32_t cut, k, tot = (int32_t)graph_h();
-        sg_lh = (tot - SG_Y - 2) / (int32_t)NTRK - SG_LG;
-        if (sg_lh < 11)
-            sg_lh = 11;
-        for (cut = SG_LY(0), k = 1; k < (int32_t)NTRK && SG_LY(k) <= (int32_t)gh; k++)
-            cut = SG_LY(k);
-        for (k = 0; k < 2; k++) {
-            int32_t y0 = k ? cut : 0, h = k ? tot - cut : cut;
-            cv_begin(240, (uint32_t)h, T_BG);
-            cv_oy = -y0;
-            cv_rrect(3, 0, 234, tot, 5, T_SURF, T_BG);
-            cv_bg = T_SURF;
-            graph_song();
-            cv_oy = 0;
-            cv_blit(0, graph_y() + (uint32_t)y0);
-        }
-        return;
-    }
-    cv_begin(240, gh, T_BG);
-    cv_rrect(3, 0, 234, (int32_t)gh, 5, T_SURF, T_BG);   /* the panel (MENU > LARGE: the strip) */
-    graph_ht = 100 + ((int32_t)gh > H_GRAPH && strip_kind() == SK_NONE ? (int32_t)gh - H_GRAPH : 0);   /* (Dah:
+    {   /* (Dah) the panel taller than the canvas (HOME's look, every page): drawn in canvases of gh rows, one under
+         * the other, each the whole graph moved up (cv_py) and clipped to it: the panel to its foot, no more RAM */
+    uint32_t tot = graph_h(), y0;
+    for (y0 = 0; y0 < tot; y0 += gh) {
+    uint32_t ph = tot - y0 < gh ? tot - y0 : gh;
+    cv_begin(240, ph, T_BG);
+    cv_split = tot > gh;
+    cv_split_h = (int32_t)tot;
+    cv_py = -(int32_t)y0;
+    cv_rrect(3, 0, 234, (int32_t)tot, 5, T_SURF, T_BG);   /* the panel (MENU > LARGE: the strip) */
+    graph_ht = 100 + ((int32_t)tot > H_GRAPH && strip_kind() == SK_NONE ? (int32_t)tot - H_GRAPH : 0);   /* (Dah:
                                                       * the panel taller, the 100 px scale's graphs stretched with it) */
     cv_bg = T_SURF;                                  /* (text drawn with cv_text lands on it) */
     cv_oy = GOY;                                     /* graphs on a 100 px scale */
@@ -3554,8 +3541,10 @@ lists:
         }
     }
     cv_oy = 0;
-    cv_blit(0, graph_y());
-    if (gh < graph_h())
-        lcd_fill(0, graph_y() + gh, 240, graph_h() - gh, T_BG);
+    cv_blit(0, graph_y() + y0);
+    }
+    cv_py = 0;
+    cv_split = 0;
+    }
     graph_ht = 100;
 }
