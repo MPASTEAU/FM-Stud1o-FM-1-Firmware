@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #ifndef FW_NAME
-#define FW_NAME "DAH"    /* this fork's name: the splash, ABOUT, the crash screen (Felucca's credits stay) */
+#define FW_NAME "FM STUDIO"/* this fork's name: the splash, ABOUT, the crash screen (Felucca's credits stay) */
 #endif
 #ifndef FW_SPLASH_MS
 #define FW_SPLASH_MS 700u        /* the power-on splash's time on the screen (main.c; Felucca's: 400; Dah: as long as the LED sweep, ~0.7 s) */
