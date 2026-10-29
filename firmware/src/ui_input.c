@@ -1820,6 +1820,7 @@ static void chain_open(void)
             str_cpy(why, FXU_N[want % FXU_N_ALL], 12);
             str_cpy(why + str_len(why), " IS SHARED\nBY ALL TRACKS", 26);
             cards_say("ON THE MASTER", why);
+            ui.msg_t = (uint8_t)(ui.msg_t + 30u);       /* (HELP's line under it: ~0.5 s more) */
         }
         n = fx_list(fx_tsel(), l);
         for (i = 0; i < n; i++)
