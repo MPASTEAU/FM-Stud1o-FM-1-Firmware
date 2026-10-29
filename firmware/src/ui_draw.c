@@ -2180,7 +2180,10 @@ static void draw_columns_in(void)
             int on = ch_cur < n && !fx_ret_fixed(ft, u[ch_cur % FXU_N_ALL]);   /* (Dah: a MASTER's return: nothing to
                                                          * move, change or mix here) */
             if (c == 0u) {                              /* (Dah) KNOB 1 the effect picked (+ ADD past the last) */
-                draw_column(0, "EFFECT", ch_cur < n ? FXU_N[u[ch_cur % FXU_N_ALL]] : "+", "", VAL(0u),
+                char no[4], of[4] = "/";               /* (Dah: its place in the list, "2 /5"; + ADD's "+") */
+                fmt_int(no, (int32_t)ch_cur + 1);
+                fmt_int(of + 1, (int32_t)n);
+                draw_column(0, "EFFECT", ch_cur < n ? no : "+", ch_cur < n ? of : "", VAL(0u),
                             n ? (int32_t)ch_cur * 1000 / (int32_t)n : -1, ICON_AUTO);
             } else if (c == 2u && on) {
                 card_span_by(span_fxu, 0, 0, FXU_N_ALL - 1, 0);
