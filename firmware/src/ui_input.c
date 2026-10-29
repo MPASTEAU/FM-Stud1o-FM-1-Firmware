@@ -2329,7 +2329,8 @@ static void ui_input(void)
                                                          * off: SAVE > TOOLS', gone) */
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
                    (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
-                   (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0)) {
+                   (ui.confirm == CF_ADD_FX && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_K1) < 0))) {   /* (Dah: SELECT or
+                                                         * KNOB 1 turned back up: NO, as OCT-) */
             if ((ui.confirm == CF_ADD_FX || ui.confirm == CF_PICK_FX) && ch_cur)   /* (Dah: no effect added: off
                                                          * + ADD, the last effect) */
                 ch_cur--;   /* (Dah: ADD TRACK: ALGO
