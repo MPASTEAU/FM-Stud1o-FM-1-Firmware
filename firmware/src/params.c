@@ -178,7 +178,8 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LTRIG] = PE("TRIG", N_LTRIG, 0),
     [P_LPOL] = PE("POL", N_LPOL, 0),
     [P_SQNT] = PE("QNTZ", N_QNT, 1),              /* ON: every step on its start, as before 1.2; 2..4 a strength */
-    [P_SPRD] = PD("SPRD", F_PCT, 0, 127, 0),      /* #148: 0 = every voice on PAN, as before (fx.c mix_spread) */
+    [P_SPRD] = PD("SPRD", F_PCT, -127, 127, 0),   /* #148: 0 = every voice on PAN, as before (fx.c mix_spread); Dah: as FL's
+                                                 * STEREO SEPARATION, below 0 merged (no voice spread: the same) */
     /* the INSERT (1.5, fx.c track_insert): TYPE OFF = as before. A B C as the editor protocol names them; the device
      * shows the type's own labels (ins_desc) */
     [P_ITYPE] = PE("INSRT", N_ITYPE, 0),

@@ -103,7 +103,8 @@ static int mom_turn(uint32_t k, int32_t s)
         if (i == 0u)
             ui_message("MOMENTARY  [OCT+] KEEP");
     }
-    *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min));
+    *vp = (int16_t)param_turn(d, *vp, accel(EN_K1 + k, vp == &TSEL->p[P_SPRD] && pg->scope == SC_TRK ? -s : s,
+                                            d->fmt == F_ENUM ? 0 : d->max - d->min));   /* (the MIXER's WIDTH: reversed) */
     return 1;
 }
 
@@ -550,9 +551,11 @@ static void tracks_edit(uint32_t slot, int32_t steps)
         vp = &t->p[P_LEVEL];
         d = &TP[P_LEVEL];
         break;
-    case 2:                                             /* (Dah) WIDTH: the voices' stereo spread, MONO .. WIDE */
+    case 2:                                             /* (Dah) WIDTH: the voices' stereo spread, as FL's STEREO
+                                                         * SEPARATION: to the left separated, to the right merged */
         vp = &t->p[P_SPRD];
         d = &TP[P_SPRD];
+        steps = -steps;
         break;
     default:
         vp = &t->p[P_PAN];

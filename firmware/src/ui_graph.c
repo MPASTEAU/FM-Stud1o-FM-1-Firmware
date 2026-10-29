@@ -2357,7 +2357,7 @@ static void mixer_strip(uint32_t c)
     uint32_t sel = c == song.sel && !mx_master, lvl = trk_level(c), arm = (song.rec >> c) & 1u, sig;
     uint32_t mute = t->p[P_MUTE] != 0 || (perf_solo && !((perf_solo >> c) & 1u));   /* (Dah: another one SOLO: grey) */
     uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u, lit = (uint32_t)midi_lit(c);
-    int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127), f, mh, x;   /* (rv: WIDTH) */
+    int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], -127, 127), f, mh, x;   /* (rv: WIDTH) */
     uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute ? T_DIM : ux.trk[c % NTRK];
     char b[16], v[8], d[2] = {(char)('1' + c), 0};
     t->peak = 0;
@@ -2368,7 +2368,7 @@ static void mixer_strip(uint32_t c)
         m = ts.meter[c] - 1;
     ts.meter[c] = (uint8_t)(m < 0 ? 0 : m);
     sig = str_hash(1u + sel + mute * 2u + arm * 4u + (uint32_t)song.playing * 8u + hot * 16u + lit * 128u, b) +
-          lvl * 7919u + ts.meter[c] * 131u + (uint32_t)(pan + 128) * 104729u + (uint32_t)rv * 1299709u + tc * 3u;
+          lvl * 7919u + ts.meter[c] * 131u + (uint32_t)(pan + 128) * 104729u + (uint32_t)(rv + 128) * 1299709u + tc * 3u;
     if (!ui.force && sig == ts.col[c])
         return;
     ts.col[c] = sig;
@@ -2404,9 +2404,14 @@ static void mixer_strip(uint32_t c)
         cv_rect(px, py, 2, ph, pc);                    /* (where it stands) */
         cv_text(gx + 2, py + 2 - AF_S_CAP_Y, &AF_S, "L", pan < -2 ? T_TEXT : T_MID);
         cv_text(gx + gw - 2 - text_w(&AF_S, "R"), py + 2 - AF_S_CAP_Y, &AF_S, "R", pan > 2 ? T_TEXT : T_MID);
-        knob_arc(MX_W / 2 - kr, ky, kr, KNOB_SMALL_COV, KNOB_SMALL_ANG, -KA_END, -KA_END + rv * 2 * KA_END / 127,
-                 T_LINE, hot == 3u ? T_TEXT : tc, bg);  /* WIDTH (Dah: not REV): from its start */
-        cv_rect(MX_W / 2 - 1, ky + kr - 1, 2, 2, rv ? tc : T_DIM);   /* (its hub) */
+        {                                              /* WIDTH (Dah: as FL's STEREO SEPARATION): from 12 o'clock,
+                                                        * separated to the left, merged (MONO) to the right */
+            int32_t a = -rv * KA_END / 127;
+            knob_arc(MX_W / 2 - kr, ky, kr, KNOB_SMALL_COV, KNOB_SMALL_ANG, a < 0 ? a : 0, a > 0 ? a : 0,
+                     T_LINE, hot == 3u ? T_TEXT : tc, bg);
+            cv_rect(MX_W / 2 - 1, ky + 1, 2, 3, T_MID);   /* (its middle: normal) */
+            cv_rect(MX_W / 2 - 1, ky + kr - 1, 2, 2, rv ? tc : T_DIM);   /* (its hub) */
+        }
     }
     cv_blit((uint32_t)(MX_X0 + (int32_t)(c + 1u) * MX_PITCH), graph_y());   /* (Dah: after the MASTER's) */
 }
@@ -2474,7 +2479,7 @@ static void draw_tracks(void)
         uint32_t arm = (song.rec >> c) & 1u, st = arm ? (song.playing ? 1u : 2u) : mute ? 3u : 0u, sig;
         uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u;   /* the knob just turned (hot_col + 1): 1 LEVEL, 2 PAN,
                                                                 * 3 REV, 4 MUTE (its badge) */
-        int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127);
+        int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127);   /* (separated only) */
         uint16_t vc;
         ux_tint(ux.trk[c]);                            /* (HA HA HE HU) each column in its track's colour */
         vc = mute ? T_DIM : T_THEME;
@@ -2486,7 +2491,7 @@ static void draw_tracks(void)
             m = ts.meter[c] - 1;                     /* falls ~2 dB a frame */
         ts.meter[c] = (uint8_t)(m < 0 ? 0 : m);
         sig = str_hash(1u + sel + st * 2u + (mute && arm) * 16u + hot * 32u, b) + lvl * 7919u +
-              ts.meter[c] * 131u + (uint32_t)(pan + 128) * 104729u + (uint32_t)rv * 1299709u + mute * 3u + sk * 0x9E37u +
+              ts.meter[c] * 131u + (uint32_t)(pan + 128) * 104729u + (uint32_t)(rv + 128) * 1299709u + mute * 3u + sk * 0x9E37u +
               lit * 15485863u;                         /* (1.5.5: MIDI IN lights the cushion) */
         if (!ui.force && sig == ts.col[c])
             continue;

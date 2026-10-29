@@ -960,8 +960,10 @@ static int32_t kc_sin(int32_t a)                        /* a: 1/1024 turn */
         i = 256 - i;
     return s * KC_SIN[i / 4];
 }
+static uint8_t knob_bip;                                /* (Dah) the next card's knob from its middle (PAN, WIDTH) */
 static void knob_card(uint32_t c, const char *label, const char *val, const char *unit, int32_t ratio, int hot)
 {
+    int bip = knob_bip;
     char key[48], nm[20];
     int32_t r = KNOB_HOME_R, bx = (COL_W - 2 * r) / 2, by = 1, cx = bx + r, cy = by + r, a1, mr = r - 1, e = HK_END;
     uint16_t tc = T_THEME;
@@ -983,8 +985,9 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     key[n + 2] = (char)('A' + ((tc >> 8) & 15u));
     key[n + 3] = (char)('A' + (tc >> 12));
     key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio * 90 / 1000));
-    key[n + 5] = (char)('0' + hot);
+    key[n + 5] = (char)('0' + hot + 2 * bip);
     key[n + 6] = 0;
+    knob_bip = 0;
     if (!ui.force && str_eq(key, ui.col[c]))
         return;
     str_cpy(ui.col[c], key, sizeof ui.col[c]);
@@ -1006,7 +1009,10 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     }
     a1 = ratio < 0 ? -e - 1 : -e + clamp(ratio, 0, 1000) * 2 * e / 1000;
     ka_end = e;
-    knob_arc(bx, by, r, KNOB_HOME_COV, KNOB_HOME_ANG, -e, a1, ux_mix(T_SURF, tc, 30), tc, T_SURF);
+    if (bip && ratio >= 0)                              /* (from 12 o'clock to it) */
+        knob_arc(bx, by, r, KNOB_HOME_COV, KNOB_HOME_ANG, a1 < 0 ? a1 : 0, a1 > 0 ? a1 : 0, ux_mix(T_SURF, tc, 30), tc, T_SURF);
+    else
+        knob_arc(bx, by, r, KNOB_HOME_COV, KNOB_HOME_ANG, -e, a1, ux_mix(T_SURF, tc, 30), tc, T_SURF);
     ka_end = KA_END;
     if (ratio >= 0) {                                   /* the mark where it stands */
         int32_t mx = cx + kc_sin(a1) * mr / 4096, my = cy - kc_sin(a1 + 256) * mr / 4096;
@@ -1070,6 +1076,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
         knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot);
         return;
     }
+    knob_bip = 0;                                       /* (cards: no knob) */
     card_mot = (uint8_t)((card_mot & ~(1u << c)) | (uint32_t)mot << c);
     if (str_eq(unit, label))
         unit = "";                                      /* "BPM 124 BPM", "USB OFF USB": the label says it */
@@ -1771,15 +1778,18 @@ static void draw_columns_in(void)
         param_format(&TP[P_PAN], t->p[P_PAN], val, &unit);
         card_mot_of(&TSEL->p[P_PAN]);
         card_span_of(&TP[P_PAN]);
+        knob_bip = 1;
         draw_column(1, "PAN", val, unit, VAL(1u), RATIO(&TP[P_PAN], t->p[P_PAN]), param_icon(&TP[P_PAN], t->p[P_PAN]));
-        if (t->p[P_SPRD] == 0 || t->p[P_SPRD] == 127) {   /* (Dah) WIDTH, its ends named */
-            str_cpy(val, t->p[P_SPRD] ? "WIDE" : "MONO", 8);
+        if (t->p[P_SPRD] == 0 || t->p[P_SPRD] == 127 || t->p[P_SPRD] == -127) {   /* (Dah) WIDTH, as FL's STEREO
+                                                         * SEPARATION: its middle and ends named */
+            str_cpy(val, !t->p[P_SPRD] ? "NORM" : t->p[P_SPRD] > 0 ? "WIDE" : "MONO", 8);
             unit = "";
         } else
             param_format(&TP[P_SPRD], t->p[P_SPRD], val, &unit);
         card_mot_of(&TSEL->p[P_SPRD]);
         card_span_of(&TP[P_SPRD]);
-        draw_column(2, "WIDTH", val, unit, VAL(2u), RATIO(&TP[P_SPRD], t->p[P_SPRD]), ICON_AUTO);
+        knob_bip = 1;                                   /* (from the middle; separated to the left) */
+        draw_column(2, "WIDTH", val, unit, VAL(2u), (127 - t->p[P_SPRD]) * 1000 / 254, ICON_AUTO);
         {
             uint32_t solo = (mix_solo >> (song.sel % NTRK)) & 1u;
             draw_column(3, "STATE", solo ? "SOLO" : t->p[P_MUTE] ? "MUTE" : "ON", "", solo || t->p[P_MUTE] ? T_ACCENT : VAL(3u),

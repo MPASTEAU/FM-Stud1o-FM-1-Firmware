@@ -68,7 +68,7 @@ static void graph_envdest(const track_t *t, uint16_t c)
 static void graph_voice(const track_t *t, uint16_t c)
 {
     uint32_t i, n = 0;
-    int32_t sw = (PANEL_W - 7 * 4) / 8, ly = graph_ht * 62 / 100, pan = t->p[P_PAN], spr = t->p[P_SPRD];
+    int32_t sw = (PANEL_W - 7 * 4) / 8, ly = graph_ht * 62 / 100, pan = t->p[P_PAN], spr = t->p[P_SPRD] > 0 ? t->p[P_SPRD] : 0;
     for (i = 0; i < NVOICE; i++) {                    /* the slots: the voices sounding, their notes */
         const voice_t *v = &t->v[i];
         int32_t x = PANEL_X0 + (int32_t)i * (sw + 4);
