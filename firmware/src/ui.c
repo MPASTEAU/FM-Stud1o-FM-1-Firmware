@@ -518,7 +518,7 @@ static void ui_say(const char *a, const char *b)
     str_cpy(ui.msg, a, sizeof ui.msg);
     n = str_len(ui.msg);
     str_cpy(ui.msg + n, b, sizeof ui.msg - n);
-    ui.msg_t = (uint8_t)(40u + 3u * str_len(ui.msg));   /* (Dah: the longer, the longer it stays: ~0.7 s + 50 ms a
+    ui.msg_t = (uint8_t)(30u + 2u * str_len(ui.msg));   /* (Dah: the longer, the longer it stays: ~0.5 s + 33 ms a
                                                          * letter) */
     ui.msg2[0] = 0;
 }
@@ -613,8 +613,8 @@ static void cards_say(const char *a, const char *b)
     ui_message(a);
     str_cpy(cards_a, ui.msg, sizeof cards_a);
     cards_b = b;
-    ui.msg_t = (uint8_t)clamp(60 + 4 * (int32_t)(str_len(a) + str_len(b)), 90, 250);   /* (Dah: by what there is to read:
-                                                         * 1 s + 65 ms a letter, 4 s at most) */
+    ui.msg_t = (uint8_t)clamp(40 + 5 * (int32_t)(str_len(a) + str_len(b)) / 2, 60, 170);   /* (Dah: by what there is to
+                                                         * read: ~0.7 s + 40 ms a letter, ~2.8 s at most) */
 }
 static void page_entered(void)
 {
