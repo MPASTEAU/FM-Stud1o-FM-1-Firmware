@@ -537,11 +537,12 @@ static void home_foot(void)
     char pn[16];
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig;
-    static const khint_t KH[4][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_SELECT, "PAT"}},   /* HOME (OCT+ held: the VIEW) */
+    static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_SELECT, "PAT"}},   /* HOME (OCT+ held: the VIEW) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}, {KC_SELECT, "FX"}},      /* an effect's page (FX: back) */
-                                     {{KC_FX, "NEXT"}, {KC_SELECT, "FX"}}};      /* .. with a second page */
-    uint32_t hk = ui.home ? 0u : cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
+                                     {{KC_FX, "NEXT"}, {KC_SELECT, "FX"}},       /* .. with a second page */
+                                     {{KC_SELECT, "TRACK"}, {KC_HOME, "HOME"}}}; /* (Dah) MIXER */
+    uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
         str_cpy(pn, "FX", sizeof pn);
     else
@@ -999,6 +1000,10 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     }
     cv_begin(COL_W, HOME_CARD_H, T_BG);
     cv_rrect(0, 0, COL_W, HOME_CARD_H, 4, T_SURF, T_BG);
+    if (!label[0] && !val[0]) {                         /* (Dah) no knob there (the MIXER's MASTER): the card bare */
+        cv_blit((uint32_t)CARD_X(c), card_y());
+        return;
+    }
     a1 = ratio < 0 ? -e - 1 : -e + clamp(ratio, 0, 1000) * 2 * e / 1000;
     ka_end = e;
     knob_arc(bx, by, r, KNOB_HOME_COV, KNOB_HOME_ANG, -e, a1, ux_mix(T_SURF, tc, 30), tc, T_SURF);
@@ -1031,7 +1036,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
         if (text_w(&AF_S, nm) <= COL_W - 4) {          /* the name under it, in the ring's opening (under its ends:
                                                          * the card's width) */
             uint32_t nl = str_len(label) < 12u ? str_len(label) : 11u;   /* (Dah: the name TEXT, its unit MID) */
-            int32_t nx = 2 + (COL_W - 4 - text_w(&AF_S, nm)) / 2;
+            int32_t nx = 2 + ink_in(&AF_S, nm, COL_W - 4);   /* (by its ink) */
             if (nl == str_len(nm))                      /* (no unit: the name alone, centred; with one, the pair) */
                 GFX_HOOK_ALIGN(2, ly, COL_W - 2, ly + AF_S_CAP_H, AL_H, "knob card label centred");
             nm[nl] = 0;

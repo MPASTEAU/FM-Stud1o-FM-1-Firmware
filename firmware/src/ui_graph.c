@@ -2378,7 +2378,7 @@ static void mixer_strip(uint32_t c)
     } else {
         cv_rrect(0, 0, MX_W, (int32_t)graph_h(), 4, bg, T_BG);
     }
-    cv_rrect(MX_W / 2 - 7, 4, 14, 13, 3, lit ? T_TEXT : tc, bg);  /* the cushion */
+    cv_rect(MX_W / 2 - 7, 4, 14, 13, lit ? T_TEXT : tc);  /* the cushion (Dah: square, as HOME's) */
     GFX_HOOK_ALIGN(MX_W / 2 - 7, 4, MX_W / 2 + 7, 17, AL_HV, "mixer strip digit centred");
     cv_text_in(MX_W / 2 - 7, 4 + CAP_IN(S, 13), 14, &AF_S, d, T_INK, lit ? T_TEXT : tc);
     if (arm)                                           /* REC (recording) / ARM: a dot */
@@ -2403,7 +2403,7 @@ static void mixer_strip(uint32_t c)
             cv_rrect(MX_W / 2 - hw, ry, 2 * hw, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
         }
     }
-    cv_blit((uint32_t)(MX_X0 + (int32_t)(c + 1u) * MX_PITCH), Y_GRAPH);   /* (Dah: after the MASTER's) */
+    cv_blit((uint32_t)(MX_X0 + (int32_t)(c + 1u) * MX_PITCH), graph_y());   /* (Dah: after the MASTER's) */
 }
 /* (Dah) the MASTER's strip before the tracks: M, the output's meter, its COMPRESSOR's reduction (ACCENT, from the top) */
 static int32_t mx_mpk;
@@ -2428,27 +2428,27 @@ static void mixer_master(uint32_t c)
         cv_rrect(1, 1, MX_W - 2, (int32_t)graph_h() - 2, 3, bg, T_TEXT);
     } else
         cv_rrect(0, 0, MX_W, (int32_t)graph_h(), 4, bg, T_BG);
-    cv_rrect(MX_W / 2 - 7, 4, 14, 13, 3, T_TEXT, bg);
+    cv_rect(MX_W / 2 - 7, 4, 14, 13, T_TEXT);
     cv_text_in(MX_W / 2 - 7, 4 + CAP_IN(S, 13), 14, &AF_S, "M", T_INK, T_TEXT);
     mh = mx_mpk * MX_FH / (TS_MH - 2);
     meter_up(MX_FX + 2, MX_FY, 7, MX_FH, mh, 0, bg);   /* the output */
     cv_rrect(MX_FX + 13, MX_FY, 7, MX_FH, 2, T_LINE, bg);   /* the reduction, from the top */
     if (gh > 1)
         cv_rect(MX_FX + 14, MX_FY + 1, 5, gh, T_ACCENT);
-    cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), Y_GRAPH);
+    cv_blit((uint32_t)(MX_X0 + (int32_t)c * MX_PITCH), graph_y());
 }
 static void draw_tracks(void)
 {
     uint32_t c, sk = strip_kind() == SK_TRK;
     if (!sk) {
         if (ui.force) {                                /* the BG between the strips only, they cover the rest (#181) */
-            lcd_fill(0, Y_GRAPH, MX_X0, (int32_t)graph_h(), T_BG);
+            lcd_fill(0, graph_y(), MX_X0, (int32_t)graph_h(), T_BG);
             for (c = 0; c < NTRK; c++)
                 ts.meter[c] = 0;
             for (c = 0; c <= trk_count(); c++) {       /* (Dah: the strips share the width; after the last, to the edge) */
                 uint32_t x = (uint32_t)(MX_X0 + (int32_t)c * MX_PITCH + MX_W);
                 if (x < 240u)
-                    lcd_fill(x, Y_GRAPH, c < trk_count() ? (uint32_t)(MX_PITCH - MX_W) : 240u - x, (int32_t)graph_h(), T_BG);
+                    lcd_fill(x, graph_y(), c < trk_count() ? (uint32_t)(MX_PITCH - MX_W) : 240u - x, (int32_t)graph_h(), T_BG);
             }
         }
         for (c = 0; c < trk_count(); c++)
