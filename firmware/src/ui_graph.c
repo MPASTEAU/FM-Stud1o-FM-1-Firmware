@@ -2082,9 +2082,14 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
         cv_free_text(ex, sy, &AF_S, fl_fx_note(i), T_MID, bg, 222 - ex);
         return;
     }
-    if ((kind == FL_SND || kind == FL_TRK) && dq < 128u && large_face_has(nm) && text_w(&AF_L, nm) <= 222 - nx) {
-        cv_text_on(nx, y + CAP_IN(L, h), &AF_L, nm, ink, bg);   /* (Dah) the sound / track in the middle: larger */
-        return;
+    if ((kind == FL_SND || kind == FL_TRK) && dq < 128u && text_w(&AF_B, nm) <= 222 - nx) {
+        const char *q = nm;
+        while (*q && glyph_at(&AF_B, fold(&AF_B, (uint8_t)*q)) >= 0)
+            q++;
+        if (!*q) {                                      /* (Dah) the sound / track in the middle: M's face larger (B) */
+            cv_text_on(nx, y + CAP_IN(B, h), &AF_B, nm, ink, bg);
+            return;
+        }
     }
     cv_free_text(nx, ty, f, nm, ink, bg, 222 - nx);
 }

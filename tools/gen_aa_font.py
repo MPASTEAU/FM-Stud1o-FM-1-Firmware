@@ -41,13 +41,14 @@ CODE = {0x2026: 0x85}                  # characters outside Latin-1 -> their one
 PHASES, PHASES_L = 4, 2                # horizontal phases per glyph (aa_raster.raster_font): S M, L
 # faces stored Huffman-coded (--huff): M and L. S, the most drawn and the least compressible (-15 %), stays
 # 2 px per byte, so the labels draw at full speed
-HUFF = [("M", "L")]
+HUFF = [("M", "L", "B")]
 # L draws only "FELUCCA", the UPDATE MODE countdown digit, the calibration's control names (panel.c
 # B_NAME / E_NAME) and MENU > LARGE's card values and page titles (ui_draw.c draw_column_tall, ui_graph.c
 # graph_title: # . / J W too; a value with another character is set in M): a sparse face of those glyphs, the
 # space as its range and the rest as extras
 # (ui_test.c checks that every L string is covered)
-L_CHARS = " #+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXY?acdefhiknorstuw"   # (Dah: "FM Stud1o", the selectors' titles)
+L_CHARS = " #+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXY?acdefhiknorstuw"
+B_CHARS = " #&'+-./0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"   # (Dah) B: M's face, larger: the selectors' row in the middle   # (Dah: "FM Stud1o", the selectors' titles)
 
 
 def preset(name):
@@ -55,7 +56,8 @@ def preset(name):
         v = str(FONTS.parent / "assets" / "fonts" / "InterTight[wght].ttf")   # SIL OFL 1.1, Google Fonts
         return [("S", v + "@400", 12, (32, 126), EXTRAS, 0.0, PHASES),
                 ("M", v + "@500", 15, (32, 126), EXTRAS, 0.0, PHASES),
-                ("L", v + "@600", 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L)]
+                ("L", v + "@600", 28, (32, 32), [ord(c) for c in L_CHARS[1:]], 0.0, PHASES_L),
+                ("B", v + "@500", 20, (32, 32), [ord(c) for c in B_CHARS[1:]], 0.0, PHASES_L)]
     if name == "standin":
         if os.path.exists(LOCAL_INTER):
             reg, med, semi = LOCAL_INTER + "#0", LOCAL_INTER + "#10", LOCAL_INTER + "#12"
