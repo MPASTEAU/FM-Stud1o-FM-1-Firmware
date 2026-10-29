@@ -2179,6 +2179,10 @@ static void confirm_text(char *a, char *b)
         str_cpy(b, "TRACK 1", 24);
         b[6] = (char)('1' + song.sel % NTRK);
         break;
+    case CF_ADD_FX:                                  /* (Dah) FX > CHAIN: + ADD reached */
+        str_cpy(a, "ADD AN EFFECT?", 24);
+        str_cpy(b, "LAST IN THE CHAIN", 24);
+        break;
     case CF_NEW_PAT:                                 /* (Dah) SELECT, GLO + ALGORITHM past the last pattern */
         str_cpy(a, "NEW PATTERN ", 24);
         fmt_int(a + str_len(a), (int32_t)k);

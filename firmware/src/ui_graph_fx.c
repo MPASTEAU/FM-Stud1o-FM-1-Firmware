@@ -195,11 +195,21 @@ static void fl_fx_label(uint32_t i, char *tag, char *nm)
         str_cpy(nm, "ADD AN EFFECT", 16);
     }
 }
+static void confirm_open(uint32_t kind, uint32_t trk);
+/* (Dah) the row picked moved (SELECT, KNOB 1): on + ADD, an effect to add asked (as ADD TRACK); no, back off it */
+static void fl_fx_at(void)
+{
+    uint8_t u[FXU_N_ALL];
+    uint32_t n = fx_list(fx_tsel(), u);
+    if (ch_cur >= n && n < fx_max(fx_tsel()) && !ui.confirm)
+        confirm_open(CF_ADD_FX, 0);
+}
 static void fl_fx_move(int32_t s)
 {
     uint32_t cur, rows = fl_fx_rows(&cur);
     ch_cur = (uint8_t)clamp((int32_t)cur + s, 0, rows ? (int32_t)rows - 1 : 0);
     ui.force = 1;
+    fl_fx_at();
 }
 /* CHAIN's actions on the row picked: ADD (a free effect, last: Dah), REMOVE, TYPE (another free one in its
  * place), MOVE (in series only: the sends are after them) */
@@ -394,7 +404,7 @@ static void graph_chain(const track_t *t, uint16_t c)
             cv_text_in(x0, y + 2 + CAP_IN(S, rh - 6), bw, &AF_S, "+ ADD", sel ? T_TEXT : T_MID, T_SURF);
         }
     }
-    cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : n < fx_max(t) ? "[OCT+] ADD AN EFFECT" : "",
+    cv_text_on(PANEL_X0, graph_ht - 12, &AF_S, ch_cur < n ? "[OCT+] ITS PAGE [REC] REMOVE" : "",
                T_MID, T_SURF);
 }
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */

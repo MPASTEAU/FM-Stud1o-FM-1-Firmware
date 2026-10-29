@@ -1451,8 +1451,10 @@ static void edit_param(uint32_t slot, int32_t steps)
         uint8_t u[FXU_N_ALL];
         track_t *ft = fx_tsel();
         uint32_t n = fx_list(ft, u), rows = n < fx_max(ft) ? n + 1u : n;
-        if (slot == 0u)
+        if (slot == 0u) {
             ch_cur = (uint8_t)clamp((int32_t)ch_cur + (steps > 0 ? 1 : -1), 0, (int32_t)rows - 1);
+            fl_fx_at();                                 /* (Dah: on + ADD, asked) */
+        }
         else if (slot == 2u)                            /* (KNOB 3 the TYPE, KNOB 2 MOVE) */
             fx_chain_type(ft, steps);
         else if (slot == 1u)
@@ -1804,12 +1806,8 @@ static void chain_open(void)
                                           PS_TRK | P_REV, 0xFF};   /* (COMP: by its title) */
     uint8_t l[FXU_N_ALL];
     uint32_t n = fx_list(fx_tsel(), l), u, i;
-    if (ch_cur >= n) {
-        if (n >= fx_max(fx_tsel()))
-            return;
-        fx_chain_add(fx_tsel());
-        ui_message("EFFECT ADDED");
-        ui.force = 1;
+    if (ch_cur >= n) {                                  /* (Dah: + ADD asks by itself, fl_fx_at; OCT+ there nothing) */
+        fl_fx_at();
         return;
     }
     u = l[ch_cur];
@@ -2222,6 +2220,9 @@ static void ui_input(void)
                 pt_delete();
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
+            } else if (kind == CF_ADD_FX) {        /* (Dah) FX > CHAIN: an effect more, last */
+                fx_chain_add(fx_tsel());
+                ui_message("EFFECT ADDED");
             } else if (kind == CF_NEW_PAT) {       /* (Dah) a new, empty pattern, every track on it */
                 int r = pattern_new_all(0);
                 if (r)
@@ -2276,7 +2277,10 @@ static void ui_input(void)
                 }
             }
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
-                   (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0))) {   /* (Dah: ADD TRACK: ALGO
+                   (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
+                   (ui.confirm == CF_ADD_FX && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_K1) < 0))) {
+            if (ui.confirm == CF_ADD_FX && ch_cur)     /* (Dah: no effect added: off + ADD, the last effect) */
+                ch_cur--;   /* (Dah: ADD TRACK: ALGO
                                                          * turned back cancels too) */
             ui.confirm = 0;
             ui.force = 1;
