@@ -175,7 +175,7 @@ static int preferences(void)
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
         host_wire[e - 47] == CHAIN_ROWS && host_wire[e - 46] == 0x55 &&
-        host_wire[e - 45] == 1 && host_wire[e - 44] == 9 &&
+        host_wire[e - 45] == 1 && host_wire[e - 44] == 1 &&   /* (Dah: the palette; favourites gone) */
         host_wire[e - 43] == 0x4d && host_wire[e - 42] == 1 &&
         host_wire[e - 41] == 64u && host_wire[e - 40] == 1 &&   /* (64 kept: 41 01 says 128) */
         host_wire[e - 39] == 0x42 && host_wire[e - 38] == 1 && host_wire[e - 37] == 3 &&
@@ -205,22 +205,15 @@ static int preferences(void)
     bad += check("out-of-range palette leaves the display unchanged", host_wire[5] == 1 && settings.palette == 7);
     a[0] = 1; a[1] = 1; request(ED_UI_SET, a, 2);
     bad += check("the retired font weight is not supported (rc 2), UI_STATE says 127",
-        host_wire[5] == 2 && host_wire[8] == 9 && host_wire[10] == 127);
+        host_wire[5] == 2 && host_wire[8] == 1 && host_wire[10] == 127);
     a[0] = 2; request(ED_UI_SET, a, 2);
     bad += check("unsupported preference is reported without applying it", host_wire[5] == 2);
+    a[0] = 3; a[1] = 1; request(ED_UI_SET, a, 2);
+    bad += check("(Dah) the favourites gone: their filter not supported (rc 2), UI_STATE says 127", host_wire[5] == 2 &&
+                 host_wire[12] == 127);
     a[0] = ENGI_DRUM; a[1] = 0; a[2] = 64; a[3] = 1;
     request(ED_FAV_SET, a, 4);
-    bad += check("FAV_SET marks DRUM as a normal engine", host_wire[5] == 3 && favorite_has(ENGI_DRUM, 0));
-    request(ED_FAV_GET, a, 4);
-    bad += check("FAV_GET reads the bounded favorite range", host_wire[5] == 0 && host_wire[10] == 1);
-    a[0] = NENGINES; a[1] = 31; request(ED_FAV_SET, a, 4);
-    bad += check("empty user slot cannot be starred", host_wire[5] == 1 && !favorite_has(NENGINES, 31));
-    up_store(31, "Saved"); request(ED_FAV_SET, a, 4);
-    bad += check("saved user slot can be starred without changing its sound", host_wire[5] == 3 && favorite_has(NENGINES, 31));
-    a[3] = 32; request(ED_FAV_GET, a, 4);
-    bad += check("favorite range cannot cross the end of user slots", host_wire[5] == 1);
-    request(ED_FAV_SET, a, 3);
-    bad += check("short favorite writes return an error without reading absent bytes", host_wire[5] == 1);
+    bad += check("  FAV_SET, FAV_GET: not supported (rc 2)", host_wire[5] == 2 && (request(ED_FAV_GET, a, 4), host_wire[5] == 2));
     bad += check("UI_STATE rejects unexpected request bytes", request(ED_UI_STATE, a, 1) == 0);
     a[0] = 0; request(ED_SONG, a, 1);
     bad += check("SONG still responds through its original command", host_wire_n > 6 && host_wire[4] == 33 && host_wire[5] == 0);

@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Sound categories (1.2, Discussion #90): every sound in the PRESETS list belongs to one, so KNOB 4 (LIST) can show
- * only the basses, the pads, .. (ui.c list_mode). Factory presets: a static table here (a letter per preset, in the
+/* Sound categories (1.2, Discussion #90): every sound belongs to one (Dah: PRESETS > LIST, which showed only one, gone;
+ * the NAME screen and the editor still set and show it). Factory presets: a static table here (a letter per preset, in the
  * engine's preset order); user presets: a byte of their record (upreset.c up_cat, set on the NAME screen when saving
  * or renaming, ui_name.c). Included by ui.c and upreset.c (the host build of the user presets needs the numbers only).
  * The numbers are stored (a user preset's record, the editor's UP_LIST / UP_GET / UP_PUT): append-only. CAT_NONE is a

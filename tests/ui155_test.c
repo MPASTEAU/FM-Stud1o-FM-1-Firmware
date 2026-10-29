@@ -377,7 +377,7 @@ static int clean_init(void)
     uint32_t r, e;
     track_t *t;
     char a[24], b[24];
-    for (r = 0; r < NENG_SHOWN; r++) {                 /* every engine one can pick: TOOLS' KNOB 2 on, CLEAN */
+    for (r = 0; r < NENG_SHOWN; r++) {                 /* every engine one can pick: EDIT + F5, CLEAN (Dah: TOOLS gone) */
         step_t st[NSTEP];
         ui_power_on();
         song.playing = 0;
@@ -387,12 +387,9 @@ static int clean_init(void)
         dress(t);
         my_steps(t);
         memcpy(st, t->step, sizeof st);
-        go_page(GR_TOOLS); frame();
-        turn(EN_K2, 1);
-        ok &= ui.act == 2u && str_eq(act_name(1), "INIT");
-        turn(EN_K2, 1);
-        ok &= ui.act == 2u && str_eq(act_name(1), "CLEAN");
-        press(B_OCTUP);
+        go_home(); frame();
+        lay_combo(B_EDIT, white(LY_CLEAN));
+        key_up(white(LY_CLEAN)); btn_up(B_EDIT); frame();
         ok &= ui.confirm == CF_CLEAN_SOUND;
         press(B_OCTUP);
         ok &= !ui.confirm && msg_is("CLEAN INIT") && !memcmp(st, t->step, sizeof st);
@@ -412,17 +409,13 @@ static int clean_init(void)
     t = TSEL;
     set_engine(ENGI_FM6);
     dress(t);
-    go_page(GR_TOOLS); frame();
-    turn(EN_K2, 1); turn(EN_K2, 1); turn(EN_K2, -1);
-    ok = ui.act == 2u && str_eq(act_name(1), "INIT");   /* (left: back to INIT, then none) */
-    turn(EN_K2, -1);
-    ok &= ui.act == 0u;
-    turn(EN_K2, 1);
-    press(B_OCTUP);
-    ok &= ui.confirm == CF_INIT_SOUND;
+    go_home(); frame();
+    lay_combo(B_EDIT, white(LY_INIT));
+    key_up(white(LY_INIT)); btn_up(B_EDIT); frame();
+    ok = ui.confirm == CF_INIT_SOUND;
     press(B_OCTUP);
     ok &= msg_is("SOUND INIT") && t->p[P_E7] == 0 && t->p[P_DLY] == ENGINES[ENGI_FM6]->presets[0].fx[2] - 1;
-    bad += check("  TOOLS' KNOB 2: right INIT, right again CLEAN, left back; INIT as before (the first preset, its sends)", ok);
+    bad += check("  EDIT + E5: INIT as before (the first preset, its sends)", ok);
 
     ui_power_on();
     go_home(); frame();
@@ -434,9 +427,7 @@ static int clean_init(void)
     dress(TSEL);
     press(B_OCTUP);
     ok &= msg_is("CLEAN INIT") && clean_is(TSEL, TSEL->eng_req, 77, -30);
-    go_page(GR_TOOLS);
-    ok &= str_eq(help_page(), "[K2]INIT, CLEAN[K3]DEL TRK[OCT+]DO") && help_fits(help_page());
-    bad += check("  EDIT + the key after INIT (F5): the dialog \"CLEAN INIT SOUND?\"; TOOLS' HELP hint", ok);
+    bad += check("  EDIT + the key after INIT (F5): the dialog \"CLEAN INIT SOUND?\"", ok);
     return bad;
 }
 

@@ -301,10 +301,6 @@ static void up_boot(void)                      /* persist_boot: the banks from f
 #endif
     upf_boot();                                  /* (after the banks: it may move the retired FM6 bank's patches) */
     fvb_boot();                                  /* FM6's voice bank: a staged one finished, its voices */
-#ifdef FELUCCA_FAVORITES
-    for (uint32_t k = 0; k < UP_SLOTS; k++)
-        if (!up_used(k)) favorite_set(NENGINES, k, 0);
-#endif
 }
 
 /* record k = *r (0: erase), then the bank to flash: 0 ok, 1 bad slot, 2 flash error or the transport runs (nothing
@@ -347,9 +343,6 @@ static int up_put(uint32_t k, const up_rec_t *r)
     }
 #endif
     if (!r) {
-#ifdef FELUCCA_FAVORITES
-        if (favorite_set(NENGINES, k, 0)) settings_save();
-#endif
         uint32_t i;
         for (i = 0; i < NTRK; i++)
             if (trk[i].user == k + 1u)

@@ -81,7 +81,7 @@ static int mom_turn(uint32_t k, int32_t s)
         d = &TP[MIX_ID[k & 3u]];
     } else {
         if (act_cols() || lock_held() || !(pg->scope == SC_TRACK || pg->scope == SC_ENGINE || pg->scope == SC_GLOBAL) ||
-            pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_BROWSE || pg->graph == GR_USER ||
+            pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_USER ||
             pg->graph == GR_PATS || (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u))
             return 0;
         d = page_desc(pg, k, &vp);
@@ -721,8 +721,7 @@ static int rec_tap(void)                                /* 1: the arming changed
     if (song.rec) {                                     /* (Dah) armed (this track or another): REC disarms them all, on
                                                          * every page; the LED goes out (a list page deletes when none is) */
         song.rec = 0;
-        ui.force = 1;
-        ui_message("REC OFF");
+        ui.force = 1;                                   /* (Dah: no message, the header's dot says it) */
         return 1;
     }
     if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
@@ -777,17 +776,21 @@ static int rec_tap(void)                                /* 1: the arming changed
     song.rec ^= bit;
     ui.force = 1;                                     /* also refresh the status on MENU / ABOUT */
     if ((song.rec & bit) && !song.playing && !seq_counting() && grid_on()) {
-        ui_message("KEYS WRITE STEPS");               /* (Dah: the DRUM grid: armed, the keys are the steps) */
+        if (help_on())                                  /* (Dah: what the keys do now: HELP's) */
+            ui_message("KEYS WRITE STEPS");               /* (Dah: the DRUM grid: armed, the keys are the steps) */
         return 1;
     }
     if ((song.rec & bit) && !song.playing && !seq_counting() && roll_on()) {
-        ui_message(ui_prefs2 & (PREF_CHORD_ADD >> 16) ? "KEYS ADD TO STEP" : "KEYS WRITE STEPS");   /* step recording:
+        if (help_on())
+            ui_message(ui_prefs2 & (PREF_CHORD_ADD >> 16) ? "KEYS ADD TO STEP" : "KEYS WRITE STEPS");   /* step recording:
                                                          * stopped, at the cursor (CHORD ENTRY ADD: adding) */
         return 1;
     }
     if ((song.rec & bit) && !song.playing && !seq_counting())
         transport_req = 1;
-    if ((song.rec & bit) && grid_on())
+    if (!help_on())
+        ;
+    else if ((song.rec & bit) && grid_on())
         ui_message("LANE KEYS RECORD");               /* (the white keys stay the steps) */
     else if ((song.rec & bit) && !ui.home && cur_page()->graph == GR_ROLL)
         ui_message("KEYS RECORD LIVE");               /* (seq_entry pauses while armed and playing) */
@@ -1340,23 +1343,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         tracks_edit(slot, steps);
         return;
     }
-    if (pg->graph == GR_BROWSE) {                         /* KNOB 1: one preset, KNOB 2: the next / previous engine */
-        if (slot == 0u) {
-            preset_step(steps);
-        } else if (slot == 1u) {
-            select_engine(eng_step(TSEL->eng_req, steps));
-        } else if (slot == 2u) {
-            preset_mark(steps > 0);
-        } else if (slot == 3u) {                          /* LIST: ALL FAV BASS .. OTHER (ui.c list_mode), no wrap */
-            uint32_t m = (uint32_t)clamp((int32_t)list_mode() + steps, 0, (int32_t)LIST_N - 1);
-            if (m != list_mode()) {
-                list_set(m);
-                ui.force = 1;
-                settings_later();                         /* (#197: not on every detent; ui.c) */
-            }
-        }
-        return;
-    }
 #if FELUCCA_SLICE
     if (pg->graph == GR_SLICES && slot < 2u) {           /* SLICES: KNOB 1 the marker, 2 moves it (ui_slice.c) */
         if (slice_page_ok())                              /* (the engine changed before ui_draw left the page) */
@@ -1364,17 +1350,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
 #endif
-    if (pg->graph == GR_TOOLS && slot == 1u) {           /* TOOLS' KNOB 2 (1.5.5, #190): right INIT, on CLEAN INIT; */
-        if (steps > 0) {                                  /* left back, then none */
-            ui.tl_clean = ui.act == 2u;
-            ui.act = 2;
-        } else if (ui.act == 2u && ui.tl_clean) {
-            ui.tl_clean = 0;
-        } else if (ui.act == 2u) {
-            ui.act = 0;
-        }
-        return;
-    }
     if ((act_cols() >> slot) & 1u) {                      /* an action's knob picks it (right) or drops it (left); */
         if (pg->graph != GR_PATS)                         /* OCT+ does it (act_do) */
             ui.act = steps > 0 ? (uint8_t)(slot + 1u) : ui.act == slot + 1u ? 0u : ui.act;
@@ -1510,16 +1485,6 @@ static void act_do(void)
         ev_oct();
         return;
     }
-    if (cur_page()->graph == GR_TOOLS) {
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return; }
-        if (!act_ready()) {                               /* nothing there to clear or delete */
-            ui_message(c == 2u ? "ONE TRACK AT LEAST" : "NOTHING TO CLEAR");
-            return;
-        }
-        confirm_open(c == 0u ? CF_CLEAR_SEQ : c == 1u ? (ui.tl_clean ? CF_CLEAN_SOUND : CF_INIT_SOUND) :
-                     c == 2u ? CF_DEL_TRACK : CF_CLEAR_SONG, c == 2u ? trk_count() - 1u : song.sel);
-        return;
-    }
     if (cur_page()->graph == GR_SONG) {                 /* (Dah) a section to add or to delete: done; else the VIEW is
                                                          * OCT+ held (ui_input) */
         uint32_t r = sg_prow, n = chain_config.count;
@@ -1616,22 +1581,13 @@ static void act_do(void)
     case G_LOAD:
         project_load(k);
         break;
-    case G_SAVE:                                          /* the NAME screen writes it */
+    default:                                              /* G_SAVE: the NAME screen writes it */
         if (transport_busy())
             ui_message("STOP TO SAVE");
         else if (project_used(k))
             confirm_open(CF_OVR_PROJ, k);
         else
             name_open(NK_PROJ_SAVE, k);
-        break;
-    case G_CLRSEQ:
-        if (chain_busy()) { ui_message("STOP TO EDIT"); break; }
-        confirm_open(CF_CLEAR_SEQ, song.sel);
-        break;
-    default:                                              /* G_INITSND */
-        set_engine(TSEL->eng_req);                        /* engine defaults + its first preset (the steps stay) */
-        ui_message("SOUND INIT");
-        ui.force = 1;
         break;
     }
 }
@@ -1787,7 +1743,7 @@ static void presets_turn(int32_t s)
         nudge_turn(held, s);
         return;
     }
-    if (ui.home || g == GR_BROWSE) {
+    if (ui.home) {
         preset_step(s);
     } else if (pg->id[0] == P_FXORD && pg->fam == FAM_FX) {   /* (Dah) CHAIN: its list */
         edit_param(0, s);
@@ -1798,7 +1754,7 @@ static void presets_turn(int32_t s)
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
-    } else if (g != GR_TOOLS && g != GR_SLICES) {     /* (Dah) the sound, on every page (its list shown ~1 s) */
+    } else if (g != GR_SLICES) {     /* (Dah) the sound, on every page (its list shown ~1 s) */
         preset_step(s);
     }
 }
@@ -2159,7 +2115,7 @@ static void ui_input(void)
     rp_apply();                                         /* (MENU > CLICK, CLICK LEVEL, COUNT-IN: click.c, seq.c) */
     if (!ui.menu)
         usb_serial_apply();                             /* (MENU > USB SERIAL: when the menu has closed) */
-    settings_later_poll();                              /* (#197: LIST / FAV written once the view is left or idle) */
+    settings_later_poll();                              /* (#197: a knob's settings written once the view is left or idle) */
     follow_poll();                                      /* (1.6, #242: SEQ's roll follows the play position) */
     if (scr_input(pressed, notes))                      /* MENU > SCREEN OFF: dark, or the wake gesture: swallowed */
         return;                                         /* (before the buttons' timers: no tap or hold after it) */
@@ -2351,8 +2307,6 @@ static void ui_input(void)
                     tl_ms = fm1_ms | 1u;            /* (its list again, the new one in the middle) */
                     tl_pat = 1;
                 }
-            } else if (kind == CF_DEL_TRACK) {
-                track_remove_last();
             } else if (kind == CF_OPEN_ARCH) {
                 (void)project_open(ui.confirm_trk);
             } else if (kind == CF_DEL_ARCH) {
@@ -2375,27 +2329,12 @@ static void ui_input(void)
                     if (ui.song_row > chain_config.count) ui.song_row = chain_config.count;
                     ui_message("SECTION DELETED");
                 }
-            } else if (kind == CF_CLEAR_SONG) {
-                if (!chain_busy()) { chain_defaults(&chain_config); ui.song_row = 0; ui_message("SONG CLEARED"); }
             } else if (kind == CF_INIT_SOUND) {
                 if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
                 if (!chain_busy()) { clean_engine(); ui_message("CLEAN INIT"); }
-            } else {
-                track_t *t = &trk[ui.confirm_trk % NTRK];
-                load_begin(t, UNDO_PAT);
-                track_defaults_steps(t);
-                load_end(t);
-                t->nheld = 0;                           /* and the latched arp chord */
-                t->arp_phys = 0;
-                if (kind == CF_CLEAR_TRK) {
-                    char b[12] = "1 CLEARED";
-                    b[0] = (char)('1' + ui.confirm_trk);
-                    ui_say("TRACK ", b);
-                } else {
-                    ui_message("PATTERN CLEARED");
-                }
-            }
+            }                                           /* (Dah: CLEAR T1 SEQUENCE / TRACK, SONG ORDER, the last track
+                                                         * off: SAVE > TOOLS', gone) */
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
                    (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
                    (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0)) {

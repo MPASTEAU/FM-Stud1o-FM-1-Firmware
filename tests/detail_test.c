@@ -340,8 +340,8 @@ static int step_unchanged(void)
     ui.force = 1;
     frame();
     x = 35 + 2 * 12 + 6;                              /* (ui_graph.c PR_X0, PR_CW: over step 3's column) */
-    a = host_screen[(uint32_t)(graph_y() + 3) * 240u + (uint32_t)x];
-    b = host_screen[(uint32_t)(graph_y() + 3) * 240u + (uint32_t)(x + 12)];
+    a = host_screen[(uint32_t)(graph_y() + 12) * 240u + (uint32_t)x];   /* (Dah: under the ruler's ticks) */
+    b = host_screen[(uint32_t)(graph_y() + 12) * 240u + (uint32_t)(x + 12)];
     ok = a != b && step_detailed(&t->step[2]) && !step_detailed(&t->step[3]);
     bad += check("  a step with a CHANCE is marked over its column on the roll (its neighbour not)", ok);
     return bad;

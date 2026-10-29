@@ -123,9 +123,10 @@ static int32_t bar_x(uint32_t i) { return 12 + (int32_t)(i % 16u) * 13 + (int32_
  * the view: a 1 px mark on the edge. The cursor: a TEXT column frame; the playhead: a 1 px ACCENT line. The view
  * (proll.lo, the bottom row) fits the notes of the page, else centres on the cursor's note, and follows in steps (a
  * third of the way per frame); graph_signature() holds it, so a page that does not change is not drawn again. */
-#define PR_ROWS 19                                  /* semitones shown (Dah: 19, the ruler under them) */
-#define PR_RH 5                                     /* px per row */
-#define PR_Y0 9                                     /* the top row (canvas y) */
+static int32_t pr_rows = 19, pr_rh = 5;             /* (Dah) as the panel's height allows (graph_roll) */
+#define PR_ROWS pr_rows                             /* semitones shown (the ruler under them) */
+#define PR_RH pr_rh                                 /* px per row */
+#define PR_Y0 18                                    /* the top row (canvas y; Dah: the ruler over it, as HOME's) */
 #define PR_X0 35                                    /* the first step column */
 #define PR_CW 12                                    /* px per step */
 #define PR_KX 24                                    /* the keyboard strip, 9 px */
@@ -272,7 +273,11 @@ static void graph_roll(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN], base = prv_base(t), nc = prv_cols(), ncol, mask = scale_mask(t), held = pr_held();
     uint64_t locks = motion_lock_steps(trk_index(t));
-    int32_t r, ybot = PR_Y0 + PR_ROWS * PR_RH, gw, cw = (int32_t)(195u / nc);
+    int32_t r, ybot, gw, cw = (int32_t)(195u / nc), full = cv_split ? cv_split_h : (int32_t)cv_h;
+    pr_rh = full >= 140 ? 6 : 5;                    /* (Dah: the roll to the panel's foot, its ruler over it) */
+    pr_rows = (full - PR_Y0 - 4) / pr_rh;
+    pr_rows = pr_rows < 19 ? 19 : pr_rows > 24 ? 24 : pr_rows;
+    ybot = PR_Y0 + PR_ROWS * PR_RH;
     char nb[8];
     ncol = base < len ? (len - base < nc ? len - base : nc) : 0u;
     gw = prv_x(ncol) - PR_X0 + 1;
@@ -303,22 +308,21 @@ static void graph_roll(const track_t *t, uint16_t c)
         if (cw >= 4 || si % 4u == 0u)
             cv_rect(prv_x(i), PR_Y0, 1, ybot - PR_Y0, si % 16u == 0u ? T_MID : si % 4u ? T_GRID : T_RAISE);
     }
-    {                                                 /* (Dah) the ruler: a tick a step, the beats taller, the bars
-                                                       * numbered */
-        int32_t ry = ybot + 1, last = -100;
+    {                                                 /* (Dah) the ruler on top, as HOME's: the whole pattern a line,
+                                                       * the view on it a bar, the step playing a mark; a tick a step
+                                                       * (the beats taller); the step playing's number on it, last */
+        int32_t x0 = PR_X0 + (int32_t)(base * 195u / (len ? len : 1u)), x1 = PR_X0 + (int32_t)((base + ncol) * 195u / (len ? len : 1u));
+        cv_rect(PR_X0, 1, 195, 1, T_LINE);
+        cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
+        if (song.playing && t->seq_idx < len)
+            cv_rect(PR_X0 + (int32_t)(t->seq_idx * 195u / len), 0, 2, 3, T_ACCENT);
         for (i = 0; i < ncol; i++) {
             uint32_t si = base + i;
             int32_t x = prv_x(i);
-            if (si % 16u == 0u) {
-                char bn[4];
-                cv_rect(x, ry, 1, 6, T_MID);
-                fmt_int(bn, (int32_t)(si / 16u) + 1);
-                if (x > last)
-                    last = cv_text_on(x + 2, ry + 1 - AF_S_CAP_Y, &AF_S, bn, T_DIM, T_SURF) + 2;
-            } else if (si % 4u == 0u)
-                cv_rect(x, ry, 1, 3, T_RAISE);
+            if (si % 4u == 0u)
+                cv_rect(x, 9, 1, 3, si % 16u == 0u ? T_MID : T_RAISE);
             else if (cw >= 4)
-                cv_rect(x, ry, 1, 1, T_GRID);
+                cv_rect(x, 11, 1, 1, T_GRID);
         }
     }
     for (i = 0; i < ncol; i++) {
@@ -329,7 +333,7 @@ static void graph_roll(const track_t *t, uint16_t c)
         if ((locks >> si) & 1u)                       /* a parameter lock: a mark over the step */
             cv_rect(x + 1, PR_Y0 - 3, cw - 1, 1, T_ACCENT);
         if (step_detailed(&seq_steps(t)[si]))         /* 1.5.1: CHANCE / RATCH / NUDGE set: a mark over it (DETAIL) */
-            cv_rect(x + cw / 2 - 2, 2, cw - 1 < 5 ? cw - 1 : 5, 2, c);
+            cv_rect(x + cw / 2 - 2, 12, cw - 1 < 5 ? cw - 1 : 5, 2, c);
     }
     for (i = 0; i < ncol; i++) {                      /* the notes */
         uint32_t si = base + i, s = pr_src(t, si, len), nx = (si + 1u) % len;
@@ -354,8 +358,14 @@ static void graph_roll(const track_t *t, uint16_t c)
     if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the playhead, gliding through
                                                          * the step (its samples so far of the step's) */
         uint32_t ss = div_samples((uint32_t)t->p[P_SDIV]), f = ss ? ((t->seq_pos >> 8) * 64u / ss) : 0u;
-        int32_t x = prv_x(t->seq_idx - base) + (int32_t)((uint32_t)cw * (f > 64u ? 64u : f) / 64u);
-        cv_rect(x, PR_Y0, 2, ybot - PR_Y0 + 6, T_ACCENT);
+        int32_t x = prv_x(t->seq_idx - base) + (int32_t)((uint32_t)cw * (f > 64u ? 64u : f) / 64u), w, ib[4], nx;
+        cv_rect(x, PR_Y0, 2, ybot - PR_Y0, T_ACCENT);
+        fmt_int(nb, (int32_t)t->seq_idx + 1);          /* (Dah) its number on the ruler, centred on its column */
+        w = text_w(&AF_S, nb);
+        text_ink(&AF_S, nb, ib);
+        nx = clamp((2 * prv_x(t->seq_idx - base) + cw - (ib[0] + ib[2])) / 2, PR_X0, 230 - w);
+        cv_rect(nx - 1, 4, w + 2, 10, T_SURF);
+        cv_text_on(nx, 4 - AF_S_CAP_Y, &AF_S, nb, T_ACCENT, T_SURF);
     }
 }
 /* SEQ > STEP on a DRUM track: the grid, 8 lanes x the 16 steps of the page shown. Lanes by their two-letter
@@ -363,48 +373,82 @@ static void graph_roll(const track_t *t, uint16_t c)
  * accent; a RATCH step's: its 2..4 parts as bars), an empty step a dot (brighter on the beats and on the selected lane); the selected lane is
  * underlaid RAISE, the cursor framed in TEXT; a TEXT bar over the step playing. 1.4.1: a muted lane (the EDIT layer's
  * black keys, eng_drum.c drum_mute): its name DIM, the MUTE icon after it, its hits DIM */
+#define GD_RH 14                                    /* (Dah) the ruler on top, as HOME's */
+#define GD_X0 40                                    /* the first step's column (12 px each) */
+static int32_t gd_lp = 14;                          /* (Dah) a lane's pitch: the panel shared by the eight */
 static void graph_grid(const track_t *t, uint16_t c)
 {
-    uint32_t l, i, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, mute = drum_mute[trk_index(t) % NPART];
+    uint32_t l, i, len = (uint32_t)t->p[P_SLEN], mute = drum_mute[trk_index(t) % NPART];
+    uint32_t base = (song.playing && !prv.nofollow && t->seq_idx < len ? t->seq_idx / 16u : ui.bank) * 16u;   /* (Dah:
+                                                         * playing, the page playing, as HOME follows it) */
+    uint32_t ph = song.playing && t->seq_idx < len && t->seq_idx / 16u == base / 16u ? t->seq_idx % 16u : 0xFFu;
     uint64_t locks = motion_lock_steps(trk_index(t));
-    int32_t y0 = 6;
-    for (i = 0; i < 16u && base + i < len; i++) {   /* a parameter lock: a mark over the step; CHANCE / RATCH / */
-        if ((locks >> (base + i)) & 1u)               /* NUDGE set (1.5.1, DETAIL): a dot under it */
-            cv_rect(41 + (int32_t)i * 12, 1, 8, 2, T_ACCENT);
-        if (step_detailed(&seq_steps(t)[base + i]))
-            cv_rect(43 + (int32_t)i * 12, 3, 4, 2, c);
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, y0 = GD_RH + 2, hs;
+    (void)c;
+    gd_lp = clamp((full - y0 - 2) / (int32_t)NLANE, 14, 20);
+    hs = gd_lp - 5;                                 /* a hit: a square in its lane's middle */
+    {   /* (Dah) the ruler, as HOME's: the whole pattern a line, this page of 16 on it a bar, the step playing a mark;
+         * a tick a step, the beats taller; marks: a lock (ACCENT), a step's DETAIL (THEME); the step playing's number */
+        int32_t x0 = GD_X0 + (int32_t)(base * 192u / (len ? len : 1u));
+        int32_t x1 = GD_X0 + (int32_t)((base + 16u < len ? base + 16u : len) * 192u / (len ? len : 1u));
+        cv_rect(GD_X0, 1, 192, 1, T_LINE);
+        cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
+        if (song.playing && t->seq_idx < len)
+            cv_rect(GD_X0 + (int32_t)(t->seq_idx * 192u / len), 0, 2, 3, T_ACCENT);
+        for (i = 0; i < 16u && base + i < len; i++) {
+            int32_t x = GD_X0 + (int32_t)i * 12;
+            cv_rect(x + 5, i % 4u == 0u ? 8 : 10, 1, i % 4u == 0u ? 3 : 1, i % 4u == 0u ? T_MID : T_GRID);
+            if ((locks >> (base + i)) & 1u)
+                cv_rect(x + 1, 12, 8, 1, T_ACCENT);
+            if (step_detailed(&seq_steps(t)[base + i]))
+                cv_rect(x + 3, 13, 4, 2, T_THEME);
+        }
     }
     for (l = 0; l < NLANE; l++) {
-        int32_t y = y0 + 4 + (int32_t)l * 14;
+        int32_t ly = y0 + (int32_t)l * gd_lp, lh = gd_lp - 1, hy = ly + (lh - hs) / 2;
         int sel = l == ui.lane, mu = (mute >> l) & 1u;
-        uint16_t row = sel ? T_RAISE : T_SURF, hc = mu ? T_DIM : ux.drum[l], ac = mu ? T_DIM : T_ACCENT;   /* (HA HA HE HU:
-                                                         * each lane's hits in its own colour; c unused) */
-        if (sel) {
-            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS, "drum lane fill centred");
-            cv_rrect(6, y, 228, 14, 3, T_RAISE, T_SURF);   /* (6 .. 234, as a list row; the hits 40 .. 230) */
+        uint16_t lc = ux.drum[l], row = sel ? ux_mix(T_SURF, lc, 16) : T_SURF, hc = mu ? T_DIM : lc, ac = mu ? T_DIM : T_ACCENT;
+        if (sel) {                                   /* (Dah) the lane picked as HOME's track: tinted, framed in its
+                                                         * colour, a band of it at the left */
+            cv_rect(3, ly, 234, lh, row);
+            cv_frame(3, ly, 234, lh, lc);
+            cv_rect(3, ly, 3, lh, lc);
         }
-        GFX_HOOK_ALIGN(0, y + 2, 0, y + 12, AL_V, "drum lane label on its hits' line");
-        cv_text_on(10, y - 1, &AF_S, drum_lane_abbr(t, l), mu ? T_DIM : sel ? T_ACCENT : T_MID, row);   /* ink rows 2 .. 11, as the hits */
+        GFX_HOOK_ALIGN(0, ly, 0, ly + lh, AL_V, "drum lane label on its hits' line");
+        cv_text_on(10, ly + CAP_IN(S, lh), &AF_S, drum_lane_abbr(t, l), mu ? T_DIM : sel ? T_TEXT : lc, row);
         if (mu) {                                    /* (27 .. 39: between the name and the first hit) */
-            GFX_HOOK_ALIGN(0, y, 0, y + 14, AL_V, "drum lane mute icon centred up/down");
-            cv_icon_in(27, y, 0, 14, 12, ICON_MUTE, T_DIM, row);
+            GFX_HOOK_ALIGN(0, ly, 0, ly + lh, AL_V, "drum lane mute icon centred up/down");
+            cv_icon_in(27, ly, 0, lh, 12, ICON_MUTE, T_DIM, row);
         }
         for (i = 0; i < 16u && base + i < len; i++) {
             const step_t *st = &seq_steps(t)[base + i];
             uint32_t b = 1u << l;
-            int32_t x = 40 + (int32_t)i * 12;
+            int32_t x = GD_X0 + (int32_t)i * 12;
+            uint16_t under = row;
+            if (i == ph) {                           /* the step playing: its column lit (as HOME's) */
+                under = ux_mix(row, T_TEXT, 22);
+                cv_rect(x - 1, ly + (sel ? 1 : 0), 12, lh - (sel ? 2 : 0), under);
+            }
             if ((step_lanes(st) & b) && step_ratchet(st) > 1u)
-                pr_split(x, y + 2, 10, 10, (step_accents(st) & b) ? ac : hc, step_ratchet(st));
+                pr_split(x, hy, 10, hs, (step_accents(st) & b) ? ac : hc, step_ratchet(st));
             else if (step_lanes(st) & b)
-                cv_rrect(x, y + 2, 10, 10, 2, (step_accents(st) & b) ? ac : hc, row);
+                cv_rrect(x, hy, 10, hs, 2, (step_accents(st) & b) ? ac : hc, under);
             else
-                cv_rect(x + 4, y + 6, 2, 2, i % 4u == 0u || sel ? T_MID : T_DIM);
+                cv_rect(x + 4, ly + lh / 2 - 1, 2, 2, i % 4u == 0u || sel ? T_MID : T_DIM);
             if (sel && base + i == ui.cursor)          /* the cursor: a 1 px frame */
-                cv_frame(x - 1, y + 1, 12, 12, T_TEXT);
+                cv_frame(x - 1, hy - 1, 12, hs + 2, T_TEXT);
         }
     }
-    if (song.playing && t->seq_idx < len && t->seq_idx / 16u == ui.bank)
-        cv_rect(40 + (int32_t)(t->seq_idx % 16u) * 12, y0 - 1, 10, 3, T_TEXT);
+    if (ph != 0xFFu) {                               /* (Dah) the step playing's number on the ruler, centred on it */
+        char nb[4];
+        int32_t w, ib[4], nx;
+        fmt_int(nb, (int32_t)t->seq_idx + 1);
+        w = text_w(&AF_S, nb);
+        text_ink(&AF_S, nb, ib);
+        nx = clamp((2 * (GD_X0 + (int32_t)ph * 12) + 10 - (ib[0] + ib[2])) / 2, GD_X0, 232 - w);
+        cv_rect(nx - 1, 3, w + 2, 11, T_SURF);
+        cv_text_on(nx, 4 - AF_S_CAP_Y, &AF_S, nb, T_ACCENT, T_SURF);
+    }
 }
 /* SEQ > DETAIL (1.5.1, Discussion #199): the cursor's 16 steps as four lanes, the knobs' order top to bottom, each
  * named on the left (the lane of the knob just turned in the accent): CHANCE a bar as high as the chance, RATCH the
@@ -417,9 +461,31 @@ static void graph_grid(const track_t *t, uint16_t c)
 static void graph_detail(const track_t *t, uint16_t c)
 {
     static const char *const NAME[4] = {"CHN", "RAT", "NDG", "VEL"};
-    static const uint8_t LY[4] = {4, 38, 62, 86}, LH[4] = {28, 18, 18, 28};
-    uint32_t i, l, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u, ncol;
+    static const uint8_t WT[4] = {28, 18, 18, 28};   /* (Dah) the lanes' shares of the panel under the ruler */
+    uint32_t i, l, len = (uint32_t)t->p[P_SLEN], ncol;
+    uint32_t base = (song.playing && !prv.nofollow && t->seq_idx < len ? t->seq_idx / 16u : ui.bank) * 16u;   /* (Dah:
+                                                         * playing, the page playing, as HOME follows it) */
+    uint32_t ph = song.playing && t->seq_idx < len && t->seq_idx / 16u == base / 16u ? t->seq_idx % 16u : 0xFFu;
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, LY[4], LH[4], avail, y = GD_RH + 4;
+    avail = full - y - 4 - 3 * 8;
+    for (l = 0; l < 4u; l++) {
+        LH[l] = avail * WT[l] / 92;
+        LY[l] = y;
+        y += LH[l] + 8;
+    }
     ncol = base < len ? (len - base < 16u ? len - base : 16u) : 0u;
+    {   /* (Dah) the ruler, as HOME's: the whole pattern a line, this page on it a bar, the step playing a mark; ticks */
+        int32_t x0 = SD_X0 + (int32_t)(base * 192u / (len ? len : 1u));
+        int32_t x1 = SD_X0 + (int32_t)((base + ncol) * 192u / (len ? len : 1u));
+        cv_rect(SD_X0, 1, 192, 1, T_LINE);
+        cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
+        if (ph != 0xFFu)
+            cv_rect(SD_X0 + (int32_t)(t->seq_idx * 192u / len), 0, 2, 3, T_ACCENT);
+        for (i = 0; i < ncol; i++)
+            cv_rect(SD_X0 + (int32_t)i * 12 + 6, i % 4u == 0u ? 8 : 10, 1, i % 4u == 0u ? 3 : 1, i % 4u == 0u ? T_MID : T_GRID);
+    }
+    if (ph != 0xFFu)                                 /* the step playing: its column lit (as HOME's) */
+        cv_rect(SD_X0 + (int32_t)ph * 12, GD_RH + 1, 13, full - GD_RH - 3, ux_mix(T_SURF, T_TEXT, 14));
     for (l = 0; l < 4u; l++) {
         int32_t yb = LY[l] + LH[l];
         cv_rect(SD_X0, yb, (int32_t)ncol * 12 + 1, 1, T_GRID);   /* the lane's floor */
@@ -431,12 +497,10 @@ static void graph_detail(const track_t *t, uint16_t c)
         int32_t x = SD_X0 + (int32_t)i * 12;
         uint16_t hi = si == ui.cursor ? T_ACCENT : c;
         if (si == ui.cursor)
-            cv_frame(x, 1, 13, 116, T_TEXT);
-        if (song.playing && si == t->seq_idx)
-            cv_rect(x + 6, 2, 1, 114, T_ACCENT);
+            cv_frame(x, GD_RH + 1, 13, full - GD_RH - 3, T_TEXT);
         for (l = 0; l < 4u; l++) {
             uint32_t k = SD_KIND[l];
-            int32_t v = ev_sval(st, k), y = LY[l], h = LH[l], set = v != ev_sdefv(k), bh;
+            int32_t v = ev_sval(st, k), y = LY[l], h = LH[l], set = v != ev_sdefv(k), bh, ry = y + (h - 8) / 2;
             uint16_t col;
             if (!sd_takes(st, k) && !set) {           /* nothing plays there */
                 cv_rect(x + 5, y + h - 3, 2, 2, T_DIM);
@@ -455,7 +519,7 @@ static void graph_detail(const track_t *t, uint16_t c)
                 bh = v * h / 100;
                 cv_rect(x + 2, y + h - (bh < 2 ? 2 : bh), 9, bh < 2 ? 2 : bh, col);
             } else if (k == EVK_RATCH) {
-                pr_split(x + 2, y + 5, 9, 8, col, (uint32_t)v);
+                pr_split(x + 2, ry, 9, 8, col, (uint32_t)v);
             } else if (k == EVK_NUDGE) {
                 if (set && (t->p[P_SQNT] || !ev_nudge_plays(t, st)))
                     col = T_DIM;
@@ -471,6 +535,16 @@ static void graph_detail(const track_t *t, uint16_t c)
                 cv_rect(x + 2, y + h - (bh < 2 ? 2 : bh), 9, bh < 2 ? 2 : bh, col);
             }
         }
+    }
+    if (ph != 0xFFu) {                               /* (Dah) the step playing's number on the ruler, centred on it */
+        char nb[4];
+        int32_t w, ib[4], nx;
+        fmt_int(nb, (int32_t)t->seq_idx + 1);
+        w = text_w(&AF_S, nb);
+        text_ink(&AF_S, nb, ib);
+        nx = clamp((2 * (SD_X0 + (int32_t)ph * 12) + 13 - (ib[0] + ib[2])) / 2, SD_X0, 232 - w);
+        cv_rect(nx - 1, 3, w + 2, 11, T_SURF);
+        cv_text_on(nx, 4 - AF_S_CAP_Y, &AF_S, nb, T_ACCENT, T_SURF);
     }
 }
 /* SCL: the 12 keys as rounded bars (black keys high, white keys low): in the scale THEME, the root the
@@ -1366,9 +1440,9 @@ static uint32_t graph_signature(void)
     if (tl_on() || pl_on())
         return h ^ ui.frame * 2654435761u;           /* (Dah) the tracks', the sounds' list gliding */
     if (ui.home)
-        return h ^ (pl_on() ? ui.frame * 2654435761u : ui.frame / 2u);   /* scope: every other frame (Dah: the list: each) */
+        return h ^ ui.frame / 2u;                    /* scope: every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
-    h ^= (uint32_t)pl_dy * 2654435761u + (uint32_t)tl_dy * 40503u;   /* (Dah: a list gliding: each step drawn) */
+    h ^= (uint32_t)tl_dy * 40503u;   /* (Dah: a list gliding: each step drawn) */
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
@@ -1407,8 +1481,6 @@ static uint32_t graph_signature(void)
         h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
-    if (pg->graph == GR_TOOLS)                       /* (Dah) the picked action's line */
-        h ^= (ui.act + 1u) * 2654435761u + ui.tl_clean * 7919u;
     if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
         h ^= (ps_used + 1u) * 2654435761u + (pt_sel + 1u) * 7919u + (ps_num(song.sel) + 1u) * 104729u + steps_sig(t) * 31u;
     if (pg->graph == GR_FILE)                        /* (HA HA HE HU) the projects (graph_arch_*), the one picked */
@@ -1499,25 +1571,19 @@ static void list_text(int32_t y, int sel, const char *tag, uint16_t tc, const ch
 }
 /* (Dah) a gliding list: rows' (y, tag, its colour, name) under a bar fixed in the middle: drawn plain, the bar over
  * them, then again in INK inside the bar only (the text clip) */
-typedef struct { int32_t y; char tag[6]; uint16_t tc; char nm[16]; uint8_t star; } glrow_t;
+typedef struct { int32_t y; char tag[6]; uint16_t tc; char nm[16]; } glrow_t;
 static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
 {
     uint32_t i;
     int32_t by = LIST_Y(list_n() / 2u);
     int16_t c0 = cv_cy0, c1 = cv_cy1;
     if (n && (r[0].y - 3) % 17 == 0) {                 /* (still, on the rows: plain ones, as any list) */
-        for (i = 0; i < n; i++) {
+        for (i = 0; i < n; i++)
             list_row(r[i].y, r[i].y == by, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
-            if (r[i].star)
-                cv_icon_in(214, r[i].y, 0, 16, 12, ICON_X_STAR, r[i].y == by ? T_INK : T_ACCENT, r[i].y == by ? T_THEME : T_SURF);
-        }
         return;
     }
-    for (i = 0; i < n; i++) {
+    for (i = 0; i < n; i++)
         list_text(r[i].y, 0, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
-        if (r[i].star)
-            cv_icon_in(214, r[i].y, 0, 16, 12, ICON_X_STAR, T_ACCENT, T_SURF);
-    }
     cv_rrect(6, by, 228, 16, 4, T_THEME, T_SURF);
     cv_cy0 = (int16_t)clamp(by + CV_OY, 0, (int32_t)cv_h);   /* (Dah: inside the canvas: a split panel's second one
                                                          * may not hold the bar at all) */
@@ -1575,76 +1641,6 @@ static void panel_alert(uint32_t id, const char *a)
     cv_text_on(x + bi[2] + PA_GAP - bt[0], y, &AF_M, a, T_TEXT, T_SURF);
 }
 
-/* preset browser: the global list (every engine), the current one selected; tag DIM, name TEXT,
- * favourites starred (the accent), the selected row's suggested pattern at its right */
-static void graph_browse(void)
-{
-    uint32_t total, cur = preset_pos(&total), e, k;
-    int32_t row;
-    if (!total) {
-        char b[24];
-        if (list_mode() == 1u) {
-            panel_note("NO FAVORITES", "LIST ALL TO ADD SOUNDS", 0);
-            return;
-        }
-        str_cpy(b, "NO ", sizeof b);                    /* a category with no sound (OTHER: tag your own) */
-        str_cpy(b + 3, list_name(list_mode()), sizeof b - 3);
-        str_cpy(b + str_len(b), " SOUNDS", sizeof b - str_len(b));
-        panel_note(b, "[K4] ANOTHER LIST", "TAG YOURS WHEN SAVING");
-        return;
-    }
-    if (!list_mode() && pl_dy) {                    /* (Dah) the bar fixed in the middle, the sounds gliding under it */
-        int32_t dy = glide(&pl_dy), h = (int32_t)list_n() / 2;
-        glrow_t r[13];
-        for (row = -h - 1; row <= h + 1; row++) {
-            glrow_t *g = &r[row + h + 1];
-            uint32_t i = (cur + total * 8u + (uint32_t)(row + 8) - 8u) % total;
-            g->y = LIST_Y(row + h) + dy;
-            g->tc = T_DIM;
-            e = preset_at(i, &k);
-            if (e == NENGINES) {
-                up_slot_label(g->tag, k);
-                up_name(k, g->nm);
-            } else {
-                str_cpy(g->tag, eng_abbr(ENGINES[e]->name), sizeof g->tag);
-                str_cpy(g->nm, ENGINES[e]->presets[k].name, sizeof g->nm);
-            }
-            g->star = (uint8_t)favorite_has(e, k);
-        }
-        glide_rows(r, (uint32_t)(2 * h + 3), 212);
-        if (dy)
-            return;                                 /* (gliding: the suggested pattern once there) */
-    }
-    for (row = 0; row < (int32_t)list_n(); row++) {
-        int32_t y = LIST_Y(row), x1 = 212;
-        char tag[6], nm[13], pt[4], pn[13];
-        uint32_t index = preset_visible(cur, total, (uint32_t)row);
-        int sel = index == cur;
-        int32_t hint = sel ? preset_pat_hint() : -1;    /* the suggested pattern */
-        if (index >= total) continue;
-        e = preset_at(index, &k);
-        if (e == NENGINES) {                             /* user preset: "U07" and its name */
-            up_slot_label(tag, k);
-            up_name(k, nm);
-        } else {
-            str_cpy(tag, eng_abbr(ENGINES[e]->name), sizeof tag);
-            str_cpy(nm, ENGINES[e]->presets[k].name, sizeof nm);
-        }
-        if (hint >= 0) {
-            pat_label((uint32_t)hint, pt, pn);
-            x1 = 206 - text_w(&AF_M, pt) - 6;
-        }
-        list_row(y, sel, tag, T_DIM, nm, T_TEXT, x1);
-        if (hint >= 0) {
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row text centred up/down");
-            cv_text_r(206, y + LIST_TY, &AF_M, pt, T_INK, T_THEME);
-        }
-        if (favorite_has(e, k)) {
-            GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row star centred up/down");
-            cv_icon_in(214, y, 0, 16, 12, ICON_X_STAR, sel ? T_INK : T_ACCENT, sel ? T_THEME : T_SURF);
-        }
-    }
-}
 /* (Dah) ALGORITHM turned: the MASTER and the project's tracks, the selected one in the middle (its colour, its
  * sound's name), gliding to it */
 static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
@@ -1667,7 +1663,6 @@ static void graph_trklist(void)
             continue;                               /* (Dah: after the last track, + ADD TRACK: ALGORITHM on) */
         m++;
         g->y = LIST_Y(row + h) + dy;
-        g->star = 0;
         g->tag[0] = i < 0 ? 'M' : 'T';
         g->tag[1] = i < 0 ? 0 : (char)('1' + i);
         g->tag[2] = 0;
@@ -1683,14 +1678,13 @@ static void graph_trklist(void)
     }
     glide_rows(r, m, 232);
 }
-/* the EDIT layer (ui_layer.c): the sound loaded, as the browser's selected row: "03" (its place in KNOB 2's list,
- * the engine's sounds) or "U07", the name, the star of a favourite */
+/* the EDIT layer (ui_layer.c): the sound loaded, as a list's selected row: "03" (its place in KNOB 2's list,
+ * the engine's sounds) or "U07", the name */
 static void engine_sound_row(int32_t y)
 {
     const engine_t *e = ENGINES[TSEL->eng_req % NENGINES];
     uint32_t total, cur = eng_list_pos(&total), u = user_of(TSEL);
     char tag[6], nm[13];
-    int fav = preset_favorite();
     if (u < UP_SLOTS) {
         up_slot_label(tag, u);
         up_name(u, nm);
@@ -1700,11 +1694,7 @@ static void engine_sound_row(int32_t y)
         tag[2] = 0;
         str_cpy(nm, e->npresets ? e->presets[TSEL->preset % e->npresets].name : "", sizeof nm);
     }
-    list_row(y, 1, tag, T_DIM, nm, T_TEXT, fav ? 212 : 232);
-    if (fav) {
-        GFX_HOOK_ALIGN(0, y, 0, y + 16, AL_V, "list row star centred up/down");
-        cv_icon_in(214, y, 0, 16, 12, ICON_X_STAR, T_INK, T_THEME);
-    }
+    list_row(y, 1, tag, T_DIM, nm, T_TEXT, 232);
     (void)total;
 }
 /* user preset slots around the selected one: "U07  NAME" / EMPTY */
@@ -1943,7 +1933,7 @@ static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
         *cur = mx_master ? 0u : song.sel + 1u;          /* (the MASTER first, then the tracks, + ADD TRACK) */
         return 1u + trk_count() + (trk_count() < NTRK);
     }
-    *cur = preset_pos(&n);
+    *cur = preset_all_pos(&n);
     return n;
 }
 static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, int32_t y, int32_t h, uint32_t dq, int sel)
@@ -1991,7 +1981,7 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
         }
         nx = 40;
     } else {
-        uint32_t k, e = preset_at(i, &k);
+        uint32_t k, e = preset_all_at(i, &k);
         if (e == NENGINES) {
             up_slot_label(tag, k);
             up_name(k, nm);
@@ -2256,8 +2246,12 @@ static int32_t ka_end = KA_END;                        /* (Dah: HOME's knobs ope
 static void knob_arc(int32_t x, int32_t y, int32_t r, const uint8_t *cov, const uint8_t *ang, int32_t lo, int32_t hi,
                      uint16_t tr, uint16_t vc, uint16_t bg)
 {
-    const uint16_t *rt = ramp(tr, bg), *rv = ramp(vc, bg);
+    uint16_t rt[16];                                   /* (Dah: a copy: the second ramp may take the first's slot of
+                                                         * the cache, the ring then flickering between the two) */
+    const uint16_t *rv;
     int32_t i, j, m;
+    memcpy(rt, ramp(tr, bg), sizeof rt);
+    rv = ramp(vc, bg);
     for (j = 0; j < r; j++)
         for (i = 0; i < r; i++) {
             uint32_t k = (uint32_t)(j * r + i), a = (cov[k >> 1] >> ((k & 1u) ? 0 : 4)) & 15u;
@@ -3421,15 +3415,10 @@ lists:
             graph_patlist();                         /* (Dah) GLO + ALGORITHM: the patterns, ~1 s */
         else
             graph_trklist();                         /* (Dah) ALGORITHM just turned: the tracks, ~1 s */
-    } else if (pl_on() && !ui.home && pg->graph != GR_BROWSE) {
+    } else if (ui.home) {                            /* (Dah: PRESETS turned: its list full screen, ui_draw.c
+                                                      * draw_list_full) */
         cv_oy = 0;
-        graph_browse();                              /* (Dah) PRESETS just turned, any page: the sounds, ~1 s */
-    } else if (ui.home) {
-        cv_oy = 0;
-        if (pl_on())
-            graph_browse();                          /* (Dah) PRESETS just turned: the list, ~1 s */
-        else
-            graph_scope(c);
+        graph_scope(c);
     } else {
         if (pg->fam == FAM_FX)
             t = fx_tsel();
@@ -3482,10 +3471,6 @@ lists:
             cv_oy = 0;
             graph_mod(t, c);
             break;
-        case GR_BROWSE:
-            cv_oy = 0;
-            graph_browse();
-            break;
         case GR_SLOTS:
             cv_oy = 0;
             graph_slots();
@@ -3513,16 +3498,6 @@ lists:
         case GR_EVENTS:
             cv_oy = 0;
             graph_events();
-            break;
-        case GR_TOOLS:
-            cv_oy = 0;
-            {                                        /* (Dah) what the picked action does, not how to press it */
-                static const char *const TL_DO[4] = {"THE TRACK'S STEPS CLEARED", "THE SOUND TO ITS PRESET",
-                                                     "THE LAST TRACK REMOVED", "THE SONG CLEARED"};
-                uint32_t a = act_col();
-                if (a)
-                    panel_note(a == 2u && ui.tl_clean ? "THE SOUND CLEANED" : TL_DO[(a - 1u) & 3u], "", 0);
-            }
             break;
 #if FELUCCA_SLICE
         case GR_SLICES:

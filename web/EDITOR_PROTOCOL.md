@@ -1046,8 +1046,9 @@ from an experimental firmware is not a SONG or preference capability.
 Command 33 remains SONG. Older editors can ignore the additional INFO bytes.
 
 `uiCaps`: bit 0 palette, bit 1 font weight (retired: firmware since the 1.0 UI has one
-weight and no longer sets it), bit 2 reserved for a MIDI monitor, bit 3 favorites. This build
-advertises 9 (palette and favorites).
+weight and no longer sets it), bit 2 reserved for a MIDI monitor, bit 3 favorites (retired: the
+firmware has no favorites any more; FAV_GET, FAV_SET and UI_SET 3 answer rc 2, the filter is 127, favoriteSig 0).
+This build advertises 1 (palette).
 
 | cmd | Request args | Reply args |
 | --- | --- | --- |

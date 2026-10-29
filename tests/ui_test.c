@@ -734,9 +734,9 @@ static int test_patterns(void)
     press(B_OCTUP);
     bad += check("over a project's steps: the dialog", ui.confirm == CF_LOAD_PAT);
     press(B_OCTDN);
-    /* the hint: PRESETS page K3 PAT, and a load moves the pick there */
-    go_page(GR_BROWSE);
-    turn(EN_K1, 1);
+    /* the hint: a load (the PRESETS knob) moves the pick there */
+    go_home();
+    turn(EN_PRESET, 1);
     bad += check("PRESETS: a factory preset's suggested pattern becomes the pick", preset_pat_hint() >= 0 &&
                  ui.ppick == (uint8_t)preset_pat_hint());
     return bad;
@@ -919,7 +919,7 @@ static int test_midi(void)
         int ok;
         ui_power_on();
         song.sel = 2;
-        go_page(GR_BROWSE);
+        go_home();
         e3 = TSEL->eng_req; p3 = TSEL->preset;
         e1 = trk[0].eng_req; p1 = trk[0].preset;
         turn(EN_PRESET, 1);
@@ -965,11 +965,9 @@ static int test_save(void)
                      !name_on() && up_used(0) && up_value(up_rec(0), P_E0) == 5 && ui.act == 0u && str_eq(nmb, au));
     }
     press(B_SAVE);
-    bad += check("1.5 (#173): SAVE again: PRESETS (the engines and sounds, one tap on)", cur_page()->graph == GR_BROWSE);
+    bad += check("1.2: SAVE again: PHRASES (the patterns; Dah: PRESETS gone)", cur_page()->graph == GR_PATS);
     press(B_SAVE);
-    bad += check("1.2: SAVE again: PHRASES (the patterns, after the sounds)", cur_page()->graph == GR_PATS);
-    press(B_SAVE);
-    bad += check("SAVE again: TOOLS, then FILE again (round)", cur_page()->graph == GR_TOOLS && (press(B_SAVE), cur_page()->graph == GR_FILE));
+    bad += check("SAVE again: FILE again (round; Dah: TOOLS gone)", cur_page()->graph == GR_FILE);
     go_home();
     press(B_SAVE);
     bad += check("SAVE from HOME returns directly to FILE", cur_page()->graph == GR_FILE && ui.act == 0u);
@@ -1111,52 +1109,20 @@ static int test_actions(void)
     bad += check("a press that began elsewhere does not load", steps_are(t, 0) && song.octave == 2);
     press(B_OCTDN);
     bad += check("PATTERNS: OCT- does nothing (Dah: no BACK; the octave stays)", !ui.home && song.octave == 2);
-    /* TOOLS: CLRSQ and INIT are picked, not done, by their knobs */
-    my_steps(t);
-    go_title("TOOLS");
-    bad += check("TOOLS: nothing picked, OCT+ dark", act_cols() == 15u && act_col() == 0u && oct_leds_seen(0) == 0u);
-    turn(EN_K1, 3);
-    bad += check("KNOB 1 picks CLEAR, the steps stay; OCT+ breathes", ui.act == 1u && !seq_is_empty(t) &&
-                 oct_leds_seen(0) == (1u | OCT_BREATH));
-    {
-        char a[16], b[16];
-        foot_hint(a, b);
-        bad += check("..the footer: OCT+ CLEAR / OCT- CANCEL", str_eq(a, "OCT+ CLEAR") && str_eq(b, "OCT- CANCEL"));
-    }
-    turn(EN_K1, -1);
-    bad += check("KNOB 1 left drops it", ui.act == 0u);
-    turn(EN_K1, 1);
-    press(B_OCTDN);
-    bad += check("OCT- cancels the pick (still on TOOLS)", ui.act == 0u && !ui.home && !seq_is_empty(t));
-    turn(EN_K1, 1);
-    press(B_OCTUP);
-    bad += check("TOOLS CLEAR first asks confirmation", ui.confirm == CF_CLEAR_SEQ && !seq_is_empty(t));
-    press(B_OCTUP);
-    bad += check("OCT+ clears the pattern, the pick dropped", seq_is_empty(t) && msg_is("PATTERN CLEARED") && ui.act == 0u);
-    turn(EN_K1, 1);
-    bad += check("nothing to clear: OCT+ dark", oct_leds_seen(0) == 1u);
-    turn(EN_K2, 1);
-    t->p[P_E0] = (int16_t)(t->p[P_E0] + 1);
-    press(B_OCTUP);
-    bad += check("TOOLS INIT first asks confirmation", ui.confirm == CF_INIT_SOUND);
-    press(B_OCTUP);
-    bad += check("KNOB 2 INIT, OCT+: SOUND INIT", msg_is("SOUND INIT") && ui.act == 0u);
-    press(B_OCTDN);
-    bad += check("OCT- with nothing picked: nothing (Dah: no BACK)", !ui.home);
     /* the dialogs and the menu */
     open_family(FAM_SEQ);
     my_steps(t);
-    confirm_open(CF_CLEAR_SEQ, song.sel);
+    confirm_open(CF_CLEAR_MOTION, song.sel);
     frame();
-    bad += check("a dialog: OCT+ breathes, OCT- lit", ui.confirm == CF_CLEAR_SEQ && oct_leds_seen(0) == (1u | OCT_BREATH) &&
+    bad += check("a dialog: OCT+ breathes, OCT- lit", ui.confirm == CF_CLEAR_MOTION && oct_leds_seen(0) == (1u | OCT_BREATH) &&
                  oct_leds_seen(1) == (1u | OCT_BREATH));
     fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
     host_pressed |= 1u << panel.btn[B_OCTUP];
     frame();
-    bad += check("..it answers on release, not on the press", ui.confirm == CF_CLEAR_SEQ && !seq_is_empty(t));
+    bad += check("..it answers on release, not on the press", ui.confirm == CF_CLEAR_MOTION);
     fm1_in.buttons &= ~(1u << panel.btn[B_OCTUP]);
     frame();
-    bad += check("..OCT+ let go: cleared", ui.confirm == CF_NONE && seq_is_empty(t));
+    bad += check("..OCT+ let go: done", ui.confirm == CF_NONE && msg_is("AUTOMATION CLEARED"));
     bad += check("back on SEQ: the octave LEDs again", oct_leds() == 2u);
     return bad;
 }
@@ -1425,65 +1391,8 @@ static int test_screen(void)
     return bad;
 }
 
-static int test_favorites(void)
-{
-    int bad = 0;
-    uint32_t total, pos;
-    track_t before;
-    ui_power_on();
-    my_steps(TSEL);
-    TSEL->p[P_AMODE] = 2;
-    go_page(GR_BROWSE);
-    before = *TSEL;
-    turn(EN_K3, 1);
-    turn(EN_K4, 1);
-    pos = preset_pos(&total);
-    bad += check("FAV and LIST mark/filter the current sound without loading or touching its steps",
-                 preset_favorite() && favorites.filter && total == 1 && pos == 0 &&
-                 !memcmp(TSEL, &before, sizeof before));
-    bad += check("one favorite occupies one display row, without repeated copies",
-                 preset_visible(pos, total, 0) == 0 && preset_visible(pos, total, 1) == total);
-    select_engine(ENGI_DRUM);
-    before = *TSEL;
-    turn(EN_K3, 1);
-    bad += check("a DRUM sound can be a favorite on any track", preset_favorite() &&
-                 favorite_has(ENGI_DRUM, 0) && !memcmp(TSEL, &before, sizeof before));
-    turn(EN_PRESET, 1);
-    bad += check("filtered browsing crosses DRUM and synth sounds while retaining the track's pattern and ARP",
-                 TSEL->eng_req == 0 && preset_favorite() && !memcmp(TSEL->step, before.step, sizeof before.step) &&
-                 TSEL->p[P_AMODE] == 2);
-    turn(EN_K3, -1);
-    pos = preset_pos(&total);
-    bad += check("unmarking the current sound leaves it loaded even when outside the filtered list",
-                 !preset_favorite() && total == 1 && pos == total && TSEL->eng_req == 0);
-    turn(EN_PRESET, -1);
-    bad += check("browsing from a nonfavorite selects the last favorite", TSEL->eng_req == ENGI_DRUM);
-    turn(EN_K3, -1);
-    before = *TSEL;
-    turn(EN_PRESET, 1);
-    bad += check("empty favorites explains LIST ALL and retains the current sound and steps",
-                 msg_is("NO FAVORITES") && !memcmp(TSEL, &before, sizeof before));
-    turn(EN_K4, -1);
-    preset_pos(&total);
-    bad += check("LIST ALL restores the full browser without an implicit load", !favorites.filter && total > 1 &&
-                 !memcmp(TSEL, &before, sizeof before));
-    up_store(31, "Favorite");
-    up_load(31);
-    turn(EN_K3, 1);
-    bad += check("user slot 32 has its own favorite reference", favorite_has(NENGINES, 31) && preset_favorite());
-    up_store(31, "Renamed");
-    bad += check("overwriting or renaming a user slot retains its star", favorite_has(NENGINES, 31));
-    up_put(31, 0);
-    bad += check("successful erasure removes the user slot star and source label",
-                 !favorite_has(NENGINES, 31) && !up_used(31) && !TSEL->user);
-    up_store(31, "New sound");
-    bad += check("reusing the erased slot does not restore its old star", !favorite_has(NENGINES, 31));
-    return bad;
-}
-
-/* 1.2 (Discussion #90): sound categories. The factory table covers every preset; PRESETS > LIST (KNOB 4) steps ALL FAV
- * BASS .. OTHER without a wrap and browses only that category (factory and user presets), kept with the settings in
- * favorites.factory[15][11] with favorites.filter 0 / 1 as before; the NAME screen's KNOB 3 sets a user preset's
+/* 1.2 (Discussion #90): sound categories. The factory table covers every preset (Dah: PRESETS > LIST gone); the NAME
+ * screen's KNOB 3 sets a user preset's
  * category (from the sound's own), written with the name and kept by a rename; a record of before (version 2) gets
  * one by a rename, its sound unchanged; PROJECT's KNOB 3 a random name */
 static int test_categories(void)
@@ -1504,72 +1413,6 @@ static int test_categories(void)
     bad += check("categories: every factory preset of every engine has one (the table's strings == the preset counts)",
                  ok && preset_cat(0, 2) == CAT_BASS && preset_cat(ENGI_DRUM, 0) == CAT_DRUM && preset_cat(ENGI_FM6, 0) == CAT_KEYS &&
                  preset_cat(ENGI_DRUM, 9) == CAT_DRUM && preset_cat(0, 99) == CAT_OTHER);
-    go_page(GR_BROWSE);
-    select_engine(0);
-    apply_preset(0);                                       /* ANALOG SAW LEAD */
-    turn(EN_K4, 1);
-    turn(EN_K4, 1);
-    pos = preset_pos(&total);
-    for (n = 0, e = 0; e < NENGINES; e++)
-        for (k = 0; eng_ok(e) && k < preset_shown(e); k++)
-            n += preset_cat(e, k) == CAT_BASS;
-    bad += check("  KNOB 4: ALL, FAV, then BASS: the list holds the factory basses only, the sound not loaded",
-                 list_mode() == 2u && str_eq(list_name(list_mode()), "BASS") && !favorites.filter && ui_lcat == CAT_BASS &&
-                 total == n && n >= 6u && pos == total && TSEL->eng_req == 0u && TSEL->preset == 0u);
-    ok = 1;
-    for (i = 0; i < total; i++) {
-        turn(EN_PRESET, 1);
-        ok &= track_cat(TSEL) == CAT_BASS;
-    }
-    bad += check("  the PRESETS knob steps through basses only (every engine), and round", ok && preset_pos(&total) == total - 1u);
-    turn(EN_K4, 20);
-    bad += check("  .. right to OTHER and no further (no wrap)", list_mode() == LIST_N - 1u && str_eq(list_name(list_mode()), "OTHER"));
-#if !FELUCCA_FM4                                           /* (DIGITAL's presets: OTHER's) */
-    {
-        track_t before = *TSEL;
-        ui.msg_t = 0;
-        turn(EN_PRESET, 1);
-        bad += check("  OTHER is empty (no factory sound): NO SOUNDS IN LIST, the sound stays",
-                     msg_is("NO SOUNDS IN LIST") && !memcmp(TSEL, &before, sizeof before));
-    }
-#endif
-    {   /* the settings: the category's byte, unknown = none; FAV clears it */
-        persist_t p;
-        list_set(1u + CAT_PAD);
-        settings_export(&p);
-        ok = p.favorites.factory[15][11] == CAT_PAD && p.favorites.filter == 0u;
-        p.favorites.factory[15][11] = 9;
-        ok &= settings_import(&p, sizeof p) == 1 && list_mode() == 0u;
-        p.favorites.factory[15][11] = CAT_FX;
-        ok &= settings_import(&p, sizeof p) == 1 && list_mode() == 1u + CAT_FX;
-        turn(EN_K4, -20);
-        turn(EN_K4, 1);
-        bad += check("  kept with the settings ([15][11], an unknown value: none); FAV clears it, ALL at the left end",
-                     ok && list_mode() == 1u && favorites.filter == 1u && ui_lcat == 0u);
-        turn(EN_K4, -1);
-    }
-    {   /* #197: LIST / FAV not written on every detent (a flash erase stops the LED scan: the whole panel flashed) */
-        uint32_t m0 = list_mode();
-        int ok2;
-        set_later.on = 0;
-        frames(200);
-        turn(EN_K4, 1);
-        ok = set_later.on && list_mode() == m0 + 1u;
-        turn(EN_K4, 1);
-        turn(EN_K3, 1);
-        frames(3000);
-        ok &= set_later.on;                                /* (still on PRESETS, touched 3 s ago: not yet) */
-        frames(SET_LATER_MS);
-        ok &= !set_later.on;                               /* idle: written */
-        turn(EN_K4, -2);
-        turn(EN_K3, -1);
-        ok2 = set_later.on && list_mode() == m0;
-        go_page(GR_FX);                                    /* the page left: written at once */
-        frame();
-        ok2 &= !set_later.on;
-        go_page(GR_BROWSE);
-        bad += check("  #197 LIST / FAV (KNOB 4 / 3): saved once idle or the page left, never on a detent", ok && ok2);
-    }
     /* NAME: USER SAVE takes the sound's category; KNOB 3 changes it; written with the name */
     select_engine(0);
     apply_preset(2);                                       /* SQR BASS */
@@ -1586,13 +1429,6 @@ static int test_categories(void)
     press(B_OCTUP);
     bad += check("  KNOB 3 steps the category (no wrap below BASS); OCT+ writes it with the name",
                  ok && !name_on() && up_used(4) && up_cat(4) == CAT_LEAD && up_rec(4)->packed[UP_CAT_AT] == CAT_LEAD);
-    list_set(1u + CAT_LEAD);
-    up_load(4);
-    pos = preset_pos(&total);
-    bad += check("  the user preset is in the LEAD list (after the factory leads), not in BASS",
-                 pos == total - 1u && preset_at(pos, &k) == NENGINES && k == 4u &&
-                 (list_set(1u + CAT_BASS), preset_pos(&total) == total));
-    list_set(0);
     go_page(GR_USER);
     ui.uslot = 4;
     press(B_EDIT);
@@ -2629,12 +2465,6 @@ static int test_chain(void)
                  chain_config.row[0].repeat == 16);
     for (k = chain_config.count; k < CHAIN_ROWS; k++) { turn(EN_K1, 1); turn(EN_K3, 1); }
     bad += check("SONG append row stays bounded at 16", chain_config.count == CHAIN_ROWS && chain_valid(&chain_config));
-    go_title("TOOLS"); turn(EN_K4, 1); press(B_OCTUP);
-    bad += check("CLEAR SONG requires explicit confirmation", ui.confirm == CF_CLEAR_SONG && chain_config.count == CHAIN_ROWS);
-    press(B_OCTDN);
-    bad += check("cancel preserves the full song", chain_config.count == CHAIN_ROWS);
-    turn(EN_K4, 1); press(B_OCTUP); press(B_OCTUP);
-    bad += check("confirmed CLEAR SONG keeps musical steps", !chain_config.count && !ui.song_row);
     return bad;
 }
 
@@ -2768,7 +2598,7 @@ static int test_presets_knob(void)
                 cur_ok &= same_snd && same_steps;
             else
                 snd_ok &= !same_snd && same_steps && ui.page == i && !ui.home;
-            if (g == GR_BROWSE) {
+            if (i == 0u) {                             /* (Dah: once, PRESETS' page gone) */
                 hold(B_SAVE);
                 undo_ok &= TSEL->preset == before.preset && TSEL->eng_req == before.eng_req &&
                            !memcmp(TSEL->p, before.p, sizeof before.p) && !memcmp(TSEL->step, before.step, sizeof before.step);
@@ -2810,7 +2640,7 @@ static int steps_but(const track_t *t, const step_t *ref, uint32_t at, const ste
 static uint32_t auto_cur(void) { uint16_t rw[EV_ROWS]; return ev_cur(rw, 0); }
 static int test_page_cycles(void)
 {
-    static const char *const SAVE_CYC[7] = {"FILE", "PATTERN", "USER", "PRESETS", "PHRASES", "TOOLS", "FILE"};   /* (1.5, #173;
+    static const char *const SAVE_CYC[5] = {"FILE", "PATTERN", "USER", "PHRASES", "FILE"};   /* (1.5, #173;
                                                      * HA HA HE HU: FILE, the projects, then PATTERN, A..D) */
     int bad = 0, ok = 1;
     uint32_t i, n0;
@@ -2819,11 +2649,11 @@ static int test_page_cycles(void)
     uint16_t rw[EV_ROWS];
     /* the cycles: each button's taps, in order */
     ui_power_on();
-    for (i = 0; i < 7u; i++) {
+    for (i = 0; i < 5u; i++) {
         press(B_SAVE); frames(320);
         ok &= !ui.home && cur_page()->fam == FAM_SAVE && str_eq(cur_page()->title, SAVE_CYC[i]);
     }
-    bad += check("1.5 (#173): SAVE cycles FILE > PATTERN > USER > PRESETS > PHRASES > TOOLS > FILE", ok);
+    bad += check("1.5 (#173): SAVE cycles FILE > PATTERN > USER > PHRASES > FILE (Dah: PRESETS, TOOLS gone)", ok);
     ok = 1;
     for (i = 0; i < NPAGES; i++) {                       /* every page in a family its button reaches, and its LED */
         uint32_t f = PAGES[i].fam;
@@ -3460,11 +3290,11 @@ static int test_layer(void)
     ok = !ui.layer && !perf_mask && gates() > 0 && !kb_layer;
     key_up(white(3)); btn_up(B_FX); frame();
     bad += check("in the menu: no layer, FX + a key plays the key; FX let go: no page", ok && ui.menu == 1);
-    ui_power_on(); ui.confirm = CF_CLEAR_SEQ;
+    ui_power_on(); ui.confirm = CF_CLEAR_MOTION;
     btn_down(B_FX); frames(512);
     ok = !ui.layer;
     btn_up(B_FX); frame();
-    bad += check("in a dialog: FX held shows no map and taps nothing", ok && ui.confirm == CF_CLEAR_SEQ);
+    bad += check("in a dialog: FX held shows no map and taps nothing", ok && ui.confirm == CF_CLEAR_MOTION);
     /* UBOOT: the countdown closes the map and stops every effect; OCT- + OCT+ are still seen */
     ui_power_on();
     btn_down(B_FX); key_down(white(5)); frame();
@@ -4263,8 +4093,6 @@ static int test_quick_layers(void)
     lay_combo(B_EDIT, white(eng_rank(3))); key_up(white(eng_rank(3))); frame();
     turn(EN_K2, 1);
     ok = TSEL->eng_req == 3u && TSEL->preset == 1u;
-    turn(EN_K3, 1);
-    ok &= preset_favorite();
     oct_back();
     ok &= TSEL->eng_req == 0u && !memcmp(TSEL->step, before.step, sizeof before.step);
     btn_up(B_EDIT); frame();
@@ -4321,11 +4149,11 @@ static int test_quick_layers(void)
     ok = !ui.layer && gates() > 0 && !kb_layer;
     key_up(white(3)); btn_up(B_GLO); frame();
     bad += check("in the menu: no GLO layer, GLO + a key plays it; GLO let go: no page", ok && ui.menu == 1);
-    ui_power_on(); ui.confirm = CF_CLEAR_SEQ;
+    ui_power_on(); ui.confirm = CF_CLEAR_MOTION;
     btn_down(B_SCL); frames(512);
     ok = !ui.layer;
     btn_up(B_SCL); frame();
-    bad += check("in a dialog: SCL held shows no map and taps nothing", ok && ui.confirm == CF_CLEAR_SEQ);
+    bad += check("in a dialog: SCL held shows no map and taps nothing", ok && ui.confirm == CF_CLEAR_MOTION);
     /* one layer at a time: a second layer button is ignored, its keys stay notes after */
     ui_power_on();
     btn_down(B_GLO); frame(); btn_down(B_EDIT); frame(); key_down(white(1)); frame();
@@ -4483,36 +4311,6 @@ static int test_bughunt_ui(void)
         bad += check("ALGORITHM ignored with a layer's button held (OCT- puts back all); then T2",
                      ok && song.sel == 1u);
     }
-    /* 6: TOOLS: each column its own ready check; nothing to do says so (not STOP TO EDIT) */
-    ui_power_on();
-    go_title("TOOLS"); frame();
-    chain_defaults(&chain_config);                      /* no song rows */
-    song.ntrk = 1;                                      /* (HA HA HE HU: DEL TRK, the last track; one: none) */
-    turn(EN_K1 + 2, 1);
-    ok = str_eq(act_name(2), "DEL TRK") && !act_ready();
-    press(B_OCTUP);
-    ok &= !ui.confirm && msg_is("ONE TRACK AT LEAST") && text_w(&AF_S, ui.msg) <= 236 - 106;   /* (fits the header) */
-    song.ntrk = 3;
-    ok &= act_ready();
-    press(B_OCTUP);
-    ok &= ui.confirm == CF_DEL_TRACK;
-    press(B_OCTDN);
-    ok &= !ui.confirm && trk_count() == 3u;
-    song.ntrk = 0;
-    turn(EN_K1 + 3, 1);                                 /* CLEAR SONG */
-    press(B_OCTUP);
-    ok &= !ui.confirm && msg_is("NOTHING TO CLEAR");
-    track_defaults_steps(TSEL);
-    chain_config.count = 1; chain_config.row[0] = chain_row_of(0, 1);
-    turn(EN_K1, 1);                                     /* CLEAR PAT on an empty track, the song with a row */
-    ok &= !act_ready();
-    press(B_OCTUP);
-    ok &= !ui.confirm && msg_is("NOTHING TO CLEAR");
-    turn(EN_K1 + 3, 1);
-    ok &= act_ready();
-    press(B_OCTUP);
-    bad += check("TOOLS: DEL TRK (one track: ONE TRACK AT LEAST; else its dialog) / CLEAR SONG / CLEAR PAT: NOTHING TO ..; a song: its dialog",
-                 ok && ui.confirm == CF_CLEAR_SONG);
     /* 7: REC works in the layers, as PLAY: it arms the track (PLAY starts); the layer stays, no page */
     ok = 1;
     {
@@ -4999,7 +4797,7 @@ static int test_bughunt_ui2(void)
             uint32_t k = white(0), ok;
             ui_power_on(); TSEL->p[P_VOICE] = V_POLY;
             go_home(); frame();
-            confirm_open(CF_CLEAR_SEQ, 0); frame();
+            confirm_open(CF_CLEAR_MOTION, 0); frame();
             btn_down(BTN[i]); frame(); frames(100);
             btn_down(B_OCTDN); frame(); btn_up(B_OCTDN); frame();   /* the dialog closes, the button still held */
             frames(800);
@@ -5245,14 +5043,7 @@ static int test_fm4_retired(void)
             seen |= 1u << e;
     }
     bad += check("PRESETS: the list holds every engine's presets but DIGITAL's", seen == all && NENG_SHOWN == NENGINES - 1u);
-    go_page(GR_BROWSE);
-    set_engine_of(TSEL, 0);
-    for (i = 0, seen = 0; i < NENG_SHOWN; i++) {
-        turn(EN_K2, 1);
-        seen |= 1u << TSEL->eng_req;
-    }
-    bad += check("PRESETS KNOB 2: the engines in order, DIGITAL skipped, back to the first",
-                 seen == all && TSEL->eng_req == 0u && eng_step(0, 1) == ENGI_FM6 && eng_step(ENGI_FM6, 1) == 2u &&
+    bad += check("  the engines in order, DIGITAL skipped, round", eng_step(0, 1) == ENGI_FM6 && eng_step(ENGI_FM6, 1) == 2u &&
                  eng_step(ENGI_FM6, -1) == 0u && eng_step(0, -1) == ENGI_DRUM);
     {   /* the display order (engines.c ENGINE_ORDER): every engine one can pick once; the PRESETS list follows it */
         static const char *const ORDER[] = {"ANALOG", "FM6", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN",
@@ -5332,17 +5123,6 @@ static int test_fm4_retired(void)
     frame();
     bad += check("a track left on engine 1 any other way: the main loop converts it (BASS -> FM BASS)",
                  trk[2].eng_req == ENGI_FM6 && trk[2].preset == 2u);
-    {   /* favourites of DIGITAL presets (settings PER4) -> the FM6 presets that cover them */
-        persist_t pe;
-        memset(&pe, 0, sizeof pe);
-        pe.magic = PERSIST_MAGIC;
-        pe.panel = PANEL_DEFAULT;
-        pe.favorites.factory[ENGI_DIGITAL][0] = 1u << 5 | 1u << 7;   /* PAD, FUNK KEY */
-        settings_import(&pe, (int)sizeof pe);
-        bad += check("favourites: DIGITAL PAD / FUNK KEY -> FM6 PAD / PLUCK, engine 1's cleared",
-                     favorite_has(ENGI_FM6, 4) && favorite_has(ENGI_FM6, 7) && !favorites.factory[ENGI_DIGITAL][0]);
-        memset(&favorites, 0, sizeof favorites);
-    }
     return bad;
 }
 #endif
@@ -5668,7 +5448,7 @@ static int test_breath(void)
         ui_power_on();
         settings_leds = MODES[m];
         go_title("ENV"); frame();
-        ui.confirm = CF_CLEAR_SEQ;
+        ui.confirm = CF_CLEAR_MOTION;
         for (t = 0; t < 4u; t++) {
             fm1_ms += 250u;
             ui_leds();
@@ -6146,7 +5926,7 @@ static int test_idle_leds(void)
     ok &= !host_idle;
     song.rec = 0; ui.menu = 1; frame(); ui_leds();
     ok &= !host_idle;
-    ui.menu = 0; ui.confirm = CF_CLEAR_SEQ; frame(); ui_leds();
+    ui.menu = 0; ui.confirm = CF_CLEAR_MOTION; frame(); ui_leds();
     ok &= !host_idle;
     ui.confirm = 0; ui.lock = LAYER_GLO; ui.layer = LAYER_GLO; ui_leds();
     ok &= !host_idle;
@@ -6264,7 +6044,7 @@ static int test_screen_off(void)
     bad += check("SCREEN OFF: NEVER stays on for hours; 5 MIN goes dark after 5; PLAY to wake starts nothing", ok);
 
     n = host_pw_n;
-    ui.confirm = CF_CLEAR_SEQ; ui.force = 1;          /* a dialog: never dark */
+    ui.confirm = CF_CLEAR_MOTION; ui.force = 1;          /* a dialog: never dark */
     scr_idle(20u * 60000u);
     ok = host_pw_n == n && host_bl;
     ui.confirm = 0; ui.force = 1;
@@ -6274,9 +6054,9 @@ static int test_screen_off(void)
     cin_left = 0;
     scr_idle(6u * 60000u);
     ok &= host_pw_n == n + 1u && !host_bl;
-    ui.confirm = CF_CLEAR_SEQ; ui.force = 1;          /* one opening while dark (the editor, MIDI): it wakes */
+    ui.confirm = CF_CLEAR_MOTION; ui.force = 1;          /* one opening while dark (the editor, MIDI): it wakes */
     frames(300u);
-    ok &= scr_woke(n + 1u) && ui.confirm == CF_CLEAR_SEQ;
+    ok &= scr_woke(n + 1u) && ui.confirm == CF_CLEAR_MOTION;
     ui.confirm = 0; ui.force = 1;
     scr_idle(6u * 60000u);
     n = host_pw_n;
@@ -7436,7 +7216,7 @@ static void rec_up(void) { btn_up(B_REC); frame(); }
 static uint32_t menu_rec(uint32_t r) { return menu_get(r == 0u ? MI_CLICK : r == 1u ? MI_COUNTIN : MI_CLKLVL); }
 static int test_rec_layer(void)
 {
-    static const uint8_t G[8] = {GR_ROLL, GR_EVENTS, GR_USER, GR_PATS, GR_SONG, GR_TOOLS, GR_ADSR, GR_TRK};
+    static const uint8_t G[8] = {GR_ROLL, GR_EVENTS, GR_USER, GR_PATS, GR_SONG, GR_FILE, GR_ADSR, GR_TRK};
     int bad = 0, ok = 1;
     uint32_t k, i, n;
     step_t before[NSTEP];
@@ -8091,8 +7871,8 @@ static int test_browse_no_pattern(void)
         track_defaults_steps(t);
         ok &= seq_is_empty(t) && up_has_pat(3);
         if (pass & 1u) song.playing = 1;              /* playing: the other tracks run, this one is empty */
-        if (pass & 2u) go_page(GR_BROWSE);
-        preset_pos(&total);
+        if (pass & 2u) go_page(GR_USER);
+        preset_all_pos(&total);
         for (n = 0; n < total + 2u; n++) {
             turn(EN_PRESET, 1);
             loads++;
@@ -8523,7 +8303,7 @@ static int test_large(void)
     bad += check("#15 LARGE: ENV tall with its ADSR in the strip; KNOB 2 turned redraws card 2 only", ok);
 
     /* per page type: lists and rolls keep the layout, the layers too; MIXER's tracks in the strip */
-    go_page(GR_BROWSE); frame();
+    go_page(GR_USER); frame();
     ok = large_kind() == LK_LABEL && card_h() == CARD_H && graph_y() == Y_GRAPH && graph_h() == H_GRAPH + FOOT_GAIN;
     go_page(GR_ROLL); frame();
     ok &= large_kind() == LK_LABEL;
@@ -10229,7 +10009,6 @@ int main(void)
     bad += test_tracks();
     bad += test_grid();
     bad += test_screen();
-    bad += test_favorites();
     bad += test_categories();
     bad += test_display_preferences();
     bad += test_menu_tabs();

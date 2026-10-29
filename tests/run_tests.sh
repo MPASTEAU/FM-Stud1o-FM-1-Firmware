@@ -82,7 +82,7 @@
 #                   knob with OCT- held an ordinary turn, the menu's OCT- back; SAVE > PROJECT ERASE (#199): KNOB 2, the dialog,
 #                   refused playing / empty (tests/persistence_test.c: the flash side, a cut before the record keeps it);
 #                   CLEAN INIT (#190): every engine's basic sound (no sends, INSERT, LFO / ENV / MOD amounts; neutral ENV; FM6
-#                   the init voice), heard and ending; TOOLS' KNOB 2 on, EDIT + F5; one undo; INIT as before. OCT- next to
+#                   the init voice), heard and ending; EDIT + F5 (E5: INIT); one undo; INIT as before. OCT- next to
 #                   EUCLID (OCT- cancels, OCT+ applies, no octave) and FILL (GLO + E4).
 # 1.5.6 (tests/v156_test.c): HUMANIZE (#213): the matrix's VEL (a note-on's velocity, RAND per note, clamped 1..127) and
 #                   TIME (a sequencer step late, 0..30 ms, at most 7/16 of the step, with NUDGE, a ratchet on time),

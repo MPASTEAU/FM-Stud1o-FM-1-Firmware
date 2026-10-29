@@ -437,6 +437,13 @@ static int32_t head_batt(int32_t x1, int32_t hh)
 static void sound_name(const track_t *t, char *b);
 #define HL_MS 250u                                      /* (Dah) the header's load read this often */
 static struct { uint8_t voices, cpu; uint32_t t; } hld;
+/* (Dah) a message for the window in the middle: two parts (cards_say: HELP's, a warning with its why) or a layer's
+ * hint; any other (REC, ARMED, SAVED..) small in the header, the page left alone */
+static int msg_win(void)
+{
+    return (cards_b && str_eq(ui.msg, cards_a)) ||
+           (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[');
+}
 static void head_home(void)
 {
     char pn[16], sl[3], num[4] = {0}, ch[2], bp[12], ti[20];
@@ -466,7 +473,7 @@ static void head_home(void)
     fmt_int(bp + 4, song.g[G_BPM]);
     sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
                          (uint32_t)song.rec * 977u + tc * 13u +
-                         (ui.msg_t && (song.playing || chain_busy()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
+                         (ui.msg_t && (song.playing || chain_busy() || !msg_win()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
                          (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
                          (ui.home ? 0u : ui.page + 1u) * 3141592653u);
@@ -513,14 +520,15 @@ static void head_home(void)
     if (6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 > xr && str_len(ti) > 10u &&
         ti[0] == 'A' && ti[4] == 'M')                   /* (no room: "AUTOMATION 3/3" -> "AUTO 3/3") */
         str_cpy(ti + 4, ti + 10, sizeof ti - 4);
-    GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-    x = cv_text(6, ty, &AF_S, ti, T_MID) + 8;            /* the page (its place in its family: "DIST 2/5") */
-    if (ui.msg_t && (song.playing || chain_busy())) {   /* (Dah) playing: a message small in the header (no window) */
+    if (ui.msg_t && (song.playing || chain_busy() || !msg_win())) {   /* (Dah) playing, or a plain one: small in the
+                                                         * header in the page's place (no window) */
         const char *m = ui.msg[0] == MSG_NOFILE[0] ? ui.msg + 1 : ui.msg;
-        cv_free_hint(x, ty, m, T_ACCENT, T_BG, xr - x);
+        cv_free_hint(6, ty, m, T_ACCENT, T_BG, xr - 6);
         cv_blit(0, Y_HEAD);
         return;
     }
+    GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
+    x = cv_text(6, ty, &AF_S, ti, T_MID) + 8;            /* the page (its place in its family: "DIST 2/5") */
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
     x = cv_text(x, ty, &AF_S, "PAT", T_MID) + 4;       /* the pattern: "PAT 1" */
     x = cv_text(x, ty, &AF_S, num + 1, sl[0] == '-' ? T_MID : T_THEME) + 8;
@@ -1555,7 +1563,7 @@ static void draw_foot_in(void)
     else
         cv_blit(0, Y_FOOT);
 }
-/* the EDIT layer's cards (ui_layer.c): ENG (the engine), No. (its sounds: KNOB 2's list), FAV, an empty card */
+/* the EDIT layer's cards (ui_layer.c): ENG (the engine), No. (its sounds: KNOB 2's list), two empty cards (Dah: FAV gone) */
 static void engine_columns(void)
 {
     uint32_t total, cur = eng_list_pos(&total), e = TSEL->eng_req % NENGINES;
@@ -1566,7 +1574,7 @@ static void engine_columns(void)
     draw_column(0, "ENG", ENGINES[e]->name, "", VAL(0u), (int32_t)eng_rank(e) * 1000 / (NENG_SHOWN > 1 ? NENG_SHOWN - 1 : 1),
                 engine_icon(ENGINES[e]->name));
     draw_column(1, "No.", val, u, VAL(1u), total > 1u ? (int32_t)(cur * 1000u / (total - 1u)) : 0, ICON_NONE);
-    draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
+    draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
     draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
 }
 static void draw_columns_in(void);
@@ -1618,7 +1626,7 @@ static int msg_popup(void)
     int help = 0;
     int two = (cards_b && str_eq(ui.msg, cards_a)) ||
               (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[');
-    if (!ui.msg_t || !(home_bare() || two) || ui.menu || ui.confirm || name_on() || ui.layer ||
+    if (!ui.msg_t || !two || ui.menu || ui.confirm || name_on() || ui.layer ||
         song.playing || chain_busy()) {                 /* (Dah: playing, none: the header says it, small) */   /* (Dah: HOME's
                                                          * look, every message; elsewhere the long ones: a layer's
                                                          * hint, a two-part message) */
@@ -1867,13 +1875,6 @@ static void draw_columns_in(void)
                     k != EVK_ADD ? VAL(3u) : T_DIM, RATIO(d, enum_rank(d, v)), param_icon(d, v));
         return;
     }
-    if (cur_page()->graph == GR_TOOLS) {
-        static const char *const labels[] = {"PAT", "SOUND", "TRACK", "SONG"};   /* (HA HA HE HU: TRACK, the last off) */
-        static const uint8_t icons[] = {ICON_AUTO, ICON_AUTO, ICON_AUTO, ICON_X_SONG};
-        for (c = 0; c < 4u; c++)                       /* (1.5.5: KNOB 2 on past INIT, CLEAN) */
-            draw_act_column(c, c == 1u && ui.tl_clean && act_col() == 2u ? "CLEAN" : labels[c], VAL(c), icons[c]);
-        return;
-    }
     if (cur_page()->scope == SC_TRK && mx_master) {   /* (Dah) the MASTER: its COMPRESSOR */
         fmt_int(val, song.g[G_MCOMP] * 100 / 127);
         draw_column(0, "COMP", song.g[G_MCOMP] ? val : "OFF", song.g[G_MCOMP] ? "%" : "", song.g[G_MCOMP] ? VAL(0u) : T_DIM,
@@ -1911,19 +1912,6 @@ static void draw_columns_in(void)
             draw_column(3, "STATE", solo ? "SOLO" : t->p[P_MUTE] ? "MUTE" : "ON", "", solo || t->p[P_MUTE] ? T_ACCENT : VAL(3u),
                         -1, ICON_AUTO);
         }
-        return;
-    }
-    if (cur_page()->graph == GR_BROWSE) {
-        uint32_t total, cur = preset_pos(&total);
-        char u[8];
-        if (cur < total) fmt_int(val, (int32_t)cur + 1);
-        else str_cpy(val, "--", 8);
-        str_cpy(u, "/", 8);
-        fmt_int(u + 1, (int32_t)total);
-        draw_column(0, "No.", val, u, VAL(0u), -1, ICON_NONE);
-        draw_column(1, "ENG", ENGINES[TSEL->eng_req]->name, "", VAL(1u), -1, engine_icon(ENGINES[TSEL->eng_req]->name));
-        draw_column(2, "FAV", preset_favorite() ? "ON" : "OFF", "", VAL(2u), -1, ICON_X_STAR);
-        draw_column(3, "LIST", list_name(list_mode()), "", VAL(3u), -1, ICON_X_FOLDER);
         return;
     }
     if (cur_page()->graph == GR_PATS) {                  /* PAT, then LOAD (a GO button) */
@@ -2385,10 +2373,6 @@ static void confirm_text(char *a, char *b)
     uint32_t k = ui.confirm_trk;
     b[0] = 0;
     switch (ui.confirm) {
-    case CF_CLEAR_TRK:
-        str_cpy(a, "CLEAR TRACK 1?", 24);
-        a[12] = (char)('1' + k % NTRK);
-        break;
     case CF_OVR_PROJ:
         str_cpy(a, "OVERWRITE PATTERN A?", 24);   /* (HA HA HE HU: the slots are the patterns) */
         a[18] = (char)('A' + (k & 3u));
@@ -2420,11 +2404,6 @@ static void confirm_text(char *a, char *b)
         a[10] = (char)('1' + k % NTRK);
         str_cpy(b, track_def_name(k % NTRK), 24);
         break;
-    case CF_DEL_TRACK:                               /* SAVE > TOOLS: the last track off */
-        str_cpy(a, "REMOVE TRACK 1?", 24);
-        a[13] = (char)('1' + k % NTRK);
-        str_cpy(b, "ITS SOUND AND STEPS GO", 24);
-        break;
     case CF_NEW_PROJ:                                /* (HA HA HE HU) SAVE > FILE's NEW */
         str_cpy(a, "NEW PROJECT?", 24);
         str_cpy(b, "UNSAVED CHANGES LOST", 24);
@@ -2435,9 +2414,6 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "DELETE PROJECT?", 24);
         if (!pfs_name(k, b) || !b[0])
             str_cpy(b, "UNTITLED", 24);
-        break;
-    case CF_CLEAR_SONG:
-        str_cpy(a, "CLEAR SONG ORDER?", 24);
         break;
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);
@@ -2473,9 +2449,8 @@ static void confirm_text(char *a, char *b)
         pat_label(pat_pick(), tag, b);               /* with the pattern picked */
         break;
     }
-    default:
-        str_cpy(a, "CLEAR T1 SEQUENCE?", 24);     /* the header (T1..T4) is hidden */
-        a[7] = (char)('1' + k % NTRK);
+    default:                                         /* (Dah: CLEAR T1 SEQUENCE?, TRACK?: SAVE > TOOLS', gone) */
+        a[0] = 0;
         break;
     }
 }

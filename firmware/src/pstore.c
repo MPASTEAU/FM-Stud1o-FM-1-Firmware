@@ -565,16 +565,6 @@ static uint32_t ps_info(uint32_t k, uint32_t num, uint32_t *den, uint8_t *ncell)
     *ncell = (uint8_t)nc;
     return len48_of(tm[0], tm[1]);
 }
-static void ps_drop_trk(uint32_t k)                     /* track k's patterns gone (the track removed) */
-{
-    uint32_t i;
-    k %= NTRK;
-    ps_song_forget(k, 0);
-    for (i = 1; i <= PS_NUM; i++)
-        ps_del(k, i);
-    ps_cur[k] = 0;
-    ps_gen++;
-}
 static void ps_reset(void)                              /* no pattern but the ones on the tracks, each number 1 */
 {
     ps_used = 0;

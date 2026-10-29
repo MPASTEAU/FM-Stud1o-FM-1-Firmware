@@ -356,7 +356,7 @@ static int screens(void)
     step_set_ratchet(&t->step[1], 3);
     ui.lane = 1;
     memset(host_screen, 0, sizeof host_screen); ui.force = 1; ui_draw();
-    y = graph_y() + 6u + 4u + 6u;                      /* lane 0's hits: y 12 .. 21 of the panel */
+    y = graph_y() + 16u + 5u;                          /* lane 0's hits (Dah: under the ruler, ui_graph.c graph_grid) */
     x = 40u + 12u;
     bad += check("  the DRUM grid draws an x3 hit in three parts", pr_is_bar(x, y) && !pr_is_bar(x + 2u, y) &&
                  pr_is_bar(x + 3u, y) && !pr_is_bar(x + 5u, y) && pr_is_bar(x + 6u, y));

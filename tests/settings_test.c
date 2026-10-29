@@ -54,15 +54,13 @@ int main(void)
         p = original; assert(settings_import(&p, sizeof p) == 1); settings_init();
     }
 #ifdef FELUCCA_FAVORITES
-    assert(favorite_has(8, 0) && favorite_has(NENGINES, 31) && favorites.filter);
-    {   /* SAMPLE's PERC starred (preset 4, retired): DRUM's kit (preset 0) instead; SAMPLE's others kept; twice the same */
+    /* (Dah) the favourites gone: their bits kept as saved, unread, nothing migrated */
+    assert(favorites.factory[8][0] == 1 && favorites.user == 1u << 31 && favorites.filter == 1);
+    {
         persist_t q = original;
         q.favorites.factory[ENGI_SAMPLE][0] = 1u << SMP_SET_PERC | 1u << 2;
-        assert(settings_import(&q, sizeof q) == 1 && favorites.factory[ENGI_SAMPLE][0] == 1u << 2 &&
-               favorites.factory[ENGI_DRUM][0] == 1u);
-        settings_export(&q);
-        assert(settings_import(&q, sizeof q) == 1 && favorites.factory[ENGI_SAMPLE][0] == 1u << 2 &&
-               favorites.factory[ENGI_DRUM][0] == 1u);
+        assert(settings_import(&q, sizeof q) == 1 && favorites.factory[ENGI_SAMPLE][0] == (1u << SMP_SET_PERC | 1u << 2) &&
+               !favorites.factory[ENGI_DRUM][0]);
         p = original; assert(settings_import(&p, sizeof p) == 1);
     }
 #endif

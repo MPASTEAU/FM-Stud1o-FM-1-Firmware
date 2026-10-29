@@ -16,7 +16,7 @@
  *              the CHORD page's two; QNT TRN stay on SCL); the LEDs show the root lit and the scale's notes breathing
  *   EDIT SET   the white keys from F3: the engines in PRESETS order (one key each, the NENG_SHOWN one can pick:
  *              engines.c eng_vis), the next white key INIT (LY_INIT: E5), the next CLEAN INIT (LY_CLEAN: F5, 1.5.5)
- *              (the dialog); KNOB 1 ENG, 2 No. (the engine's sounds), 3 FAV. Sound loads as on PRESETS: the steps
+ *              (the dialog); KNOB 1 ENG, 2 No. (the engine's sounds) (Dah: 3 FAV gone). Sound loads as on PRESETS: the steps
  *              stay, SAVE held undoes, the editor gets RELOAD; they apply while playing too. 1.4.1: the black keys
  *              the selected track's engine's quick actions (EQA below: DRUM 1..8 its lanes' MUTE; other engines
  *              none yet, the keys dark)
@@ -431,7 +431,7 @@ static void tools_key(uint32_t p)
 }
 
 /* REC: CLEAR, the selected track's steps and automation (and ARP's latched chord): one undo (SAVE held), no dialog,
- * as SEQ TOOLS' CLEAR (up to 1.1.4 REC held on SEQ asked first, CF_CLEAR_SEQ). Its own undo copy (not a sound load's) */
+ * as SEQ TOOLS' CLEAR (up to 1.1.4 REC held on SEQ asked first). Its own undo copy (not a sound load's) */
 static void rec_clear(void)
 {
     track_t *t = TSEL;
@@ -725,13 +725,11 @@ static void layer_knob(uint32_t k, int32_t s)
                              TP[P_LEVEL].max);
         motion_capture(bt, P_LEVEL, *vp);
         ml_knob(bt, P_LEVEL);                           /* (MIDI LEARN: Tk LEVEL picked) */
-    } else if (l == LAYER_EDIT) {                       /* ENG, No., FAV */
+    } else if (l == LAYER_EDIT) {                       /* ENG, No. */
         if (k == 0u)
             edit_load(eng_step(TSEL->eng_req, s), 0);
         else if (k == 1u)
             edit_load(NENGINES, s);
-        else if (k == 2u)
-            preset_mark(s > 0);
     } else if (l == LAYER_REC) {                        /* CLICK, COUNT-IN, LEVEL (KNOB 4: none) */
         if (k < 3u)
             rec_set(k, (uint32_t)clamp((int32_t)rp_get(RL_F[k]) + s, 0, 2));
@@ -1267,7 +1265,7 @@ static void draw_layer(void)
         sig += (uint32_t)drum_track(TSEL) * 31u + ui.lane * 5u + (uint32_t)chain_busy() * 3u + (uint32_t)TSEL->p[P_E0] * 131u + song.sel * 977u +
                (eu.on ? 7u + eu.hits * 13u + eu.steps * 1031u + eu.rot * 65537u + (uint32_t)TSEL->p[P_SLEN] * 257u : 0u);
     else
-        sig += snd_id() * 31u + (uint32_t)preset_favorite() * 5u + (uint32_t)chain_busy() * 3u + up_gen * 101u +
+        sig += snd_id() * 31u + (uint32_t)chain_busy() * 3u + up_gen * 101u +
                eqa_sig() * 2654435761u;
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
