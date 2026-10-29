@@ -2348,8 +2348,9 @@ static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int 
 #define MX_W (MX_PITCH - 1)
 #define MX_FX (MX_W / 2 - 9)                           /* the fader's left; the meter at MX_FX + 11 */
 #define MX_X0 4
-#define MX_FY 22                                       /* the fader: from 22 to 24 above the panel's foot */
-#define MX_FH ((int32_t)graph_h() - MX_FY - 24)
+#define MX_FY 22                                       /* the fader: from 22 to MX_LOW above the panel's foot */
+#define MX_LOW 44                                      /* (Dah) under it: the PAN (L .. R), the WIDTH a knob */
+#define MX_FH ((int32_t)graph_h() - MX_FY - MX_LOW)
 static void mixer_strip(uint32_t c)
 {
     track_t *t = &trk[c];
@@ -2391,17 +2392,21 @@ static void mixer_strip(uint32_t c)
     cv_rrect(MX_FX, MX_FY + MX_FH - f - 1 < MX_FY ? MX_FY : MX_FY + MX_FH - f - 1, 11, 3, 1, hot == 1u ? T_TEXT : T_MID, bg);
     mh = ts.meter[c] * MX_FH / (TS_MH - 2);            /* the output's meter */
     meter_up(MX_FX + 13, MX_FY, 7, MX_FH, mh, mute, bg);   /* (Dah: green to orange to red) */
-    {
-        int32_t py = (int32_t)graph_h() - 17, ry = (int32_t)graph_h() - 8;
-        cv_rect(4, py + 2, MX_W - 8, 1, T_LINE);       /* PAN: a dot on a line, the centre marked */
-        cv_rect(MX_W / 2, py, 1, 5, T_LINE);
-        x = 4 + (pan + 64) * (MX_W - 8 - 4) / 127;
-        cv_rrect(x, py, 4, 5, 2, hot == 2u ? T_TEXT : tc, bg);
-        cv_rrect(4, ry, MX_W - 8, 3, 1, T_LINE, bg);   /* WIDTH (Dah: not REV): from the middle out */
-        if (rv) {
-            int32_t hw = 1 + rv * (MX_W - 10) / 254;
-            cv_rrect(MX_W / 2 - hw, ry, 2 * hw, 3, 1, hot == 3u ? T_TEXT : tc, T_LINE);
-        }
+    {                                                  /* (Dah) PAN: L and R, the side it leans to lit, a bar
+                                                        * from the middle to it; WIDTH: a knob */
+        int32_t h = (int32_t)graph_h(), kr = KNOB_SMALL_R, ky = h - 2 * kr - 3, ph = AF_S_CAP_H + 4, py = ky - 3 - ph;
+        int32_t gx = 2, gw = MX_W - 4, mid = gx + gw / 2, px = gx + 1 + (pan + 64) * (gw - 3) / 127;
+        uint16_t pc = hot == 2u ? T_TEXT : tc;
+        cv_rrect(gx, py, gw, ph, 3, T_LINE, bg);        /* a pill: L .. R, filled from its middle */
+        if (px != mid)
+            cv_rect(px < mid ? px : mid, py + 1, px < mid ? mid - px : px - mid, ph - 2, ux_mix(T_LINE, pc, 45));
+        cv_rect(mid, py + 1, 1, ph - 2, T_MID);
+        cv_rect(px, py, 2, ph, pc);                    /* (where it stands) */
+        cv_text(gx + 2, py + 2 - AF_S_CAP_Y, &AF_S, "L", pan < -2 ? T_TEXT : T_MID);
+        cv_text(gx + gw - 2 - text_w(&AF_S, "R"), py + 2 - AF_S_CAP_Y, &AF_S, "R", pan > 2 ? T_TEXT : T_MID);
+        knob_arc(MX_W / 2 - kr, ky, kr, KNOB_SMALL_COV, KNOB_SMALL_ANG, -KA_END, -KA_END + rv * 2 * KA_END / 127,
+                 T_LINE, hot == 3u ? T_TEXT : tc, bg);  /* WIDTH (Dah: not REV): from its start */
+        cv_rect(MX_W / 2 - 1, ky + kr - 1, 2, 2, rv ? tc : T_DIM);   /* (its hub) */
     }
     cv_blit((uint32_t)(MX_X0 + (int32_t)(c + 1u) * MX_PITCH), graph_y());   /* (Dah: after the MASTER's) */
 }
