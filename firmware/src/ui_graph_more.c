@@ -178,8 +178,12 @@ static void graph_arp(const track_t *t, uint16_t c)
                     break;
             }
     }
-    if (demo)
-        cv_text_r(PANEL_X0 + PANEL_W, top + 2, &AF_S, "HOLD KEYS", T_MID, T_SURF);
+    if (demo) {                                         /* (Dah) in the middle, on a patch of the panel over the example */
+        int32_t w = text_w(&AF_M, "HOLD KEYS") + 16, y = (top + bot) / 2 - 10;
+        cv_rrect(120 - w / 2, y, w, 20, 4, T_SURF, T_SURF);
+        GFX_HOOK_ALIGN(0, y, 240, y + 20, AL_HV, "arp hold keys centred");
+        cv_text_in(0, y + CAP_IN(M, 20), 240, &AF_M, "HOLD KEYS", T_TEXT, T_SURF);
+    }
 }
 /* the delay's TIME in quarters x 24 (N_DTIME's order) */
 static const uint16_t GM_DT24[13] = {24, 12, 6, 3, 8, 4, 48, 96, 192, 384, 18, 9, 36};
