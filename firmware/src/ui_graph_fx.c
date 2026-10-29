@@ -481,6 +481,7 @@ static void graph_chain(const track_t *t, uint16_t c)
             cv_text_in(x0, ty, bw, &AF_S, "+ ADD", sel ? T_TEXT : T_MID, T_SURF);
         }
     }
+    list_more(vt > 0, (int32_t)rows * ph - vt > avail, 0, avail);   /* (Dah: more above, more below) */
 }
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */
 {

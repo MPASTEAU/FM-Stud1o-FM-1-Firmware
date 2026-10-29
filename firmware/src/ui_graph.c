@@ -1648,6 +1648,17 @@ static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
 /* (Dah) SAVE's tall lists (34 px a row): the frame from the top down to the middle, there the rows go by under it,
  * at the end on down to the foot (as HOME's steps); p the place gliding (cur's, dy back). The view's top, the frame's y
  * (from the room's top, H tall) */
+/* (Dah) more rows above / below the room y0 .. y1: a small arrow at the right, up / down */
+static void list_more(int up, int dn, int32_t y0, int32_t y1)
+{
+    int32_t k;
+    for (k = 0; k < 4; k++) {                          /* (a triangle, 7 px wide) */
+        if (up)
+            cv_rect(230 - k, y0 + 1 + k, 1 + 2 * k, 1, T_TEXT);
+        if (dn)
+            cv_rect(230 - k, y1 - 2 - k, 1 + 2 * k, 1, T_TEXT);
+    }
+}
 static int32_t tall_view(int32_t n, int32_t cur, int32_t dy, int32_t h, int32_t *fy, int32_t rh)   /* (rh: a row's
                                                          * height, 2 px between two) */
 {
@@ -1741,6 +1752,7 @@ static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int3
         if (r[k].note[0])
             cv_text_r(226, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
     }
+    list_more(vt > 0, n * (BR_H + 2) - 2 - vt > y1 - y0, y0, y1);   /* (more above, more below) */
 }
 static void graph_user(void)
 {
@@ -2206,6 +2218,7 @@ static void pat_rows(int32_t dy, int add)
         else
             pt_mini(nums[k], 38, y + 4, 188, 25, bg);
     }
+    list_more(vt > 2, rows * 34 - 2 - vt > avail - 2, 0, avail);   /* (more above, more below) */
 }
 static void graph_pattern(void)
 {
