@@ -173,8 +173,6 @@ static void au_knob(uint32_t slot, int32_t s)
     motion_undo_done(t);
     if (r == 2)
         ui_message("AUTOMATION FULL");
-    else if (!motion_enabled(t))
-        motion_set_enabled(t, 1);
 }
 static void au_clear(void)                              /* EDIT: the lane's point at the cursor (an event or a lock)
                                                          * out, the cursor on (as STEP's EDIT) */

@@ -23,9 +23,10 @@ static int motion_recording(void)
     bad += check("stop before another step restores the original parameter", t->p[P_REV] == 23);
     seq_start(); seq_tick(t, CTL);
     bad += check("recorded motion plays back at step zero", t->p[P_REV] == 110);
-    motion_set_enabled(t, 0);
-    bad += check("bypass restores base without deleting automation", t->p[P_REV] == 23 && motion_count(t) == 1u && !motion_enabled(t));
-    motion_set_enabled(t, 1); motion_step(t, 0, &motion, 1);
+    motion_wait(t, 1); motion_step(t, 0, &motion, 1);
+    bad += check("(Dah) held while a sound loads: the base back, the automation kept, none played", t->p[P_REV] == 23 &&
+        motion_count(t) == 1u);
+    motion_wait(t, 0); motion_step(t, 0, &motion, 1);
     song.rec = 0; t->p[P_REV] = 37; motion_capture(t, P_REV, 37); seq_stop();
     bad += check("manual edits outside recording become the new base", t->p[P_REV] == 37);
     song.rec = 3; seq_start(); seq_tick(t, CTL);
@@ -194,11 +195,11 @@ static int loads_and_song(void)
     motion_set_lock(t, 1, P_E0, motion_base_value(t, P_E0));
     apply_preset_to(t, 1);
     bad += check("1.1.5: a sound load of the same engine keeps the motion (both kinds, the engine's own E1 too), the pattern",
-                 motion_count(t) == 2u && motion_lock_get(t, 1, P_E0, &v) && motion_enabled(t) && t->step[0].note[0] == 60);
+                 motion_count(t) == 2u && motion_lock_get(t, 1, P_E0, &v) && t->step[0].note[0] == 60);
     undo_swap();                                   /* (back to the sound before it: REV 21) */
     set_engine_of(t, e1);
-    bad += check("  another engine: the motion on the common parameters (REV) stays, the engine's own (E1) goes, PLAY ON",
-                 motion_count(t) == 1u && !motion_lock_get(t, 1, P_E0, &v) && motion_enabled(t) && t->step[0].note[0] == 60);
+    bad += check("  another engine: the motion on the common parameters (REV) stays, the engine's own (E1) goes",
+                 motion_count(t) == 1u && !motion_lock_get(t, 1, P_E0, &v) && t->step[0].note[0] == 60);
     undo_swap(); bad += check("sound undo restores the original motion pool and base", motion_count(t) == 2u && t->p[P_REV] == 21 &&
                               t->eng_req == e0);
     undo_swap(); bad += check("sound redo restores the loaded motion state", motion_count(t) == 1u && t->eng_req == e1);
@@ -473,10 +474,6 @@ static int lock_playback(void)
     project_capture(&q);
     bad += check("  a lock sounding: the sound's own value is the base, a project saves that", t->seq_idx == 2u &&
         t->p[P_REV] == 100 && motion_base_value(t, P_REV) == 20 && q.t[0].p[P_REV] == 20);
-    motion_set_enabled(t, 0);
-    bad += check("  AUTOMATION PLAY OFF: the sound's own value at once, the locks kept", t->p[P_REV] == 20 &&
-        motion_lock_count(t) == 2u);
-    motion_set_enabled(t, 1);
     lock_next(t); lock_next(t); lock_next(t); lock_next(t);
     seq_stop();
     bad += check("  STOP while a lock sounds puts the sound's own value back", t->p[P_REV] == 20);
@@ -775,7 +772,7 @@ static int auto_list(void)
     for (k = 0; k < k0; k++) turn(EN_K2, 1);
     ok = k0 < 4u && au_lane == k0 && ui.cursor == 4u && !act_cols() && !motion_count(t);
     turn(EN_K3, 3);
-    ok &= motion_find(t, 4, id0) >= 0 && !motion_lock_count(t) && motion_enabled(t) && motion_count(t) == 1u &&
+    ok &= motion_find(t, 4, id0) >= 0 && !motion_lock_count(t) && motion_count(t) == 1u &&
           lane_value(t, 4, id0, &pt) == motion.event[0].value && pt;
     bad += check("AUTOMATION: the SEQ cursor kept; KNOB 3 an automation event on the lane there", ok);
     frames(2000);

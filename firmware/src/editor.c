@@ -366,7 +366,7 @@ static void ed_motion_reply(uint32_t k, uint32_t rc, uint32_t kinds, uint32_t fu
     track_t *t = &trk[k];
     uint32_t i, n = motion_count(t), cap = full ? MOTION_MAX : 64u, j;
     n = n < cap ? n : cap;
-    ed_b(k); ed_b(rc); ed_b(motion_enabled(t));
+    ed_b(k); ed_b(rc); ed_b(1u);                       /* (Dah: automation always plays: on) */
     if (full) {
         ed_b(n); ed_b(n >> 7); ed_b(MOTION_MAX); ed_b(MOTION_MAX >> 7);
     } else {
@@ -452,7 +452,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
             /* (the query with the kinds; 8: all of them, 1.2) */
         } else if (na > 1u && chain_busy()) rc = 3;
         else if (na > 1u) {
-            if (a[1] == 1u) motion_set_enabled(t, a[2]);
+            if (a[1] == 1u) { /* (Dah: PLAY ON / OFF gone: always on, the op taken and ignored) */ }
             else if (a[1] == 2u) { load_begin(t, UNDO_PAT); motion_clear(t); load_end(t); }
             else if (a[1] == 3u) rc = motion_set_event(t, a[2], a[3], (int16_t)ed_rv(a + 4));
             else if (a[1] == 4u && a[2] < NSTEP && motion_param(a[3])) motion_delete_event(t, a[2], a[3]);

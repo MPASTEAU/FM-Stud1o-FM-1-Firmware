@@ -1025,17 +1025,17 @@ static int test_actions(void)
     /* the dialogs and the menu */
     open_family(FAM_SEQ);
     my_steps(t);
-    confirm_open(CF_CLEAR_MOTION, song.sel);
+    confirm_open(CF_INIT_SOUND, song.sel);
     frame();
-    bad += check("a dialog: OCT+ breathes, OCT- lit", ui.confirm == CF_CLEAR_MOTION && oct_leds_seen(0) == (1u | OCT_BREATH) &&
+    bad += check("a dialog: OCT+ breathes, OCT- lit", ui.confirm == CF_INIT_SOUND && oct_leds_seen(0) == (1u | OCT_BREATH) &&
                  oct_leds_seen(1) == (1u | OCT_BREATH));
     fm1_in.buttons |= 1u << panel.btn[B_OCTUP];
     host_pressed |= 1u << panel.btn[B_OCTUP];
     frame();
-    bad += check("..it answers on release, not on the press", ui.confirm == CF_CLEAR_MOTION);
+    bad += check("..it answers on release, not on the press", ui.confirm == CF_INIT_SOUND);
     fm1_in.buttons &= ~(1u << panel.btn[B_OCTUP]);
     frame();
-    bad += check("..OCT+ let go: done", ui.confirm == CF_NONE && msg_is("AUTOMATION CLEARED"));
+    bad += check("..OCT+ let go: done", ui.confirm == CF_NONE && msg_is("SOUND INIT"));
     bad += check("back on SEQ: the octave LEDs again", oct_leds() == 2u);
     return bad;
 }
@@ -2628,7 +2628,7 @@ static int test_page_cycles(void)
         ok &= au_lane == l0;
         v0 = lane_value(t, 4, id0, &pt);
         turn(EN_K3, 3);
-        ok &= motion_find(t, 4, id0) >= 0 && lane_value(t, 4, id0, &pt) != v0 && pt && motion_enabled(t) &&
+        ok &= motion_find(t, 4, id0) >= 0 && lane_value(t, 4, id0, &pt) != v0 && pt &&
               !(motion.event[motion_find(t, 4, id0)].param & MOTION_LOCK) && ui.hot_col == 2u && motion_count(t) == 1u;
         v0 = lane_value(t, 4, id0, &pt);
         ok &= lane_value(t, 5, id0, &pt) == v0 && !pt && motion_find(t, 3, id0) < 0;
@@ -2773,24 +2773,11 @@ static int test_product_ux(void)
 #endif
     ui_power_on(); song.rec = 1; seq_start(); go_home();
     int16_t baseline = TSEL->p[P_E0]; turn(EN_K1, 1);
-    bad += check("REC plus a sound knob records motion through the UI", motion_count(TSEL) == 1 && motion_enabled(TSEL));
+    bad += check("REC plus a sound knob records motion through the UI", motion_count(TSEL) == 1);
     press(B_PLAY); events_block(32);
     bad += check("stopping returns the original sound after a recorded knob gesture", TSEL->p[P_E0] == baseline);
-    go_page(GR_EVENTS); motion_set_enabled(TSEL, 0);
+    go_page(GR_EVENTS);
     bad += check("#93 the page is AUTOMATION (GR_EVENTS inside)", str_eq(cur_page()->title, "AUTOMATION"));
-    bad += check("MOTION playback OFF preserves its stored events", !motion_enabled(TSEL) && motion_count(TSEL) == 1);
-    confirm_open(CF_CLEAR_MOTION, song.sel); frame();
-    bad += check("MOTION clear always asks confirmation", ui.confirm == CF_CLEAR_MOTION && motion_count(TSEL) == 1);
-    {
-        char qa[24], qb[24];
-        confirm_text(qa, qb);
-        bad += check("#93   the dialog asks CLEAR T1 AUTOMATION?", str_eq(qa, "CLEAR T1 AUTOMATION?"));
-    }
-    press(B_OCTDN); confirm_open(CF_CLEAR_MOTION, song.sel); frame(); press(B_OCTUP);
-    bad += check("confirmed MOTION clear removes events and SAVE hold restores them", motion_count(TSEL) == 0 &&
-                 msg_is("AUTOMATION CLEARED"));
-    hold(B_SAVE);
-    bad += check("motion-clear UNDO restores the recorded events", motion_count(TSEL) == 1);
     motion_full = 1; frame();
     bad += check("#93 the events used up: AUTOMATION FULL", msg_is("AUTOMATION FULL") && !motion_full);
     {   /* #63: a card shows MOTION's icon while the track's motion changes its parameter */
@@ -2802,28 +2789,23 @@ static int test_product_ux(void)
         bad += check("MOTION: a recorded knob marks its HOME card (and no other)", ok && motion_count(TSEL) == 1);
         song.rec = 0; press(B_PLAY); events_block(32); frame();
         ok = card_motion(0);
-        motion_set_enabled(TSEL, 0); go_home(); frame();
-        ok &= !card_motion(0) && motion_count(TSEL) == 1;
-        bad += check("MOTION: PLAY OFF takes the icon off the card, the events stay", ok);
-        motion_set_enabled(TSEL, 1); go_home(); frame();
-        ok = card_motion(0);
         track_select(1); frame();
         ok &= !card_motion(0);                           /* (another track: its own motion, none) */
         track_select(0); frame();
         ok &= card_motion(0);
-        bad += check("MOTION: PLAY ON again shows it; only on the track that has the motion", ok);
+        bad += check("MOTION: stopped still shown; only on the track that has the motion", ok);
         go_page(GR_TRK); frame();
         ok = !card_motion(0) && !card_motion(1) && !card_motion(2);
         motion_set_event(TSEL, 3, P_PAN, 20); frame();
         ok &= card_motion(1) && !card_motion(0) && !card_motion(2) && !card_motion(3);
         bad += check("MOTION: a mix parameter's event marks its MIXER card (PAN)", ok);
-        confirm_open(CF_CLEAR_MOTION, song.sel); frame(); press(B_OCTUP);
+        motion_clear(TSEL); frame();
         ok = motion_count(TSEL) == 0;
         go_home(); frame();
         ok &= !card_motion(0) && !card_motion(1);
         go_page(GR_TRK); frame();
         ok &= !card_motion(1);
-        bad += check("MOTION: CLEAR takes the icon off every card", ok && id < P_COUNT);
+        bad += check("MOTION: cleared, the icon off every card", ok && id < P_COUNT);
     }
     ui_power_on(); ui_leds();
     memset(led_pos, 0xFF, sizeof led_pos);
@@ -3172,11 +3154,11 @@ static int test_layer(void)
     ok = !ui.layer && !perf_mask && gates() > 0 && !kb_layer;
     key_up(white(3)); btn_up(B_FX); frame();
     bad += check("in the menu: no layer, FX + a key plays the key; FX let go: no page", ok && ui.menu == 1);
-    ui_power_on(); ui.confirm = CF_CLEAR_MOTION;
+    ui_power_on(); ui.confirm = CF_INIT_SOUND;
     btn_down(B_FX); frames(512);
     ok = !ui.layer;
     btn_up(B_FX); frame();
-    bad += check("in a dialog: FX held shows no map and taps nothing", ok && ui.confirm == CF_CLEAR_MOTION);
+    bad += check("in a dialog: FX held shows no map and taps nothing", ok && ui.confirm == CF_INIT_SOUND);
     /* UBOOT: the countdown closes the map and stops every effect; OCT- + OCT+ are still seen */
     ui_power_on();
     btn_down(B_FX); key_down(white(5)); frame();
@@ -4031,11 +4013,11 @@ static int test_quick_layers(void)
     ok = !ui.layer && gates() > 0 && !kb_layer;
     key_up(white(3)); btn_up(B_GLO); frame();
     bad += check("in the menu: no GLO layer, GLO + a key plays it; GLO let go: no page", ok && ui.menu == 1);
-    ui_power_on(); ui.confirm = CF_CLEAR_MOTION;
+    ui_power_on(); ui.confirm = CF_INIT_SOUND;
     btn_down(B_SCL); frames(512);
     ok = !ui.layer;
     btn_up(B_SCL); frame();
-    bad += check("in a dialog: SCL held shows no map and taps nothing", ok && ui.confirm == CF_CLEAR_MOTION);
+    bad += check("in a dialog: SCL held shows no map and taps nothing", ok && ui.confirm == CF_INIT_SOUND);
     /* one layer at a time: a second layer button is ignored, its keys stay notes after */
     ui_power_on();
     btn_down(B_GLO); frame(); btn_down(B_EDIT); frame(); key_down(white(1)); frame();
@@ -4675,7 +4657,7 @@ static int test_bughunt_ui2(void)
             uint32_t k = white(0), ok;
             ui_power_on(); TSEL->p[P_VOICE] = V_POLY;
             go_home(); frame();
-            confirm_open(CF_CLEAR_MOTION, 0); frame();
+            confirm_open(CF_INIT_SOUND, 0); frame();
             btn_down(BTN[i]); frame(); frames(100);
             btn_down(B_OCTDN); frame(); btn_up(B_OCTDN); frame();   /* the dialog closes, the button still held */
             frames(800);
@@ -5326,7 +5308,7 @@ static int test_breath(void)
         ui_power_on();
         settings_leds = MODES[m];
         go_title("ENV"); frame();
-        ui.confirm = CF_CLEAR_MOTION;
+        ui.confirm = CF_INIT_SOUND;
         for (t = 0; t < 4u; t++) {
             fm1_ms += 250u;
             ui_leds();
@@ -5804,7 +5786,7 @@ static int test_idle_leds(void)
     ok &= !host_idle;
     song.rec = 0; ui.menu = 1; frame(); ui_leds();
     ok &= !host_idle;
-    ui.menu = 0; ui.confirm = CF_CLEAR_MOTION; frame(); ui_leds();
+    ui.menu = 0; ui.confirm = CF_INIT_SOUND; frame(); ui_leds();
     ok &= !host_idle;
     ui.confirm = 0; ui.lock = LAYER_GLO; ui.layer = LAYER_GLO; ui_leds();
     ok &= !host_idle;
@@ -5922,7 +5904,7 @@ static int test_screen_off(void)
     bad += check("SCREEN OFF: NEVER stays on for hours; 5 MIN goes dark after 5; PLAY to wake starts nothing", ok);
 
     n = host_pw_n;
-    ui.confirm = CF_CLEAR_MOTION; ui.force = 1;          /* a dialog: never dark */
+    ui.confirm = CF_INIT_SOUND; ui.force = 1;          /* a dialog: never dark */
     scr_idle(20u * 60000u);
     ok = host_pw_n == n && host_bl;
     ui.confirm = 0; ui.force = 1;
@@ -5932,9 +5914,9 @@ static int test_screen_off(void)
     cin_left = 0;
     scr_idle(6u * 60000u);
     ok &= host_pw_n == n + 1u && !host_bl;
-    ui.confirm = CF_CLEAR_MOTION; ui.force = 1;          /* one opening while dark (the editor, MIDI): it wakes */
+    ui.confirm = CF_INIT_SOUND; ui.force = 1;          /* one opening while dark (the editor, MIDI): it wakes */
     frames(300u);
-    ok &= scr_woke(n + 1u) && ui.confirm == CF_CLEAR_MOTION;
+    ok &= scr_woke(n + 1u) && ui.confirm == CF_INIT_SOUND;
     ui.confirm = 0; ui.force = 1;
     scr_idle(6u * 60000u);
     n = host_pw_n;
@@ -8642,7 +8624,6 @@ static int test_song_lanes(void)
             t->p[P_SQNT] = !(st && k == 2u);
         }
         if (!st) {
-            motion_set_enabled(&trk[2], 1);
             motion_set_event(&trk[2], 0, P_REV, 100);
         }
         pat_keep(st + 1u);
@@ -9270,7 +9251,6 @@ static int test_extras(void)
         track_defaults_steps(t);
         t->p[P_SLEN] = 16; t->p[P_SDIV] = 2; t->p[P_SSWING] = 0; song.g[G_SWING] = 0; t->p[P_REV] = 30;
         trkx[0].curve = (uint8_t)n;
-        motion_set_enabled(t, 1);
         motion_set_event(t, 0, P_REV, 0);
         motion_set_event(t, 8, P_REV, 96);
         seq_start();

@@ -51,7 +51,6 @@ static uint32_t song_probe(uint32_t *blocks)
             t->p[P_SLEN] = LEN[s][k];
             t->p[P_SDIV] = DIV[s][k];
             t->p[P_SGATE] = (int16_t)(40 + 20 * (int16_t)k);
-            motion_set_enabled(t, 1);
             motion_set_event(t, (uint32_t)(2u + s), P_REV, (int16_t)(20 + 30 * (int16_t)s + (int16_t)k));
         }
         PROBE_SAVE(s);

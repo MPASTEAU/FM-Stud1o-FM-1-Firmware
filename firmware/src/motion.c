@@ -13,6 +13,7 @@ static int16_t motion_base[NTRK][P_COUNT];
 static uint32_t motion_active[NTRK][(P_COUNT + 31u) / 32u];
 static uint32_t motion_locked[NTRK][(P_COUNT + 31u) / 32u];   /* the ids a lock holds now (put back at the next step) */
 static uint8_t motion_base_valid, motion_full;
+static uint8_t motion_hold;   /* (Dah) the tracks whose motion waits (a sound loading: ui.c load_motion_hold), a bit each */
 #define MRAMP_N 4u
 static struct {
     uint8_t n, id[MRAMP_N], len[MRAMP_N], at[MRAMP_N];
@@ -61,7 +62,6 @@ static int motion_valid(const motion_store_t *m)
     }
     return 1;
 }
-static int motion_enabled(const track_t *t) { return (motion.on >> trk_index(t)) & 1u; }
 static uint32_t motion_count(const track_t *t)
 {
     uint32_t i, n = 0, k = trk_index(t);
@@ -96,13 +96,13 @@ static int motion_lock_get(const track_t *t, uint32_t step, uint32_t id, int16_t
         }
     return 0;
 }
-/* the parameters track k's MOTION will change (PLAY ON, at least one event): a bit per P_* id in m[].
+/* the parameters track k's MOTION will change (at least one event): a bit per P_* id in m[].
  * Main loop only (the ISR never writes the events); at most MOTION_MAX records, once per card redraw. */
 static uint32_t motion_mask(uint32_t k, uint32_t m[(P_COUNT + 31u) / 32u])
 {
     uint32_t i, any = 0;
     memset(m, 0, ((P_COUNT + 31u) / 32u) * sizeof m[0]);
-    if (k >= NTRK || !((motion.on >> k) & 1u)) return 0;
+    if (k >= NTRK) return 0;
     for (i = 0; i < motion.count; i++) {
         const motion_event_t *e = &motion.event[i];
         if ((e->place >> 6) != k || MOTION_ID(e) >= P_COUNT) continue;
@@ -165,11 +165,13 @@ static void motion_end(void)
     for (uint32_t k = 0; k < NTRK; k++) motion_restore(&trk[k]);
     motion_base_valid = 0;
 }
-static void motion_set_enabled(track_t *t, uint32_t on)
+/* (Dah) automation always plays (its PLAY ON / OFF gone; the stores' on bits kept as they were, unread): track t's
+ * waits while its sound loads (hold 1: what it set goes back) */
+static void motion_wait(track_t *t, uint32_t hold)
 {
     uint32_t f = motion_guard(), b = 1u << trk_index(t);
-    motion.on = (uint8_t)(on ? motion.on | b : motion.on & ~b);
-    if (!on) motion_restore(t);
+    motion_hold = (uint8_t)(hold ? motion_hold | b : motion_hold & ~b);
+    if (hold) motion_restore(t);
     motion_unguard(f);
 }
 static void motion_clear(track_t *t)
@@ -367,7 +369,7 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     uint32_t k = trk_index(t), i, w, any = 0;
     if (mramp[k].n)
         motion_ramp_step(k, step);
-    if (!((m->on >> k) & 1u)) return;
+    if ((motion_hold >> k) & 1u) return;
     if (!((motion_base_valid >> k) & 1u)) {
         memcpy(motion_base[k], t->p, sizeof t->p);
         motion_base_valid |= (uint8_t)(1u << k);

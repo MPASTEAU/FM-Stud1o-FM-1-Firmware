@@ -150,7 +150,6 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
     uint32_t s;
     for (s = s0; s <= s1 && s < NSTEP; s += 8u)
         (void)motion_set_event(t, s, id, (int16_t)(v0 + (v1 - v0) * (int32_t)(s - s0) / (int32_t)(s1 > s0 ? s1 - s0 : 1u)));
-    motion_set_enabled(t, 1);
 }
 static void felucca_demo(void) __attribute__((noinline));   /* (its own, built for size: tools/size_fns.py) */
 static void demo_var(uint32_t k, uint32_t v) __attribute__((noinline));

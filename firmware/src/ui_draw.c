@@ -2419,9 +2419,6 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "CLEAN INIT SOUND?", 24);
         str_cpy(b, "NO FX, NO MOD", 24);
         break;
-    case CF_CLEAR_MOTION:
-        str_cpy(a, "CLEAR T1 AUTOMATION?", 24); a[7] = (char)('1' + k % NTRK);
-        break;
     case CF_OVR_USER:
         str_cpy(a, "OVERWRITE ", 24);
         up_slot_label(a + str_len(a), k);
@@ -2457,7 +2454,7 @@ static void draw_confirm(void)
     cv_rrect(!!ux.style, !!ux.style, DLG_W - 2 * !!ux.style, DLG_H - 2 * !!ux.style, 8 - !!ux.style, T_SURF,
              ux.style ? T_RULE : T_BG);
     GFX_HOOK_ALIGN(0, 0, DLG_W, 0, AL_H, "dialog icon centred");
-    cv_icon_in(0, 12, DLG_W, 0, 16, ui.confirm == CF_CLEAR_MOTION ? ICON_X_MOTION_DEL : ICON_X_WARN, T_ACCENT, T_SURF);
+    cv_icon_in(0, 12, DLG_W, 0, 16, ICON_X_WARN, T_ACCENT, T_SURF);
     if (text_w(tf, a) > DLG_W - 16)
         tf = &AF_S;
     GFX_HOOK_ALIGN(0, 0, DLG_W, 0, AL_H, "dialog question centred");

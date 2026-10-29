@@ -147,7 +147,6 @@ static int cond_locks_rolls(void)
     uint32_t r0, r1, i;
     set_cond(&t->step[4], 1);                          /* 1:2 */
     motion_set_lock(t, 4, P_LEVEL, 7);
-    motion_set_enabled(t, 1);
     seq_start();
     for (i = 0; i < 5u * div_samples(2) / CTL; i++)
         seq_tick(t, CTL);                              /* loop 1: plays, its lock with it */
@@ -510,7 +509,6 @@ static int test_double_half(void)
     motion_set_lock(t, 2, P_REV, 50);
     motion_set_event(t, 7, P_CHOR, 20);
     motion_set_lock(t, 10, P_DIST, 30);                /* (past LEN: replaced by the copy's) */
-    motion_set_enabled(t, 1);
     memcpy(ref, t->step, sizeof ref);
     mc = motion_count(t);
     go_page(GR_ROLL); frame();

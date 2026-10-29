@@ -238,7 +238,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 
 | cmd (v7) | Request args | Reply args |
 | --- | --- | --- |
-| 64 MOTION | track (query); track, 1, on 0/1 (play on / off); track, 2 (clear); track, 3, step, id, v14 (set an event); track, 4, step, id (delete an event or a lock); (1.1) track, 5, step, id, v14 (set a lock); track, 6, step (clear the step's locks; step 127: every step's); track, 7 (query with the kinds); (1.2) track, 8 (every record, with the kinds) | track, rc, on (0/1), count (this track's events and locks), max (64), then count × (step, id, v14); after ops 5..7 (1.1) then count × kind (0 automation, 1 lock), in the same order. 1.2: ops 1..7 list at most the track's first 64 records (count ≤ 64, max 64: as before); op 8 answers track, rc, on, count lo, count hi, max lo, max hi (two 7-bit bytes each, LSB first; max 128), count × (step, id, v14), count × kind |
+| 64 MOTION | track (query); track, 1, on 0/1 (play on / off: taken and ignored since the 8-track firmware, automation always plays; the replies say on 1); track, 2 (clear); track, 3, step, id, v14 (set an event); track, 4, step, id (delete an event or a lock); (1.1) track, 5, step, id, v14 (set a lock); track, 6, step (clear the step's locks; step 127: every step's); track, 7 (query with the kinds); (1.2) track, 8 (every record, with the kinds) | track, rc, on (0/1), count (this track's events and locks), max (64), then count × (step, id, v14); after ops 5..7 (1.1) then count × kind (0 automation, 1 lock), in the same order. 1.2: ops 1..7 list at most the track's first 64 records (count ≤ 64, max 64: as before); op 8 answers track, rc, on, count lo, count hi, max lo, max hi (two 7-bit bytes each, LSB first; max 128), count × (step, id, v14), count × kind |
 | 65 BACKUP_LIST | — | 1, rc, count (11), then per object: id, size u32, crc u32 |
 | 66 BACKUP_GET | id, offset u32, count lo, count hi (≤ 256) | id, rc, offset u32, count lo, count hi, pack7 data |
 | 67 BACKUP_PUT | op 0 begin: 0, id, size u32, crc u32; op 1 data: 1, id, offset u32, pack7 data; op 2 commit: 2, id; op 3 abort: 3, id | op, id, rc |
@@ -573,8 +573,8 @@ when the track's engine is not the saved one).
   33..36 (DIST, CHO, DLY, REV), 38 (GLIDE), 39 (PAN), 44 (DETUNE), 61..80 (the FM operator parameters) and
   83..90 (the DRUM lane levels), 91..98 (the engine parameters; not the chord keys 81, 82). The device records them while the track is armed, playing and selected, from its knobs
   and from `SET` / `TRACK_PARAM` alike.
-  - `MOTION` with the track alone is the query. `on` 0 keeps the data and stops playing it; 1 plays it. Clear
-    drops the track's events and turns it off; on the device it is undone by SAVE held.
+  - `MOTION` with the track alone is the query. `on` is always 1 (automation always plays; op 1 is taken and
+    ignored). Clear drops the track's events; on the device it is undone by SAVE held.
   - Set: `value` must be inside the parameter's range for that track's engine (and −64..127); a
     new event when the 64 are used gets rc 2 ("MOTION FULL" on the device), an event that already exists is
     updated. A set turns the track's motion on. A delete of an event that does not exist succeeds.
@@ -660,7 +660,7 @@ INFO advertises `4C 01 1` after the ratchet tag (`52 01 4`). Firmware without it
   parts too); the next step puts back what sounds without it: the latest automation event of that id at a step up
   to that one in this pass, else the sound's own value. An **automation event** (what the device records with REC
   armed) sets its value at its step and holds it, as before. The ids that can be locked are the ones motion can
-  record (`motion_param`, see above); AUTOMATION's PLAY OFF bypasses locks too, its CLEAR clears them.
+  record (`motion_param`, see above); `MOTION` 2 (clear) clears them too.
 - `MOTION` 5 sets a lock (track, 5, step, id, v14): as op 3, the value inside the parameter's range for the track's
   engine, rc 2 when the 64 are used. A lock and an automation event on the same step and id are one record: op 3
   over a lock makes it an automation event, op 5 over an automation event makes it a lock. Op 4 deletes either

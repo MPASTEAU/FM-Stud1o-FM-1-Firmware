@@ -234,7 +234,7 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
-       CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_MOTION, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
+       CF_DEL_ROW, CF_INIT_SOUND, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
        CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_ADD_EQ };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
@@ -1045,7 +1045,7 @@ static uint8_t undo_depth;       /* loads nest (an engine jump loads its first p
 static uint8_t pat_from[NTRK];
 static uint32_t pat_from_h[NTRK];
 static uint8_t load_from;        /* a sound load (the outer one): the engine before it (load_end) */
-static uint8_t load_mo;          /* .. the track's motion paused while the sound changes: bit 0 set, bit 1 it was ON */
+static uint8_t load_mo;          /* .. the track's motion held while the sound changes (motion_wait): bit 0 set */
 
 static uint32_t fnv(uint32_t h, const void *p, uint32_t n)
 {
@@ -1087,8 +1087,8 @@ static void pat_from_set(uint32_t slot)             /* every track's pattern is 
     }
 }
 
-/* load_begin, the copy taken: a pattern load drops the track's motion (its steps go); a sound load pauses it (PLAY
- * OFF while the sound changes under it) and load_end keeps what still means the same (motion_sound_loaded) */
+/* load_begin, the copy taken: a pattern load drops the track's motion (its steps go); a sound load holds it (motion_wait
+ * while the sound changes under it) and load_end keeps what still means the same (motion_sound_loaded) */
 static void load_motion_hold(track_t *t, uint32_t what)
 {
     if (what & UNDO_PAT) {
@@ -1097,8 +1097,8 @@ static void load_motion_hold(track_t *t, uint32_t what)
         return;
     }
     load_from = t->eng_req;
-    load_mo = (uint8_t)(1u | (motion_enabled(t) ? 2u : 0u));
-    motion_set_enabled(t, 0);
+    load_mo = 1u;
+    motion_wait(t, 1);
 }
 
 /* MOMENTARY (ui_input.c mom_turn: LFO held, the knobs' changes go back when it is let go): the values turned, where
@@ -1164,8 +1164,7 @@ static void load_end(track_t *t)
         return;
     if (load_mo & 1u) {                           /* a sound load: the motion on the common parameters stays */
         (void)motion_sound_loaded(t, load_from, t->eng_req);
-        if ((load_mo & 2u) && motion_count(t))
-            motion_set_enabled(t, 1);
+        motion_wait(t, 0);
         load_mo = 0;
     }
     motion_rebase(t);
