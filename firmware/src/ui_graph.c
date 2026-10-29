@@ -1648,6 +1648,19 @@ static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
 /* (Dah) SAVE's tall lists (34 px a row): the frame from the top down to the middle, there the rows go by under it,
  * at the end on down to the foot (as HOME's steps); p the place gliding (cur's, dy back). The view's top, the frame's y
  * (from the room's top, H tall) */
+/* (Dah) a list's scrollbar at the right (as the full-screen selectors'): the room y0 .. y1, the content ch tall, the
+ * view's top vt */
+static void list_bar(int32_t y0, int32_t y1, int32_t ch, int32_t vt)
+{
+    int32_t th = y1 - y0, bh, by;
+    if (ch <= th)
+        return;
+    bh = th * th / ch;
+    bh = bh < 8 ? 8 : bh;
+    by = y0 + (int32_t)((int64_t)vt * (th - bh) / (ch - th));
+    cv_rect(232, y0, 2, th, T_LINE);
+    cv_rect(231, by, 4, bh, T_MID);
+}
 static int32_t tall_view(int32_t n, int32_t cur, int32_t dy, int32_t h, int32_t *fy, int32_t rh)   /* (rh: a row's
                                                          * height, 2 px between two) */
 {
@@ -1719,9 +1732,9 @@ typedef struct { char tag[6]; char nm[20]; char note[12]; uint16_t tc, nc; } big
 static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int32_t y0, int32_t y1)
 {
     int32_t fy, vt = tall_view(n, cur, dy, y1 - y0, &fy, BR_H), k;   /* (Dah: taller than a list's, less than PATTERN's) */
-    cv_rrect(4, y0 + fy - 1, 232, BR_H + 2, 5, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the
+    cv_rrect(4, y0 + fy - 1, 222, BR_H + 2, 5, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the
                                                          * rows by; Dah: the one in it a little bigger, as CHAIN's) */
-    cv_rrect(6, y0 + fy + 1, 228, BR_H - 2, 4, T_RAISE, T_THEME);
+    cv_rrect(6, y0 + fy + 1, 218, BR_H - 2, 4, T_RAISE, T_THEME);
     int16_t c0 = cv_cy0, c1 = cv_cy1;
     cv_cy0 = (int16_t)clamp(y0 + CV_OY, 0, (int32_t)cv_h);   /* (Dah) the rows cut by the room's edges: shown, fainter
                                                          * (as the selectors'), clipped to it */
@@ -1735,7 +1748,7 @@ static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int3
             continue;
         if (!whole) {                                   /* (cut: small, faint) */
             cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, r[k].tag, ux_mix(T_SURF, T_MID, 55), T_SURF);
-            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, ux_mix(T_SURF, T_MID, 55), T_SURF, 170);
+            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, ux_mix(T_SURF, T_MID, 55), T_SURF, 160);
             continue;
         }
         if (y + CV_OY >= 0 && y + BR_H + CV_OY <= (int32_t)cv_h)   /* (a split panel: in this canvas whole) */
@@ -1746,12 +1759,13 @@ static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int3
         else
             cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, r[k].tag, r[k].tc ? r[k].tc : T_MID, bg);
         if (mid)
-            cv_free_text(54, y + CAP_IN(M, BR_H), &AF_M, r[k].nm, r[k].nc ? r[k].nc : T_TEXT, bg, r[k].note[0] ? 122 : 172);
+            cv_free_text(54, y + CAP_IN(M, BR_H), &AF_M, r[k].nm, r[k].nc ? r[k].nc : T_TEXT, bg, r[k].note[0] ? 112 : 162);
         else
-            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, r[k].nc ? r[k].nc : T_MID, bg, r[k].note[0] ? 120 : 170);
+            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, r[k].nc ? r[k].nc : T_MID, bg, r[k].note[0] ? 110 : 160);
         if (r[k].note[0])
-            cv_text_r(226, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
+            cv_text_r(216, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
     }
+    list_bar(y0, y1, n * (BR_H + 2) - 2, vt);          /* (Dah: the scrollbar, as the selectors') */
     cv_scroll = 0;
     cv_cy0 = c0;
     cv_cy1 = c1;
@@ -2200,9 +2214,9 @@ static void pat_rows(int32_t dy, int add)
         if (nums[i] == cur) at = i;
     rows = n + (add && n < (int32_t)PS_NUM);
     vt = tall_view(rows, at, dy, avail - 2, &fy, 32);
-    cv_rrect(4, 1 + fy, 232, 34, 5, T_THEME, T_SURF);   /* (the frame: down to the middle, the rows by, on down; Dah:
+    cv_rrect(4, 1 + fy, 222, 34, 5, T_THEME, T_SURF);   /* (the frame: down to the middle, the rows by, on down; Dah:
                                                          * the one in it a little bigger, as CHAIN's) */
-    cv_rrect(6, 3 + fy, 228, 30, 4, T_RAISE, T_THEME);
+    cv_rrect(6, 3 + fy, 218, 30, 4, T_RAISE, T_THEME);
     for (k = 0; k < rows; k++) {
         int32_t y = 2 + k * 34 - vt;
         int mid = y > 2 + fy - 17 && y < 2 + fy + 17, whole = y >= 0 && y + 32 <= avail;
@@ -2236,10 +2250,11 @@ static void pat_rows(int32_t dy, int add)
                 cv_text_on(16, y + CAP_IN(S, 32), &AF_S, b, T_MID, bg);
         }
         if (mid)
-            pt_mini(nums[k], 34, y + 3, 196, 27, bg);   /* (its steps a little bigger) */
+            pt_mini(nums[k], 34, y + 3, 186, 27, bg);   /* (its steps a little bigger) */
         else
-            pt_mini(nums[k], 38, y + 4, 188, 25, bg);
+            pt_mini(nums[k], 38, y + 4, 178, 25, bg);
     }
+    list_bar(0, avail, rows * 34 - 2, vt);              /* (Dah: the scrollbar, as the selectors') */
 }
 static void graph_pattern(void)
 {
