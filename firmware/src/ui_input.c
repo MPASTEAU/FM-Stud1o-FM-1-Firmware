@@ -1821,6 +1821,54 @@ static void chain_open(void)
         }
 }
 
+/* (Dah) FX tapped: from elsewhere, CHAIN; on CHAIN, the effect picked's page (+ ADD: asked); on an effect's page, its
+ * second when it has one ("EQ" -> "EQ 2"), else back to CHAIN */
+static int fx_has_next(void)
+{
+    char t[16];
+    uint32_t i = ui.page + 1u;
+    if (ui.home || cur_page()->fam != FAM_FX || cur_page()->id[0] == P_FXORD || i >= NPAGES || PAGES[i].fam != FAM_FX ||
+        !page_visible(i))
+        return 0;
+    str_cpy(t, PAGES[ui.page].title, 12);
+    str_cpy(t + str_len(t), " 2", 3);
+    return str_eq(PAGES[i].title, t);
+}
+static void fx_go_chain(void)
+{
+    uint32_t i;
+    for (i = 0; i < NPAGES && !(PAGES[i].fam == FAM_FX && PAGES[i].id[0] == P_FXORD); i++)
+        ;
+    ui.page = (uint8_t)(i < NPAGES ? i : page_first(FAM_FX));
+    ui.fam_last[FAM_FX] = ui.page;
+    ui.home = 0;
+    page_entered();
+}
+static void fx_tap(void)
+{
+    if (ui.home || cur_page()->fam != FAM_FX)
+        fx_go_chain();
+    else if (cur_page()->id[0] == P_FXORD)
+        chain_open();
+    else if (fx_has_next()) {
+        ui.page++;
+        ui.fam_last[FAM_FX] = ui.page;
+        page_entered();
+    } else
+        fx_go_chain();
+}
+/* (Dah) SELECT on an effect's page: the effect before or after it in the chain, its page (its list the screen) */
+static void fx_sel_turn(int32_t s)
+{
+    uint8_t u[FXU_N_ALL];
+    uint32_t n = fx_list(fx_tsel(), u);
+    if (!n)
+        return;
+    ch_cur = (uint8_t)clamp((int32_t)(ch_cur < n ? ch_cur : 0u) + s, 0, (int32_t)n - 1);
+    chain_open();
+    tl_ms = fm1_ms | 1u;
+    tl_pat = 2;
+}
 /* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
  * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, PHRASES, SONG's sections, AUTOMATION's rows, STEP's
  * cursor. On HOME and on a page with no list (ENV, LFO, ARP, SCL ..) the tempo (Dah) */
@@ -2359,8 +2407,6 @@ static void ui_input(void)
     } else if (oct & 0x30u) {                           /* (Dah) the octave, on release (pressed where nothing else
                                                          * takes OCT- / OCT+) */
         song.octave += oct & 0x10u ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
-    } else if (ka_chain_page() && (oct & 2u)) {
-        chain_open();                                   /* (Dah) CHAIN: the effect picked, its page (or + ADD) */
     } else if (act_cols() && (oct & 2u)) {              /* action pages: OCT+ does the picked action, */
         act_do();
     } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it (Dah: no more BACK to HOME) */
@@ -2500,6 +2546,8 @@ static void ui_input(void)
                                                          * letting go, LFO is held (MOMENTARY) or steps are held */
             for (k = (uint32_t)(s > 0 ? s : -s); k && !lay && !kq && !mom_down() && !lock_held(); k--)
                 sel_list(s > 0 ? 1 : -1);
+        } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] != P_FXORD) {
+            fx_sel_turn(s);                             /* (Dah) an effect's page: SELECT the next / previous effect */
         } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] == P_FXORD) {
             fl_fx_move(s);                              /* (Dah) FX > CHAIN: SELECT the effect, its list the screen */
             tl_ms = fm1_ms | 1u;

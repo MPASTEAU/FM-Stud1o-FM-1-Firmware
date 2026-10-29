@@ -524,16 +524,18 @@ static void head_home(void)
 }
 /* (Dah) HOME's footer, a band at the screen's foot: the shortcuts left (keycaps: OCT+ held the VIEW, SELECT the
  * pattern), the selected track's preset right (its name alone) */
+static int fx_has_next(void);                           /* (ui_input.c: an effect with a second page) */
 static void home_foot(void)
 {
     static uint32_t fsig;
     char pn[16];
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig;
-    static const khint_t KH[3][2] = {{{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}},   /* HOME */
-                                     {{KC_OCTUP, "OPEN"}, {KC_REC, "DEL"}},      /* FX > CHAIN: the effect picked */
-                                     {{KC_FX, "NEXT"}, {KC_SELECT, "PAT"}}};     /* an effect's page */
-    uint32_t hk = ui.home ? 0u : cur_page()->id[0] == P_FXORD ? 1u : 2u;
+    static const khint_t KH[4][2] = {{{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}},   /* HOME */
+                                     {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
+                                     {{KC_FX, "CHAIN"}, {KC_SELECT, "FX"}},      /* an effect's page (FX: back) */
+                                     {{KC_FX, "NEXT"}, {KC_SELECT, "FX"}}};      /* .. with a second page */
+    uint32_t hk = ui.home ? 0u : cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
         str_cpy(pn, "FX", sizeof pn);
     else

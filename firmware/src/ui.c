@@ -909,8 +909,13 @@ static void note_name(char *b, uint32_t n)
  * to 1.4.1 the last); HOME: home_tap). From another
  * family the family's page shown last (SAVE: USER); one that is not the family's any more (a page that moved, as GLOBAL
  * and SYSTEM in 1.2), or not shown for this track, gives the family's first */
+static void fx_tap(void);                               /* (Dah: ui_input.c, FX's own way) */
 static void open_family(uint32_t fam)
 {
+    if (fam == FAM_FX) {
+        fx_tap();
+        return;
+    }
     if (!ui.home && cur_page()->fam == fam) {          /* same button again: next page */
         uint32_t n, i = ui.page;
         for (n = 0; n < NPAGES; n++) {
