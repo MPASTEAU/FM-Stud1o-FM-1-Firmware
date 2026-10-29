@@ -2910,10 +2910,13 @@ static void rack_ruler(void)
         cv_rect(x, RK_RH - (beat ? 3 : 1), 1, beat ? 3 : 1, beat ? T_MID : T_LINE);
     }
     if (ph != 0xFFu) {                                 /* the step playing: its number, where it lands */
-        int32_t cx = RK_SX + (int32_t)(2u * ph + 1u) * RK_SW / (int32_t)(2u * nc), w;
+        int32_t bx = RK_SX + (int32_t)ph * RK_SW / (int32_t)nc, sp = RK_SW / (int32_t)nc, w, ib[4];
+        int32_t cw = RK_SX + (int32_t)(ph + 1u) * RK_SW / (int32_t)nc - bx - (sp > 3 ? 2 : 1);
+        int32_t cx2 = 2 * bx + cw;                      /* (twice the lit column's middle, as the rows draw it) */
         fmt_int(b, (int32_t)(p0 + ph) + 1);
         w = text_w(&AF_S, b);
-        x0 = clamp(cx - w / 2, 0, TR_W - w);
+        text_ink(&AF_S, b, ib);                         /* (Dah: its ink centred on the column) */
+        x0 = clamp((cx2 - (ib[0] + ib[2])) / 2, 0, TR_W - w);
         cv_rect(x0 - 1, 4, w + 2, RK_RH - 4, T_BG);
         cv_text(x0, 4 - AF_S_CAP_Y, &AF_S, b, T_ACCENT);
     }
