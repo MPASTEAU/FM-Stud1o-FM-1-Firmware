@@ -333,6 +333,11 @@ static void graph_roll(const track_t *t, uint16_t c)
         if (step_detailed(&seq_steps(t)[si]))         /* 1.5.1: CHANCE / RATCH / NUDGE set: a mark over it (DETAIL) */
             cv_rect(x + cw / 2 - 2, 12, cw - 1 < 5 ? cw - 1 : 5, 2, c);
     }
+    if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the step playing: its column lit,
+                                                         * step by step (as HOME's), the notes over it */
+        int32_t x = prv_x(t->seq_idx - base);
+        cv_rect(x + 1, PR_Y0, prv_x(t->seq_idx - base + 1u) - x - 1, ybot - PR_Y0, ux_mix(T_SURF, T_TEXT, 22));
+    }
     for (i = 0; i < ncol; i++) {                      /* the notes */
         uint32_t si = base + i, s = pr_src(t, si, len), nx = (si + 1u) % len;
         const step_t *st, *ns = &seq_steps(t)[nx];
@@ -353,11 +358,8 @@ static void graph_roll(const track_t *t, uint16_t c)
             cv_line(x + w - 2, y + 2, x + w + 2, ny + 2, T_TEXT);   /* the slide into the next note */
         }
     }
-    if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the playhead, gliding through
-                                                         * the step (its samples so far of the step's) */
-        uint32_t ss = div_samples((uint32_t)t->p[P_SDIV]), f = ss ? ((t->seq_pos >> 8) * 64u / ss) : 0u;
-        int32_t x = prv_x(t->seq_idx - base) + (int32_t)((uint32_t)cw * (f > 64u ? 64u : f) / 64u), w, ib[4], nx;
-        cv_rect(x, PR_Y0, 2, ybot - PR_Y0, T_ACCENT);
+    if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the step playing: its number on the ruler */
+        int32_t w, ib[4], nx;
         fmt_int(nb, (int32_t)t->seq_idx + 1);          /* (Dah) its number on the ruler, centred on its column */
         w = text_w(&AF_S, nb);
         text_ink(&AF_S, nb, ib);
