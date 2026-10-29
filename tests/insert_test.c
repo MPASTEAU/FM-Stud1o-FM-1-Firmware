@@ -480,7 +480,7 @@ static void test_stored(void)
             }
         }
         {   /* four bands: HP 24, LP 24, a shelf, a bell: six stages asked, five run (the LP at 12) */
-            static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}};
+            static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}, EQF_NEW | EQF_IN};
             uint8_t kd[EQ_NB], bk[EQ_NB], st[EQ_NB];
             *c = E4;
             t->p[P_EQLO] = 20; t->p[P_EQ3G] = 1; t->p[P_EQHI] = 100; t->p[P_EQ3F] = 1;
@@ -488,46 +488,54 @@ static void test_stored(void)
             ok &= eq_stages(t, c) == 6u && eq_plan(t, c, kd, bk, st) == 4u && kd[0] == EQK_HP24 && kd[1] == EQK_LP12 &&
                   kd[2] == EQK_LS && kd[3] == EQK_BELL && st[3] == 4u && eq_units(t) == 15u;
         }
-        for (p = 0; p < P_COUNT; p++)                   /* the layout before bands: LOW CUT 30, HIGH CUT off, bells
-                                                         * 1 and 3 (3 into the free slot) */
+        for (p = 0; p < P_COUNT; p++)                   /* the EQ before filters: LOW CUT 30, HIGH CUT off, bells 1
+                                                         * and 3 */
             raw[p] = t->p[p];
         raw[P_EQLO] = 30; raw[P_EQHI] = 118; raw[P_EQ1F] = 50; raw[P_EQ1G] = 20; raw[P_EQ2F] = 90; raw[P_EQ2G] = 0;
         raw[P_EQ3F] = 110; raw[P_EQ3G] = -10;
         eq_adopt(t->p, raw, c);
-        ok &= c->n == 4u && eq_type(c, 0) == EQT_HP && eq_type(c, 1) == EQT_LP && eq_type(c, 2) == EQT_BELL &&
-              eq_type(c, 3) == EQT_BELL && t->p[P_EQLO] == 30 && t->p[P_EQ3G] == 0 && t->p[P_EQ3F] == 0 &&
-              t->p[P_EQ1F] == 50 && t->p[P_EQ1G] == 20 && t->p[P_EQ2F] == 110 && t->p[P_EQ2G] == -10 && eq_units(t) == 13u;
-        memset(c, 0, sizeof *c);                        /* none: the two cuts */
-        ok &= eq_units(t) == 1u;
-        {   /* the page: KNOB 1 past the last asks; YES adds a BELL, picked; REC takes it out */
+        ok &= c->n == 3u && c->f == (EQF_NEW | EQF_IN) && eq_type(c, 0) == EQT_HP && eq_slot(c, 0) == 0u &&
+              eq_type(c, 1) == EQT_BELL && eq_slot(c, 1) == 2u && eq_type(c, 2) == EQT_BELL && eq_slot(c, 2) == 3u &&
+              t->p[P_EQLO] == 30 && t->p[P_EQ3G] == 0 && t->p[P_EQ1F] == 50 && t->p[P_EQ1G] == 20 &&
+              t->p[P_EQ2F] == 110 && t->p[P_EQ2G] == -10 && eq_units(t) == 7u;
+        raw[P_EQLO] = 0; raw[P_EQ1G] = 0; raw[P_EQ3G] = 0;   /* (all at rest: none, out of the chain) */
+        eq_adopt(t->p, raw, c);
+        ok &= c->n == 0u && c->f == EQF_NEW && !eq_units(t);
+        {   /* the page: none at first; KNOB 1 asks, YES adds a BELL, picked; TYPE, SLOPE; REC takes them out, all */
             go_title("EQ");
-            t->p[P_EQLO] = 20;
+            memset(c, 0, sizeof *c);
+            c->f = EQF_NEW | EQF_IN;
             eq_ui_band = 0;
-            edit_param(0, 1);
-            ok &= eq_ui_band == 1u && !ui.confirm;
+            edit_param(2, 1);
+            edit_param(1, 1);
+            ok &= c->n == 0u && page_id(cur_page(), 2) == 0xFFu;
             edit_param(0, 1);
             ok &= ui.confirm == CF_ADD_EQ;
             ui.confirm = 0;
             eq_add();
-            ok &= c->n == 3u && eq_ui_band == 2u && eq_type(c, 2) == EQT_BELL && page_id(cur_page(), 2) == P_EQ1F &&
-                  page_id(cur_page(), 3) == P_EQ1G;
+            ok &= c->n == 1u && eq_ui_band == 0u && eq_type(c, 0) == EQT_BELL && eq_slot(c, 0) == 0u;
+            edit_param(0, 1);
+            ok &= ui.confirm == CF_ADD_EQ;
+            ui.confirm = 0;
+            eq_add();
+            ok &= c->n == 2u && eq_ui_band == 1u && page_id(cur_page(), 2) == P_EQHI && page_id(cur_page(), 3) == P_EQ3F;
             edit_param(1, -1);                          /* BELL -> HIGH SHELF */
-            ok &= eq_type(c, 2) == EQT_HS;
+            ok &= eq_type(c, 1) == EQT_HS;
             edit_param(1, -1); edit_param(1, -1); edit_param(1, -1);   /* -> HP: a 12 dB slope */
             edit_param(3, 1);
-            ok &= eq_type(c, 2) == EQT_HP && t->p[P_EQ1G] == 1;
-            eq_ui_band = 1;
-            eq_del();
-            ok &= c->n == 2u && eq_slot(c, 0) == 0u && eq_slot(c, 1) == 2u && t->p[P_EQHI] == 118;
+            ok &= eq_type(c, 1) == EQT_HP && t->p[P_EQ3F] == 1;
             eq_ui_band = 0;
             eq_del();
-            eq_del();                                   /* (one stays) */
-            ok &= c->n == 1u && eq_slot(c, 0) == 2u;
+            ok &= c->n == 1u && eq_slot(c, 0) == 1u && t->p[P_EQLO] == 0;
+            eq_del();
+            ok &= c->n == 0u && fx_unit_on(t, 3);
+            eq_del();                                   /* (none: nothing) */
+            ok &= c->n == 0u;
         }
         memset(c, 0, sizeof *c);
         t->p[P_EQLO] = 0; t->p[P_EQHI] = 118; t->p[P_EQ1F] = 40; t->p[P_EQ1G] = 0; t->p[P_EQ2F] = 90; t->p[P_EQ2G] = 0;
         t->p[P_EQ3G] = t->p[P_EQ3F] = 0;
-        ck("EQ (Dah): one page; each TYPE as its curve; five stages at most; the old layout as bands; ADD, TYPE, SLOPE, REC", ok);
+        ck("EQ (Dah): one page; each TYPE as its curve; five stages at most; the old EQ as filters; none at first, ADD, TYPE, SLOPE, REC", ok);
     }
 }
 

@@ -413,9 +413,10 @@ static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ?
  * stepped or joined by lines (smooth), and how its automation moves between two events (curve: 0 STEP, as always; 1 RAMP,
  * motion.c motion_ramp) */
 #define LDRAW_N 16u
-/* (Dah) the EQ's bands (fx_eq.c): how many (1..4; 0 the layout before bands, LOW CUT HIGH CUT and three bells: eq_adopt),
- * band k's slot (o's bits 2k, 2k + 1: its two parameters, EQ_FID EQ_SID) and each slot's TYPE (EQT_*) */
-typedef struct { uint8_t n, o, t[4]; } eqc_t;
+/* (Dah) the EQ's filters (fx_eq.c): how many (0..4), filter k's slot (o's bits 2k, 2k + 1: its two parameters, EQ_FID
+ * EQ_SID), each slot's TYPE (EQT_*); f: EQF_NEW (set since filters: none, a project's EQ before them, LOW CUT HIGH CUT
+ * and three bells, made filters on load: eq_adopt), EQF_IN (the EQ in the chain) */
+typedef struct { uint8_t n, o, t[4], f; } eqc_t;
 typedef struct {
     int8_t draw[LDRAW_N];
     uint8_t smooth, curve, rsv0, rsv;   /* (Dah: rsv0 the COMPRESSOR's AMOUNT, 0 none (fx_comp.c); rsv MATCH's COLOR and

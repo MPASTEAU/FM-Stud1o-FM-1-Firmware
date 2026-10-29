@@ -590,7 +590,8 @@ static track_t *fx_tsel(void);                         /* (Dah) ui.c: FX's track
 static uint8_t mx_master;                               /* (ui.c: the MASTER picked) */
 static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **valp)
 {
-    uint32_t id = pg->id[slot];
+    uint32_t id = eq_page(pg) ? eq_ui_id(slot) : pg->id[slot];   /* (Dah: the EQ's knobs, the band picked's: not the
+                                                         * page's table, 0xFF past KNOB 1) */
     track_t *ft = pg->fam == FAM_FX ? fx_tsel() : TSEL;
     if (id == 0xFFu) {
         *valp = 0;

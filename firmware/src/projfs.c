@@ -15,7 +15,7 @@
 #define PFS_IDS 32u
 #define PFS_PAY 64u                                /* the payload's offset in the first sector */
 #define PFS_MAGIC 0x4A525048u                      /* "HPRJ" */
-#define PFS_VER 7u                                 /* (7: the MASTER's EQ bands (eq_mc) after its chain; 6: the MASTER's DIST IN; 5: the MASTER's COMP IN OUT too; 4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
+#define PFS_VER 8u                                 /* (8: eq_mc with its flags; 7: the MASTER's EQ bands (eq_mc) after its chain; 6: the MASTER's DIST IN; 5: the MASTER's COMP IN OUT too; 4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
                                                     * parameters; before 3 the extras were TRKX_V2 bytes) */
 #define PFS_CUR DAH_CUR                           /* the project open, its id (0 none): kept with the settings (favorites.c) */
 _Static_assert(PFS_BASE + PFS_NSECT * ST_SECTOR <= 0xDC000u, "the projects in USR2 and USR3");
@@ -171,7 +171,7 @@ static void pfs_stream(void)
     pw_put(&chain_config, sizeof chain_config);
     for (i = 0; i < MST_N; i++)                         /* (4) the MASTER's chain */
         pw_b((uint32_t)(mtrk.p[MST_ID[i]] + 64));
-    pw_put(&eq_mc, sizeof eq_mc);                       /* (7) its EQ's bands */
+    pw_put(&eq_mc, sizeof eq_mc);                       /* (7) its EQ's filters (8: and flags) */
     for (k = 0; k < nt; k++) {
         const track_t *t = &trk[k];
         uint8_t fm[FM6_PACKED], n2[2];
@@ -334,7 +334,7 @@ static int pfs_read_in(uint32_t id)
     q->sel = (uint8_t)pr_b();
     if (!pr_get(&q->chain, sizeof q->chain) || !chain_valid(&q->chain)) return 2;
     if (ver >= 4u && !pr_get(mst, ver >= 6u ? MST_N : ver >= 5u ? MST_N5 : MST_N4)) return 2;
-    if (ver >= 7u && !pr_get(&mqc, sizeof mqc)) return 2;
+    if (ver >= 7u && !pr_get(&mqc, ver >= 8u ? sizeof mqc : 6u)) return 2;
     for (k = 0; k < nt; k++) {
         int16_t v[P_COUNT], def[P_COUNT];
         for (i = 0; i < np; i++)
@@ -369,7 +369,7 @@ static int pfs_read_in(uint32_t id)
     for (i = 0; ver >= 4u && i < (ver >= 6u ? MST_N : ver >= 5u ? MST_N5 : MST_N4); i++)            /* (the MASTER's chain: restore_runtime emptied it) */
         mtrk.p[MST_ID[i]] = (int16_t)clamp((int32_t)mst[i] - 64, TP[MST_ID[i]].min, TP[MST_ID[i]].max);
     eq_mc = mqc;
-    if (!eq_mc.n || eq_mc.n > EQ_NB) {                  /* (Dah) none kept: its EQ before bands, as bands */
+    if (!(eq_mc.f & EQF_NEW) || eq_mc.n > EQ_NB) {      /* (Dah) none kept: its EQ before filters, as filters */
         int16_t raw[P_COUNT];
         memcpy(raw, mtrk.p, sizeof raw);
         for (i = 0; ver >= 4u && i < (ver >= 6u ? MST_N : ver >= 5u ? MST_N5 : MST_N4); i++)

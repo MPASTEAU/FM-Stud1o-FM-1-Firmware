@@ -154,17 +154,18 @@ static void eqs_take(void)
         }
     }
 }
-/* (Dah) the EQ page: the band picked (KNOB 1; past the last, while ADD A FILTER? is asked: "+"), its knobs' ids */
-static uint32_t eq_pick(const eqc_t *e) { return eq_ui_band < e->n ? eq_ui_band : e->n - 1u; }
+/* (Dah) the EQ page: the filter picked (KNOB 1; past the last, while ADD A FILTER? is asked: "+"), its knobs' ids
+ * (none: 0xFF) */
+static uint32_t eq_pick(const eqc_t *e) { return eq_ui_band < e->n ? eq_ui_band : e->n ? e->n - 1u : 0u; }
 static uint32_t eq_ui_id(uint32_t c)
 {
     eqc_t e;
     eq_get(fx_tsel(), &e);
-    return c < 2u ? 0xFFu : (c == 2u ? EQ_FID : EQ_SID)[eq_slot(&e, eq_pick(&e))];
+    return c < 2u || !e.n ? 0xFFu : (c == 2u ? EQ_FID : EQ_SID)[eq_slot(&e, eq_pick(&e))];
 }
 static void graph_eq(const track_t *t, uint16_t c)
 {
-    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, top = 4, bot = full - 6, mid = (top + bot) / 2, x, i, py = 0;
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, top = 4, bot = full - 6, mid = (top + bot) / 2, x, i;
     int32_t cy[128];
     eqc_t e;
     uint32_t sel, k, on = eq_units(t);
@@ -195,22 +196,14 @@ static void graph_eq(const track_t *t, uint16_t c)
         static const uint8_t DEC[3] = {24, 71, 117};
         cv_rect(PANEL_X0 + DEC[i] * PANEL_W / 127, top, 1, bot - top, T_GRID);
     }
-    if (((on >> sel) & 1u) && (on & ~(1u << sel)))    /* the band picked alone, faint (others running too) */
-        for (i = 0; i <= 127; i++) {
-            int32_t db = clamp(eq_curve_db(t, i, sel), -144, 144), y = mid - db * (bot - top) / 2 / 144;
-            x = PANEL_X0 + i * (PANEL_W - 1) / 127;
-            if (i)
-                cv_line_t(PANEL_X0 + (i - 1) * (PANEL_W - 1) / 127, py, x, y, ux_mix(T_ACCENT, T_SURF, 55), 1);
-            py = y;
-        }
-    for (i = 0; i <= 127; i++) {                        /* the curve: every band */
+    for (i = 0; i <= 127; i++) {                        /* the curve: every filter */
         int32_t db = clamp(eq_curve_db(t, i, EQ_NB), -144, 144);
         cy[i] = mid - db * (bot - top) / 2 / 144;
         x = PANEL_X0 + i * (PANEL_W - 1) / 127;
         if (i)
             cv_line_t(PANEL_X0 + (i - 1) * (PANEL_W - 1) / 127, cy[i - 1], x, cy[i], c, 2);
     }
-    for (k = 0; k <= e.n; k++) {                        /* each band a dot on the curve at its frequency (the picked
+    for (k = 0; e.n && k <= e.n; k++) {                 /* each filter a dot on the curve at its frequency (the picked
                                                          * one last, larger, ACCENT), its number over it */
         uint32_t b = k < e.n ? k : sel, j = eq_slot(&e, b);
         int32_t f = clamp(t->p[EQ_FID[j]], 0, 127), fx = PANEL_X0 + f * (PANEL_W - 1) / 127, r = b == sel ? 4 : 2;
@@ -225,12 +218,13 @@ static void graph_eq(const track_t *t, uint16_t c)
                    &AF_S, nm, b == sel ? T_ACCENT : T_MID, T_SURF);
     }
 }
-/* (Dah) the EQ page's keys (ui_input.c edit_param, rec_tap, the dialog): t's bands, set (none yet: the two cuts) */
+/* (Dah) the EQ page's keys (ui_input.c edit_param, rec_tap, the dialog): t's filters, kept as filters (EQF_NEW) */
 static eqc_t *eq_own(const track_t *t)
 {
     eqc_t *e = eq_cfg(t);
-    if (!e->n || e->n > EQ_NB)
-        eq_get(t, e);
+    if (e->n > EQ_NB)
+        e->n = 0;
+    e->f |= EQF_NEW;
     return e;
 }
 static int eq_full(const track_t *t, const eqc_t *e) { return e->n >= EQ_NB || eq_stages(t, e) >= EQ_NS; }
@@ -240,7 +234,8 @@ static void eq_set(track_t *t, uint32_t id, int32_t v)
     if (!fx_mst(t))
         (void)motion_capture(t, id, t->p[id]);
 }
-/* KNOB 1 the band (past the last: ADD A FILTER?), 2 its TYPE, 4 a cut's SLOPE (a GAIN: as any parameter); 1 done */
+/* KNOB 1 the filter (past the last, or none yet: ADD A FILTER?), 2 its TYPE, 4 a cut's SLOPE (a GAIN: as any
+ * parameter); none: 2..4 nothing. 1 done */
 static int eq_knob(uint32_t slot, int32_t steps)
 {
     track_t *t = fx_tsel();
@@ -253,22 +248,17 @@ static int eq_knob(uint32_t slot, int32_t steps)
                 ui_message(e->n >= EQ_NB ? "4 FILTERS AT MOST" : "NO ROOM: 24 dB USES 2");
             else
                 confirm_open(CF_ADD_EQ, 0);
-        } else
+        } else if (e->n)
             eq_ui_band = (uint8_t)clamp((int32_t)k + d, 0, (int32_t)e->n - 1);
+    } else if (!e->n) {
+        return 1;
     } else if (slot == 1u) {
         uint32_t ny = (uint32_t)clamp((int32_t)y + d, 0, EQT_N - 1);
         if (ny == y)
             return 1;
         e->t[j] = (uint8_t)ny;
-        if ((ny <= EQT_LP) != (y <= EQT_LP)) {          /* (a cut now 12 dB; a shelf, a bell flat, or +3 dB alone) */
+        if ((ny <= EQT_LP) != (y <= EQT_LP))            /* (a cut now 12 dB; a shelf, a bell flat) */
             eq_set(t, EQ_SID[j], 0);
-            if (!eq_units(t))
-                eq_set(t, EQ_SID[j], 13);
-        }
-        if (!eq_units(t)) {                             /* (a cut at rest alone: it stays in the chain) */
-            e->t[j] = (uint8_t)y;
-            ui_message("REMOVE IT IN CHAIN");
-        }
     } else if (slot == 3u && y <= EQT_LP) {
         int32_t s = (int32_t)eq_slope(v) + d;
         if (s > 2 || s < 0)
@@ -300,18 +290,19 @@ static void eq_add(void)
     eq_set(t, EQ_FID[j], 71);
     eq_set(t, EQ_SID[j], 0);
     e->o = (uint8_t)((e->o & ~(3u << (2u * e->n))) | j << (2u * e->n));
+    e->f |= EQF_IN;
     eq_ui_band = e->n++;
     ui_message("FILTER ADDED");
+    ui.force = 1;
 }
-/* REC: the band picked out (one stays; the others move down) */
+/* REC: the filter picked out (the others move down; the last too: none) */
 static void eq_del(void)
 {
     track_t *t = fx_tsel();
     eqc_t *e = eq_own(t), o = *e;
     uint32_t k = eq_pick(e), j = eq_slot(e, k), i;
-    int16_t f = t->p[EQ_FID[j]], s = t->p[EQ_SID[j]];
-    if (e->n <= 1u) {
-        ui_message("ONE FILTER AT LEAST");
+    if (!e->n) {
+        ui_message("NO FILTER");
         return;
     }
     for (i = k; i + 1u < e->n; i++)
@@ -319,14 +310,7 @@ static void eq_del(void)
     e->n--;
     t->p[EQ_FID[j]] = TP[EQ_FID[j]].def;
     t->p[EQ_SID[j]] = 0;
-    if (!eq_units(t)) {                                 /* (the last one doing something: CHAIN takes the EQ out) */
-        *e = o;
-        t->p[EQ_FID[j]] = f;
-        t->p[EQ_SID[j]] = s;
-        ui_message("REMOVE IT IN CHAIN");
-        return;
-    }
-    eq_ui_band = (uint8_t)(k < e->n ? k : e->n - 1u);
+    eq_ui_band = (uint8_t)(k < e->n ? k : e->n ? e->n - 1u : 0u);
     ui_message("FILTER REMOVED");
     ui.force = 1;
 }

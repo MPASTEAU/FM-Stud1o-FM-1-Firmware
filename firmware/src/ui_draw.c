@@ -628,7 +628,7 @@ static void home_foot(void)
             eq_get(fx_tsel(), &e);
             kh[2] = (khint_t){KC_REC, "DEL"};
             n = 3u;
-            ok |= e.n > 1u ? 4u : 0u;
+            ok |= e.n ? 4u : 0u;
         }
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
@@ -1671,7 +1671,8 @@ static int msg_popup(void)
         b = LY_LONG[ly_hint][1];
         help = 1;
     }
-    help |= str_eq(a, "ON THE MASTER");                 /* (Dah) HELP's windows: how to have them no more, small */
+    help |= str_eq(a, "ON THE MASTER") || str_eq(a, "EQ") || str_eq(a, "EFFECTS");   /* (Dah) HELP's windows: how to
+                                                         * have them no more, small (EQ, EFFECTS: ui.c page_entered) */
     int knob = 0;                                       /* (Dah) "\x02" in its first line: a knob drawn there */
     {
         uint32_t i;
@@ -2130,12 +2131,15 @@ static void draw_columns_in(void)
             int32_t fv;
             eq_get(ft, &e);
             k = eq_pick(&e); j = eq_slot(&e, k); y = eq_type(&e, k);
-            if (c == 0u) {
+            if (!e.n && (c || ui.confirm != CF_ADD_EQ)) {   /* (none yet: KNOB 1 adds one) */
+                draw_column(c, c == 0u ? "FILTER" : c == 1u ? "TYPE" : c == 2u ? "FREQ" : "GAIN", "--", "",
+                            c ? T_DIM : VAL(0u), -1, ICON_AUTO);
+            } else if (c == 0u) {
                 char pl[6] = {(char)('1' + k), '/', (char)('0' + e.n), 0};
                 if (ui.confirm == CF_ADD_EQ)
                     str_cpy(pl, "+", 6);
                 card_span_by(span_eqb, 0, 0, 4, 0);
-                draw_column(0, "BAND", pl, "", VAL(0u), e.n > 1u ? (int32_t)k * 1000 / (int32_t)(e.n - 1u) : -1, ICON_AUTO);
+                draw_column(0, "FILTER", pl, "", VAL(0u), e.n > 1u ? (int32_t)k * 1000 / (int32_t)(e.n - 1u) : -1, ICON_AUTO);
             } else if (c == 1u) {
                 card_span_by(span_eqt, 0, 0, EQT_N - 1, 0);
                 draw_column(1, "TYPE", EQ_TN[y], "", VAL(1u), (int32_t)y * 1000 / (EQT_N - 1), ICON_AUTO);
@@ -2379,11 +2383,11 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_ADD_EQ:                                  /* (Dah) FX > EQ: KNOB 1 past the last band */
         str_cpy(a, "ADD A FILTER?", 24);
-        str_cpy(b, "BAND 1: A BELL, FLAT", 24);
+        str_cpy(b, "FILTER 1: A BELL, FLAT", 24);
         {
             eqc_t e;
             eq_get(fx_tsel(), &e);
-            b[5] = (char)('1' + e.n % 9u);
+            b[7] = (char)('1' + e.n % 9u);
         }
         break;
     case CF_ADD_FX:                                  /* (Dah) FX > CHAIN: + ADD reached */

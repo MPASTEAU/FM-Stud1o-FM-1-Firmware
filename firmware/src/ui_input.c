@@ -1464,15 +1464,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         v = 1;
         ui_message("REMOVE IT IN CHAIN");
     }
-    if (eq_page(pg)) {                                  /* (Dah) EQ: its last band doing something stays so */
-        int16_t o = *vp;
-        *vp = (int16_t)v;
-        if (!eq_units(fx_tsel())) {
-            v = o;
-            ui_message("REMOVE IT IN CHAIN");
-        }
-        *vp = o;
-    }
     *vp = (int16_t)v;
     if (vp >= TSEL->p && vp < TSEL->p + P_COUNT) {      /* (Dah: a track's value, a send on a global page too) */
         if (motion_param((uint32_t)(vp - TSEL->p))) {   /* (Dah: STEP's automation lane shows the last one turned) */

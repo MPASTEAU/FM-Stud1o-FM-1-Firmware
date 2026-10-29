@@ -1162,12 +1162,13 @@ static void setup(int s)
             eq_ring[i] = (int16_t)((int32_t)((i * 110u * 65536u / 44100u) & 0xFFFFu) / 4 - 8192);
         eq_wn++;
     }
-        memset(&trkx[song.sel].eq, 0, sizeof(eqc_t));   /* (Dah: the two cuts, as at power-on) */
+        memset(&trkx[song.sel].eq, 0, sizeof(eqc_t));   /* (Dah: in the chain, no filter yet) */
+        trkx[song.sel].eq.f = EQF_NEW | EQF_IN;
         eq_ui_band = 0;
-        TSEL->p[P_EQLO] = 30; TSEL->p[P_EQHI] = 100; go_title("EQ"); break;
+        go_title("EQ"); break;
     case S_FX_EQ2: case S_FX_EQ_ADD: {                  /* (Dah) four bands: HP 24 dB, LP, a LOW SHELF, a BELL; the
                                                          * shelf picked; ADD A FILTER? asked */
-        static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}};
+        static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}, EQF_NEW | EQF_IN};
         trkx[song.sel].eq = E4;
         TSEL->p[P_EQLO] = 20; TSEL->p[P_EQ3G] = 1; TSEL->p[P_EQHI] = 104; TSEL->p[P_EQ3F] = 0;
         TSEL->p[P_EQ1F] = 34; TSEL->p[P_EQ1G] = 30; TSEL->p[P_EQ2F] = 80; TSEL->p[P_EQ2G] = -44;

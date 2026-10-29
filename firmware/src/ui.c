@@ -629,6 +629,15 @@ static void page_entered(void)
         song.g[G_SLOT] = (int16_t)(project_current() + 1u);   /* (the pattern on the tracks) */
     ui.fl_del = 0;
     help_start();
+    if (!ui.home && pg->fam == FAM_FX && help_on() && !song.playing && !chain_busy()) {   /* (Dah) HELP: what the EQ's
+                                                         * knobs do, CHAIN's */
+        eqc_t e;
+        eq_get(fx_tsel(), &e);
+        if (eq_page(pg))
+            cards_say("EQ", e.n ? "K1 FILTER  K2 TYPE\nK3 FREQ  K4 GAIN" : "TURN \x02" "K1 TO ADD\nA FILTER");
+        else if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK)
+            cards_say("EFFECTS", "K1 MOVE  K2 TYPE\nK3 MIX  FX OPENS");
+    }
     ui.force = 1;
 }
 
