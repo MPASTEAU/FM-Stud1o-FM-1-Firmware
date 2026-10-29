@@ -1599,9 +1599,24 @@ static void draw_columns_in(void);
 /* HA HA HE HU: the four cards in the colour of where one is: a page's family (ux.fam), HOME the selected track's */
 static void draw_columns(void)
 {
+    static uint8_t kb;
     ux_tint(ui.home || ui.layer || cur_page()->fam == FAM_TRK ? ux.trk[song.sel % NTRK] : ux.fam[cur_page()->fam % 12u]);
+    if ((uint8_t)ka_blink() != kb) {                    /* (Dah) ASSIGN: the four knobs blink (a turn of one asked) */
+        kb = (uint8_t)ka_blink();
+        ui.force = 1;
+    }
     draw_columns_in();
     ux_untint();
+    if (kb) {
+        uint32_t c;
+        for (c = 0; c < 4u; c++) {
+            uint32_t x = (uint32_t)CARD_X(c), y = card_y(), w = COL_W, h = card_h();
+            lcd_fill(x, y, w, 2, T_ACCENT);
+            lcd_fill(x, y + h - 2u, w, 2, T_ACCENT);
+            lcd_fill(x, y, 2, h, T_ACCENT);
+            lcd_fill(x + w - 2u, y, 2, h, T_ACCENT);
+        }
+    }
 }
 /* (Dah) HOME's look: a message over the four knobs while it shows (the header keeps its own); a layer's "HOLD [X]
  * QUICK" said whole, on two lines. The knobs drawn again after it */

@@ -643,7 +643,6 @@ static uint32_t song_leds(void)
 /* (Dah) ASSIGN, HOME's four knobs: OCT- and OCT+ together, then a knob turned on any page (its parameter: the source),
  * OCT+ (OK), then one of the four (HOME's knob that drives it from now on: the track's, trkx home). OCT+ before a
  * source: a HOME knob back to its engine's. OCT- leaves. The header says what is asked */
-static struct { uint8_t st, src; } ka;                  /* st: 0 off, 1 the source, 2 OK?, 3 the knob, 4 the knob reset */
 static const char *ka_say(void)
 {
     static char m[24];
@@ -658,10 +657,12 @@ static const char *ka_say(void)
     }
 }
 static int ka_chain_page(void) { return !ui.home && !ui.menu && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX; }
+static void ka_apply(uint32_t k);
 static void ka_start(void)
 {
-    ka.st = 1;
-    ui_message(ka_say());
+    ka.dst = 0xFFu;
+    ka.st = 1;                                          /* (Dah: the panel says it, ui_graph.c graph_assign) */
+    ui.force = 1;
 }
 static void ka_oct(uint32_t oct)
 {
@@ -672,8 +673,11 @@ static void ka_oct(uint32_t oct)
         ka.st = 4;                                      /* (no source: a knob back to its engine's) */
     else if (ka.st == 2)
         ka.st = 3;
-    if (ka.st)
-        ui_message(ka_say());
+    else if (ka.st >= 3 && ka.dst < 4u) {              /* (Dah) the HOME knob shown in its new place: OCT+ makes it so */
+        ka_apply(ka.dst);
+        return;
+    }
+    ui.force = 1;                                       /* (Dah: the panel says what is asked) */
 }
 /* the parameter knob k edits here (HOME: its own), 0xFF none (an action, a list, a global value, the MIXER) */
 static uint32_t ka_id_of(uint32_t k)
@@ -699,9 +703,15 @@ static void ka_knob(uint32_t k)
         }
         ka.src = (uint8_t)id;
         ka.st = 2;
-        ui_message(ka_say());
+        ui.force = 1;
         return;
     }
+    ka.dst = (uint8_t)(k & 3u);                         /* (Dah) the HOME knob picked: shown replaced, OCT+ to confirm */
+    ui.force = 1;
+}
+static void ka_apply(uint32_t k)
+{
+    char m[24] = "HOME K";
     trkx[song.sel % NTRK].home[k & 3u] = (uint8_t)(ka.st == 3 ? ka.src + 1u : 0u);
     m[6] = (char)('1' + (k & 3u));
     m[7] = ':'; m[8] = ' ';
@@ -2395,8 +2405,7 @@ static void ui_input(void)
     for (id = 0; b; id++, b >>= 1)
         if (b & 1u)
             page_tap(panel_btn_of(id));
-    if (ka.st && ui.msg_t < 4u)
-        ui_message(ka_say());                           /* (Dah) ASSIGN: what it asks, held in the header */
+    (void)ka_say;                                       /* (Dah) ASSIGN: the panel says what it asks (graph_assign) */
     if (oct & 4u && !ui.menu && !ui.confirm && !name_on()) {   /* (Dah) OCT- and OCT+ together: ASSIGN a HOME knob */
         ka_start();
     } else if (ka.st && (oct & 0x33u)) {

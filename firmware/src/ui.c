@@ -1681,7 +1681,11 @@ static void eng_list_step(int32_t direction)         /* the next / previous soun
 
 /* (Dah) PRESETS turned: its list full screen ~1 s (ui_graph.c draw_list_full) */
 static uint32_t pl_ms, tl_ms;                           /* (.. ALGORITHM turned: the tracks' list, the same way) */
-static int32_t tl_dy, pp_dy, lu_dy, lf_dy, ch_dy;   /* (ch_dy: FX > CHAIN's) */      /* (lu_dy, lf_dy: MY PRESETS', FILE's) */                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
+static int32_t tl_dy, pp_dy, lu_dy, lf_dy, ch_dy;
+/* (Dah) ASSIGN, HOME's four knobs (ui_input.c ka_*; the panel and the cards: ui_graph.c graph_assign, ui_draw.c): st 0
+ * off, 1 the source, 2 OK?, 3 the knob, 4 the knob reset */
+static struct { uint8_t st, src, dst; } ka;         /* (dst: the HOME knob picked, 0xFF none yet) */
+static int ka_blink(void) { return (ka.st == 1u || (ka.st >= 3u && ka.dst > 3u)) && ((fm1_ms / 300u) & 1u); }   /* (ch_dy: FX > CHAIN's) */      /* (lu_dy, lf_dy: MY PRESETS', FILE's) */                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
 static uint8_t tl_pat;                                  /* (Dah) .. GLO + ALGORITHM: the patterns' list */
 static int tl_on(void) { return tl_ms && (uint32_t)((int32_t)(fm1_ms - tl_ms) + 1) < 1001u && !ui.menu && !ui.confirm; }
 static int pl_on(void) { return pl_ms && (uint32_t)((int32_t)(fm1_ms - pl_ms) + 1) < 1001u; }   /* (fm1_ms | 1: a ms ahead) */
