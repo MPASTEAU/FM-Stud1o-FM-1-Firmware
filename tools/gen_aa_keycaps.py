@@ -45,7 +45,7 @@ LABELS = [("PRESETS", "PRESETS"), ("SELECT", "SELECT"), ("ALGO", "ALGO"), ("OCTD
           ("FX", "FX"), ("K14", "K1-4"), ("SCL", "SCL"), ("OCTPM", "OCT-/+"),
           ("LFO", "LFO"), ("ENV", "ENV")]   # (1.5: HELP's hints, src/ui_help.c)
 
-KNOBS = [("BIG", 17, 2), ("SMALL", 10, 2), ("HOME", 19, 3), ("TINY", 7, 2)]   # outer radius, the ring's width (Dah: HOME's cards, 4 px)
+KNOBS = [("BIG", 17, 2), ("SMALL", 10, 2), ("HOME", 19, 3)]   # outer radius, the ring's width (Dah: HOME's cards, 4 px)
 
 
 def pill_cov(w, h, r):

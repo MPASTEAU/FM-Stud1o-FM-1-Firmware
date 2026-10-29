@@ -522,8 +522,9 @@ static void home_foot(void)
 {
     static uint32_t fsig;
     char pn[16];
-    int32_t y0 = 240 - HOME_FOOT_H, x, w, my = 16, kx;
+    int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig;
+    static const khint_t KH[2] = {{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}};
     if (mx_master)
         str_cpy(pn, "FX", sizeof pn);
     else
@@ -534,22 +535,13 @@ static void home_foot(void)
     fsig = sig;
     lcd_fill(0, (uint32_t)y0 - 2u, 240, 2, T_BG);
     cv_begin(240, HOME_FOOT_H, T_BG);
-    x = cv_key_hint(4, my - KC_H / 2, KC_OCTUP, "VIEW", 1, T_BG) + 12;   /* OCT+ held: the VIEW */
-    {   /* (Dah) SELECT, a knob drawn: its name small over it, a ring open at the foot and its pointer, what it does
-         * beside it */
-        int32_t lw = text_w(&AF_S, "SELECT"), r = KNOB_TINY_R;
-        kx = x + lw / 2;                                /* the knob's centre, under its name */
-        cv_text(x, 1 - AF_S_CAP_Y, &AF_S, "SELECT", T_MID);
-        knob_arc(kx - r, my - r + 3, r, KNOB_TINY_COV, KNOB_TINY_ANG, -KA_END, -KA_END - 1, T_TEXT, T_TEXT, T_BG);
-        cv_rect(kx, my - r + 5, 1, r - 1, T_TEXT);      /* its pointer, up */
-        GFX_HOOK_ALIGN(0, my - r + 3, 0, my + r + 3, AL_V, "home footer text on the knob's middle");
-        x = cv_text(kx + r + 5, my + 3 - AF_S_CAP_Y - AF_S_CAP_H / 2, &AF_S, "PAT", T_TEXT) + 10;
-    }
+    x = cv_key_hint(4, (HOME_FOOT_H - KC_H) / 2, KH[0].key, KH[0].act, 1, T_BG) + 8;
+    x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, KH[1].key, KH[1].act, 1, T_BG) + 10;
     w = text_w(&AF_S, pn);                              /* (the preset's name alone) */
     if (w > 236 - x)
         w = 236 - x;
-    GFX_HOOK_ALIGN(0, my - KC_H / 2, 0, my - KC_H / 2 + KC_H, AL_V, "home footer text on its middle");
-    cv_free_text(236 - w, my - KC_H / 2 + CAP_IN(S, KC_H), &AF_S, pn, T_TEXT, T_BG, w);
+    GFX_HOOK_ALIGN(0, 0, 0, HOME_FOOT_H, AL_V, "home footer text on its middle");
+    cv_free_text(236 - w, CAP_IN(S, HOME_FOOT_H), &AF_S, pn, T_TEXT, T_BG, w);
     cv_blit(0, (uint32_t)y0);
 }
 static void draw_head(void)

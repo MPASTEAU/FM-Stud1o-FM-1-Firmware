@@ -430,7 +430,7 @@ static uint32_t graph_y(void) { return large_kind() == LK_TALL ? LG_Y_GRAPH : ho
  * layer, NAME or menu over it): the panel takes its rows, FOOT_GAIN more (graph_h); the footer keeps its second */
 #define FOOT_GAIN 18u
 static int foot_free(void);
-#define HOME_FOOT_H 26                                  /* (Dah) HOME's footer: its shortcuts, the sound's name */
+#define HOME_FOOT_H 17                                  /* (Dah) HOME's footer: its shortcuts, the sound's name */
 #define H_GRAPH_BARE (240u - HOME_FOOT_H - graph_y() - 2u)
 static uint32_t graph_h(void)
 {
