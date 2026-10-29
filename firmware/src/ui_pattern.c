@@ -30,6 +30,8 @@ static void pt_move(int32_t steps)                      /* KNOB 1: up and down t
     for (i = 0; i < n && nums[i] != cur; i++)
         ;
     i = (uint32_t)clamp((int32_t)i + (steps > 0 ? 1 : -1), 0, (int32_t)n - 1);
+    if (nums[i] != cur)                                 /* (Dah) the rows glide to it (ui_graph.c graph_pattern) */
+        pp_dy = clamp(pp_dy + (steps > 0 ? 17 : -17), -68, 68);
     if (nums[i] != cur && pattern_go_all(nums[i]))
         ui_message("MEMORY FULL");
     pt_sel = (uint8_t)ps_num(song.sel);

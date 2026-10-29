@@ -1365,8 +1365,12 @@ static void edit_param(uint32_t slot, int32_t steps)
         return;
     }
     if (pg->graph == GR_USER) {                           /* KNOB 1 the slot */
-        if (slot == 0u)
+        if (slot == 0u) {
+            uint32_t was = ui.uslot;
             ui.uslot = (uint8_t)clamp((int32_t)ui.uslot + steps, 0, UP_SLOTS - 1);
+            if (ui.uslot != was)                        /* (Dah: the slots glide to it) */
+                lu_dy = clamp(lu_dy + (ui.uslot > was ? 17 : -17), -68, 68);
+        }
         return;
     }
     if (fop_page(pg->graph)) {                           /* FM6's operators: KNOB 1 OP, 2..4 its bytes (ui_fm6op.c) */
@@ -1835,14 +1839,21 @@ static void fx_tap(void)
 static void fx_sel_turn(int32_t s)
 {
     uint8_t u[FXU_N_ALL];
-    uint32_t n = fx_list(fx_tsel(), u), k;
+    uint32_t n, k;
+    if (mx_master && fx_back >= 0) {                    /* (Dah) a send's page, from a track: on along the track's chain */
+        mx_master = 0;
+        if ((uint32_t)fx_back != song.sel)
+            track_select((uint32_t)fx_back);
+        ch_cur = fx_back_row;
+        fx_back = -1;
+    }
+    n = fx_list(fx_tsel(), u);
     int32_t c = (int32_t)(ch_cur < n ? ch_cur : 0u), d = s > 0 ? 1 : -1;
     if (!n)
         return;
-    for (k = (uint32_t)(s > 0 ? s : -s); k; k--) {      /* (Dah: a track's sends skipped: the MASTER's effects) */
+    for (k = (uint32_t)(s > 0 ? s : -s); k; k--) {      /* (Dah: a track's sends too: chain_open puts the MASTER's page
+                                                         * up, a while, FX back to the track) */
         int32_t j = c + d;
-        while (j >= 0 && j < (int32_t)n && !mx_master && fx_send(u[j]))
-            j += d;
         if (j < 0 || j >= (int32_t)n)
             break;
         c = j;
@@ -1912,6 +1923,8 @@ static void fx_map_sync(void);
 static void fx_assign(int32_t s);
 static void fx_default(void);
 static int layer_play(void);
+static void seq_presets(int32_t s);                    /* (Dah: ui_layer.c, the SEQ layer's QUANTIZE) */
+static void tl_clear_all(track_t *t);                  /* (Dah: ui_tools.c, its CLEAR ALL) */
 static int layer_set_open(void);
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct);
 static void layer_oct_open(uint32_t pressed);
@@ -2080,7 +2093,7 @@ static void ui_input(void)
     uint32_t home, rec, save;
     uint32_t oct, oct_plain;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
-    int32_t s, sel = 0, ks[4] = {0, 0, 0, 0};
+    int32_t s, sel = 0, ks[4] = {0, 0, 0, 0}, qs = 0;
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
     midi_take();                                        /* (MIDI IN notes: lights, SCREEN WAKE, AUTO SELECT's) */
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
@@ -2175,7 +2188,10 @@ static void ui_input(void)
         for (k = 0; k < 4u; k++)                        /* KNOB 1..4: the layer's (ui_layer.c layer_knob) */
             if ((ks[k] = panel_enc(EN_K1 + k)) != 0)
                 combo = 1;
-        if ((s = panel_enc(EN_PRESET)) != 0 && ui.ly == LAYER_FX) {   /* (a stray turn would load another sound) */
+        if ((s = panel_enc(EN_PRESET)) != 0 && ui.ly == LAYER_SEQ) {   /* (Dah) SEQ: the QUANTIZE amount (once the layer */
+            qs = s;                                     /* has opened: its OCT- puts back what it was) */
+            combo = 1;
+        } else if (s && ui.ly == LAYER_FX) {            /* (a stray turn would load another sound) */
             fx_assign(s);                               /* FX: the white key held takes the next effect */
             combo = 1;
         }
@@ -2197,6 +2213,8 @@ static void ui_input(void)
     lytap = layer_gesture(now, combo);
     layer_show();
     layer_keys(lkeys);
+    if (qs)
+        seq_presets(qs);
     for (k = 0; k < 4u; k++)
         if (ks[k]) {
             layer_knob(k, ks[k]);
@@ -2307,6 +2325,8 @@ static void ui_input(void)
                     if (ui.song_row > chain_config.count) ui.song_row = chain_config.count;
                     ui_message("SECTION DELETED");
                 }
+            } else if (kind == CF_CLEAR_PAT) {     /* (Dah) the SEQ layer's CLEAR ALL */
+                if (!chain_busy()) tl_clear_all(TSEL);
             } else if (kind == CF_INIT_SOUND) {
                 if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
@@ -2498,8 +2518,12 @@ static void ui_input(void)
             confirm_open(CF_ADD_TRACK, trk_count());
         else if (!mx_master)
             track_select((uint32_t)clamp((int32_t)song.sel + s, 0, (int32_t)trk_count() - 1));
-        if ((mx_master ? NTRK : song.sel) != was)
+        if ((mx_master ? NTRK : song.sel) != was) {
             tl_dy = clamp(tl_dy + (s > 0 ? 17 : -17), -68, 68);
+            if (!mx_master && !song.playing && !chain_busy() && !(ui_idle & 2u))   /* (Dah) stopped: the track picked heard, as a sound
+                                                         * picked (seq.c seq_preview) */
+                pv_req = (uint8_t)(song.sel + 1u);
+        }
     }
     if ((s = glo ? sel : panel_enc(EN_SELECT)) != 0) {   /* SELECT knob = global tempo; */
         if (!glo && !lay && ((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u)) {   /* (Dah) OCT+ held + SELECT: the tempo,

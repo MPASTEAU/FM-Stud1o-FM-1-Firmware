@@ -1482,19 +1482,19 @@ static int test_menu_tabs(void)
     ui_power_on();
     hold(B_HOME);
     ok = ui.menu == 1 && ui.menu_sel == MI_COLOR && menu_tab() == MTAB_DISPLAY;
-    for (i = 0; i < 7u; i++) turn(EN_PRESET, 1);
+    for (i = 0; i < 7u; i++) turn(EN_SELECT, 1);
     ok &= ui.menu_sel == MI_HOME;
-    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_COLOR;  /* (wraps within the tab) */
-    turn(EN_PRESET, -1); ok &= ui.menu_sel == MI_HOME;
-    turn(EN_PRESET, -1); turn(EN_PRESET, -1); turn(EN_PRESET, -1); ok &= ui.menu_sel == MI_LEDS;
+    turn(EN_SELECT, 1); ok &= ui.menu_sel == MI_COLOR;  /* (wraps within the tab) */
+    turn(EN_SELECT, -1); ok &= ui.menu_sel == MI_HOME;
+    turn(EN_SELECT, -1); turn(EN_SELECT, -1); turn(EN_SELECT, -1); ok &= ui.menu_sel == MI_LEDS;
     bad += check("MENU: PRESETS moves within the tab and wraps there (COLOR .. HOME)", ok);
     turn(EN_ALGO, 1); ok = ui.menu_sel == MI_HOLD && menu_tab() == MTAB_CONTROL;
-    turn(EN_PRESET, 1); turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_LATCH;
+    turn(EN_SELECT, 1); turn(EN_SELECT, 1); ok &= ui.menu_sel == MI_LATCH;
     turn(EN_ALGO, 1); ok &= ui.menu_sel == MI_LOWCUT && menu_tab() == MTAB_AUDIO;
     turn(EN_ALGO, 1); ok &= ui.menu_sel == MI_MIDIIN && menu_tab() == MTAB_MIDI;   /* (1.2) */
-    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TCH1;    /* (1.5.5: T1..T4 CHANNEL) */
-    turn(EN_PRESET, -1); turn(EN_PRESET, -1); ok &= ui.menu_sel == MI_LCLEAR;   /* (1.5: LEARN CLEAR, the last: round) */
-    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_MIDIIN;
+    turn(EN_SELECT, 1); ok &= ui.menu_sel == MI_TCH1;    /* (1.5.5: T1..T4 CHANNEL) */
+    turn(EN_SELECT, -1); turn(EN_SELECT, -1); ok &= ui.menu_sel == MI_LCLEAR;   /* (1.5: LEARN CLEAR, the last: round) */
+    turn(EN_SELECT, 1); ok &= ui.menu_sel == MI_MIDIIN;
     turn(EN_ALGO, 1); ok &= ui.menu_sel == MI_SERIAL && menu_tab() == MTAB_SYSTEM;
     turn(EN_ALGO, -1); turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_LOWCUT;
     turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_LATCH;   /* (back at the row left there) */
@@ -1502,13 +1502,13 @@ static int test_menu_tabs(void)
     turn(EN_ALGO, -1); ok &= ui.menu_sel == MI_SERIAL && menu_tab() == MTAB_SYSTEM;   /* (wraps) */
     turn(EN_ALGO, 1); ok &= ui.menu_sel == MI_LEDS;
     bad += check("MENU: ALGORITHM steps between the tabs and wraps, each tab back at its last row", ok && ui.menu == 1);
-    turn(EN_ALGO, 1); turn(EN_PRESET, -1);            /* CONTROL: from FX LATCH up to KNOB ACCEL */
+    turn(EN_ALGO, 1); turn(EN_SELECT, -1);            /* CONTROL: from FX LATCH up to KNOB ACCEL */
     ok = ui.menu_sel == MI_ACCEL && !(ui_prefs & PREF_ACCEL);
     for (i = 0; i < 4u; i++) {                         /* any of KNOB 1..4: right ON, left OFF */
         turn(EN_K1 + i, 1); ok &= (ui_prefs & PREF_ACCEL) != 0u;
         turn(EN_K1 + i, -1); ok &= !(ui_prefs & PREF_ACCEL);
     }
-    turn(EN_ALGO, 1); turn(EN_PRESET, 1);             /* AUDIO: USB LEVEL */
+    turn(EN_ALGO, 1); turn(EN_SELECT, 1);             /* AUDIO: USB LEVEL */
     ok &= ui.menu_sel == MI_USB;
     turn(EN_K4, 1); ok &= (ui_prefs & PREF_USB_FIXED) && fx_usb_fixed;
     turn(EN_K2, -1); ok &= !(ui_prefs & PREF_USB_FIXED) && !fx_usb_fixed;
@@ -6579,7 +6579,7 @@ static int test_layer_knob_race(void)
  * opens the map with no button held, over the page the first tap left (put back); the keys and KNOB 1..4 act as held;
  * a tap closes it (no page), so does another page button (which opens its page), HOME, the menu, a dialog; OCT- puts
  * back as in the layer; a single tap, a peek, a combo and two slow taps are as before; the header shows the lock */
-/* ------------------------------------------------------ SEQ TOOLS (1.2) --- */
+/* ------------------------------------------- the SEQ layer (1.2; Dah: QUANTIZE, CLEAR ALL) --- */
 static void tl_note(step_t *s, uint32_t n) { memset(s, 0, sizeof *s); s->time = ST_NOTE; s->n = 1; s->note[0] = (uint8_t)n; s->vel = 96; }
 static void tl_tie(step_t *s) { memset(s, 0, sizeof *s); s->time = ST_TIE; }
 /* the selected track: LEN 8, C4 tied, E4, G4 (steps 1 2, 4, 6), a note past LEN (21), a lock on step 4 */
@@ -6599,50 +6599,11 @@ static void tl_melody(void)
 }
 static int tl_lock_at(uint32_t step) { int16_t v; return motion_lock_get(TSEL, step, P_REV, &v) && v == 50; }
 static void tl_key(uint32_t w) { key_down(white(w)); frame(); key_up(white(w)); frame(); }
-static uint32_t tl_count(const track_t *t, uint32_t l)
-{
-    uint32_t i, c = 0;
-    for (i = 0; i < (uint32_t)t->p[P_SLEN]; i++)
-        c += (step_lanes(&t->step[i]) >> l) & 1u;
-    return c;
-}
-static uint32_t tl_lanes_of(const track_t *t, uint32_t l)   /* lane l over steps 1..16, a bit each */
-{
-    uint32_t i, m = 0;
-    for (i = 0; i < 16u; i++)
-        m |= ((step_lanes(&t->step[i]) >> l) & 1u) << i;
-    return m;
-}
-static int tl_in_key(const track_t *t)                       /* every note of steps 1..LEN in the track's scale */
-{
-    uint32_t i, k;
-    for (i = 0; i < (uint32_t)t->p[P_SLEN]; i++)
-        for (k = 0; k < t->step[i].n; k++)
-            if (t->step[i].time == ST_NOTE && !tl_in_scale(t, t->step[i].note[k]))
-                return 0;
-    return 1;
-}
-static int tl_times_are(const track_t *t, const step_t *ref, uint32_t len)   /* the rhythm: the same NOTE / TIE / REST */
-{
-    uint32_t i;
-    for (i = 0; i < len; i++)
-        if (t->step[i].time != ref[i].time || (t->step[i].n != 0) != (ref[i].n != 0))
-            return 0;
-    return 1;
-}
-static void tl_drum(void)
-{
-    set_engine_of(TSEL, ENGI_DRUM);
-    TSEL->engine = TSEL->eng_req;
-    track_defaults_steps(TSEL);
-    TSEL->p[P_SLEN] = 16;
-}
-
 static int test_seq_tools(void)
 {
-    int bad = 0, ok, okc;
-    uint32_t i, k, a, b2, pg, seed;
-    step_t ref[NSTEP], mid[NSTEP];
+    int bad = 0, ok;
+    uint32_t i, k, a, b2, pg;
+    step_t ref[NSTEP];
 
     /* where it opens (1.2): every page; up to 1.1.5 away from the SEQ pages SEQ held opened SONG */
     ok = 1;
@@ -6682,174 +6643,68 @@ static int test_seq_tools(void)
     ok &= cur_page()->graph == GR_ROLL;
     bad += check("  from elsewhere the SEQ page shown last; one remembered that left SEQ: STEP", ok);
 
-    /* the whole sequence: REVERSE (a note's ties stay after it), SHIFT, CLEAR, locks, LEN, silent keys, undo */
+    /* (Dah) QUANTIZE: PRESETS its amount (OFF 25 50 75 ON, at once), OCT+ APPLY writes it (QUANTIZE OFF), undo */
     ui_power_on();
     tl_melody();
+    step_set_nudge(&TSEL->step[3], 4); step_set_nudge(&TSEL->step[5], -6);
     memcpy(ref, TSEL->step, sizeof ref);
     go_page(GR_ROLL); frame();
-    usb.config = 1;
+    btn_down(B_SEQ); frame();
+    turn(EN_PRESET, -1);
+    ok = TSEL->p[P_SQNT] == 4 && msg_is("QUANTIZE 75%") && ui.layer == LAYER_SEQ;
+    turn(EN_PRESET, -1); turn(EN_PRESET, -1); turn(EN_PRESET, -1); turn(EN_PRESET, -1);
+    ok &= TSEL->p[P_SQNT] == 0 && msg_is("QUANTIZE OFF");
+    press(B_OCTUP);
+    ok &= msg_is("QUANTIZE IS OFF") && !memcmp(TSEL->step, ref, sizeof ref);
+    turn(EN_PRESET, 1); turn(EN_PRESET, 1);
+    ok &= TSEL->p[P_SQNT] == 3 && msg_is("QUANTIZE 50%");
+    bad += check("SEQ layer QUANTIZE: PRESETS the amount (OFF 25 50 75 ON, the ends held); APPLY with it OFF: nothing", ok);
+    press(B_OCTUP);
+    ok = step_nudge(&TSEL->step[3]) == 2 && step_nudge(&TSEL->step[5]) == -3 && TSEL->p[P_SQNT] == 0 &&
+         msg_is("QUANTIZED 2 STEPS") && ui.layer == LAYER_SEQ && song.octave == 0;
+    btn_up(B_SEQ); frame();
+    hold(B_SAVE);
+    ok &= !memcmp(TSEL->step, ref, sizeof ref);
+    bad += check("  OCT+ APPLY: the nudges as they play written (50 %: half), QUANTIZE OFF; SAVE held: back", ok);
+    TSEL->p[P_SQNT] = 1;
+    btn_down(B_SEQ); frame();
+    turn(EN_PRESET, -2); turn(EN_K1, -2);
+    ok = TSEL->p[P_SQNT] != 1 && TSEL->p[P_SLEN] == 6;
+    oct_back();
+    ok &= TSEL->p[P_SQNT] == 1 && TSEL->p[P_SLEN] == 8 && msg_is("SEQUENCE PUT BACK");
+    btn_up(B_SEQ); frame();
+    bad += check("  OCT-: QUANTIZE and LEN as the layer opened; KNOB 1..4 LEN DIV SWING GATE", ok);
+
+    /* (Dah) CLEAR ALL: F3, its dialog; the steps and the automation gone, the pattern (LEN) kept; one undo */
+    memcpy(ref, TSEL->step, sizeof ref);
+    btn_down(B_SEQ); frame();
+    tl_key(1); tl_key(4);                               /* (the other keys: nothing) */
+    ok = !memcmp(TSEL->step, ref, sizeof ref) && !ui.confirm;
+    tl_key(0);
+    ok &= ui.confirm == CF_CLEAR_PAT;
+    btn_up(B_SEQ); frame();
     {
-        uint32_t mo = mo_w;
-        btn_down(B_SEQ); frame();
-        tl_key(1);                                      /* G3: REVERSE */
-        ok = ui.layer == LAYER_SEQ && !gates() && mo_w == mo && msg_is("REVERSED");
+        char qa[24], qb[24];
+        confirm_text(qa, qb);
+        ok &= str_eq(qa, "CLEAR PATTERN 1?");
     }
-    usb.config = 0;
-    ok &= TSEL->step[6].time == ST_NOTE && TSEL->step[6].note[0] == 60 && TSEL->step[7].time == ST_TIE &&
-          TSEL->step[4].note[0] == 64 && TSEL->step[2].note[0] == 67 && TSEL->step[0].time == ST_REST &&
-          TSEL->step[20].note[0] == 72 && tl_lock_at(4) && !tl_lock_at(3);
-    bad += check("  G3 REVERSE: steps 1..LEN mirrored, C4 + its tie as C4 then the tie, the lock moves with E4", ok);
-    btn_up(B_SEQ); frame();
-    hold(B_SAVE);
-    bad += check("  SAVE held: the reverse undone (steps and the lock)", !memcmp(TSEL->step, ref, sizeof ref) && tl_lock_at(3));
-    btn_down(B_SEQ); frame();
-    tl_key(3);                                          /* B3: SHIFT > */
-    ok = TSEL->step[1].note[0] == 60 && TSEL->step[2].time == ST_TIE && TSEL->step[4].note[0] == 64 && tl_lock_at(4) &&
-         msg_is("SHIFTED RIGHT");
-    tl_key(3);
-    tl_key(2); tl_key(2);                               /* A3: SHIFT < twice */
-    ok &= !memcmp(TSEL->step, ref, sizeof ref) && tl_lock_at(3);
-    TSEL->p[P_SLEN] = 6;
-    tl_key(2);
-    ok &= TSEL->step[5].note[0] == 60 && TSEL->step[2].note[0] == 64 && TSEL->step[6].time == ST_REST &&
-          TSEL->step[20].note[0] == 72;                 /* (inside LEN 6: step 7 and 21 stay) */
-    tl_key(3);
-    TSEL->p[P_SLEN] = 8;
-    ok &= !memcmp(TSEL->step, ref, sizeof ref);
-    bad += check("  B3 / A3 SHIFT > <: one step round inside LEN (the lock with it); back again: as it was", ok);
-    tl_key(0);                                          /* F3: CLEAR */
-    for (ok = msg_is("SEQUENCE CLEARED"), i = 0; i < 8u; i++)
+    press(B_OCTDN);
+    ok &= !ui.confirm && !memcmp(TSEL->step, ref, sizeof ref) && tl_lock_at(3);
+    btn_down(B_SEQ); frame(); tl_key(0); btn_up(B_SEQ); frame();
+    press(B_OCTUP);
+    for (i = 0; i < NSTEP; i++)
         ok &= TSEL->step[i].time == ST_REST && !TSEL->step[i].n;
-    ok &= TSEL->step[20].note[0] == 72 && !motion_lock_count(TSEL);
-    bad += check("  F3 CLEAR: steps 1..LEN empty (no dialog), past LEN kept, the locks of the steps cleared go", ok);
-    oct_back();
-    ok = !memcmp(TSEL->step, ref, sizeof ref) && tl_lock_at(3) && TSEL->p[P_SLEN] == 8 && msg_is("SEQUENCE PUT BACK") &&
-         ui.layer == LAYER_SEQ && song.octave == 0;
-    turn(EN_K1, -2);
-    ok &= TSEL->p[P_SLEN] == 6;                         /* KNOB 1: LEN (the PATTERN page's four) */
-    oct_back();
-    ok &= TSEL->p[P_SLEN] == 8;
-    btn_up(B_SEQ); frame();
-    hold(B_SAVE);                                       /* (OCT-'s put back is one undo too: the tools again) */
-    ok &= TSEL->step[0].time == ST_REST;
+    ok &= !motion_count(TSEL) && TSEL->p[P_SLEN] == 8 && msg_is("PATTERN CLEARED") && ps_num(song.sel) == 1u;
     hold(B_SAVE);
-    ok &= !memcmp(TSEL->step, ref, sizeof ref);
-    bad += check("  OCT-: the track as the layer opened (steps, locks, LEN); KNOB 1..4 LEN DIV SWING GATE", ok);
-
-    /* RANDOM / COOK on a melodic track (fixed seeds): the rhythm stays, the notes in the scale, near the middle */
-    ok = okc = 1;
-    for (seed = 1; seed <= 40u; seed++) {
-        ui_power_on();
-        tl_melody();
-        TSEL->p[P_ROOT] = 2; TSEL->p[P_SCALE] = 2;
-        memcpy(ref, TSEL->step, sizeof ref);
-        go_page(GR_ROLL); frame();
-        rng_state = 0x9E3779B9u * seed;
-        btn_down(B_SEQ); frame();
-        tl_key(4);                                      /* C4: RANDOM */
-        ok &= msg_is("RANDOM NOTES") && tl_times_are(TSEL, ref, NSTEP) && tl_in_key(TSEL) && TSEL->step[20].note[0] == 72;
-        for (i = 0; i < 8u; i++)
-            if (TSEL->step[i].n)
-                ok &= TSEL->step[i].note[0] >= 54 && TSEL->step[i].note[0] <= 72;
-        for (k = 0; k < 12u; k++) {                     /* D4: COOK, again and again */
-            memcpy(mid, TSEL->step, sizeof mid);
-            tl_key(5);
-            okc &= tl_times_are(TSEL, ref, NSTEP) && tl_in_key(TSEL) && TSEL->step[20].note[0] == 72 &&
-                   memcmp(mid, TSEL->step, sizeof mid) != 0;
-        }
-        okc &= msg_is("COOKED 12");
-        btn_up(B_SEQ); frame();
-    }
-    bad += check("  C4 RANDOM (melodic): the rhythm kept, new notes in the scale near the middle (40 seeds)", ok);
-    bad += check("  D4 COOK x12: each press changes it, the rhythm and the scale kept, \"COOKED 12\"", okc);
-    hold(B_SAVE);
-    bad += check("  SAVE held after COOKs: the last one undone only", !memcmp(TSEL->step, mid, sizeof mid));
-    ui_power_on();
-    track_defaults_steps(TSEL);
-    TSEL->p[P_SLEN] = 16;
-    go_page(GR_ROLL); frame();
-    rng_state = 12345u;
-    btn_down(B_SEQ); frame();
-    tl_key(5);
-    ok = msg_is("NOTHING TO COOK") && !undo.trk;
-    tl_key(4);
-    for (k = 0, i = 0; i < 16u; i++) {
-        ok &= i % 2u ? TSEL->step[i].time == ST_REST : 1;
-        k += (uint32_t)tl_gate(&TSEL->step[i]);
-    }
-    ok &= tl_gate(&TSEL->step[0]) && k >= 3u && tl_in_key(TSEL);
-    btn_up(B_SEQ); frame();
-    bad += check("  an empty pattern: COOK says NOTHING TO COOK; RANDOM writes 8ths with rests, in the scale", ok);
-
-    /* DRUM: RANDOM (kick 3..5 with one on step 1, snare 2 .. 3 on 2 and 4, closed hat 8..12), COOK keeps the 1 */
-    ok = okc = 1;
-    for (seed = 1; seed <= 60u; seed++) {
-        ui_power_on();
-        tl_drum();
-        go_page(GR_ROLL); frame();
-        rng_state = 0x2545F491u * seed;
-        btn_down(B_SEQ); frame();
-        tl_key(4);
-        a = tl_count(TSEL, DV_KICK); b2 = tl_count(TSEL, DV_SNARE);
-        ok &= msg_is("RANDOM BEAT") && a >= 3u && a <= 5u && (tl_lanes_of(TSEL, DV_KICK) & 1u) && b2 >= 2u && b2 <= 3u &&
-              (tl_lanes_of(TSEL, DV_SNARE) & 0x1010u) == 0x1010u && tl_count(TSEL, DV_HATC) >= 8u &&
-              tl_count(TSEL, DV_HATC) <= 12u;
-        for (k = 0; k < 10u; k++) {
-            memcpy(mid, TSEL->step, sizeof mid);
-            tl_key(5);
-            okc &= (tl_lanes_of(TSEL, DV_KICK) & 1u) && memcmp(mid, TSEL->step, sizeof mid) != 0 && tl_count(TSEL, DV_HATC);
-        }
-        btn_up(B_SEQ); frame();
-    }
-    bad += check("  DRUM RANDOM: kick 3..5 (one on 1), snare on 2 and 4 (+ a ghost), hat 8..12; 60 seeds", ok);
-    bad += check("  DRUM COOK x10: each press changes it, the kick on 1 stays", okc);
-    ui_power_on();
-    tl_drum();
-    go_page(GR_ROLL); frame();
-    btn_down(B_SEQ); frame();
-    tl_key(6);                                          /* E4: BEAT */
-    ok = msg_is("BASIC BEAT") && tl_lanes_of(TSEL, DV_KICK) == 0x1111u && tl_lanes_of(TSEL, DV_SNARE) == 0x1010u &&
-         tl_lanes_of(TSEL, DV_HATC) == 0x5555u;
-    key_down(black(2)); frame(); key_up(black(2)); frame();   /* black key 3: the CLAP lane */
-    ok &= ui.lane == DV_CLAP && !gates();
-    tl_key(10);                                         /* B4: FILL, four times round */
-    ok &= tl_lanes_of(TSEL, DV_CLAP) == 0xFFFFu && msg_is("CLAP EVERY STEP");
-    tl_key(10);
-    ok &= tl_lanes_of(TSEL, DV_CLAP) == 0x5555u;
-    tl_key(10);
-    ok &= tl_lanes_of(TSEL, DV_CLAP) == 0x1111u;
-    tl_key(10);
-    ok &= !tl_lanes_of(TSEL, DV_CLAP) && msg_is("CLAP CLEARED") && tl_lanes_of(TSEL, DV_KICK) == 0x1111u;
-    bad += check("  E4 BEAT: four on the floor, 2 and 4, 8th hats; black key 3 the lane, B4 FILL 1 / 2 / 4 / none", ok);
-    ui.lane = DV_SNARE;
-    grid_acc(TSEL, 4, DV_SNARE, 1);
-    tl_key(9);                                          /* A4: REVERSE the lane */
-    ok = tl_lanes_of(TSEL, DV_SNARE) == 0x0808u && ((step_accents(&TSEL->step[11]) >> DV_SNARE) & 1u) &&
-         !((step_accents(&TSEL->step[3]) >> DV_SNARE) & 1u) && tl_lanes_of(TSEL, DV_KICK) == 0x1111u;
-    tl_key(8);                                          /* G4: CLEAR the lane */
-    ok &= !tl_lanes_of(TSEL, DV_SNARE) && tl_lanes_of(TSEL, DV_HATC) == 0x5555u && msg_is("SNARE CLEARED");
-    ui.lane = DV_TOM;
-    rng_state = 77u;
-    tl_key(11);                                         /* C5: RANDOM the lane: at least one hit */
-    ok &= tl_count(TSEL, DV_TOM) >= 1u && tl_lanes_of(TSEL, DV_KICK) == 0x1111u;
-    bad += check("  A4 / G4 / C5: the lane reversed (its accents with it), cleared, at random; the others stay", ok);
+    ok &= !memcmp(TSEL->step, ref, sizeof ref) && tl_lock_at(3);
+    bad += check("  F3 CLEAR ALL: CLEAR PATTERN 1? (OCT- keeps it); OCT+ every step and its automation gone, LEN and the "
+                 "pattern kept; SAVE held: back", ok);
+    btn_down(B_SEQ); frames(500);
     a = leds_at(0); b2 = leds_at(250);
-    ok = ((a ^ b2) >> white(0)) & 1u && ((a ^ b2) >> white(11)) & 1u && ((a ^ b2) >> white(7)) & 1u &&   /* (F4 EUCLID) */
-         ((a & b2) >> black(DV_TOM)) & 1u && ((a ^ b2) >> black(0)) & 1u && !(((a | b2) >> black(8)) & 1u);
+    ok = ((a ^ b2) >> white(0)) & 1u && !(((a | b2) >> white(1)) & 1u) && !(((a | b2) >> white(7)) & 1u) &&
+         !(((a | b2) >> black(0)) & 1u);
     btn_up(B_SEQ); frame();
-    ui_power_on();
-    tl_melody();
-    go_page(GR_ROLL); frame();
-    btn_down(B_SEQ); frames(500);                       /* (the map: a peek) */
-    memcpy(ref, TSEL->step, sizeof ref);
-    a = leds_at(0); b2 = leds_at(250);
-    ok &= ((a ^ b2) >> white(5)) & 1u && !(((a | b2) >> white(6)) & 1u) && !(((a | b2) >> black(0)) & 1u) &&
-          ((a ^ b2) >> white(7)) & 1u;                  /* (1.5.5: F4 EUCLID on every track) */
-    tl_key(6); tl_key(10);
-    key_down(black(2)); frame(); key_up(black(2)); frame();
-    ok &= !memcmp(TSEL->step, ref, sizeof ref) && ui.lane == 0u && !gates();
-    btn_up(B_SEQ); frame();
-    bad += check("  LEDs: the tools breathe, the lane lit (DRUM); a melodic track: no BEAT, no lane keys", ok);
+    bad += check("  LEDs: F3 CLEAR ALL breathes, nothing else", ok);
 
     /* the lock (a double tap), a song playing */
     ui_power_on();
@@ -6858,16 +6713,18 @@ static int test_seq_tools(void)
     pg = ui.page;
     press(B_SEQ); frames(64); press(B_SEQ); frames(500);
     ok = ui.lock == LAYER_SEQ && ui.layer == LAYER_SEQ && ui.page == pg;
-    tl_key(1);
-    ok &= TSEL->step[6].note[0] == 60;
+    turn(EN_PRESET, -1);
+    ok &= TSEL->p[P_SQNT] == 4;
     press(B_SEQ); frames(16);
     ok &= !ui.lock && !ui.layer && ui.page == pg;
-    bad += check("  double tapped on STEP: locked over STEP, the keys act; a tap closes it", ok);
+    bad += check("  double tapped on STEP: locked over STEP, PRESETS the amount; a tap closes it", ok);
     chain.running = 1;
     memcpy(ref, TSEL->step, sizeof ref);
     btn_down(B_SEQ); frame();
-    tl_key(4);
-    ok = msg_is("STOP TO EDIT") && !memcmp(TSEL->step, ref, sizeof ref);
+    turn(EN_PRESET, 1);
+    ok = msg_is("STOP TO EDIT") && TSEL->p[P_SQNT] == 4;
+    tl_key(0);
+    ok &= msg_is("STOP TO EDIT") && !ui.confirm && !memcmp(TSEL->step, ref, sizeof ref);
     btn_up(B_SEQ); frame();
     chain.running = 0;
     bad += check("  while a song plays: STOP TO EDIT, nothing changes", ok);

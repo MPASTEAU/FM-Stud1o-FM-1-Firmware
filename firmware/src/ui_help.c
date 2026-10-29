@@ -74,7 +74,6 @@ static const char *const HELP_LAYER[LAYER_N] = {
     "[K1]ENGINE[K2]SOUND", "[K1]LENGTH[K3]SWING[K4]GATE", "[K1]CLICK[K2]COUNT-IN[K3]LEVEL",
 };
 
-static const char H_EUCLID[] = "[K1]HITS[K2]STEPS[K3]ROTATE";   /* SEQ TOOLS' EUCLID open (1.5.5) */
 /* the hint of the page shown, 0 = none */
 static const char *help_page(void)
 {

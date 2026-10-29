@@ -1445,7 +1445,7 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ ui.frame / 2u;                    /* scope: every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
-    h ^= (uint32_t)tl_dy * 40503u + (uint32_t)pp_dy * 2246822519u;   /* (Dah: a list gliding: each step drawn) */
+    h ^= (uint32_t)tl_dy * 40503u + (uint32_t)pp_dy * 2246822519u + (uint32_t)lu_dy * 3266489917u + (uint32_t)lf_dy * 668265263u;   /* (Dah: a list gliding: each step drawn) */
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
@@ -1572,7 +1572,7 @@ static void list_text(int32_t y, int sel, const char *tag, uint16_t tc, const ch
 }
 /* (Dah) a gliding list: rows' (y, tag, its colour, name) under a bar fixed in the middle: drawn plain, the bar over
  * them, then again in INK inside the bar only (the text clip) */
-typedef struct { int32_t y; char tag[6]; uint16_t tc; char nm[16]; } glrow_t;
+typedef struct { int32_t y; char tag[6]; uint16_t tc, nc; char nm[28]; } glrow_t;   /* (nc: the name's, 0 TEXT) */
 static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
 {
     uint32_t i;
@@ -1580,11 +1580,11 @@ static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
     int16_t c0 = cv_cy0, c1 = cv_cy1;
     if (n && (r[0].y - 3) % 17 == 0) {                 /* (still, on the rows: plain ones, as any list) */
         for (i = 0; i < n; i++)
-            list_row(r[i].y, r[i].y == by, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
+            list_row(r[i].y, r[i].y == by, r[i].tag, r[i].tc, r[i].nm, r[i].nc ? r[i].nc : T_TEXT, x1);
         return;
     }
     for (i = 0; i < n; i++)
-        list_text(r[i].y, 0, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
+        list_text(r[i].y, 0, r[i].tag, r[i].tc, r[i].nm, r[i].nc ? r[i].nc : T_TEXT, x1);
     cv_rrect(6, by, 228, 16, 4, T_THEME, T_SURF);
     cv_cy0 = (int16_t)clamp(by + CV_OY, 0, (int32_t)cv_h);   /* (Dah: inside the canvas: a split panel's second one
                                                          * may not hold the bar at all) */
@@ -1655,7 +1655,7 @@ static void graph_trklist(void)
 {
     int32_t row, cur = mx_master ? -1 : (int32_t)song.sel, n = (int32_t)trk_count();
     int32_t dy = glide(&tl_dy), h = (int32_t)list_n() / 2;
-    glrow_t r[13];
+    glrow_t r[13] = {{0}};
     uint32_t m = 0;
     for (row = -h - 1; row <= h + 1; row++) {        /* (the bar fixed in the middle, the tracks gliding) */
         int32_t i = cur + row;
@@ -1701,7 +1701,27 @@ static void engine_sound_row(int32_t y)
 /* user preset slots around the selected one: "U07  NAME" / EMPTY */
 static void graph_user(void)
 {
-    int32_t n = (int32_t)list_n() - 1, row, first = clamp((int32_t)ui.uslot - n / 2, 0, UP_SLOTS - n);
+    int32_t h = (int32_t)list_n() / 2, row, dy = glide(&lu_dy);
+    glrow_t r[13] = {{0}};
+    uint32_t m = 0;
+    for (row = -h - 1; row <= h + 1; row++) {          /* (Dah) the bar in the middle, the slots gliding under it (as
+                                                         * PATTERN's); none under the sound's line */
+        int32_t k = (int32_t)ui.uslot + row, y = LIST_Y(row + h) + dy;
+        glrow_t *g = &r[m];
+        if (k < 0 || k >= UP_SLOTS || y < 17)
+            continue;
+        m++;
+        g->y = y;
+        g->tc = T_MID;
+        up_slot_label(g->tag, (uint32_t)k);
+        if (up_used((uint32_t)k))
+            up_name((uint32_t)k, g->nm);
+        else {
+            str_cpy(g->nm, "EMPTY", sizeof g->nm);     /* (Dah: said, not "--") */
+            g->nc = T_DIM;
+        }
+    }
+    glide_rows(r, m, 232);
     {   /* (Dah) on top, what SAVE puts in a slot: the selected track's sound ("TRACK 1  ACID") */
         char nm[16], tl[10] = "TRACK ";
         int32_t x;
@@ -1711,17 +1731,6 @@ static void graph_user(void)
         GFX_HOOK_ALIGN(0, 4, 0, 14, AL_V, "user presets: the track's sound line");
         x = cv_text_on(14, 4 - AF_S_CAP_Y, &AF_S, tl, ux.trk[song.sel % NTRK], T_SURF) + 8;
         cv_free_text(x, 4 - AF_S_CAP_Y, &AF_S, nm[0] ? nm : "--", T_TEXT, T_SURF, 226 - x);
-    }
-    for (row = 0; row < n; row++) {
-        uint32_t k = (uint32_t)(first + row);
-        char tag[4], nm[13];
-        int used = up_used(k);
-        up_slot_label(tag, k);
-        if (used)
-            up_name(k, nm);
-        else
-            str_cpy(nm, "EMPTY", sizeof nm);           /* (Dah: said, not "--") */
-        list_row(LIST_Y(row) + 17, k == ui.uslot, tag, T_MID, nm, used ? T_TEXT : T_DIM, 232);
     }
 }
 /* DRUM's lane pages (ui_drumlane.c): the lanes around the one picked, each with its lane name, its VOICE (KIT: the kit's
@@ -2201,18 +2210,27 @@ static void graph_file(void)
     }
     for (i = 0; i < gfile.n; i++)
         if (gfile.ids[i] == ui.fsel) at = i;
-    first = gfile.n <= rn ? 0u : at < rn / 2u ? 0u : at + (rn - rn / 2u) > gfile.n ? gfile.n - rn : at - rn / 2u;
-    for (i = 0; i < rn && first + i < gfile.n; i++) {
-        uint32_t k = first + i;
-        int32_t y = LIST_Y(i);
-        char b[4], nm[28];
-        fmt_int(b, (int32_t)gfile.ids[k]);
-        str_cpy(nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
-        str_cpy(nm + str_len(nm), "  ", 3);
-        fmt_int(nm + str_len(nm), gfile.pct[k]);
-        str_cpy(nm + str_len(nm), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
-        list_row(y, gfile.ids[k] == ui.fsel, b, gfile.ids[k] == cur ? T_ACCENT : T_MID, nm, T_TEXT, 232);
+    {   /* (Dah) the bar in the middle, the projects gliding under it (as PATTERN's); none over the memory line */
+        int32_t h = (int32_t)list_n() / 2, row, dy = glide(&lf_dy);
+        glrow_t r[13] = {{0}};
+        uint32_t m = 0;
+        for (row = -h - 1; row <= h + 1; row++) {
+            int32_t k = (int32_t)at + row, y = LIST_Y(row + h) + dy;
+            glrow_t *g = &r[m];
+            if (k < 0 || k >= (int32_t)gfile.n || y + 16 > my - 2)
+                continue;
+            m++;
+            g->y = y;
+            g->tc = gfile.ids[k] == cur ? T_ACCENT : T_MID;
+            fmt_int(g->tag, (int32_t)gfile.ids[k]);
+            str_cpy(g->nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
+            str_cpy(g->nm + str_len(g->nm), "  ", 3);
+            fmt_int(g->nm + str_len(g->nm), gfile.pct[k]);
+            str_cpy(g->nm + str_len(g->nm), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
+        }
+        glide_rows(r, m, 232);
     }
+    (void)first; (void)rn;
 }
 /* project slots: the name (none: USED) / EMPTY, the selected one filled; (HA HA HE HU) the one the music is from: its
  * letter in the accent, "OPEN" after its name */
@@ -2396,7 +2414,7 @@ static void mixer_strip(uint32_t c)
     uint32_t sel = c == song.sel && !mx_master, lvl = trk_level(c), arm = (song.rec >> c) & 1u, sig;
     uint32_t mute = t->p[P_MUTE] != 0 || (perf_solo && !((perf_solo >> c) & 1u));   /* (Dah: another one SOLO: grey) */
     uint32_t hot = sel && ui.hot_t ? ui.hot_col + 1u : 0u, lit = (uint32_t)midi_lit(c);
-    int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], -127, 127), f, mh, x;   /* (rv: WIDTH) */
+    int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], -64, 127), f, mh, x;   /* (rv: WIDTH) */
     uint16_t bg = sel ? T_RAISE : T_SURF, tc = mute ? T_DIM : ux.trk[c % NTRK];
     char b[16], v[8], d[2] = {(char)('1' + c), 0};
     t->peak = 0;
@@ -2445,7 +2463,7 @@ static void mixer_strip(uint32_t c)
         cv_text(gx + gw - 2 - text_w(&AF_S, "R"), py + 2 - AF_S_CAP_Y, &AF_S, "R", pan > 2 ? T_TEXT : T_MID);
         {                                              /* WIDTH (Dah: as FL's STEREO SEPARATION): from 12 o'clock,
                                                         * separated to the left, merged (MONO) to the right */
-            int32_t a = -rv * KA_END / 127;
+            int32_t a = rv >= 0 ? -rv * KA_END / 127 : -rv * KA_END / 64;
             knob_arc(MX_W / 2 - kr, ky, kr, KNOB_SMALL_COV, KNOB_SMALL_ANG, a < 0 ? a : 0, a > 0 ? a : 0,
                      T_LINE, hot == 3u ? T_TEXT : tc, bg);
             cv_rect(MX_W / 2 - 1, ky + 1, 2, 3, T_MID);   /* (its middle: normal) */

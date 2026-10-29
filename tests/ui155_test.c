@@ -4,7 +4,7 @@
  *   PAN        (#199) a bipolar value (-64..63, F_BIPCT) reads -100..+100 %: +100 at the top (was +98), the stored
  *              range and the sound unchanged; the MIXER strip's number the same
  *   (and SELECT PAGE, PROJECT ERASE, CLEAN INIT; OCT- on the press as in 1.5.1 (1.5.6: #205 taken
- *   out), next to EUCLID, FILL)
+ *   out), next to the SEQ layer's OCT+, FILL)
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
@@ -373,32 +373,20 @@ static int clean_init(void)
     return bad;
 }
 
-/* OCT- (on the press again in 1.5.6) next to 1.5.5's other OCT- / layer users: SEQ TOOLS' EUCLID (OCT- cancels, OCT+
- * applies, its knobs HITS STEPS ROT even with OCT- held) and FILL (GLO + E4) leave the octave alone; a plain OCT- after
+/* OCT- (on the press again in 1.5.6) next to 1.5.5's other OCT- / layer users: the SEQ layer's OCT+ (QUANTIZE's APPLY)
+ * and FILL (GLO + E4) leave the octave alone; a plain OCT- after
  * them still lowers it. (MIDI LEARN's OCT- clear: tests/midi_control_test.c checks the octave stays) */
 static int oct_layers(void)
 {
     int bad = 0, ok;
-    uint32_t h;
     ui_power_on();
     go_page(GR_ROLL); frame();
     song.octave = 0;
-    eu.steps = 0;
     btn_down(B_SEQ); frame();
-    key_down(white(7)); frame(); key_up(white(7)); frame();   /* F4: EUCLID */
-    ok = eu.on;
-    h = eu.hits;
-    btn_down(B_OCTDN); frame();
-    turn(EN_K1, 1);                                    /* (OCT- held: still EUCLID's HITS) */
-    ok &= eu.hits == h + 1u;
-    btn_up(B_OCTDN); frame();
-    ok &= !eu.on && str_eq(ui.msg, "EUCLID CANCELLED") && song.octave == 0;
-    key_down(white(7)); frame(); key_up(white(7)); frame();
-    ok &= eu.on;
-    btn_down(B_OCTUP); frame(); btn_up(B_OCTUP); frame();
-    ok &= !eu.on && str_eq(ui.msg, "EUCLID APPLIED") && song.octave == 0;
+    btn_down(B_OCTUP); frame(); btn_up(B_OCTUP); frame();   /* (Dah) SEQ: OCT+ APPLY (QUANTIZE ON, nothing nudged) */
+    ok = str_eq(ui.msg, "NOTHING TO QUANTIZE") && song.octave == 0;
     btn_up(B_SEQ); frames(400);
-    bad += check("OCT- and EUCLID (#186): OCT- cancels, OCT+ applies, OCT- + KNOB 1 is HITS; no octave", ok);
+    bad += check("OCT+ in the SEQ layer: QUANTIZE's APPLY; no octave", ok);
 
     btn_down(B_GLO); frames(100);
     key_down(key_at(0, 6)); frames(50);                /* E4: FILL while held */

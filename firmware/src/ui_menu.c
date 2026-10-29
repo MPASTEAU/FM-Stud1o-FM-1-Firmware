@@ -409,9 +409,9 @@ static uint32_t menu_split(uint32_t n)
 }
 static void draw_menu(void)
 {
-    static const khint_t KEYS[3][3] = {{{KC_ALGO, "TAB"}, {KC_PRESETS, "ROW"}, {KC_OCTPM, "VALUE"}},
-                                       {{KC_ALGO, "TAB"}, {KC_PRESETS, "ROW"}, {KC_OCTUP, "OPEN"}},
-                                       {{KC_ALGO, "TAB"}, {KC_PRESETS, "ROW"}, {KC_OCTUP, "CLEAR"}}};
+    static const khint_t KEYS[3][3] = {{{KC_ALGO, "TAB"}, {KC_SELECT, "ROW"}, {KC_OCTPM, "VALUE"}},
+                                       {{KC_ALGO, "TAB"}, {KC_SELECT, "ROW"}, {KC_OCTUP, "OPEN"}},
+                                       {{KC_ALGO, "TAB"}, {KC_SELECT, "ROW"}, {KC_OCTUP, "CLEAR"}}};
     uint32_t pass, k, first, n, split, sig;
     int32_t pos0 = mt.pos;
     if (ui.menu == 1)
@@ -530,12 +530,12 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
                                                         * the tabs */
         if (dn)
             ui.menu = 1, ui.force = 1;
-        else if (ui.menu == 2 && (s = panel_enc(EN_PRESET)) != 0)
+        else if (ui.menu == 2 && (s = panel_enc(EN_SELECT)) != 0)   /* (Dah: SELECT, as the rows) */
             ui.menu_scroll = (uint16_t)clamp((int32_t)ui.menu_scroll + clamp(s, -128, 128) * 18, 0, menu_scroll_max());
         enc_drop();
         return;
     }
-    if ((s = panel_enc(EN_PRESET)) != 0)
+    if ((s = panel_enc(EN_SELECT)) != 0)              /* (Dah) SELECT the rows (PRESETS: nothing here) */
         menu_move(s);
     if ((s = panel_enc(EN_ALGO)) != 0)
         menu_tab_go(s);

@@ -1861,7 +1861,7 @@ static void draw_columns_in(void)
         card_span_of(&TP[P_PAN]);
         knob_bip = 1;
         draw_column(1, "PAN", val, unit, VAL(1u), RATIO(&TP[P_PAN], t->p[P_PAN]), param_icon(&TP[P_PAN], t->p[P_PAN]));
-        if (t->p[P_SPRD] == 0 || t->p[P_SPRD] == 127 || t->p[P_SPRD] == -127) {   /* (Dah) WIDTH, as FL's STEREO
+        if (t->p[P_SPRD] == 0 || t->p[P_SPRD] == 127 || t->p[P_SPRD] == -64) {   /* (Dah) WIDTH, as FL's STEREO
                                                          * SEPARATION: its middle and ends named */
             str_cpy(val, !t->p[P_SPRD] ? "NORM" : t->p[P_SPRD] > 0 ? "WIDE" : "MONO", 8);
             unit = "";
@@ -1870,7 +1870,8 @@ static void draw_columns_in(void)
         card_mot_of(&TSEL->p[P_SPRD]);
         card_span_of(&TP[P_SPRD]);
         knob_bip = 1;                                   /* (from the middle; separated to the left) */
-        draw_column(2, "WIDTH", val, unit, VAL(2u), (127 - t->p[P_SPRD]) * 1000 / 254, ICON_AUTO);
+        draw_column(2, "WIDTH", val, unit, VAL(2u), t->p[P_SPRD] >= 0 ? (127 - t->p[P_SPRD]) * 500 / 127 : 500 - t->p[P_SPRD] * 500 / 64,
+                    ICON_AUTO);   /* (-64 .. 127: a byte of the stores, motion's least; each half of the knob its own) */
         {
             uint32_t solo = (mix_solo >> (song.sel % NTRK)) & 1u;
             draw_column(3, "STATE", solo ? "SOLO" : t->p[P_MUTE] ? "MUTE" : "ON", "", solo || t->p[P_MUTE] ? T_ACCENT : VAL(3u),
@@ -2418,6 +2419,13 @@ static void confirm_text(char *a, char *b)
         break;
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);
+        break;
+    case CF_CLEAR_PAT:                               /* (Dah) the SEQ layer's CLEAR ALL: the steps and automation */
+        str_cpy(a, "CLEAR PATTERN ", 24);
+        fmt_int(a + str_len(a), (int32_t)k);
+        str_cpy(a + str_len(a), "?", 4);
+        str_cpy(b, "T1 STEPS + AUTOMATION", 24);
+        b[1] = (char)('1' + song.sel % NTRK);
         break;
     case CF_CLEAN_SOUND:                             /* 1.5.5 (#190): the basic sound, nothing added */
         str_cpy(a, "CLEAN INIT SOUND?", 24);

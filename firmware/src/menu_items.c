@@ -14,8 +14,8 @@
  * GLO > SYSTEM), the values the project holds and saves as before (no format change; a project load brings its own);
  * nothing of theirs is in the settings record (MI_PROJECT: menu_get / menu_put read and write song.g) */
 enum { MI_HELP, MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HOME, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_SCLLED,
-       MI_PREVIEW, MI_CHADD, MI_SELECT, MI_LOWCUT, MI_USB,
-       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_SYNC, MI_SWING, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_RESTORE, MI_SCOPE,
+       MI_PREVIEW, MI_CHADD, MI_SELECT, MI_SNDPV, MI_LOWCUT,
+       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_SYNC, MI_SWING, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_USB, MI_RESTORE, MI_SCOPE,
 #if FELUCCA_CPU2
        MI_CPU2,                                        /* (not in a FELUCCA_CPU2=0 build: core.h) */
 #endif
@@ -38,9 +38,9 @@ static int menu_valued(uint32_t row) { return row < MI_VALUES && row != MI_LCLEA
 #define MI_TCH(row) ((row) >= MI_TCH1 && (row) <= MI_TCH4)   /* 1.5.5 (#202): T1..T4 CHANNEL, MIDI IN TRACK's */
 static const char *const MI_NAME[MI_COUNT] = {"HELP", "COLOR", "STYLE", "LARGE", "ANIM", "LEDS", "SCREEN OFF", "HOME", "HOLD", "KNOB ACCEL",
                                               "FX LATCH", "BPM LOCK", "SCALE LEDS", "STEP PREVIEW", "CHORD ENTRY", "SELECT",
-                                              "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE", "SYNC", "SWING",
+                                              "PLAY ON PICK", "SPEAKER EQ", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE", "SYNC", "SWING",
                                               "MIDI IN", "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL",
-                                              "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR", "USB SERIAL", "RESTORE LAST", "SCOPE",
+                                              "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR", "USB SERIAL", "USB LEVEL", "RESTORE LAST", "SCOPE",
 #if FELUCCA_CPU2
                                               "2ND CORE",
 #endif
@@ -64,7 +64,8 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_CONTROL,                                                           /* SCALE LEDS (1.2) */
     MTAB_CONTROL, MTAB_CONTROL,                                             /* STEP PREVIEW, CHORD ENTRY (1.2) */
     MTAB_CONTROL,                                                           /* SELECT (1.5.5) */
-    MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL,
+    MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* (Dah) PLAY ON PICK (a sound / track picked
+                                                                             * heard), SPEAKER EQ, CLICK, CLICK LEVEL,
                                                                              * COUNT-IN */
     MTAB_AUDIO,                                                             /* TUNE (1.2) */
     MTAB_AUDIO, MTAB_AUDIO,                                                 /* (Dah) SYNC, SWING: the project's clock
@@ -74,8 +75,8 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_MIDI,                                                              /* AUTO SELECT (1.5.5) */
     MTAB_MIDI,                                                              /* SCREEN WAKE (1.5.5: DISPLAY is full) */
     MTAB_MIDI,                                                              /* LEARN CLEAR (1.5) */
-    MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* USB SERIAL, RESTORE LAST, SCOPE (Dah: HELP
-                                                                             * went first) */
+    MTAB_SYSTEM, MTAB_SYSTEM,                                               /* USB SERIAL, USB LEVEL (Dah: AUDIO full) */
+    MTAB_SYSTEM, MTAB_SYSTEM,                                               /* RESTORE LAST, SCOPE (Dah: HELP went first) */
 #if FELUCCA_CPU2
     MTAB_SYSTEM,                                                            /* 2ND CORE (1.6.1) */
 #endif
@@ -204,6 +205,7 @@ static uint32_t menu_get(uint32_t row)
     case MI_HOLD: return settings_hold % 4u;
     case MI_SCROFF: return scr_get();
     case MI_ANIM: return ui_prefs & PREF_ANIM_OFF ? 1u : (ui_idle & 1u) ? 2u : 0u;
+    case MI_SNDPV: return (ui_idle >> 1) & 1u;         /* (Dah: bit 1 of ANIM IDLE's byte, 1 = OFF; 0, older ones, ON) */
     case MI_HOME: return ui_home_view < HV_COUNT ? ui_home_view : HV_SCOPE;
     case MI_SELECT: return sel_mode();
     case MI_CLICK: case MI_CLKLVL: case MI_COUNTIN: return rp_get(row - MI_CLICK);
@@ -234,6 +236,7 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     case MI_COUNTIN: return COUNTIN_N[v % 3u];
     case MI_SCROFF: return SCROFF_N[v % NELEM(SCROFF_N)];
     case MI_ANIM: return ANIM_N[v % 3u];
+    case MI_SNDPV: return v & 1u ? "OFF" : "ON";
     case MI_HOME: return HOME_N[v % HV_COUNT];
     case MI_SELECT: return SELECT_N[v % SEL_N];
     case MI_LEDS: return LEDS_ROW_N[v % LEDS_ROWS];
@@ -298,6 +301,7 @@ static void menu_put(uint32_t row, uint32_t v)
         ui_prefs = (uint8_t)(v == 1u ? ui_prefs | PREF_ANIM_OFF : ui_prefs & ~PREF_ANIM_OFF);
         ui_idle = (uint8_t)(v == 2u ? ui_idle | 1u : ui_idle & ~1u);
         break;                                         /* (1.5: up to 1.4.1 it fell through: ANIM set HOME too) */
+    case MI_SNDPV: ui_idle = (uint8_t)(v ? ui_idle | 2u : ui_idle & ~2u); break;
     case MI_HOME:                                      /* (another look: HOME drawn anew) */
         ui_home_view = (uint8_t)(v < HV_COUNT ? v : HV_SCOPE);
         ui.force = 1;

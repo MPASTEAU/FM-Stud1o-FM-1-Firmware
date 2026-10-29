@@ -664,8 +664,7 @@ static void state(void)                          /* a playing song with steps on
 {
     uint32_t i;
     ui_power_on();
-    seq_fill = 0;                                /* (1.5.5: GLO's FILL, held in layer_glo_fill only; */
-    eu.on = 0;                                   /* SEQ TOOLS' EUCLID, open in layer_seq_euclid*) */
+    seq_fill = 0;                                /* (1.5.5: GLO's FILL, held in layer_glo_fill only) */
     if (large_on) ui_prefs |= PREF_LARGE;
     song.playing = 1;
     song.g[G_BPM] = 124;
@@ -787,7 +786,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, 
        S_LEARN_WAIT, S_LEARN_PICK, S_LEARN_SET, S_LEARN_LONG, S_GLO_LEARN, S_MENU_LCLEAR, S_MENU_LCLEAR_NONE,
        S_DLY_DOT, S_DLY_DOT16, S_FX_THROW,
        S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL,
-       S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_EUCLID, S_SEQ_EUCLID_DRUM, S_SEQ_EUCLID_64,
+       S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_QNT, S_SEQ_QNT_OFF, S_SEQ_QNT_64, S_CONFIRM_CLEAR_PAT,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_CONFIRM_CLEAN,
        S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_EQ_ADD, S_FX_SENDS, S_FX_SC, S_FX_COMP, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "user",
@@ -817,8 +816,8 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "learn_wait", "learn_pick", "learn_set", "learn_long", "layer_glo_learn", "menu_learn_clear", "menu_learn_clear_none",
     "dly_dotted", "dly_dotted_16", "perform_throw",
     "detail", "detail_playing", "detail_rest", "detail_drum", "roll_marks", "drum_marks", "help_detail",
-    "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_euclid", "layer_seq_euclid_drum",
-    "layer_seq_euclid_64",
+    "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_quantize", "layer_seq_quantize_off",
+    "layer_seq_quantize_64", "confirm_clear_pattern",
     "menu_select", "project_erase", "confirm_erase_project", "confirm_clean",
     "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq_bands", "fx_eq_add", "fx_sends", "fx_sc", "fx_comp"};
 
@@ -1438,8 +1437,8 @@ static void setup(int s)
     /* 1.2 SEQ TOOLS (SEQ held on STEP): a melodic track (the sequence's tools), the DRUM grid (+ BEAT, the lane's tools,
      * the lanes; CLAP selected), a song playing (every tool dimmed: STOP TO EDIT) */
     case S_SEQ_TOOLS: go_page(GR_ROLL); ui.layer = LAYER_SEQ; break;
-    case S_SEQ_TOOLS_DRUM: drum(0); go_page(GR_ROLL); ui.lane = 2; ui.layer = LAYER_SEQ; break;
-    case S_SEQ_TOOLS_SONG: drum(1); go_page(GR_ROLL); ui.lane = 5; chain.running = 1; ui.layer = LAYER_SEQ; break;
+    case S_SEQ_TOOLS_DRUM: drum(0); go_page(GR_ROLL); ui.layer = LAYER_SEQ; break;
+    case S_SEQ_TOOLS_SONG: drum(1); go_page(GR_ROLL); chain.running = 1; ui.layer = LAYER_SEQ; break;
     /* 1.4.1 ENGINE QUICK ACTIONS: the EDIT layer on a DRUM track, KICK and HATOP muted (the black keys' row); on KIT 77
      * (CL CY), CL muted; the grid with SD (the lane selected) and OH muted. A non-DRUM track's map: layer_edit_active */
     case S_EDIT_DRUM: drum(0); go_home(); ui.layer = LAYER_EDIT; drum_mute[3] = 1u | 16u; break;
@@ -1580,19 +1579,19 @@ static void setup(int s)
         go_title_page("DETAIL"); ui.cursor = 12; ui.hot_col = 0; ui.hot_t = 30;
         break;
     case S_GLO_FILL: go_home(); ui.layer = LAYER_GLO; seq_fill = 1; break;
-    /* 1.5.5 (#186): SEQ TOOLS' EUCLID open: 5 / 16 turned by 2 on ACID (HELP ON); 3 / 8 on the DRUM beat's clap (its
-     * repeats faint); 7 / 64 over 64 steps (four rows) */
-    case S_SEQ_EUCLID: case S_SEQ_EUCLID_DRUM: case S_SEQ_EUCLID_64:
-        if (s == S_SEQ_EUCLID_DRUM) { drum(0); ui.lane = 2; } else roll_scene(S_ROLL_ACID);
-        if (s == S_SEQ_EUCLID) ui_prefs2 |= PREF_HELP >> 16;
-        if (s == S_SEQ_EUCLID_64) TSEL->p[P_SLEN] = 64;
-        go_page(GR_ROLL); ui.layer = LAYER_SEQ; lys.trk = song.sel;
-        eu.steps = 0; eu_open(TSEL);
-        eu.hits = s == S_SEQ_EUCLID ? 5 : s == S_SEQ_EUCLID_DRUM ? 3 : 7;
-        eu.steps = s == S_SEQ_EUCLID ? 16 : s == S_SEQ_EUCLID_DRUM ? 8 : 64;
-        eu.rot = s == S_SEQ_EUCLID ? 2 : 0;
-        eu_render(TSEL); ui.msg_t = 0;
+    /* (Dah) the SEQ layer: QUANTIZE 50 % on ACID with nudges (HELP ON); OFF; ON over 64 steps; CLEAR ALL's dialog */
+    case S_SEQ_QNT: case S_SEQ_QNT_OFF: case S_SEQ_QNT_64: {
+        uint32_t i;
+        roll_scene(S_ROLL_ACID);
+        if (s == S_SEQ_QNT) ui_prefs2 |= PREF_HELP >> 16;
+        if (s == S_SEQ_QNT_64) TSEL->p[P_SLEN] = 64;
+        for (i = 0; i < (uint32_t)TSEL->p[P_SLEN]; i++)
+            step_set_nudge(&TSEL->step[i], (int32_t)(i * 5u % 15u) - 7);
+        TSEL->p[P_SQNT] = s == S_SEQ_QNT ? 3 : s == S_SEQ_QNT_OFF ? 0 : 1;
+        go_page(GR_ROLL); ui.layer = LAYER_SEQ; lys.trk = song.sel; ui.msg_t = 0;
         break;
+    }
+    case S_CONFIRM_CLEAR_PAT: ui.confirm = CF_CLEAR_PAT; ui.confirm_trk = 1; break;
     /* 1.5.5 (#188): MENU > CONTROL > SELECT PAGE (the tab's eighth row) */
     case S_MENU_SELECT: ui_prefs2 |= PREF_SEL_PAGE >> 16; ui.menu = 1; ui.menu_sel = MI_SELECT; break;
     /* 1.5.5 (#199): SAVE > PROJECT with KNOB 2 ERASE picked on a used slot; its dialog with the project's name */

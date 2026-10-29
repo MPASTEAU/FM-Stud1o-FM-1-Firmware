@@ -73,8 +73,7 @@
 # SEQ 1.5.5 (tests/seq155_test.c, #209 #186 #85): CONDITIONS (1:2 .. 4:4 by each track's loops from PLAY / a SONG
 #                   section, FILL / !FILL with GLO + E4, a NUDGE early step 1, no lock on a failed one, the chance draws
 #                   as before), DETAIL's KNOB 1 past 100 %, FUN10 round trip and what 1.5 /
-#                   1.5.1 do with them; SEQ TOOLS' EUCLID (hits / steps / rotation, DRUM lane or notes, OCT+ / OCT-,
-#                   undo) and DOUBLE / HALF (ties, locks, the steps' own fields, 64 steps, undo).
+#                   1.5.1 do with them.
 # 1.5.5 (tests/ui155_test.c): PAN reads -100..+100 % (#199, the stored range as before); MENU > CONTROL > SELECT (#188):
 #                   BPM by default, PAGE steps the family's pages (round, HOME MIXER CLOCK one round), GLO + SELECT the tempo;
 #                   OCT- (1.5.6: #205's "OCT- held + a knob = default" taken out): the octave on the press as in 1.5.1, a
@@ -82,7 +81,7 @@
 #                   refused playing / empty (tests/persistence_test.c: the flash side, a cut before the record keeps it);
 #                   CLEAN INIT (#190): every engine's basic sound (no sends, INSERT, LFO / ENV / MOD amounts; neutral ENV; FM6
 #                   the init voice), heard and ending; EDIT + F5 (E5: INIT); one undo; INIT as before. OCT- next to
-#                   EUCLID (OCT- cancels, OCT+ applies, no octave) and FILL (GLO + E4).
+#                   the SEQ layer's OCT+ (QUANTIZE's APPLY, no octave) and FILL (GLO + E4).
 # 1.5.6 (tests/v156_test.c): HUMANIZE (#213): the matrix's VEL (a note-on's velocity, RAND per note, clamped 1..127) and
 #                   TIME (a sequencer step late, 0..30 ms, at most 7/16 of the step, with NUDGE, a ratchet on time),
 #                   appended after DEPTH; nothing changes without such a slot (RAND draws, mod_begin, timing); saved.
@@ -275,7 +274,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/detail_test" tests/detail_test.c -lm
     run "1.5.1 SEQ > DETAIL: a step's CHANCE RATCH NUDGE VEL on KNOB 1..4 (walk, entries, undo, DRUM, chords, playback, marks)" "$OUT/detail_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq155_test" tests/seq155_test.c -lm
-    run "1.5.5 SEQ: conditions and FILL, SONG, storage, editor; SEQ TOOLS EUCLID, DOUBLE, HALF" "$OUT/seq155_test"
+    run "1.5.5 SEQ: conditions and FILL, SONG, storage, editor" "$OUT/seq155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm
     run "1.5.5 fixes and UI: PAN +-100, SELECT PAGE, OCT- on the press (1.5.6), PROJECT ERASE, CLEAN INIT" "$OUT/ui155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/v156_test" tests/v156_test.c -lm

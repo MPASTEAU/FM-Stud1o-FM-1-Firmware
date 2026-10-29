@@ -234,7 +234,7 @@ static struct {
 } ui;
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
-       CF_DEL_ROW, CF_INIT_SOUND, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
+       CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_PAT, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
        CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_ADD_EQ };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
@@ -1690,7 +1690,7 @@ static void eng_list_step(int32_t direction)         /* the next / previous soun
 
 /* (Dah) PRESETS turned: its list full screen ~1 s (ui_graph.c draw_list_full) */
 static uint32_t pl_ms, tl_ms;                           /* (.. ALGORITHM turned: the tracks' list, the same way) */
-static int32_t tl_dy, pp_dy;                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
+static int32_t tl_dy, pp_dy, lu_dy, lf_dy;      /* (lu_dy, lf_dy: MY PRESETS', FILE's) */                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
 static uint8_t tl_pat;                                  /* (Dah) .. GLO + ALGORITHM: the patterns' list */
 static int tl_on(void) { return tl_ms && (uint32_t)((int32_t)(fm1_ms - tl_ms) + 1) < 1001u && !ui.menu && !ui.confirm; }
 static int pl_on(void) { return pl_ms && (uint32_t)((int32_t)(fm1_ms - pl_ms) + 1) < 1001u; }   /* (fm1_ms | 1: a ms ahead) */
@@ -1704,7 +1704,8 @@ static void preset_step(int32_t direction)
         d = direction > 0 ? 1 : -1;
     preset_go(cur >= total ? (direction > 0 ? 0 : total - 1) :
               (uint32_t)(((int32_t)cur + d + (int32_t)total * 8) % (int32_t)total));
-    if (!song.playing && !chain_busy())                 /* (Dah) stopped: the sound heard (seq.c seq_preview) */
+    if (!song.playing && !chain_busy() && !(ui_idle & 2u))   /* (Dah) stopped, MENU > PREVIEW ON: the sound heard
+                                                         * (seq.c seq_preview) */
         pv_req = (uint8_t)(song.sel + 1u);
 }
 
@@ -1769,6 +1770,8 @@ static void file_move(int32_t steps)
     for (i = 0; i < n && ids[i] != ui.fsel; i++)
         ;
     i = (uint32_t)clamp((int32_t)(i < n ? i : 0u) + (steps > 0 ? 1 : -1), 0, (int32_t)n - 1);
+    if (ids[i] != ui.fsel)                              /* (Dah: the projects glide to it) */
+        lf_dy = clamp(lf_dy + (steps > 0 ? 17 : -17), -68, 68);
     ui.fsel = ids[i];
     ui.force = 1;
 }
