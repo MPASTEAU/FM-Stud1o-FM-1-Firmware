@@ -1161,11 +1161,11 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
             if (nl == str_len(nm))                      /* (no unit: the name alone, centred; with one, the pair) */
                 GFX_HOOK_ALIGN(2, ly, COL_W - 2, ly + AF_S_CAP_H, AL_H, "knob card label centred");
             nm[nl] = 0;
-            nx = cv_text(nx, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : T_TEXT);
+            nx = cv_text(nx, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : dim ? T_DIM : T_TEXT);
             if (unit[0] && !str_eq(unit, label) && text_w(&AF_S, label) + text_w(&AF_S, " ") + text_w(&AF_S, unit) <= COL_W - 4)
                 cv_text(nx + text_w(&AF_S, " "), ly - AF_S_CAP_Y, &AF_S, unit, T_MID);
         } else
-            cv_free_text(2, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : T_TEXT, T_SURF, COL_W - 4);
+            cv_free_text(2, ly - AF_S_CAP_Y, &AF_S, nm, hot ? T_ACCENT : dim ? T_DIM : T_TEXT, T_SURF, COL_W - 4);
     }
     cv_blit((uint32_t)CARD_X(c), card_y());
 }
