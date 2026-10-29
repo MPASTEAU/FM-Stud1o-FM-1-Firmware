@@ -1368,6 +1368,7 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ (pl_on() ? ui.frame * 2654435761u : ui.frame / 2u);   /* scope: every other frame (Dah: the list: each) */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
+    h ^= (uint32_t)pl_dy * 2654435761u + (uint32_t)tl_dy * 40503u;   /* (Dah: a list gliding: each step drawn) */
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
@@ -1518,8 +1519,9 @@ static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
             cv_icon_in(214, r[i].y, 0, 16, 12, ICON_X_STAR, T_ACCENT, T_SURF);
     }
     cv_rrect(6, by, 228, 16, 4, T_THEME, T_SURF);
-    cv_cy0 = (int16_t)(by + CV_OY);
-    cv_cy1 = (int16_t)(by + 16 + CV_OY);
+    cv_cy0 = (int16_t)clamp(by + CV_OY, 0, (int32_t)cv_h);   /* (Dah: inside the canvas: a split panel's second one
+                                                         * may not hold the bar at all) */
+    cv_cy1 = (int16_t)clamp(by + 16 + CV_OY, cv_cy0, (int32_t)cv_h);
     for (i = 0; i < n; i++)
         if (r[i].y > by - 16 && r[i].y < by + 16)
             list_text(r[i].y, 1, r[i].tag, r[i].tc, r[i].nm, T_TEXT, x1);
@@ -1528,7 +1530,8 @@ static void glide_rows(const glrow_t *r, uint32_t n, int32_t x1)
 }
 static int32_t glide(int32_t *dy)                       /* (Dah) a step of the glide: a quarter of the way, a px at least */
 {
-    *dy -= *dy / 4 ? *dy / 4 : *dy > 0 ? 1 : *dy < 0 ? -1 : 0;
+    if (!cv_py)                                         /* (a split panel's next canvases: the same step) */
+        *dy -= *dy / 4 ? *dy / 4 : *dy > 0 ? 1 : *dy < 0 ? -1 : 0;
     return *dy;
 }
 /* an empty list: a title and a hint, centred */

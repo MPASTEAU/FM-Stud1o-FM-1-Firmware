@@ -95,6 +95,9 @@ static void name_open(uint32_t kind, uint32_t slot)
             up_name(slot, b);
         else if (user_of(TSEL) < UP_SLOTS)             /* the sound's own name */
             up_name(user_of(TSEL), b);
+        else if (ENGINES[TSEL->eng_req % NENGINES]->npresets)   /* (Dah) the preset's name, not "ANALOG 07" */
+            str_cpy(b, ENGINES[TSEL->eng_req % NENGINES]->presets[TSEL->preset % ENGINES[TSEL->eng_req % NENGINES]->npresets].name,
+                    sizeof b);
         else
             str_cpy(b, nm.ph, sizeof b);
         nm.cat = (uint8_t)(kind == NK_USER_RENAME ? up_cat(slot) : track_cat(TSEL));

@@ -1305,10 +1305,7 @@ static void act_card(uint32_t c, const char *label, int picked, int ready)
 static void draw_act_column(uint32_t c, const char *label, uint16_t vc, uint32_t icon)   /* icon: ICON_AUTO = by label */
 {
     int picked = act_col() == c + 1u;
-    if (home_bare()) {
-        act_card(c, label, picked, act_ready());
-        return;
-    }
+    (void)act_card;                                     /* (Dah: the knobs kept, the user's choice) */
     draw_column(c, label, picked ? "[OCT+]" : "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc, -1, icon);
 }
 
