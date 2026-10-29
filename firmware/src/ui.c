@@ -235,7 +235,7 @@ static struct {
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
        CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_PAT, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
+       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_LOAD_USER };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -1846,13 +1846,13 @@ static uint32_t act_col(void)
 
 static const char *act_name(uint32_t c)          /* column c's action (the footer hint) */
 {
-    static const char *const UP_GO[3] = {"LOAD", "ERASE", "SAVE"};
+    static const char *const UP_GO[3] = {"LOAD", "DELETE", "SAVE"};
     uint32_t id = page_id(cur_page(), c);
     if (cur_page()->graph == GR_SONG)
         return sg_pend == 1u ? "ADD" : sg_pend ? "DELETE" : "HOLD VIEW";   /* (Dah: OCT+ held, the VIEW; a section pending:
                                                          * OCT+ does it) */
-    if (cur_page()->graph == GR_USER)
-        return UP_GO[(c + 2u) % 3u];
+    if (cur_page()->graph == GR_USER)                   /* (Dah: DELETE, not ERASE; SAVE over one: REPLACE) */
+        return (c + 2u) % 3u == 2u && up_used(ui.uslot) ? "REPLACE" : UP_GO[(c + 2u) % 3u];
     if (cur_page()->graph == GR_SLICES)
         return c == 3u ? "JOIN" : "SPLIT";
     if (cur_page()->graph == GR_PATTERN || cur_page()->graph == GR_FILE) {   /* (Dah) */

@@ -575,7 +575,8 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
             return 3u;
         }
         if (nk == 2u) {
-            kh[0] = (khint_t){KC_OCTDN, hb + 5};
+            kh[0] = (khint_t){KC_OCTDN, cur_page()->graph == GR_USER ? "" : hb + 5};   /* (MY PRESETS: its keycap alone, the
+                                                         * room for REPLACE and NAME) */
             kh[1] = (khint_t){KC_OCTUP, ha + 5};
             *ok = 1u | *ok << 1;
         } else
@@ -1874,8 +1875,8 @@ static void draw_columns_in(void)
         up_slot_label(val, ui.uslot);
         draw_column(0, "PRESET", val, "", VAL(0u), (int32_t)ui.uslot * 1000 / (int32_t)(UP_SLOTS - 1u), ICON_AUTO);
         draw_act_column(1, "LOAD", used ? T_THEME : T_DIM, ICON_AUTO);
-        draw_act_column(2, "ERASE", used ? T_THEME : T_DIM, ICON_AUTO);
-        draw_act_column(3, "SAVE", T_THEME, ICON_AUTO);
+        draw_act_column(2, "DELETE", used ? T_THEME : T_DIM, ICON_AUTO);   /* (Dah: DELETE; SAVE over one: REPLACE) */
+        draw_act_column(3, used ? "REPLACE" : "SAVE", T_THEME, ICON_AUTO);
         return;
     }
 #if FELUCCA_SLICE
@@ -2424,8 +2425,17 @@ static void confirm_text(char *a, char *b)
         a[14] = (char)('A' + (k & 3u));
         (void)project_name(k & 3u, b);
         break;
+    case CF_LOAD_USER:                               /* (Dah) the track's sound replaced */
+        str_cpy(a, "LOAD ", 24);
+        up_slot_label(a + str_len(a), k);
+        str_cpy(a + str_len(a), " ON T", 6);
+        a[str_len(a) + 1] = 0;
+        a[str_len(a)] = (char)('1' + song.sel % NTRK);
+        str_cpy(a + str_len(a), "?", 2);
+        up_name(k, b);
+        break;
     case CF_ERASE_USER:
-        str_cpy(a, "ERASE ", 24);
+        str_cpy(a, "DELETE ", 24);
         up_slot_label(a + str_len(a), k);
         str_cpy(a + str_len(a), "?", 2);
         up_name(k, b);

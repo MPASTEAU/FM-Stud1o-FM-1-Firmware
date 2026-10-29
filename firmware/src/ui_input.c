@@ -1482,6 +1482,9 @@ static void act_do(void)
     uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
     if (!c--)
         return;
+    if (cur_page()->graph == GR_USER && !act_ready())   /* (Dah) MY PRESETS: what cannot be done (LOAD, DELETE on an
+                                                         * empty slot) greyed, OCT+ nothing */
+        return;
     if (cur_page()->graph == GR_SONG) {                 /* (Dah) a section to add or to delete: done; else the VIEW is
                                                          * OCT+ held (ui_input) */
         uint32_t r = sg_prow, n = chain_config.count;
@@ -1517,7 +1520,9 @@ static void act_do(void)
         if (c > 1u)
             ui.act = 0;
         if (c == 2u && up_used(ui.uslot) && !transport_busy())
-            confirm_open(CF_ERASE_USER, ui.uslot);        /* ERASE: the dialog first */
+            confirm_open(CF_ERASE_USER, ui.uslot);        /* DELETE: the dialog first */
+        else if (c == 1u && up_used(ui.uslot))
+            confirm_open(CF_LOAD_USER, ui.uslot);         /* (Dah) LOAD too: the track's sound goes */
         else if (c != 3u)
             up_ui(c - 1u, ui.uslot);
         else if (transport_busy())
@@ -2279,6 +2284,8 @@ static void ui_input(void)
                 name_open(NK_USER_SAVE, ui.confirm_trk);
             } else if (kind == CF_ERASE_USER) {
                 up_ui(1u, ui.confirm_trk);
+            } else if (kind == CF_LOAD_USER) {          /* (Dah) MY PRESETS: LOAD, answered */
+                up_ui(0u, ui.confirm_trk);
             } else if (kind == CF_NEW_PROJ) {      /* (HA HA HE HU) a new, empty project: the power-on sounds */
                 (void)project_new_file();
             } else if (kind == CF_DEL_PAT) {       /* (HA HA HE HU) SAVE > PATTERN, REC */

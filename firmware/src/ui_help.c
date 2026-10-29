@@ -55,7 +55,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"VOICE 2", "[K2]DETUNE[K3]PAN[K4]MUTE"},
     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
     {"SONG", "[K1]SECTION[K3]PATTERN[REC]DELETE"},
-    {"MY PRESETS", "[K2]LOAD[K4]SAVE[REC]ERASE"},
+    {"MY PRESETS", "[K2]LOAD[K3]DELETE[K4]SAVE"},
     {"FILE", "[PRESETS]PROJECT[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: the projects; REC deletes, EDIT renames) */
     {"PATTERN", "[PRESETS]PATTERN[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: a track's patterns; REC deletes) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
