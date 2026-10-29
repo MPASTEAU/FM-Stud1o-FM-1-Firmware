@@ -508,7 +508,8 @@ static void head_home(void)
         return;
     }
     GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-    x = cv_text(x, ty, &AF_S, num, sl[0] == '-' ? T_MID : T_THEME) + 8;   /* the pattern */
+    x = cv_text(x, ty, &AF_S, "PAT", T_MID) + 4;       /* the pattern: "PAT 1" */
+    x = cv_text(x, ty, &AF_S, num + 1, sl[0] == '-' ? T_MID : T_THEME) + 8;
     cv_rect(x, (hh - 14) / 2, 14, 14, tc);              /* the track (square) */
     GFX_HOOK_ALIGN(x, (hh - 14) / 2, x + 14, (hh - 14) / 2 + 14, AL_HV, "header track cushion digit centred");
     cv_text_in(x, (hh - 14) / 2 + CAP_IN(S, 14), 14, &AF_S, ch, T_INK, tc);
