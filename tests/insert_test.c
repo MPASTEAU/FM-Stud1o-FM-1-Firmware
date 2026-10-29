@@ -438,6 +438,97 @@ static void test_stored(void)
             ok &= motion_param(i) && !param_kept(i);
         ck("pages: INSERT (TYPE A B C), INSERT 2 (MIX), SLICER, EQ (Dah: the chain's order); A B C named by TYPE; recordable; part of the sound", ok);
     }
+    {   /* (Dah) the EQ's bands (fx_eq.c): one page; each TYPE's sound as its curve on the page says (a sine, +-1 dB); the
+         * stages (five at most: a 24 dB cut a 12 past them); the layout before bands as bands; KNOB 1 past the last
+         * asks, ADD a BELL, REC takes one out (one stays) */
+        static eq_t es;
+        static int32_t eb[64];
+        track_t *t = &trk[0];
+        eqc_t *c = eq_cfg(t);
+        int16_t raw[P_COUNT];
+        uint32_t p, neq = 0, y, q, fi;
+        int ty;
+        for (p = 0; p < NPAGES; p++)
+            neq += str_eq(PAGES[p].title, "EQ") * 1u + str_eq(PAGES[p].title, "EQ 2") * 100u;
+        ok = neq == 1u;
+        for (ty = 0; ty < EQT_N * 3; ty++) {
+            static const uint8_t FI[3] = {30, 60, 100};
+            y = (uint32_t)ty / 3u;
+            if (y > EQT_LP && ty % 3 == 2)
+                continue;
+            c->n = 1; c->o = 0; c->t[0] = (uint8_t)y;
+            t->p[EQ_FID[0]] = 60;
+            t->p[EQ_SID[0]] = (int16_t)(y > EQT_LP ? (ty % 3 ? -40 : 40) : ty % 3 - 1);
+            for (q = 0; q < 3u; q++) {
+                double e_in = 0, e_out = 0, hz, db;
+                uint32_t n, i;
+                fi = FI[q];
+                hz = CUTOFF_HZ[fi];
+                memset(&es, 0, sizeof es);
+                for (n = 0; n < 600u; n++) {
+                    for (i = 0; i < 64u; i++)
+                        eb[i] = (int32_t)(1000000.0 * sin(6.283185307 * hz * (double)(n * 64u + i) / FS));
+                    for (i = 0; n >= 300u && i < 64u; i++) e_in += (double)eb[i] * eb[i];
+                    eq_run(&es, t, eb, 64);
+                    for (i = 0; n >= 300u && i < 64u; i++) e_out += (double)eb[i] * eb[i];
+                }
+                db = 10.0 * log10(e_out / e_in);
+                if (db > -60.0 && fabs(db - eq_curve_db(t, (int32_t)fi, EQ_NB) / 8.0) > 1.0) {
+                    printf("insert: EQ type %u (%d) at %.0f Hz: %.1f dB, the curve %.1f\n", y, t->p[EQ_SID[0]], hz, db, eq_curve_db(t, (int32_t)fi, EQ_NB) / 8.0);
+                    ok = 0;
+                }
+            }
+        }
+        {   /* four bands: HP 24, LP 24, a shelf, a bell: six stages asked, five run (the LP at 12) */
+            static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}};
+            uint8_t kd[EQ_NB], bk[EQ_NB], st[EQ_NB];
+            *c = E4;
+            t->p[P_EQLO] = 20; t->p[P_EQ3G] = 1; t->p[P_EQHI] = 100; t->p[P_EQ3F] = 1;
+            t->p[P_EQ1F] = 30; t->p[P_EQ1G] = 20; t->p[P_EQ2F] = 70; t->p[P_EQ2G] = -20;
+            ok &= eq_stages(t, c) == 6u && eq_plan(t, c, kd, bk, st) == 4u && kd[0] == EQK_HP24 && kd[1] == EQK_LP12 &&
+                  kd[2] == EQK_LS && kd[3] == EQK_BELL && st[3] == 4u && eq_units(t) == 15u;
+        }
+        for (p = 0; p < P_COUNT; p++)                   /* the layout before bands: LOW CUT 30, HIGH CUT off, bells
+                                                         * 1 and 3 (3 into the free slot) */
+            raw[p] = t->p[p];
+        raw[P_EQLO] = 30; raw[P_EQHI] = 118; raw[P_EQ1F] = 50; raw[P_EQ1G] = 20; raw[P_EQ2F] = 90; raw[P_EQ2G] = 0;
+        raw[P_EQ3F] = 110; raw[P_EQ3G] = -10;
+        eq_adopt(t->p, raw, c);
+        ok &= c->n == 4u && eq_type(c, 0) == EQT_HP && eq_type(c, 1) == EQT_LP && eq_type(c, 2) == EQT_BELL &&
+              eq_type(c, 3) == EQT_BELL && t->p[P_EQLO] == 30 && t->p[P_EQ3G] == 0 && t->p[P_EQ3F] == 0 &&
+              t->p[P_EQ1F] == 50 && t->p[P_EQ1G] == 20 && t->p[P_EQ2F] == 110 && t->p[P_EQ2G] == -10 && eq_units(t) == 13u;
+        memset(c, 0, sizeof *c);                        /* none: the two cuts */
+        ok &= eq_units(t) == 1u;
+        {   /* the page: KNOB 1 past the last asks; YES adds a BELL, picked; REC takes it out */
+            go_title("EQ");
+            t->p[P_EQLO] = 20;
+            eq_ui_band = 0;
+            edit_param(0, 1);
+            ok &= eq_ui_band == 1u && !ui.confirm;
+            edit_param(0, 1);
+            ok &= ui.confirm == CF_ADD_EQ;
+            ui.confirm = 0;
+            eq_add();
+            ok &= c->n == 3u && eq_ui_band == 2u && eq_type(c, 2) == EQT_BELL && page_id(cur_page(), 2) == P_EQ1F &&
+                  page_id(cur_page(), 3) == P_EQ1G;
+            edit_param(1, -1);                          /* BELL -> HIGH SHELF */
+            ok &= eq_type(c, 2) == EQT_HS;
+            edit_param(1, -1); edit_param(1, -1); edit_param(1, -1);   /* -> HP: a 12 dB slope */
+            edit_param(3, 1);
+            ok &= eq_type(c, 2) == EQT_HP && t->p[P_EQ1G] == 1;
+            eq_ui_band = 1;
+            eq_del();
+            ok &= c->n == 2u && eq_slot(c, 0) == 0u && eq_slot(c, 1) == 2u && t->p[P_EQHI] == 118;
+            eq_ui_band = 0;
+            eq_del();
+            eq_del();                                   /* (one stays) */
+            ok &= c->n == 1u && eq_slot(c, 0) == 2u;
+        }
+        memset(c, 0, sizeof *c);
+        t->p[P_EQLO] = 0; t->p[P_EQHI] = 118; t->p[P_EQ1F] = 40; t->p[P_EQ1G] = 0; t->p[P_EQ2F] = 90; t->p[P_EQ2G] = 0;
+        t->p[P_EQ3G] = t->p[P_EQ3F] = 0;
+        ck("EQ (Dah): one page; each TYPE as its curve; five stages at most; the old layout as bands; ADD, TYPE, SLOPE, REC", ok);
+    }
 }
 
 /* ------------------------------------------------------------------ 5 --- */

@@ -94,8 +94,8 @@ enum {                          /* per-track parameters */
     P_FXORD,                                   /* HA HA HE HU: the order of DIST, INSERT and SLICER (fx.c mix_part) */
     P_DKSRC, P_DKAMT,                          /* HA HA HE HU: DUCK, the sidechain: its source track, depth (fx.c); its release
                                                 * is P_DKREL (P_ED_FX's byte) */
-    P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G,   /* Dah: the EQ (fx_eq.c): LOW CUT, HIGH CUT, two bells */
-    P_EQ3G, P_EQ3F,                            /* Dah: the EQ's third band (GAIN first: a store's 0 there, the band off) */
+    P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G,   /* Dah: the EQ's four slots (fx_eq.c EQ_FID EQ_SID): FREQ, and */
+    P_EQ3G, P_EQ3F,                            /* SLOPE or GAIN (were LOW CUT, HIGH CUT and three bells' FREQ GAIN) */
     P_DOUT, P_DCOL,                            /* Dah: DIST's OUT (-64..63: +-15 dB, 0 as before) and COLOR (0 as before) */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
@@ -413,6 +413,9 @@ static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ?
  * stepped or joined by lines (smooth), and how its automation moves between two events (curve: 0 STEP, as always; 1 RAMP,
  * motion.c motion_ramp) */
 #define LDRAW_N 16u
+/* (Dah) the EQ's bands (fx_eq.c): how many (1..4; 0 the layout before bands, LOW CUT HIGH CUT and three bells: eq_adopt),
+ * band k's slot (o's bits 2k, 2k + 1: its two parameters, EQ_FID EQ_SID) and each slot's TYPE (EQT_*) */
+typedef struct { uint8_t n, o, t[4]; } eqc_t;
 typedef struct {
     int8_t draw[LDRAW_N];
     uint8_t smooth, curve, rsv0, rsv;   /* (Dah: rsv0 the COMPRESSOR's AMOUNT, 0 none (fx_comp.c); rsv MATCH's COLOR and
@@ -423,6 +426,7 @@ typedef struct {
     int8_t cin, cout;            /* (Dah) the COMPRESSOR's IN and OUT gains (-64..63: +-15 dB, 0 as before; fx_comp.c) */
     uint8_t sc2;                 /* (Dah) the SIDECHAIN's second source (a track + 1, 0 none; fx.c duck_part_sd) */
     int8_t din;                  /* (Dah) DIST's IN gain before its drive (-64..63: +-15 dB, 0 as before) */
+    eqc_t eq;                    /* (Dah) the EQ's bands (fx_eq.c) */
 } trkx_t;
 #define TRKX_V2 20u                      /* (Dah) the extras' size before tap and home */
 static trkx_t trkx[NTRK];

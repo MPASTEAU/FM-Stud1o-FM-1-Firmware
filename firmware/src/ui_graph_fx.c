@@ -164,13 +164,17 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
     case 2:
         t->p[P_SLCR] = (int16_t)(on ? 1 : 0);
         break;
-    case 3:
-        t->p[P_EQLO] = (int16_t)(on ? 24 : 0);          /* (on: a low cut at ~100 Hz) */
-        if (!on) {
-            t->p[P_EQHI] = EQ_TOP;
-            t->p[P_EQ1G] = t->p[P_EQ2G] = t->p[P_EQ3G] = 0;
+    case 3: {                                           /* (on: the two cuts, the HIGH PASS at ~100 Hz; off: at rest) */
+        uint32_t j;
+        memset(eq_cfg(t), 0, sizeof(eqc_t));
+        for (j = 0; j < EQ_NB; j++) {
+            t->p[EQ_FID[j]] = TP[EQ_FID[j]].def;
+            t->p[EQ_SID[j]] = 0;
         }
+        t->p[P_EQLO] = (int16_t)(on ? 24 : 0);
+        eq_ui_band = 0;
         break;
+    }
     case 4:                                             /* (on: the first other track, at full depth) */
         t->p[P_DKSRC] = (int16_t)(on ? (trk_index(t) ? 1 : 2) : 0);
         if (on && !t->p[P_DKAMT])
@@ -345,7 +349,7 @@ static void fx_unit_info(const track_t *t, uint32_t u, char *b)
     case 3: {
         uint32_t m = eq_units(t), c = 0;
         for (; m; m &= m - 1u) c++;
-        fmt_int(b, (int32_t)c); str_cpy(b + str_len(b), c > 1u ? " PARTS" : " PART", 7);
+        fmt_int(b, (int32_t)c); str_cpy(b + str_len(b), c > 1u ? " FILTERS" : " FILTER", 9);
         break;
     }
     case FXU_COMP:
@@ -611,7 +615,7 @@ static int graph_fxfam(const page_t *pg, const track_t *t, uint16_t c)
             fxv_draw(FXV_RX, FXV_RW, 16, graph_ht - 4, c, 0u);
         }
     }
-    else if (id == P_EQLO || id == P_EQ2F) graph_eq(t, c);
+    else if (id == P_EQLO) graph_eq(t, c);
     else return 0;
     return 1;
 }

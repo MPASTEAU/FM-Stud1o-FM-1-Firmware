@@ -940,9 +940,7 @@ static void mst_defaults(void)
     for (i = 0; i < MST_N; i++)
         mtrk.p[MST_ID[i]] = TP[MST_ID[i]].def;
     mtrk.p[P_DIST] = 0;
-    mtrk.p[P_EQLO] = 0;
-    mtrk.p[P_EQHI] = EQ_TOP;
-    mtrk.p[P_EQ1G] = mtrk.p[P_EQ2G] = mtrk.p[P_EQ3G] = 0;
+    memset(&eq_mc, 0, sizeof eq_mc);                    /* (its EQ: the two cuts at rest) */
     mtrk.p[P_IA] = mtrk.p[P_IB] = mtrk.p[P_PAN] = 0;
     memset(mdist, 0, sizeof mdist);
 }
