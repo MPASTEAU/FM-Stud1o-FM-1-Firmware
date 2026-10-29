@@ -2857,12 +2857,13 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
     int32_t rh = R->rh, sp = RK_SW / (int32_t)nc, cw, top = 2, sh = rh - 4;
     uint16_t bg = R->bg, tc = R->tc, tc0 = R->tc0;
     char d[2] = {(char)('1' + R->c), 0};
-    cv_rect(-ox, 0, TR_W, rh, bg);                     /* (Dah: square, as the rest) */
     if (R->sel) {                                      /* (Dah) the selected: framed in its colour, a band of it at
-                                                         * the left */
-        cv_frame(-ox, 0, TR_W, rh, tc0);
-        cv_rect(-ox, 0, 3, rh, tc0);
-    }
+                                                         * the left, its corners round */
+        cv_rect(-ox, 0, TR_W, rh, T_BG);
+        cv_rrect(-ox, 0, TR_W, rh, -5, tc0, T_BG);
+        cv_rrect(-ox + 3, 1, TR_W - 4, rh - 2, -4, bg, tc0);
+    } else
+        cv_rect(-ox, 0, TR_W, rh, bg);                 /* (the others square, as the rest) */
     if (ox < 20) {   /* the number: the selected's on its colour (INK), the others' in their colour on the row */
         int32_t cx = 5 - ox, cyy = (rh - 13) / 2;
         uint16_t nc0 = R->mute || R->off ? T_DIM : tc0;
