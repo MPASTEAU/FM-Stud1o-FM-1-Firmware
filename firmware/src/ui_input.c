@@ -1801,6 +1801,8 @@ static void presets_turn(int32_t s)
 }
 
 /* (Dah) CHAIN: OCT+ opens the page of the effect picked; on + ADD, adds one */
+static int8_t fx_back = -1;                             /* (Dah) the track a send was opened from (its MASTER's page) */
+static uint8_t fx_back_row;
 static void chain_open(void)
 {
     static const uint8_t ID[FXU_N_ALL] = {P_DIST, P_ITYPE, P_SLCR, P_EQLO, P_DKSRC, PS_TRK | P_CHOR, PS_TRK | P_DLY,
@@ -1810,7 +1812,15 @@ static void chain_open(void)
     if (ch_cur < n && fx_send(l[ch_cur]) && !mx_master) {   /* (Dah) a track's send: the effect is the MASTER's, its
                                                          * settings there (its return, in the MASTER's chain) */
         uint32_t want = l[ch_cur];
+        static char why[32];
+        fx_back = (int8_t)(song.sel % NTRK);            /* (Dah: FX on its page again: back to this track's chain) */
+        fx_back_row = ch_cur;
         mx_master = 1;
+        if (!song.playing && !chain_busy()) {           /* (Dah) said, stopped: where one is now and why */
+            str_cpy(why, FXU_N[want % FXU_N_ALL], 12);
+            str_cpy(why + str_len(why), " IS SHARED\nBY ALL TRACKS", 26);
+            cards_say("ON THE MASTER", why);
+        }
         n = fx_list(fx_tsel(), l);
         for (i = 0; i < n; i++)
             if (l[i] == want)
@@ -1857,7 +1867,19 @@ static void fx_go_chain(void)
 }
 static void fx_tap(void)
 {
-    if (ui.home || cur_page()->fam != FAM_FX)
+    if (ui.home || cur_page()->fam != FAM_FX) {
+        fx_back = -1;
+        fx_go_chain();
+    } else if (fx_back >= 0 && mx_master && cur_page()->id[0] != P_FXORD && !fx_has_next()) {
+        mx_master = 0;                                  /* (Dah) a track's send opened on the MASTER: FX back to the
+                                                         * track's chain, its send picked */
+        track_select((uint32_t)fx_back);
+        ch_cur = fx_back_row;
+        fx_back = -1;
+        fx_go_chain();
+        ui.force = 1;
+    }
+    else if (ui.home || cur_page()->fam != FAM_FX)
         fx_go_chain();
     else if (cur_page()->id[0] == P_FXORD)
         chain_open();
