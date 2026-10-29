@@ -1109,7 +1109,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
             sq_w = SQ_W;
         cv_begin((uint32_t)sq_w, SQ_H, T_SURF);
         cv_text(1, 0, &AF_S, val, T_TEXT);
-        memmove(sq_px, cv_px, (uint32_t)sq_w * SQ_H * sizeof cv_px[0]);
+        memcpy(sq_px, cv_px, (uint32_t)sq_w * SQ_H * sizeof cv_px[0]);
     }
     cv_begin(COL_W, HOME_CARD_H, T_BG);
     cv_rrect(0, 0, COL_W, HOME_CARD_H, 4, T_SURF, T_BG);

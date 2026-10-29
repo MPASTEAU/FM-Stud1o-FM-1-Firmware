@@ -1729,7 +1729,8 @@ static void engine_sound_row(int32_t y)
  * right (S); the one in the frame on RAISE, its tag in the theme */
 #define BR_H 24                                        /* (Dah) MY PRESETS', FILE's rows: 24 px, 26 apart */
 typedef struct { char tag[6]; char nm[20]; char note[12]; uint16_t tc, nc; } bigrow_t;
-static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int32_t y0, int32_t y1)
+typedef void (*bigrow_fn)(int32_t k, bigrow_t *r);   /* (Dah: a row made when drawn: no table in RAM) */
+static void big_rows(bigrow_fn fill, int32_t n, int32_t cur, int32_t dy, int32_t y0, int32_t y1)
 {
     int32_t fy, vt = tall_view(n, cur, dy, y1 - y0, &fy, BR_H), k;   /* (Dah: taller than a list's, less than PATTERN's) */
     cv_rrect(4, y0 + fy - 1, 222, BR_H + 2, 5, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the
@@ -1744,49 +1745,47 @@ static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int3
         int32_t y = y0 + k * (BR_H + 2) - vt;
         int mid = y > y0 + fy - BR_H / 2 && y < y0 + fy + BR_H / 2, whole = y >= y0 && y + BR_H <= y1;
         uint16_t bg = mid ? T_RAISE : T_SURF;
+        bigrow_t rw = {{0}, {0}, {0}, 0, 0};
         if (y + BR_H <= y0 || y >= y1)
             continue;
+        fill(k, &rw);
         if (!whole) {                                   /* (cut: small, faint) */
-            cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, r[k].tag, ux_mix(T_SURF, T_MID, 55), T_SURF);
-            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, ux_mix(T_SURF, T_MID, 55), T_SURF, 160);
+            cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, rw.tag, ux_mix(T_SURF, T_MID, 55), T_SURF);
+            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, rw.nm, ux_mix(T_SURF, T_MID, 55), T_SURF, 160);
             continue;
         }
         if (y + CV_OY >= 0 && y + BR_H + CV_OY <= (int32_t)cv_h)   /* (a split panel: in this canvas whole) */
             GFX_HOOK_ALIGN(0, y, 0, y + BR_H, AL_V, "save list row text centred");   /* (the one in the frame in M, the
                                                          * others S: a slight zoom) */
         if (mid)
-            cv_text_on(12, y + CAP_IN(M, BR_H), &AF_M, r[k].tag, T_THEME, bg);
+            cv_text_on(12, y + CAP_IN(M, BR_H), &AF_M, rw.tag, T_THEME, bg);
         else
-            cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, r[k].tag, r[k].tc ? r[k].tc : T_MID, bg);
+            cv_text_on(16, y + CAP_IN(S, BR_H), &AF_S, rw.tag, rw.tc ? rw.tc : T_MID, bg);
         if (mid)
-            cv_free_text(54, y + CAP_IN(M, BR_H), &AF_M, r[k].nm, r[k].nc ? r[k].nc : T_TEXT, bg, r[k].note[0] ? 112 : 162);
+            cv_free_text(54, y + CAP_IN(M, BR_H), &AF_M, rw.nm, rw.nc ? rw.nc : T_TEXT, bg, rw.note[0] ? 112 : 162);
         else
-            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, r[k].nm, r[k].nc ? r[k].nc : T_MID, bg, r[k].note[0] ? 110 : 160);
-        if (r[k].note[0])
-            cv_text_r(216, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
+            cv_free_text(56, y + CAP_IN(S, BR_H), &AF_S, rw.nm, rw.nc ? rw.nc : T_MID, bg, rw.note[0] ? 110 : 160);
+        if (rw.note[0])
+            cv_text_r(216, y + CAP_IN(S, BR_H), &AF_S, rw.note, T_MID, bg);
     }
     list_bar(y0, y1, n * (BR_H + 2) - 2, vt);          /* (Dah: the scrollbar, as the selectors') */
     cv_scroll = 0;
     cv_cy0 = c0;
     cv_cy1 = c1;
 }
+static void user_row(int32_t k, bigrow_t *r)            /* (Dah) MY PRESETS' row k */
+{
+    up_slot_label(r->tag, (uint32_t)k);
+    if (up_used((uint32_t)k))
+        up_name((uint32_t)k, r->nm);
+    else {
+        str_cpy(r->nm, "EMPTY", sizeof r->nm);         /* (Dah: said, not "--") */
+        r->nc = T_DIM;
+    }
+}
 static void graph_user(void)
 {
-    static bigrow_t r[UP_SLOTS];
-    int32_t k;
-    for (k = 0; k < UP_SLOTS; k++) {                   /* (Dah) as PATTERN's: tall rows gliding (lu_dy) */
-        up_slot_label(r[k].tag, (uint32_t)k);
-        r[k].note[0] = 0;
-        r[k].tc = 0;
-        if (up_used((uint32_t)k)) {
-            up_name((uint32_t)k, r[k].nm);
-            r[k].nc = 0;
-        } else {
-            str_cpy(r[k].nm, "EMPTY", sizeof r[k].nm);   /* (Dah: said, not "--") */
-            r[k].nc = T_DIM;
-        }
-    }
-    big_rows(r, UP_SLOTS, (int32_t)ui.uslot, glide(&lu_dy) * 2, 18, (int32_t)graph_h() - 4);
+    big_rows(user_row, UP_SLOTS, (int32_t)ui.uslot, glide(&lu_dy) * 2, 18, (int32_t)graph_h() - 4);
     {   /* (Dah) on top, what SAVE puts in a slot: the selected track's sound ("TRACK 1  ACID") */
         char nm[16], tl[10] = "TRACK ";
         int32_t x;
@@ -2291,6 +2290,15 @@ static uint32_t graph_arch_sig(void)
     graph_file_read();
     return fnv(gfile.n + 1u, gfile.name, sizeof gfile.name) + fnv(7u, gfile.pct, sizeof gfile.pct);
 }
+static void file_row(int32_t k, bigrow_t *r)            /* (Dah) FILE's row k */
+{
+    uint32_t cur = pfs_cur();
+    fmt_int(r->tag, (int32_t)gfile.ids[k]);
+    str_cpy(r->nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
+    fmt_int(r->note, gfile.pct[k]);
+    str_cpy(r->note + str_len(r->note), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
+    r->tc = gfile.ids[k] == cur ? T_ACCENT : 0;
+}
 static void graph_file(void)
 {
     uint32_t i, at = 0, first, cur = pfs_cur();
@@ -2309,17 +2317,7 @@ static void graph_file(void)
     for (i = 0; i < gfile.n; i++)
         if (gfile.ids[i] == ui.fsel) at = i;
     {   /* (Dah) as PATTERN's: tall rows gliding through the frame (lf_dy); the memory line under them */
-        static bigrow_t r[32];
-        uint32_t k;
-        for (k = 0; k < gfile.n && k < 32u; k++) {
-            fmt_int(r[k].tag, (int32_t)gfile.ids[k]);
-            str_cpy(r[k].nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
-            fmt_int(r[k].note, gfile.pct[k]);
-            str_cpy(r[k].note + str_len(r[k].note), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
-            r[k].tc = gfile.ids[k] == cur ? T_ACCENT : 0;
-            r[k].nc = 0;
-        }
-        big_rows(r, (int32_t)gfile.n, (int32_t)at, glide(&lf_dy) * 2, 2, my - 4);
+        big_rows(file_row, (int32_t)gfile.n, (int32_t)at, glide(&lf_dy) * 2, 2, my - 4);
     }
     (void)first; (void)rn;
 }
