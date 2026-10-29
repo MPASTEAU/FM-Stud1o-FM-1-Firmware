@@ -70,8 +70,8 @@ static void graph_lfo(const track_t *t, uint16_t c)
             cv_line_t(PANEL_X0 + x - 1, py, PANEL_X0 + x, y, c, 2);
         py = y;
     }
-    cv_rect(PANEL_X0 + (int32_t)((t->lfo_ph - ph) / (0xFFFFFFFFu / PANEL_W)), cy - a - 4, 1, 2 * a + 8, T_ACCENT);   /* (Dah)
-                                                         * where it is now */
+    if (song.playing)                                   /* (Dah) where it is now: playing only */
+        cv_rect(PANEL_X0 + (int32_t)((t->lfo_ph - ph) / (0xFFFFFFFFu / PANEL_W)), cy - a - 4, 1, 2 * a + 8, T_ACCENT);
 }
 
 /* HA HA HE HU: LFO DRAW's panel: the 16 points as bars from the middle line (the point picked in the colour, the others
@@ -96,7 +96,7 @@ static void graph_ldraw(const track_t *t, uint16_t c)
             cv_line_t(PANEL_X0 + i - 1, py, PANEL_X0 + i, y, t->p[P_LWAVE] == 5 ? T_TEXT : T_MID, 2);
         py = y;
     }
-    if (t->p[P_LWAVE] == 5)                          /* (Dah) where the LFO is now: a bar */
+    if (t->p[P_LWAVE] == 5 && song.playing)          /* (Dah) where the LFO is now: a bar, playing only */
         cv_rect(PANEL_X0 + (int32_t)(t->lfo_ph / (0xFFFFFFFFu / PANEL_W)), cy - a - 2, 1, 2 * a + 4, T_ACCENT);
 }
 /* step bar x of step i of a 16-step row: 4 groups, as the footer (9 px bars, 13 px apart, 4 px between groups),
@@ -1361,8 +1361,10 @@ static uint32_t graph_signature(void)
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
-    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_LFO || pg->graph == GR_LDRAW ||
-        pg->graph == GR_SCALE || pg->graph == GR_CHORD) h ^= ui.frame / 2u;
+    if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
+        ((pg->graph == GR_LFO || pg->graph == GR_LDRAW) && song.playing)) h ^= ui.frame / 2u;   /* (Dah: the LFO's bar
+                                                         * moves playing only) */
+    h ^= (uint32_t)song.playing * 0x2F1Du;
     if (pg->graph == GR_ROLL && (song.playing || prv.on))   /* (Dah: the playhead gliding; the VIEW) */
         h ^= ui.frame * 2654435761u + prv.zoom * 7u + (uint32_t)prv.at * 131u + prv.nofollow * 3u;   /* (Dah: FX's: live) */
     for (i = 0; i < P_COUNT; i++)
