@@ -1421,8 +1421,7 @@ static int project_restore_runtime(const project_t *input)
             const param_desc_t *d = param_desc_of(e, i);
             t->p[i] = (int16_t)param_fit(d, s->p[i]);
         }
-        if (!(trkx[k].eq.f & EQF_NEW) || trkx[k].eq.n > EQ_NB)   /* (Dah) its EQ before filters (LOW CUT, HIGH CUT,
-                                                         * bells): as filters */
+        if (!(trkx[k].eq.f & EQF_4))                    /* (Dah) its EQ stored before four filters: as four */
             eq_adopt(t->p, s->p, &trkx[k].eq);
         t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
         memcpy(t->step, s->step, sizeof t->step);

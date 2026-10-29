@@ -729,10 +729,6 @@ static int rec_tap(void)                                /* 1: the arming changed
         else confirm_open(CF_DEL_PAT, ps_num(song.sel));
         return 0;
     }
-    if (!ui.home && !ui.menu && !ui.confirm && eq_page(cur_page())) {   /* (Dah) EQ: the band picked out */
-        eq_del();
-        return 0;
-    }
     if (!ui.home && !ui.menu && !ui.confirm && cur_page()->id[0] == P_FXORD && cur_page()->fam == FAM_FX) {   /* (Dah)
                                                          * CHAIN: the effect picked out of the chain */
         uint8_t u[FXU_N_ALL];
@@ -2289,8 +2285,6 @@ static void ui_input(void)
                 pt_delete();
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
-            } else if (kind == CF_ADD_EQ) {        /* (Dah) FX > EQ: a filter more, picked */
-                eq_add();
             } else if (kind == CF_ADD_FX) {        /* (Dah) FX > CHAIN: an effect more: which, picked next */
                 fxp_cur = 0;
                 confirm_open(CF_PICK_FX, 0);
@@ -2335,7 +2329,7 @@ static void ui_input(void)
                                                          * off: SAVE > TOOLS', gone) */
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
                    (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
-                   (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0) || (ui.confirm == CF_ADD_EQ && panel_enc(EN_K1) < 0)) {
+                   (ui.confirm == CF_ADD_FX && panel_enc(EN_SELECT) < 0)) {
             if ((ui.confirm == CF_ADD_FX || ui.confirm == CF_PICK_FX) && ch_cur)   /* (Dah: no effect added: off
                                                          * + ADD, the last effect) */
                 ch_cur--;   /* (Dah: ADD TRACK: ALGO

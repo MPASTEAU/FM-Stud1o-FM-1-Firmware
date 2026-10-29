@@ -154,8 +154,7 @@ static void eqs_take(void)
         }
     }
 }
-/* (Dah) the EQ page: the filter picked (KNOB 1; past the last, while ADD A FILTER? is asked: "+"), its knobs' ids
- * (none: 0xFF) */
+/* (Dah) the EQ page: the filter picked (KNOB 1), its knobs' ids (KNOB 1, 2: 0xFF) */
 static uint32_t eq_pick(const eqc_t *e) { return eq_ui_band < e->n ? eq_ui_band : e->n ? e->n - 1u : 0u; }
 static uint32_t eq_ui_id(uint32_t c)
 {
@@ -218,41 +217,30 @@ static void graph_eq(const track_t *t, uint16_t c)
                    &AF_S, nm, b == sel ? T_ACCENT : T_MID, T_SURF);
     }
 }
-/* (Dah) the EQ page's keys (ui_input.c edit_param, rec_tap, the dialog): t's filters, kept as filters (EQF_NEW) */
-static eqc_t *eq_own(const track_t *t)
+/* (Dah) the EQ page's keys (ui_input.c edit_param): t's four filters, set */
+static eqc_t *eq_own(track_t *t)
 {
     eqc_t *e = eq_cfg(t);
-    if (e->n > EQ_NB)
-        e->n = 0;
-    e->f |= EQF_NEW;
+    if (!(e->f & EQF_4))
+        eq_four(t->p, e, 0);
     return e;
 }
-static int eq_full(const track_t *t, const eqc_t *e) { return e->n >= EQ_NB || eq_stages(t, e) >= EQ_NS; }
 static void eq_set(track_t *t, uint32_t id, int32_t v)
 {
     t->p[id] = (int16_t)v;
     if (!fx_mst(t))
         (void)motion_capture(t, id, t->p[id]);
 }
-/* KNOB 1 the filter (past the last, or none yet: ADD A FILTER?), 2 its TYPE, 4 a cut's SLOPE (a GAIN: as any
- * parameter); none: 2..4 nothing. 1 done */
+/* KNOB 1 the filter (1..4), 2 its TYPE, 4 a cut's SLOPE (a GAIN: as any parameter). 1 done */
 static int eq_knob(uint32_t slot, int32_t steps)
 {
     track_t *t = fx_tsel();
     eqc_t *e = eq_own(t);
     uint32_t k = eq_pick(e), j = eq_slot(e, k), y = eq_type(e, k);
     int32_t d = steps > 0 ? 1 : -1, v = t->p[EQ_SID[j]];
-    if (slot == 0u) {
-        if (d > 0 && k + 1u >= e->n) {
-            if (eq_full(t, e))
-                ui_message(e->n >= EQ_NB ? "4 FILTERS AT MOST" : "NO ROOM: 24 dB USES 2");
-            else
-                confirm_open(CF_ADD_EQ, 0);
-        } else if (e->n)
-            eq_ui_band = (uint8_t)clamp((int32_t)k + d, 0, (int32_t)e->n - 1);
-    } else if (!e->n) {
-        return 1;
-    } else if (slot == 1u) {
+    if (slot == 0u)
+        eq_ui_band = (uint8_t)clamp((int32_t)k + d, 0, EQ_NB - 1);
+    else if (slot == 1u) {
         uint32_t ny = (uint32_t)clamp((int32_t)y + d, 0, EQT_N - 1);
         if (ny == y)
             return 1;
@@ -271,46 +259,4 @@ static int eq_knob(uint32_t slot, int32_t steps)
         return 0;
     ui.force = 1;
     return 1;
-}
-/* ADD A FILTER? answered: a BELL at 1 kHz, flat, after the last (a free slot), picked */
-static void eq_add(void)
-{
-    track_t *t = fx_tsel();
-    eqc_t *e = eq_own(t);
-    uint32_t used = 0, k, j;
-    if (eq_full(t, e)) {
-        ui_message("EQ FULL");
-        return;
-    }
-    for (k = 0; k < e->n; k++)
-        used |= 1u << eq_slot(e, k);
-    for (j = 0; (used >> j) & 1u; j++)
-        ;
-    e->t[j] = EQT_BELL;
-    eq_set(t, EQ_FID[j], 71);
-    eq_set(t, EQ_SID[j], 0);
-    e->o = (uint8_t)((e->o & ~(3u << (2u * e->n))) | j << (2u * e->n));
-    e->f |= EQF_IN;
-    eq_ui_band = e->n++;
-    ui_message("FILTER ADDED");
-    ui.force = 1;
-}
-/* REC: the filter picked out (the others move down; the last too: none) */
-static void eq_del(void)
-{
-    track_t *t = fx_tsel();
-    eqc_t *e = eq_own(t), o = *e;
-    uint32_t k = eq_pick(e), j = eq_slot(e, k), i;
-    if (!e->n) {
-        ui_message("NO FILTER");
-        return;
-    }
-    for (i = k; i + 1u < e->n; i++)
-        e->o = (uint8_t)((e->o & ~(3u << (2u * i))) | eq_slot(&o, i + 1u) << (2u * i));
-    e->n--;
-    t->p[EQ_FID[j]] = TP[EQ_FID[j]].def;
-    t->p[EQ_SID[j]] = 0;
-    eq_ui_band = (uint8_t)(k < e->n ? k : e->n ? e->n - 1u : 0u);
-    ui_message("FILTER REMOVED");
-    ui.force = 1;
 }

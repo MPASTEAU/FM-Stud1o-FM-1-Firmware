@@ -788,7 +788,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, 
        S_DETAIL, S_DETAIL_PLAYING, S_DETAIL_REST, S_DETAIL_DRUM, S_ROLL_MARKS, S_DRUM_MARKS, S_HELP_DETAIL,
        S_DETAIL_COND, S_DETAIL_FILL, S_AUTO_COND, S_GLO_FILL, S_SEQ_QNT, S_SEQ_QNT_OFF, S_SEQ_QNT_64, S_CONFIRM_CLEAR_PAT,
        S_MENU_SELECT, S_PROJECT_ERASE, S_CONFIRM_ERASE_PROJ, S_CONFIRM_CLEAN,
-       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_EQ_ADD, S_FX_SENDS, S_FX_SC, S_FX_COMP, S_COUNT };
+       S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_EQ_BOOST, S_FX_SENDS, S_FX_SC, S_FX_COMP, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "user",
     "project", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
     "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
@@ -819,7 +819,7 @@ static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "mes
     "detail_cond", "detail_fill", "auto_cond", "layer_glo_fill", "layer_seq_quantize", "layer_seq_quantize_off",
     "layer_seq_quantize_64", "confirm_clear_pattern",
     "menu_select", "project_erase", "confirm_erase_project", "confirm_clean",
-    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq_bands", "fx_eq_add", "fx_sends", "fx_sc", "fx_comp"};
+    "menu_midi_track", "menu_midi_channels_unused", "menu_midi_auto_select", "home_tracks_midi", "mixer_midi", "edit_phase_fold", "fx_chain", "fx_dist", "fx_eq", "fx_eq_bands", "fx_eq_boost", "fx_sends", "fx_sc", "fx_comp"};
 
 /* the STEP page's piano roll (ui_graph.c graph_roll) on track 1, stopped unless said: an empty pattern; ACID in
  * A minor; POLY chords (Am7 F C G, tied); a line with ties, slides and accents in C major; LEN 32 on its second
@@ -1151,35 +1151,36 @@ static void setup(int s)
     case S_FX: go_title("CHAIN"); break;
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
     case S_DLY: TSEL->p[P_DLY] = 50; go_title("DELAY"); break;
-    case S_FX_CHAIN: TSEL->p[P_DIST] = 40; TSEL->p[P_EQLO] = 30; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; TSEL->p[P_REV] = 60; TSEL->p[P_DLY] = 30; trkx[song.sel].tap[2] = 2; go_title("CHAIN"); break;
+    case S_FX_CHAIN: TSEL->p[P_DIST] = 40; fx_unit_set(TSEL, 3, 1); TSEL->p[P_EQ1G] = 20; TSEL->p[P_ITYPE] = 6; TSEL->p[P_FXORD] = 13; TSEL->p[P_REV] = 60; TSEL->p[P_DLY] = 30; trkx[song.sel].tap[2] = 2; go_title("CHAIN"); break;
     case S_FX_DIST: TSEL->p[P_DIST] = 70; TSEL->p[P_DOUT] = -20; TSEL->p[P_DCOL] = 30; go_title("DIST"); break;
     case S_FX_COMP: trkx[song.sel].rsv0 = 90; trkx[song.sel].rsv1 = 60; cmp_trk[song.sel].gr = 60; go_title("COMP"); break;
     case S_FX_SC: TSEL->p[P_DKSRC] = 2; TSEL->p[P_DKAMT] = 110; TSEL->p[P_DIST] = 30; go_title("SIDECHAIN"); break;
-    case S_FX_EQ: {                                     /* (a saw at 110 Hz in the ring: the spectrum) */
+    case S_FX_EQ: case S_FX_EQ_BOOST: {                 /* (a saw at 110 Hz in the ring: the spectrum) */
         uint32_t i;
         for (i = 0; i < EQ_RN; i++)
             eq_ring[i] = (int16_t)((int32_t)((i * 110u * 65536u / 44100u) & 0xFFFFu) / 4 - 8192);
         eq_wn++;
     }
-        memset(&trkx[song.sel].eq, 0, sizeof(eqc_t));   /* (Dah: in the chain, no filter yet) */
-        trkx[song.sel].eq.f = EQF_NEW | EQF_IN;
+        memset(&trkx[song.sel].eq, 0, sizeof(eqc_t));   /* (Dah: in the chain, four flat BELLs) */
+        eq_four(TSEL->p, &trkx[song.sel].eq, 0);
+        trkx[song.sel].eq.f |= EQF_IN;
         eq_ui_band = 0;
+        if (s == S_FX_EQ_BOOST) {                       /* (the third, 2 kHz, +7 dB, picked) */
+            TSEL->p[P_EQ1G] = 30;
+            eq_ui_band = 2;
+            ui.hot_col = 3;
+            ui.hot_t = 30;
+        }
         go_title("EQ"); break;
-    case S_FX_EQ2: case S_FX_EQ_ADD: {                  /* (Dah) four bands: HP 24 dB, LP, a LOW SHELF, a BELL; the
-                                                         * shelf picked; ADD A FILTER? asked */
-        static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}, EQF_NEW | EQF_IN};
+    case S_FX_EQ2: {                                    /* (Dah) HP 24 dB, LP, a LOW SHELF picked, a BELL */
+        static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_LP, EQT_LS, EQT_BELL}, EQF_NEW | EQF_IN | EQF_4};
         trkx[song.sel].eq = E4;
         TSEL->p[P_EQLO] = 20; TSEL->p[P_EQ3G] = 1; TSEL->p[P_EQHI] = 104; TSEL->p[P_EQ3F] = 0;
         TSEL->p[P_EQ1F] = 34; TSEL->p[P_EQ1G] = 30; TSEL->p[P_EQ2F] = 80; TSEL->p[P_EQ2G] = -44;
         go_title("EQ");
         eq_ui_band = 2;
-        if (s == S_FX_EQ_ADD) {                         /* (three: a fourth asked) */
-            trkx[song.sel].eq.n = 3;
-            ui.confirm = CF_ADD_EQ;
-        } else {
-            ui.hot_col = 3;
-            ui.hot_t = 30;
-        }
+        ui.hot_col = 3;
+        ui.hot_t = 30;
         break;
     }
     case S_FX_SENDS: TSEL->p[P_CHOR] = 30; TSEL->p[P_DLY] = 90; TSEL->p[P_REV] = 60; go_title("CHORUS"); break;

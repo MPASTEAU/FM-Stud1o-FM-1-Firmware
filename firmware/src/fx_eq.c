@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; Dah fork */
-/* Dah: the EQ, a unit of the track's chain (ORDER, fx.c fx_chain / mix_spread): up to four bands (eqc_t: trkx's, the
- * MASTER's eq_mc; none at first: KNOB 1 adds them), each a TYPE in a slot's two parameters (EQ_FID EQ_SID: its FREQ, its SLOPE or GAIN): HIGH PASS and
- * LOW PASS (6, 12 or 24 dB an octave, Butterworth), LOW SHELF and HIGH SHELF (Q 0.71), BELL (Q 1); GAIN -15 .. +15 dB.
+/* Dah: the EQ, a unit of the track's chain (ORDER, fx.c fx_chain / mix_spread): four filters (eqc_t: trkx's, the
+ * MASTER's eq_mc; flat BELLs at first), each a TYPE in a slot's two parameters (EQ_FID EQ_SID: its FREQ, its SLOPE or
+ * GAIN): HIGH PASS and LOW PASS (6, 12 or 24 dB an octave, Butterworth), LOW SHELF and HIGH SHELF (Q 0.71), BELL
+ * (Q 1); GAIN -15 .. +15 dB.
  * Five filter stages at most, as the five filters before bands (a 24 dB cut takes two, any other band one: eq_plan).
  * Each a trapezoidal SVF (Zavalishin; a 6 dB cut a one-pole), Q16 coefficients a block (EQ_G: tan(pi f / FS) of the
  * cutoff index, 30 Hz .. 10.25 kHz); mulq16 keeps a sample's full precision. A band at rest (a HIGH PASS at its bottom,
@@ -29,11 +30,13 @@ enum { EQT_HP, EQT_LP, EQT_LS, EQT_HS, EQT_BELL, EQT_N };   /* a band's TYPE */
 enum { EQK_HP6, EQK_HP12, EQK_HP24, EQK_LP6, EQK_LP12, EQK_LP24, EQK_LS, EQK_HS, EQK_BELL };   /* .. as it runs */
 #define EQ_NB 4u                                        /* bands at most (the parameters' four slots) */
 #define EQ_NS 5u                                        /* filter stages at most */
-#define EQF_NEW 1u                                      /* (eqc_t f) */
-#define EQF_IN 2u
+#define EQF_NEW 1u                                      /* (eqc_t f: filters, not the EQ before them) */
+#define EQF_IN 2u                                       /* .. in the chain */
+#define EQF_4 4u                                        /* .. always four (before: a count, 0..4, of slots in o) */
 static const uint8_t EQ_FID[EQ_NB] = {P_EQLO, P_EQHI, P_EQ1F, P_EQ2F};   /* each slot's FREQ */
 static const uint8_t EQ_SID[EQ_NB] = {P_EQ3G, P_EQ3F, P_EQ1G, P_EQ2G};   /* .. its GAIN, a cut's SLOPE (< 0 6, 0 12,
                                                          * > 0 24 dB) */
+static const uint8_t EQ_FLAT[EQ_NB] = {24, 57, 85, 113};   /* a flat BELL's FREQ: 100 Hz, 500 Hz, 2 kHz, 8 kHz */
 typedef struct {
     int32_t s1[EQ_NS], s2[EQ_NS];                       /* each stage's two states */
     uint16_t g[EQ_NS], dq[EQ_NS];                       /* the block's g and 1 / (1 + g (g + k)), Q16 (a one-pole: g / (1 + g)) */
@@ -43,44 +46,64 @@ typedef struct {
 } eq_t;
 static eq_t eq[NTRK] __attribute__((section(".pool")));
 static eq_t eq_m[2];                                    /* (the MASTER's: left, right) */
-static eqc_t eq_mc;                                     /* (the MASTER's bands: projfs.c keeps them) */
+static eqc_t eq_mc;                                     /* (the MASTER's filters: projfs.c keeps them) */
 
 static eqc_t *eq_cfg(const track_t *t) { return t >= trk && t < trk + NTRK ? &trkx[t - trk].eq : &eq_mc; }
 static uint32_t eq_slot(const eqc_t *c, uint32_t k) { return (c->o >> (2u * (k & 3u))) & 3u; }
 static uint32_t eq_type(const eqc_t *c, uint32_t k) { uint32_t y = c->t[eq_slot(c, k)]; return y < EQT_N ? y : EQT_BELL; }
 static uint32_t eq_slope(int32_t v) { return v < 0 ? 0u : v > 0 ? 2u : 1u; }   /* 6 12 24 dB */
-/* t's filters (a count past EQ_NB: none) */
+/* t's four filters, filter k in slot k (none set yet: four BELLs) */
 static void eq_get(const track_t *t, eqc_t *c)
 {
     *c = *eq_cfg(t);
-    if (c->n > EQ_NB)
-        c->n = 0;
+    if (!(c->f & EQF_4))
+        c->t[0] = c->t[1] = c->t[2] = c->t[3] = EQT_BELL;
+    c->n = EQ_NB;
+    c->o = 0 | 1u << 2 | 2u << 4 | 3u << 6;
 }
-/* the EQ before filters (eqc_t f without EQF_NEW: LOW CUT, HIGH CUT, the bells 1 2 3 in p's raw values) as filters: a
- * LOW CUT on a HIGH PASS, a HIGH CUT on a LOW PASS (12 dB), each bell not at 0 dB a BELL (a third where a slot is
- * free); in the chain when one does something. p may be raw */
+/* c's four filters (the slots in used kept, the others flat BELLs: p's FREQ EQ_FLAT, GAIN 0) */
+static void eq_four(int16_t *p, eqc_t *c, uint32_t used)
+{
+    uint32_t j;
+    for (j = 0; j < EQ_NB; j++)
+        if (!((used >> j) & 1u)) {
+            c->t[j] = EQT_BELL;
+            p[EQ_FID[j]] = EQ_FLAT[j];
+            p[EQ_SID[j]] = 0;
+        }
+    c->n = EQ_NB;
+    c->o = 0 | 1u << 2 | 2u << 4 | 3u << 6;
+    c->f |= EQF_NEW | EQF_4;
+}
+/* a stored EQ as four filters: one before filters (f without EQF_NEW: LOW CUT, HIGH CUT, the bells 1 2 3 in p's raw
+ * values: a LOW CUT not at rest a HIGH PASS in slot 1, a HIGH CUT a LOW PASS in 2 (12 dB), each bell not at 0 dB a
+ * BELL in a free slot; in the chain when one does something), or a count of them (f without EQF_4: those kept); the
+ * rest flat BELLs. p may be raw */
 static void eq_adopt(int16_t *p, const int16_t *raw, eqc_t *c)
 {
     static const uint8_t FREE[4] = {2, 3, 1, 0};        /* (the bells' slots: the cuts' last) */
     int32_t lo = raw[P_EQLO], hi = raw[P_EQHI], b[3][2] = {{raw[P_EQ1F], raw[P_EQ1G]}, {raw[P_EQ2F], raw[P_EQ2G]},
                                                            {raw[P_EQ3F], raw[P_EQ3G]}};
     uint32_t k, j, used = 0;
-    memset(c, 0, sizeof *c);
-    c->f = EQF_NEW;
-    for (j = 0; j < EQ_NB; j++) {
-        p[EQ_FID[j]] = TP[EQ_FID[j]].def;
-        p[EQ_SID[j]] = 0;                               /* (12 dB, 0 dB) */
+    if (c->f & EQF_4)
+        return;
+    if (c->f & EQF_NEW) {                               /* (a count: its slots) */
+        for (k = 0; k < c->n && k < EQ_NB; k++)
+            used |= 1u << eq_slot(c, k);
+        eq_four(p, c, used);
+        return;
     }
+    memset(c, 0, sizeof *c);
+    for (j = 0; j < EQ_NB; j++)
+        p[EQ_SID[j]] = 0;                               /* (12 dB, 0 dB) */
     if (lo > 0) {
         p[P_EQLO] = (int16_t)clamp(lo, 0, EQ_TOP);
         c->t[0] = EQT_HP;
-        c->o = (uint8_t)(c->o | 0u << (2u * c->n++));
         used |= 1u;
     }
     if (hi < EQ_TOP) {
         p[P_EQHI] = (int16_t)clamp(hi, 0, EQ_TOP);
         c->t[1] = EQT_LP;
-        c->o = (uint8_t)(c->o | 1u << (2u * c->n++));
         used |= 2u;
     }
     for (k = 0; k < 3u; k++)
@@ -94,9 +117,9 @@ static void eq_adopt(int16_t *p, const int16_t *raw, eqc_t *c)
             p[EQ_FID[j]] = (int16_t)clamp(b[k][0], 0, EQ_TOP);
             p[EQ_SID[j]] = (int16_t)clamp(b[k][1], -64, 63);
             c->t[j] = EQT_BELL;
-            c->o = (uint8_t)(c->o | j << (2u * c->n++));
         }
-    if (c->n)
+    eq_four(p, c, used);
+    if (used)
         c->f |= EQF_IN;
 }
 /* band k doing something (at rest: nothing) */

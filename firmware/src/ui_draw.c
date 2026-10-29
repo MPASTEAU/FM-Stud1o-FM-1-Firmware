@@ -623,13 +623,6 @@ static void home_foot(void)
         kh[1] = KH[hk][1];
         n = 2u;
         ok = 3u;
-        if (eq_page(cur_page())) {                      /* (Dah) EQ: REC takes the band picked out (one stays) */
-            eqc_t e;
-            eq_get(fx_tsel(), &e);
-            kh[2] = (khint_t){KC_REC, "DEL"};
-            n = 3u;
-            ok |= e.n ? 4u : 0u;
-        }
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
         n = 0;
@@ -904,13 +897,9 @@ static void span_fxrow(const card_span_t *sp, int32_t v, char *val)     /* (Dah)
     val[0] = (char)('1' + v); val[1] = '/'; val[2] = '9'; val[3] = 0;
 }
 static const char *const EQ_TN[EQT_N] = {"HP", "LP", "LSH", "HSH", "BELL"};   /* (Dah) the EQ's TYPEs, short */
-static void span_eqb(const card_span_t *sp, int32_t v, char *val)       /* (Dah) the EQ's BAND: n / 4, or + */
+static void span_eqb(const card_span_t *sp, int32_t v, char *val)       /* (Dah) the EQ's FILTER: n / 4 */
 {
     (void)sp;
-    if (v >= 4) {
-        str_cpy(val, "+", 2);
-        return;
-    }
     val[0] = (char)('1' + v); val[1] = '/'; val[2] = '4'; val[3] = 0;
 }
 static void span_eqt(const card_span_t *sp, int32_t v, char *val)       /* (Dah) .. its TYPE */
@@ -1671,8 +1660,8 @@ static int msg_popup(void)
         b = LY_LONG[ly_hint][1];
         help = 1;
     }
-    help |= str_eq(a, "ON THE MASTER") || str_eq(a, "EQ") || str_eq(a, "EFFECTS");   /* (Dah) HELP's windows: how to
-                                                         * have them no more, small (EQ, EFFECTS: ui.c page_entered) */
+    help |= str_eq(a, "ON THE MASTER") || str_eq(a, "EFFECTS");   /* (Dah) HELP's windows: how to have them no more,
+                                                         * small (EFFECTS: ui.c page_entered) */
     int knob = 0;                                       /* (Dah) "\x02" in its first line: a knob drawn there */
     {
         uint32_t i;
@@ -2124,23 +2113,18 @@ static void draw_columns_in(void)
                         (int32_t)s2 * 1000 / NTRK, ICON_AUTO);
             continue;
         }
-        if (eq_page(cur_page())) {                      /* (Dah) EQ: BAND n/N ("+": one more asked), TYPE, FREQ, SLOPE /
-                                                         * GAIN of the band picked */
+        if (eq_page(cur_page())) {                      /* (Dah) EQ: FILTER n/4, TYPE, FREQ, SLOPE / GAIN of the filter
+                                                         * picked */
             const track_t *ft = fx_tsel();
             eqc_t e;
             uint32_t k, j, y;
             int32_t fv;
             eq_get(ft, &e);
             k = eq_pick(&e); j = eq_slot(&e, k); y = eq_type(&e, k);
-            if (!e.n && (c || ui.confirm != CF_ADD_EQ)) {   /* (none yet: KNOB 1 adds one) */
-                draw_column(c, c == 0u ? "FILTER" : c == 1u ? "TYPE" : c == 2u ? "FREQ" : "GAIN", "--", "",
-                            c ? T_DIM : VAL(0u), -1, ICON_AUTO);
-            } else if (c == 0u) {
-                char pl[6] = {(char)('1' + k), '/', (char)('0' + e.n), 0};
-                if (ui.confirm == CF_ADD_EQ)
-                    str_cpy(pl, "+", 6);
-                card_span_by(span_eqb, 0, 0, 4, 0);
-                draw_column(0, "FILTER", pl, "", VAL(0u), e.n > 1u ? (int32_t)k * 1000 / (int32_t)(e.n - 1u) : -1, ICON_AUTO);
+            if (c == 0u) {
+                char pl[6] = {(char)('1' + k), '/', '4', 0};
+                card_span_by(span_eqb, 0, 0, 3, 0);
+                draw_column(0, "FILTER", pl, "", VAL(0u), (int32_t)k * 1000 / 3, ICON_AUTO);
             } else if (c == 1u) {
                 card_span_by(span_eqt, 0, 0, EQT_N - 1, 0);
                 draw_column(1, "TYPE", EQ_TN[y], "", VAL(1u), (int32_t)y * 1000 / (EQT_N - 1), ICON_AUTO);
@@ -2381,15 +2365,6 @@ static void confirm_text(char *a, char *b)
         str_cpy(a + str_len(a), "?", 4);
         str_cpy(b, "TRACK 1", 24);
         b[6] = (char)('1' + song.sel % NTRK);
-        break;
-    case CF_ADD_EQ:                                  /* (Dah) FX > EQ: KNOB 1 past the last band */
-        str_cpy(a, "ADD A FILTER?", 24);
-        str_cpy(b, "FILTER 1: A BELL, FLAT", 24);
-        {
-            eqc_t e;
-            eq_get(fx_tsel(), &e);
-            b[7] = (char)('1' + e.n % 9u);
-        }
         break;
     case CF_ADD_FX:                                  /* (Dah) FX > CHAIN: + ADD reached */
         str_cpy(a, "ADD AN EFFECT?", 24);

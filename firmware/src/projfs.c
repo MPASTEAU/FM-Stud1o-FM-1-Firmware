@@ -369,7 +369,7 @@ static int pfs_read_in(uint32_t id)
     for (i = 0; ver >= 4u && i < (ver >= 6u ? MST_N : ver >= 5u ? MST_N5 : MST_N4); i++)            /* (the MASTER's chain: restore_runtime emptied it) */
         mtrk.p[MST_ID[i]] = (int16_t)clamp((int32_t)mst[i] - 64, TP[MST_ID[i]].min, TP[MST_ID[i]].max);
     eq_mc = mqc;
-    if (!(eq_mc.f & EQF_NEW) || eq_mc.n > EQ_NB) {      /* (Dah) none kept: its EQ before filters, as filters */
+    if (!(eq_mc.f & EQF_4)) {                           /* (Dah) its EQ stored before four filters: as four */
         int16_t raw[P_COUNT];
         memcpy(raw, mtrk.p, sizeof raw);
         for (i = 0; ver >= 4u && i < (ver >= 6u ? MST_N : ver >= 5u ? MST_N5 : MST_N4); i++)

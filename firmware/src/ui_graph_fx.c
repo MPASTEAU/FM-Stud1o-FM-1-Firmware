@@ -71,7 +71,7 @@ static int fx_unit_on(const track_t *t, uint32_t u)
     case 0: return t->p[P_DIST] != 0;
     case 1: return t->p[P_ITYPE] != 0 && t->p[P_IMIX] != 0;
     case 2: return t->p[P_SLCR] != 0;
-    case 3: return (eq_cfg(t)->f & EQF_IN) != 0u;       /* (Dah: no filter yet, it is there) */
+    case 3: return (eq_cfg(t)->f & EQF_IN) != 0u;       /* (Dah: flat, it is there) */
     case 4: return t->p[P_DKSRC] != 0;
     case 5: return fx_mst(t) || t->p[P_CHOR] != 0;     /* (Dah: the MASTER's returns: always) */
     case 6: return fx_mst(t) || t->p[P_DLY] != 0;
@@ -164,17 +164,12 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
     case 2:
         t->p[P_SLCR] = (int16_t)(on ? 1 : 0);
         break;
-    case 3: {                                           /* (in or out: no filter, KNOB 1 adds them) */
-        uint32_t j;
+    case 3:                                             /* (in or out: four flat BELLs) */
         memset(eq_cfg(t), 0, sizeof(eqc_t));
-        eq_cfg(t)->f = (uint8_t)(EQF_NEW | (on ? EQF_IN : 0u));
-        for (j = 0; j < EQ_NB; j++) {
-            t->p[EQ_FID[j]] = TP[EQ_FID[j]].def;
-            t->p[EQ_SID[j]] = 0;
-        }
+        eq_four(t->p, eq_cfg(t), 0);
+        eq_cfg(t)->f |= on ? EQF_IN : 0u;
         eq_ui_band = 0;
         break;
-    }
     case 4:                                             /* (on: the first other track, at full depth) */
         t->p[P_DKSRC] = (int16_t)(on ? (trk_index(t) ? 1 : 2) : 0);
         if (on && !t->p[P_DKAMT])
@@ -347,10 +342,9 @@ static void fx_unit_info(const track_t *t, uint32_t u, char *b)
     case 1: str_cpy(b, N_ITYPE[clamp(t->p[P_ITYPE], 0, IT_N - 1)], 12); break;
     case 2: str_cpy(b, N_SLCR[clamp(t->p[P_SLCR], 0, 2)], 12); break;
     case 3: {
-        eqc_t e;
-        uint32_t c;
-        eq_get(t, &e);
-        c = e.n;
+        uint32_t m = eq_units(t), c = 0;
+        for (; m; m &= m - 1u) c++;
+        if (!c) { str_cpy(b, "FLAT", 6); break; }
         fmt_int(b, (int32_t)c); str_cpy(b + str_len(b), c > 1u ? " FILTERS" : " FILTER", 9);
         break;
     }

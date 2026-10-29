@@ -1438,9 +1438,9 @@ static void felucca_init(void)
 #if FELUCCA_DEMO
     felucca_demo();
     for (i = 0; i < NTRK; i++)                /* (Dah: its EQs as LOW CUT, HIGH CUT and bells: as bands, fx_eq.c) */
-        if (!(trkx[i].eq.f & EQF_NEW))
+        if (!(trkx[i].eq.f & EQF_4))
             eq_adopt(trk[i].p, trk[i].p, &trkx[i].eq);
-    if (!(eq_mc.f & EQF_NEW))
+    if (!(eq_mc.f & EQF_4))
         eq_adopt(mtrk.p, mtrk.p, &eq_mc);
 #endif
     undo_depth--;

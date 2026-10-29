@@ -26,7 +26,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"INSERT", "[K1]TYPE[FX]DRY / WET"},
     {"INSERT 2", "[K1]DRY / WET[FX]SLICER"},
     {"SLICER", "[K1]ON[K2]PATTERN[FX]EQ"},
-    {"EQ", "[K1]FILTER / ADD[K2]TYPE[REC]DEL"},       /* (Dah: KNOB 1 past the last: one more) */
+    {"EQ", "[K1]FILTER[K2]TYPE[K3]FREQ"},           /* (Dah: four, flat BELLs at first) */
     {"SIDECHAIN", "[K1]SOURCE[K2]DEPTH[K3]RELEASE"},
     {"COMP", "[K1]AMOUNT[K2]RELEASE[FX]NEXT"},
     {"DELAY", "[K1]SEND[K2]TIME[K3]FEEDBACK"},

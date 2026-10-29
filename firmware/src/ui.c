@@ -235,7 +235,7 @@ static struct {
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
        CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_PAT, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_ADD_EQ };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
+       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -629,15 +629,10 @@ static void page_entered(void)
         song.g[G_SLOT] = (int16_t)(project_current() + 1u);   /* (the pattern on the tracks) */
     ui.fl_del = 0;
     help_start();
-    if (!ui.home && pg->fam == FAM_FX && help_on() && !song.playing && !chain_busy()) {   /* (Dah) HELP: what the EQ's
-                                                         * knobs do, CHAIN's */
-        eqc_t e;
-        eq_get(fx_tsel(), &e);
-        if (eq_page(pg))
-            cards_say("EQ", e.n ? "K1 FILTER  K2 TYPE\nK3 FREQ  K4 GAIN" : "TURN \x02" "K1 TO ADD\nA FILTER");
-        else if (pg->id[0] == P_FXORD && pg->scope == SC_TRACK)
-            cards_say("EFFECTS", "K1 MOVE  K2 TYPE\nK3 MIX  FX OPENS");
-    }
+    if (!ui.home && pg->fam == FAM_FX && pg->id[0] == P_FXORD && pg->scope == SC_TRACK && help_on() && !song.playing &&
+        !chain_busy())                                  /* (Dah) HELP: what CHAIN's knobs do (the EQ's: none, the user's
+                                                         * choice) */
+        cards_say("EFFECTS", "K1 MOVE  K2 TYPE\nK3 MIX  FX OPENS");
     ui.force = 1;
 }
 
