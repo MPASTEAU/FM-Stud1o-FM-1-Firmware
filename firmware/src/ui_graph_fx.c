@@ -246,6 +246,8 @@ static void fl_fx_move(int32_t s)
 {
     uint32_t cur, rows = fl_fx_rows(&cur);
     ch_cur = (uint8_t)clamp((int32_t)cur + s, 0, rows ? (int32_t)rows - 1 : 0);
+    if (ch_cur != cur)                                  /* (Dah) CHAIN's rows glide to it (graph_chain) */
+        ch_dy = clamp(ch_dy + ((int32_t)ch_cur > (int32_t)cur ? 24 : -24), -96, 96);
     ui.force = 1;
     fl_fx_at();
 }
@@ -430,62 +432,45 @@ static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, 
 static void graph_chain(const track_t *t, uint16_t c)
 {
     uint8_t u[FXU_N_ALL];
-    uint32_t n = fx_list(t, u), i, rows = n < fx_max(t) ? n + 1u : n, vis, first;
-    int32_t avail = graph_ht + GOY - 4, x0 = PANEL_X0 + 16, bw = PANEL_W - 18, hs, ho, y;
+    uint32_t n = fx_list(t, u), rows = n < fx_max(t) ? n + 1u : n;
+    int32_t avail = graph_ht + GOY - 4, x0 = PANEL_X0 + 16, bw = PANEL_W - 18, ph = 24, my, vt, dy = glide(&ch_dy), i;
     if (ch_cur >= rows)
         ch_cur = (uint8_t)(rows - 1u);
-    vis = rows;
-    while (vis > 1u && 26 + (int32_t)(vis - 1u) * 13 > avail)
-        vis--;                                          /* (too many: a window round the one picked) */
-    first = ch_cur + 1u >= vis ? ch_cur + 1u - (vis + 1u) / 2u : 0u;
-    if (first + vis > rows)
-        first = rows - vis;
-    hs = vis > 1u ? 26 : avail;                         /* the one picked: 26 px */
-    ho = vis > 1u ? (avail - hs) / (int32_t)(vis - 1u) : 0;
-    if (ho > 22)
-        ho = 22;
-    if (hs > 30)
-        hs = 30;
-    y = 1;
-    cv_rect(PANEL_X0 + 5, y + 4, 2, hs + ho * (int32_t)(vis - 1u) - 8, T_RAISE);   /* the sound's way down */
-    for (i = first; i < first + vis; i++) {
-        int sel = i == ch_cur;
-        int32_t rh = sel ? hs : ho, by = y + 1, bh = rh - 3, ty = by + CAP_IN(S, bh);
-        if (i < n) {
+    vt = tall_view((int32_t)rows, (int32_t)ch_cur, dy, avail - 1, &my, ph - 2) - 1;   /* (Dah) as SAVE > PATTERN's: the
+                                                         * frame from the top to the middle, the effects by, on down */
+    {   /* the sound's way down, from the first to the last */
+        int32_t y0 = -vt + 6, y1 = (int32_t)rows * ph - vt - 6;
+        y0 = y0 < 1 ? 1 : y0;
+        y1 = y1 > avail ? avail : y1;
+        if (y1 > y0)
+            cv_rect(PANEL_X0 + 5, y0, 2, y1 - y0, T_RAISE);
+    }
+    my += 1;
+    cv_rrect(x0 - 2, my, bw + 4, ph - 1, 5, T_ACCENT, T_SURF);   /* (the frame) */
+    for (i = 0; i < (int32_t)rows; i++) {
+        int32_t y = i * ph - vt, by = y + 2, bh = ph - 5, ty = by + CAP_IN(S, bh);
+        int sel = y > my - ph / 2 && y < my + ph / 2;
+        if (y < 0 || y + ph > avail)                    /* (cut by an edge: not drawn) */
+            continue;
+        if (i < (int32_t)n) {
             char d[2] = {(char)('1' + i), 0}, inf[16];
-            int32_t dy = y + (rh - 12) / 2, nx = x0 + 6;
+            int32_t cy = y + (ph - 12) / 2, nx = x0 + 6;
             int ms = fx_send(u[i]) && !fx_mst(t);       /* (Dah) a send: the MASTER's effect, greyed, "M" */
             uint16_t cc = ms || fx_mst(t) ? T_MID : c;   /* (Dah: the MASTER's chain grey: no track's colour) */
-            cv_rrect(PANEL_X0, dy, 12, 12, 6, sel ? T_ACCENT : cc, T_SURF);
-            cv_text_in(PANEL_X0, dy + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : cc);
-            if (sel)
-                cv_rrect(x0 - 2, by - 1, bw + 4, bh + 2, 5, T_ACCENT, T_SURF);
+            cv_rrect(PANEL_X0, cy, 12, 12, 6, sel ? T_ACCENT : cc, T_SURF);
+            cv_text_in(PANEL_X0, cy + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : cc);
             cv_rrect(x0, by, bw, bh, 4, sel ? cc : T_RAISE, sel ? T_ACCENT : T_SURF);
-            if (sel) {                                  /* (the one picked: its name in M) */
-                int32_t mty = by + CAP_IN(M, bh);
-                if (ms)
-                    nx = cv_text_on(nx, mty, &AF_M, "M", T_INK, cc) + 6;
-                cv_text_on(nx, mty, &AF_M, FXU_N[u[i]], T_INK, cc);
-            } else {
-                if (ms)
-                    nx = cv_text_on(nx, ty, &AF_S, "M", T_THEME, T_RAISE) + 5;
-                cv_text_on(nx, ty, &AF_S, FXU_N[u[i]], ms ? T_MID : T_TEXT, T_RAISE);
-            }
+            if (ms)
+                nx = cv_text_on(nx, ty, &AF_S, "M", sel ? T_INK : T_THEME, sel ? cc : T_RAISE) + 5;
+            cv_text_on(nx, ty, &AF_S, FXU_N[u[i]], sel ? T_INK : ms ? T_MID : T_TEXT, sel ? cc : T_RAISE);
             fx_unit_info(t, u[i], inf);
             cv_text_r(x0 + bw - 6, ty, &AF_S, inf, sel ? T_INK : T_MID, sel ? cc : T_RAISE);
         } else {                                        /* + ADD */
-            if (sel)
-                cv_rrect(x0 - 2, by - 1, bw + 4, bh + 2, 5, T_ACCENT, T_SURF);
             cv_rrect(x0, by, bw, bh, 4, T_LINE, sel ? T_ACCENT : T_SURF);
             cv_rrect(x0 + 1, by + 1, bw - 2, bh - 2, 3, T_SURF, T_LINE);
             cv_text_in(x0, ty, bw, &AF_S, "+ ADD", sel ? T_TEXT : T_MID, T_SURF);
         }
-        y += rh;
     }
-    if (first)                                          /* (more above, more under: a mark at the right) */
-        cv_rect(PANEL_X0 + PANEL_W - 4, 1, 3, 3, T_MID);
-    if (first + vis < rows)
-        cv_rect(PANEL_X0 + PANEL_W - 4, y - 3, 3, 3, T_MID);
 }
 static int32_t dist_curve(const track_t *t, int32_t x)   /* fx.c track_dist's, the filters left out */
 {

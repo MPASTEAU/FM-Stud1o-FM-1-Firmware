@@ -1445,7 +1445,7 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ ui.frame / 2u;                    /* scope: every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
-    h ^= (uint32_t)tl_dy * 40503u + (uint32_t)pp_dy * 2246822519u + (uint32_t)lu_dy * 3266489917u + (uint32_t)lf_dy * 668265263u;   /* (Dah: a list gliding: each step drawn) */
+    h ^= (uint32_t)tl_dy * 40503u + (uint32_t)pp_dy * 2246822519u + (uint32_t)lu_dy * 3266489917u + (uint32_t)lf_dy * 668265263u + (uint32_t)ch_dy * 374761393u;   /* (Dah: a list gliding: each step drawn) */
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
@@ -1645,6 +1645,18 @@ static void panel_alert(uint32_t id, const char *a)
 /* (Dah) ALGORITHM turned: the MASTER and the project's tracks, the selected one in the middle (its colour, its
  * sound's name), gliding to it */
 static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
+/* (Dah) SAVE's tall lists (34 px a row): the frame from the top down to the middle, there the rows go by under it,
+ * at the end on down to the foot (as HOME's steps); p the place gliding (cur's, dy back). The view's top, the frame's y
+ * (from the room's top, H tall) */
+static int32_t tall_view(int32_t n, int32_t cur, int32_t dy, int32_t h, int32_t *fy, int32_t rh)   /* (rh: a row's
+                                                         * height, 2 px between two) */
+{
+    int32_t p = cur * (rh + 2) - dy, last = n * (rh + 2) - 2 - h, vt = p - (h - rh) / 2;
+    vt = vt > last ? last : vt;
+    vt = vt < 0 ? 0 : vt;
+    *fy = p - vt;
+    return vt;
+}
 static void pat_rows(int32_t dy, int add);
 static void graph_patlist(void)                         /* (Dah) SELECT, GLO + ALGORITHM: the patterns, each its steps (every
                                                          * track a line, as HOME's), + NEW after the last; gliding */
@@ -1699,29 +1711,46 @@ static void engine_sound_row(int32_t y)
     (void)total;
 }
 /* user preset slots around the selected one: "U07  NAME" / EMPTY */
+/* (Dah) SAVE's lists as PATTERN's: tall rows (32 px, 34 apart) gliding through a frame fixed in the panel's middle
+ * (y0 .. y1 the room: under a line on top, over one at the foot); the row k of n, its tag (M), name (M), a note at the
+ * right (S); the one in the frame on RAISE, its tag in the theme */
+#define BR_H 24                                        /* (Dah) MY PRESETS', FILE's rows: 24 px, 26 apart */
+typedef struct { char tag[6]; char nm[20]; char note[12]; uint16_t tc, nc; } bigrow_t;
+static void big_rows(const bigrow_t *r, int32_t n, int32_t cur, int32_t dy, int32_t y0, int32_t y1)
+{
+    int32_t fy, vt = tall_view(n, cur, dy, y1 - y0, &fy, BR_H), k;   /* (Dah: taller than a list's, less than PATTERN's) */
+    cv_rrect(6, y0 + fy, 228, BR_H, 4, T_THEME, T_SURF);   /* (as PATTERN's: the frame down to the middle, the rows by) */
+    cv_rrect(8, y0 + fy + 2, 224, BR_H - 4, 3, T_RAISE, T_THEME);
+    for (k = 0; k < n; k++) {
+        int32_t y = y0 + k * (BR_H + 2) - vt;
+        int mid = y > y0 + fy - BR_H / 2 && y < y0 + fy + BR_H / 2;
+        uint16_t bg = mid ? T_RAISE : T_SURF;
+        if (y < y0 || y + BR_H > y1)                    /* (cut by an edge: not drawn) */
+            continue;
+        GFX_HOOK_ALIGN(0, y, 0, y + BR_H, AL_V, "save list row text centred");
+        cv_text_on(14, y + CAP_IN(M, BR_H), &AF_M, r[k].tag, mid ? T_THEME : r[k].tc ? r[k].tc : T_MID, bg);
+        cv_free_text(56, y + CAP_IN(M, BR_H), &AF_M, r[k].nm, r[k].nc ? r[k].nc : T_TEXT, bg, r[k].note[0] ? 120 : 170);
+        if (r[k].note[0])
+            cv_text_r(226, y + CAP_IN(S, BR_H), &AF_S, r[k].note, T_MID, bg);
+    }
+}
 static void graph_user(void)
 {
-    int32_t h = (int32_t)list_n() / 2, row, dy = glide(&lu_dy);
-    glrow_t r[13] = {{0}};
-    uint32_t m = 0;
-    for (row = -h - 1; row <= h + 1; row++) {          /* (Dah) the bar in the middle, the slots gliding under it (as
-                                                         * PATTERN's); none under the sound's line */
-        int32_t k = (int32_t)ui.uslot + row, y = LIST_Y(row + h) + dy;
-        glrow_t *g = &r[m];
-        if (k < 0 || k >= UP_SLOTS || y < 17)
-            continue;
-        m++;
-        g->y = y;
-        g->tc = T_MID;
-        up_slot_label(g->tag, (uint32_t)k);
-        if (up_used((uint32_t)k))
-            up_name((uint32_t)k, g->nm);
-        else {
-            str_cpy(g->nm, "EMPTY", sizeof g->nm);     /* (Dah: said, not "--") */
-            g->nc = T_DIM;
+    static bigrow_t r[UP_SLOTS];
+    int32_t k;
+    for (k = 0; k < UP_SLOTS; k++) {                   /* (Dah) as PATTERN's: tall rows gliding (lu_dy) */
+        up_slot_label(r[k].tag, (uint32_t)k);
+        r[k].note[0] = 0;
+        r[k].tc = 0;
+        if (up_used((uint32_t)k)) {
+            up_name((uint32_t)k, r[k].nm);
+            r[k].nc = 0;
+        } else {
+            str_cpy(r[k].nm, "EMPTY", sizeof r[k].nm);   /* (Dah: said, not "--") */
+            r[k].nc = T_DIM;
         }
     }
-    glide_rows(r, m, 232);
+    big_rows(r, UP_SLOTS, (int32_t)ui.uslot, glide(&lu_dy) * 2, 18, (int32_t)graph_h() - 4);
     {   /* (Dah) on top, what SAVE puts in a slot: the selected track's sound ("TRACK 1  ACID") */
         char nm[16], tl[10] = "TRACK ";
         int32_t x;
@@ -2130,31 +2159,36 @@ static void draw_list_full(int fresh)
 static void pat_rows(int32_t dy, int add)
 {
     uint8_t nums[PS_NUM];
-    int32_t n = (int32_t)pt_list(nums), at = 0, i, row;
+    int32_t n = (int32_t)pt_list(nums), at = 0, i, k, rows, vt, fy;
     uint32_t cur = ps_num(song.sel);
     char b[4];
-    int32_t avail = (int32_t)graph_h() - (add ? 0 : 18), my = (avail - 32) / 2;   /* (Dah: the panel's height; the
-                                                         * PATTERN page: its memory line under them) */
+    int32_t avail = (int32_t)graph_h() - (add ? 0 : 18);   /* (Dah: the panel's height; the PATTERN page: its memory
+                                                         * line under them) */
     for (i = 0; i < n; i++)
         if (nums[i] == cur) at = i;
-    cv_rrect(6, my, 228, 32, 4, T_THEME, T_SURF);       /* (the frame stays, the rows glide through it) */
-    cv_rrect(8, my + 2, 224, 28, 3, T_RAISE, T_THEME);
-    for (row = -3; row <= 3; row++) {
-        int32_t k = at + row, y = my + row * 34 + dy;
-        int mid = y > my - 17 && y < my + 17;
+    rows = n + (add && n < (int32_t)PS_NUM);
+    vt = tall_view(rows, at, dy, avail - 2, &fy, 32);
+    cv_rrect(6, 2 + fy, 228, 32, 4, T_THEME, T_SURF);   /* (the frame: down to the middle, the rows by, on down) */
+    cv_rrect(8, 4 + fy, 224, 28, 3, T_RAISE, T_THEME);
+    for (k = 0; k < rows; k++) {
+        int32_t y = 2 + k * 34 - vt;
+        int mid = y > 2 + fy - 17 && y < 2 + fy + 17, whole = y >= 0 && y + 32 <= avail;
         uint16_t bg = mid ? T_RAISE : T_SURF;
-        if (k < 0 || k > n || (k == n && (!add || n >= (int32_t)PS_NUM)) || y + 32 <= 0 || y >= avail)   /* (Dah: the
-                                                         * ones round it too, cut by the edges) */
+        if (y + 32 <= 0 || y >= avail)
             continue;
         if (k == n) {                                   /* + NEW */
+            if (!whole)
+                continue;
             GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
             cv_text_on(14, y + CAP_IN(M, 32), &AF_M, "+", mid ? T_THEME : T_DIM, bg);
             cv_text_on(36, y + CAP_IN(M, 32), &AF_M, "NEW", mid ? T_THEME : T_DIM, bg);
             continue;
         }
-        fmt_int(b, (int32_t)nums[k]);
-        GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
-        cv_text_on(14, y + CAP_IN(M, 32), &AF_M, b, mid ? T_THEME : T_MID, bg);
+        if (whole) {                                    /* (cut by an edge: its steps alone) */
+            fmt_int(b, (int32_t)nums[k]);
+            GFX_HOOK_ALIGN(0, y, 0, y + 32, AL_V, "pattern row number centred");
+            cv_text_on(14, y + CAP_IN(M, 32), &AF_M, b, mid ? T_THEME : T_MID, bg);
+        }
         pt_mini(nums[k], 36, y + 4, 192, 25, bg);
     }
 }
@@ -2210,25 +2244,18 @@ static void graph_file(void)
     }
     for (i = 0; i < gfile.n; i++)
         if (gfile.ids[i] == ui.fsel) at = i;
-    {   /* (Dah) the bar in the middle, the projects gliding under it (as PATTERN's); none over the memory line */
-        int32_t h = (int32_t)list_n() / 2, row, dy = glide(&lf_dy);
-        glrow_t r[13] = {{0}};
-        uint32_t m = 0;
-        for (row = -h - 1; row <= h + 1; row++) {
-            int32_t k = (int32_t)at + row, y = LIST_Y(row + h) + dy;
-            glrow_t *g = &r[m];
-            if (k < 0 || k >= (int32_t)gfile.n || y + 16 > my - 2)
-                continue;
-            m++;
-            g->y = y;
-            g->tc = gfile.ids[k] == cur ? T_ACCENT : T_MID;
-            fmt_int(g->tag, (int32_t)gfile.ids[k]);
-            str_cpy(g->nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
-            str_cpy(g->nm + str_len(g->nm), "  ", 3);
-            fmt_int(g->nm + str_len(g->nm), gfile.pct[k]);
-            str_cpy(g->nm + str_len(g->nm), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
+    {   /* (Dah) as PATTERN's: tall rows gliding through the frame (lf_dy); the memory line under them */
+        static bigrow_t r[32];
+        uint32_t k;
+        for (k = 0; k < gfile.n && k < 32u; k++) {
+            fmt_int(r[k].tag, (int32_t)gfile.ids[k]);
+            str_cpy(r[k].nm, gfile.name[k][0] ? gfile.name[k] : "UNTITLED", 14);
+            fmt_int(r[k].note, gfile.pct[k]);
+            str_cpy(r[k].note + str_len(r[k].note), gfile.ids[k] == cur ? "%  OPEN" : "%", 8);
+            r[k].tc = gfile.ids[k] == cur ? T_ACCENT : 0;
+            r[k].nc = 0;
         }
-        glide_rows(r, m, 232);
+        big_rows(r, (int32_t)gfile.n, (int32_t)at, glide(&lf_dy) * 2, 2, my - 4);
     }
     (void)first; (void)rn;
 }

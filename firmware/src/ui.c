@@ -1685,7 +1685,7 @@ static void eng_list_step(int32_t direction)         /* the next / previous soun
 
 /* (Dah) PRESETS turned: its list full screen ~1 s (ui_graph.c draw_list_full) */
 static uint32_t pl_ms, tl_ms;                           /* (.. ALGORITHM turned: the tracks' list, the same way) */
-static int32_t tl_dy, pp_dy, lu_dy, lf_dy;      /* (lu_dy, lf_dy: MY PRESETS', FILE's) */                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
+static int32_t tl_dy, pp_dy, lu_dy, lf_dy, ch_dy;   /* (ch_dy: FX > CHAIN's) */      /* (lu_dy, lf_dy: MY PRESETS', FILE's) */                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
 static uint8_t tl_pat;                                  /* (Dah) .. GLO + ALGORITHM: the patterns' list */
 static int tl_on(void) { return tl_ms && (uint32_t)((int32_t)(fm1_ms - tl_ms) + 1) < 1001u && !ui.menu && !ui.confirm; }
 static int pl_on(void) { return pl_ms && (uint32_t)((int32_t)(fm1_ms - pl_ms) + 1) < 1001u; }   /* (fm1_ms | 1: a ms ahead) */
@@ -1766,7 +1766,7 @@ static void file_move(int32_t steps)
         ;
     i = (uint32_t)clamp((int32_t)(i < n ? i : 0u) + (steps > 0 ? 1 : -1), 0, (int32_t)n - 1);
     if (ids[i] != ui.fsel)                              /* (Dah: the projects glide to it) */
-        lf_dy = clamp(lf_dy + (steps > 0 ? 17 : -17), -68, 68);
+        lf_dy = clamp(lf_dy + (steps > 0 ? 13 : -13), -52, 52);   /* (26 px a row: graph_file) */
     ui.fsel = ids[i];
     ui.force = 1;
 }

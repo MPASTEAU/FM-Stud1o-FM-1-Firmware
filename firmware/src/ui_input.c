@@ -1365,7 +1365,7 @@ static void edit_param(uint32_t slot, int32_t steps)
             uint32_t was = ui.uslot;
             ui.uslot = (uint8_t)clamp((int32_t)ui.uslot + steps, 0, UP_SLOTS - 1);
             if (ui.uslot != was)                        /* (Dah: the slots glide to it) */
-                lu_dy = clamp(lu_dy + (ui.uslot > was ? 17 : -17), -68, 68);
+                lu_dy = clamp(lu_dy + (ui.uslot > was ? 13 : -13), -52, 52);   /* (26 px a row: graph_user) */
         }
         return;
     }
@@ -1433,11 +1433,11 @@ static void edit_param(uint32_t slot, int32_t steps)
         uint8_t u[FXU_N_ALL];
         track_t *ft = fx_tsel();
         uint32_t n = fx_list(ft, u);
-        if (slot == 3u)
-            return;
-        if (slot == 1u)
+        if (slot == 0u)                                 /* (Dah) KNOB 1 the effect, in the list (no window) */
+            fl_fx_move(steps > 0 ? 1 : -1);
+        else if (slot == 2u)
             fx_chain_type(ft, steps);
-        else if (slot == 0u)
+        else if (slot == 1u)
             fx_chain_move(ft, steps);
         else if (ch_cur < n && u[ch_cur] == FXU_COMP)   /* (COMP's MIX: its AMOUNT) */
             fx_cset(ft, clamp((int32_t)fx_camt(ft) + steps, 1, 127), -1);
@@ -2541,9 +2541,7 @@ static void ui_input(void)
         } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] != P_FXORD) {
             fx_sel_turn(s);                             /* (Dah) an effect's page: SELECT the next / previous effect */
         } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] == P_FXORD) {
-            fl_fx_move(s);                              /* (Dah) FX > CHAIN: SELECT the effect, its list the screen */
-            tl_ms = fm1_ms | 1u;
-            tl_pat = 2;
+            fl_fx_move(s > 0 ? 1 : -1);                 /* (Dah) FX > CHAIN: SELECT the effect too, in the list */
         } else if (!glo && !lay) {                      /* (Dah) SELECT: the pattern, every track's, on any page without
                                                          * a list (its list ~1 s); the tempo: GLO + SELECT */
             pattern_turn_ui(s);
