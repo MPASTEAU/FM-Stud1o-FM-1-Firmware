@@ -537,7 +537,7 @@ static void home_foot(void)
     char pn[16];
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig;
-    static const khint_t KH[4][2] = {{{KC_OCTUP, "VIEW"}, {KC_SELECT, "PAT"}},   /* HOME */
+    static const khint_t KH[4][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_SELECT, "PAT"}},   /* HOME (OCT+ held: the VIEW) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}, {KC_SELECT, "FX"}},      /* an effect's page (FX: back) */
                                      {{KC_FX, "NEXT"}, {KC_SELECT, "FX"}}};      /* .. with a second page */
