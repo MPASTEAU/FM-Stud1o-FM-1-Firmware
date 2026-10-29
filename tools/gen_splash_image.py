@@ -13,6 +13,7 @@ import sys
 from pathlib import Path
 
 SPLASH_SIZE = 128
+KEEP = [(40, 215, 60), (25, 150, 40)]   # (Dah) gen_logo.py's leaf greens
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -41,6 +42,16 @@ def main():
     canvas = Image.new("RGB", (SPLASH_SIZE, SPLASH_SIZE))
     canvas.paste(im, ((SPLASH_SIZE - nw) // 2, (SPLASH_SIZE - nh) // 2))
     q = canvas.quantize(colors=16, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)   # (Dah: 4 bits a pixel)
+    keep = [c for c in KEEP if any(abs(px[0] - c[0]) + abs(px[1] - c[1]) + abs(px[2] - c[2]) < 40
+                                   for px in canvas.getdata())]
+    if keep:                            # (Dah) a small area's colours MEDIANCUT drops (the logo's leaves): kept
+        q = canvas.quantize(colors=16 - len(keep), method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+        pal = q.getpalette()[:3 * (16 - len(keep))]
+        for c in keep:
+            pal += list(c)
+        pi = Image.new("P", (1, 1))
+        pi.putpalette(pal + [0] * (768 - len(pal)))
+        q = canvas.quantize(palette=pi, dither=Image.Dither.NONE)
     pal = q.getpalette()[:48] + [0] * 48
     pal = [rgb565_swapped(pal[3 * i], pal[3 * i + 1], pal[3 * i + 2]) for i in range(16)]
     ix = list(q.getdata())

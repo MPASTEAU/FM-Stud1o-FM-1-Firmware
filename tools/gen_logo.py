@@ -8,7 +8,7 @@ im = Image.new("RGB", (S, S), (8, 8, 16))   # (the screen's BG, T_BG: no square 
 d = ImageDraw.Draw(im)
 # soft glow behind
 glow = Image.new("RGB", (S, S), (8, 8, 16)); g = ImageDraw.Draw(glow)
-g.ellipse((420, 520, 1630, 1730), fill=(30, 60, 160)); glow = glow.filter(ImageFilter.GaussianBlur(160))
+g.ellipse((420, 520, 1630, 1730), fill=(20, 80, 220)); glow = glow.filter(ImageFilter.GaussianBlur(160))
 im = Image.blend(im, glow, 0.45); d = ImageDraw.Draw(im)
 # the berry: radial gradient
 cx, cy, R = 1024, 1150, 560
@@ -19,7 +19,7 @@ lx, ly = cx - 230, cy - 260
 for y in range(cy - R, cy + R):
     for x in range(cx - R, cx + R):
         t = min(1.0, math.hypot(x - lx, y - ly) / (R * 1.55))
-        a = (90, 150, 255); b = (28, 40, 120); c = (12, 14, 50)
+        a = (90, 200, 255); b = (20, 90, 255); c = (10, 24, 110)   # (an electric blue)
         if t < 0.5:
             k = t / 0.5; col = tuple(int(a[i] + (b[i] - a[i]) * k) for i in range(3))
         else:
@@ -51,8 +51,8 @@ def leaf(x0, y0, x1, y1, w, col, vein):
         s = w * math.sin(math.pi * t)
         L.append((x + nx * s, y + ny * s)); R2.append((x - nx * s, y - ny * s))
     d.polygon(L + R2[::-1], fill=col); d.line((x0, y0, x1, y1), fill=vein, width=10)
-d.line((ccx + 10, ccy - 40, ccx + 70, ccy - 210), fill=(70, 120, 60), width=34)
-leaf(ccx + 70, ccy - 200, ccx + 390, ccy - 330, 95, (80, 190, 110), (50, 140, 80))
-leaf(ccx + 60, ccy - 205, ccx - 200, ccy - 380, 80, (60, 165, 95), (40, 120, 70))
+d.line((ccx + 10, ccy - 40, ccx + 70, ccy - 210), fill=(40, 170, 50), width=34)
+leaf(ccx + 70, ccy - 200, ccx + 390, ccy - 330, 95, (40, 215, 60), (25, 150, 40))
+leaf(ccx + 60, ccy - 205, ccx - 200, ccy - 380, 80, (40, 215, 60), (25, 150, 40))
 im = im.resize((512, 512), Image.LANCZOS)
 im.save(out)
