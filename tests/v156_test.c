@@ -414,11 +414,7 @@ static int select_play(void)
     bad += check("  VEL: the keys' velocity 1..127 (100 at power-on), shown, sounding and sent; GLO + SELECT as ever", ok);
 
     menu_put(MI_SELECT, SEL_MODW);
-    go_title("CLOCK");
-    ok = str_eq(help_page(), "[K1]TEMPO[GLO]HOLD: TAP");
-    menu_put(MI_SELECT, 0);
-    ok &= str_eq(help_page(), "[SELECT]TEMPO[GLO]HOLD: TAP");
-    bad += check("  HELP: CLOCK's hint names KNOB 1 the tempo with MODW / VEL too", ok);
+    menu_put(MI_SELECT, 0);                             /* (Dah: CLOCK's page and its hint gone) */
     return bad;
 }
 

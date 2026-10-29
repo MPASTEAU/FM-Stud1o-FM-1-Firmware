@@ -171,11 +171,7 @@ static int select_page(void)
     b0 = song.g[G_BPM];
     turn(EN_SELECT, 1);
     ok = ui.home && song.g[G_BPM] == b0 && ps_num(0) == 2u;
-    go_title("CLOCK"); frame();
-    b0 = song.g[G_BPM];
-    turn(EN_K1, 1);
-    ok &= song.g[G_BPM] == b0 + 1;                      /* CLOCK's KNOB 1: the tempo */
-    bad += check("  LIST: on HOME SELECT is the pattern (Dah); CLOCK's KNOB 1 too", ok);
+    bad += check("  LIST: on HOME SELECT is the pattern (Dah)", ok);
 
     go_title("ENV"); frame();
     b0 = song.g[G_BPM];
@@ -190,11 +186,7 @@ static int select_page(void)
     btn_up(B_LFO); frame();
     bad += check("  LIST: GLO + SELECT is the tempo; nothing with LFO held", ok);
 
-    go_title("CLOCK"); frame();
-    ok = help_page() && str_eq(help_page(), "[K1]TEMPO[GLO]HOLD: TAP") && help_fits(help_page());
-    menu_put(MI_SELECT, 0);
-    ok &= str_eq(help_page(), "[SELECT]TEMPO[GLO]HOLD: TAP");
-    bad += check("  HELP: CLOCK's hint says KNOB 1 is the tempo with LIST", ok);
+    menu_put(MI_SELECT, 0);                             /* (Dah: CLOCK's page and its hint gone) */
     return bad;
 }
 

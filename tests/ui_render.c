@@ -1161,7 +1161,7 @@ static void setup(int s)
     case S_CHORD_KIT: eng(ENGI_DRUM); TSEL->p[P_CHRD] = CH_DIA3; go_title("CHORD"); break;
     case S_ARP: go_title("ARP"); break;
     case S_VOICE: go_title("VOICE"); break;
-    case S_CLOCK: go_title("CLOCK"); break;          /* (1.2: HOME > MIXER > CLOCK; up to 1.1.5 GLO > GLOBAL) */
+    case S_CLOCK: ui.menu = 1; ui.menu_sel = MI_SYNC; break;   /* (Dah: CLOCK's page gone: MENU > AUDIO SYNC) */
     /* 1.2: the old SYSTEM page's items in the MENU: MIDI > MIDI IN (ROUT) on CH5-8; AUDIO > TUNE (-12 ct) selected;
      * SYSTEM > INFO (the USB state, the CPU load) */
     case S_MENU_MIDI: ui.menu = 1; ui.menu_sel = MI_MIDIIN; song.g[G_ROUTE] = 2; break;
@@ -1954,7 +1954,7 @@ static void roll_frames(const char *dir)
         memset(cimg, 90, sizeof cimg);
         state(); song.playing = 0; pal(p);
         song.g[G_BPM] = 129; song.g[G_TUNE] = 19;
-        go_title("CLOCK"); page_over = &ROLL_PG;
+        go_title("ENV"); page_over = &ROLL_PG;
         snprintf(name, sizeof name, "%s/roll", UI_PALETTES[p].name);
         cur_name = name;
         draw(-1);
@@ -1997,7 +1997,7 @@ static void roll_cost(void)
         clock_t c0;
         state(); song.playing = 0; pal(1);
         song.g[G_BPM] = 129; song.g[G_TUNE] = 19;
-        go_title("CLOCK"); page_over = &ROLL_PG;
+        go_title("ENV"); page_over = &ROLL_PG;
         draw(-1);
         for (k = 0; k < 8u; k++) { ui.hot_t = 0; ui.bpm_t = 0; ui_draw(); }
         px_visited = 0; blit_px = 0;

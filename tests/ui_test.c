@@ -1730,10 +1730,10 @@ static int test_menu_tabs(void)
             }
     }
     ui_prefs = 0;
-    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 6 8 7 rows: 1.6.1 2ND CORE, a FELUCCA_CPU2=0 build SYSTEM 6; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
+    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 8 8 7 rows: Dah SYNC SWING; 1.6.1 2ND CORE, a FELUCCA_CPU2=0 build SYSTEM 6; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
                  "constant (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
-                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 6u &&
+                 mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 8u &&
                  mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u + FELUCCA_CPU2 &&
 #if FELUCCA_CPU2
                  MI_TAB[MI_CPU2] == MTAB_SYSTEM &&
@@ -2141,7 +2141,7 @@ static const page_t ROLL_PG = {"CLOCK", FAM_TRK, SC_GLOBAL, GR_NONE, {G_BPM, G_S
 static void roll_settle(void)                     /* CLOCK + TUNE, nothing rolling, no knob hot */
 {
     uint32_t k;
-    go_title("CLOCK");
+    go_title("ENV");                              /* (Dah: CLOCK's page gone: the test's own over ENV) */
     page_over = &ROLL_PG;                         /* (cur_page(): its knobs, its cards; a layer's way, ui_layer.c) */
     ui.hot_t = 0; ui.bpm_t = 0;
     for (k = 0; k < 12u; k++) frame();
@@ -2853,10 +2853,9 @@ static int test_page_cycles(void)
             if (str_eq(PAGES[i].title, "CLOCK"))
                 clock = i + 1u;
         }
-        ok &= clock && PAGES[clock - 1u].fam == FAM_TRK && PAGES[clock - 1u].scope == SC_GLOBAL &&
-              PAGES[clock - 1u].id[0] == G_BPM && PAGES[clock - 1u].id[1] == G_SWING && PAGES[clock - 1u].id[2] == G_CLOCK &&
-              PAGES[clock - 1u].id[3] == 0xFFu;
-        bad += check("1.2: no GLOBAL, no SYSTEM page; HOME > CLOCK has BPM SWG CLK (three knobs), TUNE and ROUT on no page", ok);
+        ok &= !clock && MI_TAB[MI_SYNC] == MTAB_AUDIO && MI_TAB[MI_SWING] == MTAB_AUDIO;   /* (Dah: CLOCK gone, its SYNC
+                                                         * and SWING MENU > AUDIO's) */
+        bad += check("1.2: no GLOBAL, no SYSTEM page (Dah: no CLOCK, SYNC SWING in MENU > AUDIO), TUNE and ROUT on no page", ok);
     }
     /* remembered pages: one that left its family, or out of range, gives the family's first (1.2: GLO's whatever it was,
      * GLOBAL and SYSTEM too, now SONG; HOME's never remembered: from HOME the MIXER) */
@@ -2999,10 +2998,12 @@ static int test_product_ux(void)
     bad += check("MIXER K3 edits WIDTH (Dah: the stereo spread, not the reverb), never sequence length",
                  TSEL->p[P_SLEN] == len && TSEL->p[P_SPRD] == send + 1);
     press(B_HOME);
-    ok = !ui.home && !ui.menu && str_eq(cur_page()->title, "CLOCK") && cur_fam() == FAM_TRK && FAM_BTN[cur_fam()] == B_HOME;
-    {   /* (CLOCK: HOME's LED lit, as on MIXER; GLO's not) */
+    ok = ui.home && !ui.menu;                           /* (Dah: no CLOCK: MIXER > HOME) */
+    press(B_HOME);
+    ok &= cur_page()->graph == GR_TRK;
+    {   /* (MIXER: HOME's LED lit; GLO's not) */
         uint8_t pos0[sizeof led_pos];
-        ui_leds();                                      /* (its positions made once, then ours) */
+        ui_leds();
         memcpy(pos0, led_pos, sizeof pos0);
         memset(led_pos, 0xFF, sizeof led_pos);
         led_pos[panel.btn[B_HOME]] = 0u << 3 | 1u;
@@ -3011,28 +3012,16 @@ static int test_product_ux(void)
         ok &= led_of(fm1_led, panel.btn[B_HOME]) && !led_of(fm1_led, panel.btn[B_GLO]);
         memcpy(led_pos, pos0, sizeof pos0);
     }
-    {   /* CLOCK's knobs: BPM SWG CLK as GLO > GLOBAL's were; KNOB 4 nothing */
-        int16_t bpm = song.g[G_BPM], swg = song.g[G_SWING], clk = song.g[G_CLOCK], tune = song.g[G_TUNE];
-        turn(EN_K1, 1); turn(EN_K2, 1); turn(EN_K3, 1); turn(EN_K4, 5);
-        ok &= song.g[G_BPM] == bpm + 1 && song.g[G_SWING] == swg + 1 && song.g[G_CLOCK] != clk && song.g[G_TUNE] == tune;
-        song.g[G_CLOCK] = clk;
-    }
-    press(B_HOME);
-    ok &= ui.home && !ui.menu;
-    press(B_HOME);
-    ok &= cur_page()->graph == GR_TRK;
     go_title("ENV"); press(B_HOME);
     ok &= ui.home;
-    go_title("CLOCK"); press(B_HOME);
-    ok &= ui.home;
-    bad += check("1.2: HOME cycles HOME > MIXER > CLOCK > HOME (CLOCK: BPM SWG CLK, HOME's LED); from any other page HOME", ok);
+    bad += check("1.2: HOME cycles HOME > MIXER > HOME (Dah: no CLOCK; MIXER: HOME's LED); from any other page HOME", ok);
     hold(B_HOME);
     bad += check("1.2: HOME held still opens the menu", ui.menu == 1);
     ui_power_on();
     frames(320);                                       /* (taps further apart than a double tap: #83) */
     press(B_GLO); frames(320); ok = cur_page()->fam == FAM_GLO && str_eq(cur_page()->title, "SONG");
     press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "SONG") && cur_page()->fam == FAM_GLO && !ui.home;
-    go_title("CLOCK"); press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "SONG");
+    go_title("MIXER"); press(B_GLO); frames(320); ok &= str_eq(cur_page()->title, "SONG");
     bad += check("GLO opens SONG directly, again SONG (Dah: DELAY REVERB CHORUS are FX's); from elsewhere SONG", ok);
     go_home(); btn_down(B_SEQ); frames(500);
     ok = ui.layer == LAYER_SEQ && ui.home;
@@ -8197,11 +8186,17 @@ static int test_click_menu(void)
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_COUNTIN;
     turn(EN_K4, 1); ok &= cin_bars == 1u;
     turn(EN_K4, 1); ok &= cin_bars == 1u;               /* (Dah: ON the last) */
-    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TUNE;     /* (1.2: TUNE, AUDIO's last) */
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_TUNE;     /* (1.2: TUNE) */
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_SYNC;     /* (Dah: SYNC, SWING: CLOCK's) */
+    turn(EN_K1, 1); ok &= song.g[G_CLOCK] == 1 && str_eq(menu_vname(MI_SYNC, menu_get(MI_SYNC)), "USB");
+    turn(EN_K1, -1); ok &= song.g[G_CLOCK] == 0;
+    turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_SWING;
+    turn(EN_K1, 1); ok &= song.g[G_SWING] == 5 && str_eq(menu_vname(MI_SWING, menu_get(MI_SWING)), "5%");
+    turn(EN_K1, -1); ok &= song.g[G_SWING] == 0;
     turn(EN_PRESET, 1); ok &= ui.menu_sel == MI_LOWCUT;   /* (wraps within AUDIO) */
     press(B_HOME);
     ok &= !ui.menu;
-    bad += check("MENU > AUDIO: PRESETS to CLICK, CLICK LEVEL, COUNT-IN, TUNE; knobs / OCT step them, applied at once", ok);
+    bad += check("MENU > AUDIO: PRESETS to CLICK, CLICK LEVEL, COUNT-IN, TUNE, SYNC, SWING; knobs / OCT step them, applied at once", ok);
     {
         persist_t p;
         settings_export(&p);
@@ -8397,12 +8392,13 @@ static int test_bpm_lock(void)
     ok &= text_w(&AF_S, "BPM LOCKED") <= 236 - 106;                   /* (fits the header's message zone) */
     bad += check("#58 BPM LOCK ON: SELECT leaves the tempo on HOME and the pages (Dah: the pattern's)", ok);
 
-    /* ON: HOME > CLOCK's BPM knob (up to 1.1.5 GLO > GLOBAL's) */
-    go_home(); press(B_HOME); press(B_HOME); frame();   /* (HOME > MIXER > CLOCK) */
+    /* ON: OCT+ held + SELECT (Dah: CLOCK's page gone) */
+    go_home(); frame();
     b0 = song.g[G_BPM];
-    turn(EN_K1, 1);
-    ok = str_eq(cur_page()->title, "CLOCK") && cur_page()->id[0] == G_BPM && song.g[G_BPM] == b0 + 1;
-    bad += check("#58 BPM LOCK ON: HOME > CLOCK KNOB 1 still sets the tempo", ok);
+    tempo_turn(1);
+    frame();
+    ok = song.g[G_BPM] == b0 + 1;
+    bad += check("#58 BPM LOCK ON: OCT+ held + SELECT still sets the tempo (Dah)", ok);
 
     /* ON: GLO + SELECT (a quick turn: a combo, no GLO page), OCT- puts it back, F4 TAP */
     go_title("ENV"); frame();
@@ -8504,11 +8500,12 @@ static int test_large(void)
     bad += check("#15 LARGE ON: HOME's cards tall (a K1..K4 pill over each column), the scope a strip, the footer kept", ok);
 
     /* the value in L: CLOCK's BPM 124 stands about twice as tall as in M */
-    go_title("CLOCK"); frame();
+    go_title("ENV"); page_over = &ROLL_PG; ui.force = 1; frame();   /* (Dah: CLOCK's page gone: the test's own) */
     ok = large_kind() == LK_TALL && strip_kind() == SK_TITLE && cur_page()->id[0] == G_BPM && lg_value_rows(0) >= AF_L_CAP_H - 3;
     ui_prefs = 0; ui.force = 1; frame();
     ok &= lg_value_rows(0) <= AF_M_CAP_H + 2;
     ui_prefs = PREF_LARGE; ui.force = 1; frame();
+    page_over = 0;
     bad += check("#15 LARGE: a card value in L (CLOCK's BPM 120: about 21 rows of figures, M's 11)", ok);
 
     /* a knob turned: its own card redrawn, the other three not */
@@ -9834,11 +9831,10 @@ static int test_home_tracks(void)
     ok &= trk[3].p[id] != v0;
     bad += check("HOME > TRACKS: K1..K4 edit the selected track (HOME's four), ALGORITHM moves the selected row", ok);
     press(B_HOME); ok = !ui.home && cur_page()->graph == GR_TRK;
-    press(B_HOME); ok &= !ui.home && str_eq(cur_page()->title, "CLOCK");
-    press(B_HOME); ok &= ui.home;
+    press(B_HOME); ok &= ui.home;                       /* (Dah: no CLOCK) */
     frame();
     ok &= rk_bg(3) == T_RAISE;
-    bad += check("HOME > TRACKS: HOME tapped still goes HOME > MIXER > CLOCK > HOME (the rows back)", ok);
+    bad += check("HOME > TRACKS: HOME tapped still goes HOME > MIXER > HOME (the rows back)", ok);
 
     ui_prefs |= PREF_LARGE;                             /* MENU > LARGE: the cards as on a list page, the rows */
     ui.force = 1; frame();

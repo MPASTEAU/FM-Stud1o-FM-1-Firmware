@@ -68,7 +68,6 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"DETAIL", "[PRESETS]STEP[K1]CHANCE, 1:4, FILL"},   /* (1.5.5: the conditions past 100 %) */
     {"AUTOMATION", "[K1]ROW[OCT+]DO[EDIT]DELETE"},
     {"MIXER", "[K4]MUTE[ALGO]TRACK[HOME]CLOCK"},
-    {"CLOCK", "[SELECT]TEMPO[GLO]HOLD: TAP"},
 };
 #define H_HOME "[ALGO]+ TRACK[HOME]HOLD: MENU"
 #define H_LEVELS "[K1-4]LEVELS[HOME]MIXER"
@@ -90,8 +89,6 @@ static const char *help_page(void)
     if (grid_on() && !detail_on())
         return H_GRID;
     t = cur_page()->title;
-    if (sel_mode() != SEL_BPM && str_eq(t, "CLOCK"))   /* (1.5.5: SELECT steps the pages; 1.5.6: or plays) */
-        return "[K1]TEMPO[GLO]HOLD: TAP";
     for (i = 0; i < NELEM(HELP_PAGE); i++)
         if (str_eq(HELP_PAGE[i].title, t))
             return HELP_PAGE[i].hint;
