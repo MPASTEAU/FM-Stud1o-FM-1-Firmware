@@ -2204,6 +2204,14 @@ static void ui_input(void)
     else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
         open_family(FAM_SAVE);
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
+        if (ui.confirm == CF_PICK_FX) {                 /* (Dah) ADD's picker: SELECT (or KNOB 1) the effect */
+            int32_t st = panel_enc(EN_SELECT) + panel_enc(EN_K1);
+            uint32_t cur, n = fl_pick_rows(&cur);
+            if (st && n) {
+                fxp_cur = (uint8_t)clamp((int32_t)cur + st, 0, (int32_t)n - 1);
+                ui.force = 1;
+            }
+        }
         if (oct & 2u) {
             uint32_t kind = ui.confirm;
             ui.confirm = 0;
@@ -2220,7 +2228,13 @@ static void ui_input(void)
                 pt_delete();
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
-            } else if (kind == CF_ADD_FX) {        /* (Dah) FX > CHAIN: an effect more, last */
+            } else if (kind == CF_ADD_FX) {        /* (Dah) FX > CHAIN: an effect more: which, picked next */
+                fxp_cur = 0;
+                confirm_open(CF_PICK_FX, 0);
+                ui.pg_down = 0;
+                enc_drop();
+                return;
+            } else if (kind == CF_PICK_FX) {       /* (Dah) the one picked (SELECT), added last */
                 fx_chain_add(fx_tsel());
                 ui_message("EFFECT ADDED");
             } else if (kind == CF_NEW_PAT) {       /* (Dah) a new, empty pattern, every track on it */
@@ -2279,7 +2293,8 @@ static void ui_input(void)
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
                    (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
                    (ui.confirm == CF_ADD_FX && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_K1) < 0))) {
-            if (ui.confirm == CF_ADD_FX && ch_cur)     /* (Dah: no effect added: off + ADD, the last effect) */
+            if ((ui.confirm == CF_ADD_FX || ui.confirm == CF_PICK_FX) && ch_cur)   /* (Dah: no effect added: off
+                                                         * + ADD, the last effect) */
                 ch_cur--;   /* (Dah: ADD TRACK: ALGO
                                                          * turned back cancels too) */
             ui.confirm = 0;

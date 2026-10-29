@@ -7,6 +7,8 @@
  *   SENDS: CHO DLY REV, each one's share and the sound going there, a level each.
  * Included by ui_graph_more.c */
 static uint8_t ch_cur;                                  /* CHAIN: the row picked (an effect, or + ADD after them) */
+static uint32_t fx_free_list(const track_t *t, uint8_t *f);   /* (Dah: ADD's picker, below) */
+static uint8_t fxp_cur;
 /* the effects: 0..4 in series in ORDER (DIST INSERT SLICER EQ SIDECHAIN), 5..7 the sends to GLO's buses (CHORUS DELAY
  * REVERB, after them: fixed). In the chain: doing something (a send above 0); none by default */
 #define FXU_SER 5u
@@ -55,7 +57,7 @@ static void fx_cput(const track_t *t, uint32_t out, int32_t v)
     v = clamp(v, -64, 63);
     if (p) *p = (int16_t)v; else *x8 = (int8_t)v;
 }
-static uint32_t fx_max(const track_t *t) { return fx_mst(t) ? 3u : FXU_N_ALL; }   /* (the effects it takes) */
+static uint32_t fx_max(const track_t *t) { return fx_mst(t) ? 3u : 8u; }   /* (the effects it takes; Dah: eight at most) */   /* (the effects it takes) */
 static uint32_t fx_crel(const track_t *t) { return fx_mst(t) ? (uint32_t)song.g[G_MREL] : trkx[trk_index(t) % NTRK].rsv1; }
 static uint32_t fx_unit_at(const track_t *t, uint32_t i) { return (fx_order(t) >> (3u * (i % FXU_SER))) & 7u; }
 static int fx_unit_on(const track_t *t, uint32_t u)
@@ -204,6 +206,20 @@ static void fl_fx_at(void)
     if (ch_cur >= n && n < fx_max(fx_tsel()) && !ui.confirm)
         confirm_open(CF_ADD_FX, 0);
 }
+static uint32_t fl_pick_rows(uint32_t *cur)             /* (Dah) ADD's picker: the free effects */
+{
+    uint8_t f[FXU_N_ALL];
+    uint32_t n = fx_free_list(fx_tsel(), f);
+    *cur = fxp_cur < n ? fxp_cur : 0u;
+    return n;
+}
+static void fl_pick_label(uint32_t i, char *tag, char *nm)
+{
+    uint8_t f[FXU_N_ALL];
+    uint32_t n = fx_free_list(fx_tsel(), f);
+    tag[0] = 0;
+    str_cpy(nm, i < n ? FXU_N[f[i]] : "", 16);
+}
 static void fl_fx_move(int32_t s)
 {
     uint32_t cur, rows = fl_fx_rows(&cur);
@@ -213,13 +229,28 @@ static void fl_fx_move(int32_t s)
 }
 /* CHAIN's actions on the row picked: ADD (a free effect, last: Dah), REMOVE, TYPE (another free one in its
  * place), MOVE (in series only: the sends are after them) */
+/* (Dah) the effects not in t's chain yet, that it takes: their units into f, how many */
+static uint32_t fx_free_list(const track_t *t, uint8_t *f)
+{
+    uint32_t x, n = 0;
+    for (x = 0; x < FXU_N_ALL; x++)
+        if (!fx_unit_on(t, x) && fx_unit_ok(t, x))
+            f[n++] = (uint8_t)x;
+    return n;
+}
+static void fx_chain_add_unit(track_t *t, uint32_t x);
 static void fx_chain_add(track_t *t)
 {
+    uint8_t f[FXU_N_ALL];
+    uint32_t n = fx_free_list(t, f);
+    if (n)
+        fx_chain_add_unit(t, f[fxp_cur < n ? fxp_cur : 0u]);
+}
+static void fx_chain_add_unit(track_t *t, uint32_t x)
+{
     uint8_t u[FXU_N_ALL];
-    uint32_t n = fx_list(t, u), x, i;
-    for (x = 0; x < FXU_N_ALL && (fx_unit_on(t, x) || !fx_unit_ok(t, x)); x++)
-        ;
-    if (x >= FXU_N_ALL)
+    uint32_t n = fx_list(t, u), i;
+    if (x >= FXU_N_ALL || fx_unit_on(t, x) || n >= fx_max(t))
         return;
     fx_unit_set(t, x, 1);
     {                                                   /* (Dah) last: before the COMPRESSOR and the SIDECHAIN only */

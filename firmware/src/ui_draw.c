@@ -2336,7 +2336,8 @@ static void ui_draw_page(uint32_t counting)
     }
     {   /* (Dah) a list just turned: the whole screen, ~1 s; gone: all of the page again */
         static uint8_t was;
-        uint8_t on = (uint8_t)((tl_on() || pl_on()) && !ui.confirm && !name_on());
+        uint8_t on = (uint8_t)(((tl_on() || pl_on()) && !ui.confirm && !name_on()) || ui.confirm == CF_PICK_FX);   /* (Dah:
+                                                         * ADD's picker too) */
         if (was && !on)
             ui.force = 1;
         if (on) {
