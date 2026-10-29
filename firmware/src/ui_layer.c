@@ -82,7 +82,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
-static const khint_t EU_FOOT[3] = {{KC_OCTUP, "APPLY"}, {KC_OCTDN, "CANCEL"}, {0, 0}};   /* (SEQ TOOLS' EUCLID open) */
+static const khint_t EU_FOOT[3] = {{KC_OCTDN, "CANCEL"}, {KC_OCTUP, "APPLY"}, {0, 0}};   /* (Dah: OCT- first) */   /* (SEQ TOOLS' EUCLID open) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
 #define fx_keys (&favorites.factory[15][14])
@@ -314,6 +314,7 @@ static void layer_tap(uint32_t l)
 {
     uint8_t m = ui.msg_t;
     int acted;
+    uint32_t was = ui.home ? 0xFFu : cur_page()->fam;   /* (Dah: the family the tap leaves) */
     lys.nv.home = ui.home;                              /* (#83: the page this tap leaves, for a double tap) */
     lys.nv.page = ui.page;
     lys.nv.act = ui.act;
@@ -328,10 +329,11 @@ static void layer_tap(uint32_t l)
         acted = page_tap(LAYERS[l].btn);
     }
     lys.dt_hint = 0;
-    if (!((layer_seen >> l) & 1u) && ui.msg_t == m && !name_on() && !ui.confirm && !ui.menu) {
+    if (!((layer_seen >> l) & 1u) && ui.msg_t == m && !name_on() && !ui.confirm && !ui.menu &&
+        (ui.home || cur_page()->fam != was)) {          /* (Dah: only arriving from elsewhere, not a tap within) */
         ui_say("HOLD [", KC[LY_KC[l]].label);
         str_cpy(ui.msg + str_len(ui.msg), "] QUICK", sizeof ui.msg - str_len(ui.msg));
-        ui.msg_t = 90;                                  /* ~1.5 s */
+        ui.msg_t = 180;                                 /* ~3 s (Dah: a sentence to read; the knobs act under it) */
         ly_hint = (uint8_t)l;                           /* (Dah: HOME's look says it whole, over the knobs) */
         lys.dt_hint = 1;
     }

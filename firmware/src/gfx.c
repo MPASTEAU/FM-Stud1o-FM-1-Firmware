@@ -824,6 +824,16 @@ static int32_t cv_key_hint(int32_t x, int32_t y, uint32_t id, const char *act, i
  * the row is too wide the action words go first, from the last hint back (the keycaps never shrink).
  * on: a bit per hint (1 = available) */
 typedef struct { uint8_t key; const char *act; } khint_t;
+/* (Dah) key hints packed from x0, KH_ROW_GAP apart (OCT- before OCT+, as on the panel: where something is confirmed);
+ * on: a bit per hint. Returns the end */
+#define KH_ROW_GAP 10
+static int32_t cv_key_left(int32_t x0, int32_t y, const khint_t *h, uint32_t n, uint32_t on, uint16_t under)
+{
+    uint32_t i;
+    for (i = 0; i < n; i++)
+        x0 = cv_key_hint(x0, y, h[i].key, h[i].act, (int)((on >> i) & 1u), under) + KH_ROW_GAP;
+    return x0;
+}
 static void cv_key_row(int32_t x0, int32_t x1, int32_t y, const khint_t *h, uint32_t n, uint32_t on, uint16_t under)
 {
     uint32_t i, words = n;                         /* hints 0 .. words-1 keep their word */

@@ -2067,8 +2067,8 @@ static void draw_list_full(int fresh)
             }
         }
         if (kind == FL_PICK) {                          /* (its keys, at the foot) */
-            static const khint_t KH[2] = {{KC_OCTUP, "ADD"}, {KC_OCTDN, "NO"}};
-            cv_key_row(10, 230, 240 - 4 - KC_H, KH, 2, 3u, T_BG);
+            static const khint_t KH[2] = {{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD"}};   /* (OCT- first, as on the panel) */
+            cv_key_left(10, 240 - 4 - KC_H, KH, 2, 3u, T_BG);
         }
         cv_oy = 0;
         cv_blit(0, 120u * half);

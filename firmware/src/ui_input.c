@@ -2282,8 +2282,9 @@ static void ui_input(void)
                 ui.pg_down = 0;
                 enc_drop();
                 return;
-            } else if (kind == CF_PICK_FX) {       /* (Dah) the one picked (SELECT), added last */
+            } else if (kind == CF_PICK_FX) {       /* (Dah) the one picked (SELECT), added last, its page open */
                 fx_chain_add(fx_tsel());
+                chain_open();
                 ui_message("EFFECT ADDED");
             } else if (kind == CF_NEW_PAT) {       /* (Dah) a new, empty pattern, every track on it */
                 int r = pattern_new_all(0);

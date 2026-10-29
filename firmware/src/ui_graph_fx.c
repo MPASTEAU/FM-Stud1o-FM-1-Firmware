@@ -253,15 +253,8 @@ static void fx_chain_add_unit(track_t *t, uint32_t x)
     if (x >= FXU_N_ALL || fx_unit_on(t, x) || n >= fx_max(t))
         return;
     fx_unit_set(t, x, 1);
-    {                                                   /* (Dah) last: before the COMPRESSOR and the SIDECHAIN only */
-        uint32_t at = n;
-        while (at && (u[at - 1u] == FXU_COMP || u[at - 1u] == 4u))
-            at--;
-        for (i = n; i > at; i--)
-            u[i] = u[i - 1u];
-        u[at] = (uint8_t)x;
-        n++;
-    }
+    u[n++] = (uint8_t)x;                                /* (Dah) at the chain's end (the COMPRESSOR, whose place is the
+                                                         * sound's end, stays after it) */
     fx_set_list(t, u, n);
     n = fx_list(t, u);
     for (i = 0; i < n; i++)

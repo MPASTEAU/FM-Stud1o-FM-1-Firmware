@@ -1342,26 +1342,32 @@ static void draw_foot_in(void)
         khint_t kh[3];
         uint32_t rn = foot_rename(), dl = foot_del();
         foot_hint(ha, hb);                            /* "OCT+ LOAD", "OCT- BACK": keycaps and their words */
-        uint32_t nk = hb[0] ? 2u : 1u;                /* (Dah: OCT- shown only when it cancels) */
-        kh[0] = (khint_t){KC_OCTUP, ha + 5};
-        kh[1] = (khint_t){KC_OCTDN, hb[0] ? hb + 5 : ""};
+        uint32_t nk = hb[0] ? 2u : 1u, ok;            /* (Dah: OCT- shown only when it cancels) */
+        /* (Dah) OCT- before OCT+ (as on the panel), packed at the left; what else after them */
+        ok = act_ready() ? 1u : 0u;
+        if (nk == 2u) {
+            kh[0] = (khint_t){KC_OCTDN, hb + 5};
+            kh[1] = (khint_t){KC_OCTUP, ha + 5};
+            ok = 1u | ok << 1;
+        } else
+            kh[0] = (khint_t){KC_OCTUP, ha + 5};
         if (cur_page()->graph == GR_SONG && sg_pend) {   /* (Dah) SONG, a section pending: OCT+ does it, OCT- not */
-            kh[1] = (khint_t){KC_OCTDN, "CANCEL"};
-            cv_key_row(8, 232, 2, kh, 2u, 3u, T_BG);
+            kh[0] = (khint_t){KC_OCTDN, "CANCEL"};
+            kh[1] = (khint_t){KC_OCTUP, ha + 5};
+            cv_key_left(8, 2, kh, 2u, 3u, T_BG);
         } else if (cur_page()->graph == GR_SONG) {    /* (Dah) SONG: OCT+ held the VIEW, REC adds, OCT- held deletes */
+            kh[0] = (khint_t){KC_OCTUP, ha + 5};
             kh[1] = (khint_t){KC_REC, "ADD"};
             kh[2] = (khint_t){KC_OCTDN, "DEL"};             /* (held: the room for "HOLD" there is not) */
             cv_key_row(8, 232, 2, kh, 3u, 1u | 2u | (dl == 2u ? 4u : 0u), T_BG);
-        } else if (dl) {                              /* (Dah) FILE, PATTERN: "REC DELETE" after OCT+ */
-            kh[2] = kh[1];
-            kh[1] = (khint_t){KC_REC, "DELETE"};
-            cv_key_row(8, 232, 2, kh, nk + 1u, (act_ready() ? 1u : 0u) | (dl == 2u ? 2u : 0u) | 4u, T_BG);
-        } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" after OCT+ */
-            kh[2] = kh[1];
-            kh[1] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
-            cv_key_row(8, 232, 2, kh, nk + 1u, (act_ready() ? 1u : 0u) | (rn == 2u ? 2u : 0u) | 4u, T_BG);
+        } else if (dl) {                              /* (Dah) FILE, PATTERN: "REC DELETE" after them */
+            kh[nk] = (khint_t){KC_REC, "DELETE"};
+            cv_key_left(8, 2, kh, nk + 1u, ok | (dl == 2u ? 1u : 0u) << nk, T_BG);
+        } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" after them */
+            kh[nk] = (khint_t){KC_EDIT, cur_page()->graph == GR_EVENTS ? "DELETE" : "NAME"};
+            cv_key_left(8, 2, kh, nk + 1u, ok | (rn == 2u ? 1u : 0u) << nk, T_BG);
         } else {
-            cv_key_row(8, 232, 2, kh, nk, act_ready() ? 3u : 2u, T_BG);
+            cv_key_left(8, 2, kh, nk, ok, T_BG);
         }
     } else if (ui.ml.on) {                               /* row 1: MIDI LEARN's line, OCT+ DONE at the right */
         khint_t kh = {KC_OCTUP, "DONE"};
