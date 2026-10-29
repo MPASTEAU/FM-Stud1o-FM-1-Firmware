@@ -1620,10 +1620,11 @@ static void note_line(int32_t y, const char *s, uint16_t fg)   /* centred S; "[K
 }
 static void panel_note(const char *a, const char *b, const char *c)
 {
-    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "panel note centred");
-    cv_text_in(0, 30, 240, &AF_M, a, T_TEXT, T_SURF);
-    if (b) note_line(60, b, T_MID);
-    if (c) note_line(82, c, T_DIM);
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, bh = c ? 67 : b ? 45 : 19, y = (full - bh) / 2 - cv_oy;
+    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "panel note centred");   /* (Dah: the lines centred up and down in the panel) */
+    cv_text_in(0, y, 240, &AF_M, a, T_TEXT, T_SURF);
+    if (b) note_line(y + 30, b, T_MID);
+    if (c) note_line(y + 52, c, T_DIM);
 }
 /* the same title led by an icon (16 px, the accent's: the header message's, ui_draw.c draw_head) in the middle of
  * the panel: the title's capitals centred up and down in it, the icon's ink on them; across, the pair centred by
