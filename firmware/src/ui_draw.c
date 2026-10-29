@@ -1445,19 +1445,49 @@ static void draw_columns(void)
 }
 /* (Dah) HOME's look: a message over the four knobs while it shows (the header keeps its own); a layer's "HOLD [X]
  * QUICK" said whole, on two lines. The knobs drawn again after it */
-static int cards_msg(void)
+/* (Dah) HOME's look: a message in a window in the middle of the screen, large (what it says first in M, bold; the rest
+ * in M, MID, on as many lines as it takes, two at most). The screen under it waits; all of it again once it is gone */
+static int32_t pop_wrap(const char *b, int32_t w, char out[2][40])   /* b on two lines at most, by words */
+{
+    uint32_t i = 0, k, n = 0, last = 0;
+    out[0][0] = out[1][0] = 0;
+    while (b[i] && n < 2u) {
+        char t[40];
+        uint32_t j = i;
+        for (k = 0; b[j] && k < 39u; k++, j++) {     /* as many words as fit */
+            t[k] = b[j];
+            t[k + 1u] = 0;
+            if (b[j + 1u] == ' ' || !b[j + 1u]) {
+                if (text_w(&AF_M, t) > w && last)
+                    break;
+                last = k + 1u;
+            }
+        }
+        if (!last)
+            last = k;
+        str_cpy(out[n], b + i, last + 1u);
+        i += last;
+        while (b[i] == ' ')
+            i++;
+        n++;
+        last = 0;
+    }
+    return (int32_t)n;
+}
+static int msg_popup(void)
 {
     static uint32_t msig;
-    uint32_t c, sig;
-    int32_t w = CARD_X(3) + CARD_W - CARD_X(0), h = (int32_t)card_h();
+    uint32_t sig;
+    int32_t W = 216, H, x0 = 12, y0, nl, ly;
+    char ln[2][40];
     const char *a = ui.msg, *b = "";
     if (!home_bare() || !ui.msg_t) {
-        if (msig && home_bare())                        /* (gone: the gaps between the knobs, BG again) */
-            draw_gaps(card_y(), card_h());
+        if (msig)                                       /* (gone: the page again, all of it) */
+            ui.force = 1;
         msig = 0;
         return 0;
     }
-    if (cards_b && str_eq(ui.msg, cards_a)) {          /* (a message of two lines: cards_say) */
+    if (cards_b && str_eq(ui.msg, cards_a)) {          /* (a message of two parts: cards_say) */
         a = ui.msg;
         b = cards_b;
     } else if (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[' &&
@@ -1465,24 +1495,36 @@ static int cards_msg(void)
         a = LY_LONG[ly_hint][0];
         b = LY_LONG[ly_hint][1];
     }
+    nl = b[0] ? pop_wrap(b, W - 28, ln) : 0;
+    H = 22 + 20 + (nl ? 8 + 20 * nl : 0) + 18;
+    y0 = 120 - H / 2;
     sig = str_hash(str_hash(9u, a), b) + 1u;
-    for (c = 0; c < 4u; c++)
-        ui.col[c][0] = 0;                               /* (the knobs: all again once it is gone) */
     if (!ui.force && sig == msig)
         return 1;
     msig = sig;
-    cv_begin((uint32_t)w, (uint32_t)h, T_BG);
-    cv_rect(0, 0, w, h, T_SURF);
-    if (b[0]) {
-        GFX_HOOK_ALIGN(0, 4, 0, 4 + KC_H, AL_V | AL_PASS, "cards message first line");
-        cv_free_hint(8, 4 + CAP_IN(S, KC_H), a, T_TEXT, T_SURF, w - 16);
-        GFX_HOOK_ALIGN(0, h - 4 - KC_H, 0, h - 4, AL_V, "cards message second line");
-        cv_free_text(8, h - 4 - KC_H + CAP_IN(S, KC_H), &AF_S, b, T_MID, T_SURF, w - 16);
-    } else {
-        GFX_HOOK_ALIGN(0, 0, 0, h, AL_V | AL_PASS, "cards message on its middle");
-        cv_free_hint(8, CAP_IN(S, h), a, T_TEXT, T_SURF, w - 16);
+    cv_begin((uint32_t)W, (uint32_t)H, T_BG);
+    cv_rrect(0, 0, W, H, 8, T_THEME, T_BG);              /* (a window: its frame the colour, inside SURF) */
+    cv_rrect(2, 2, W - 4, H - 4, 6, T_SURF, T_THEME);
+    ly = 22;
+    if (a[0] == MSG_NOFILE[0])                          /* (an icon's byte first: the words) */
+        a++;
+    {
+        uint32_t i, key = 0;
+        for (i = 0; a[i]; i++)
+            key |= a[i] == '[';
+        if (key) {                                      /* a key in it: its keycap */
+            GFX_HOOK_ALIGN(0, ly - 6, 0, ly - 6 + KC_H, AL_V | AL_PASS, "message window key line");
+            cv_free_hint((W - head_hint_w(a, W - 28)) / 2, ly - 6 + CAP_IN(S, KC_H), a, T_TEXT, T_SURF, W - 28);   /* (centred) */
+        } else
+            cv_text_in(0, ly - AF_M_CAP_Y - 2, W, &AF_M, a, T_TEXT, T_SURF);
     }
-    cv_blit((uint32_t)CARD_X(0), card_y());
+    if (nl) {
+        int32_t k;
+        for (k = 0; k < nl; k++)
+            cv_text_in(0, ly + 26 + 20 * k - AF_M_CAP_Y, W, &AF_M, ln[k], T_MID, T_SURF);
+    }
+    lcd_fill(0, (uint32_t)card_y(), 240, (uint32_t)(240 - (int32_t)card_y()), T_BG);   /* (the page under it, quiet) */
+    cv_blit((uint32_t)x0, (uint32_t)y0);
     return 1;
 }
 static void draw_columns_in(void)
@@ -1490,8 +1532,7 @@ static void draw_columns_in(void)
     uint32_t c;
     char val[12];
     const char *unit;
-    if (cards_msg())
-        return;
+
     (void)motion_mask(song.sel, card_mot_mask);       /* (PLAY OFF: no scan) */
     if (ui.home && hvw.on) {                            /* (Dah) HOME's VIEW: MOVE, ZOOM, FOLLOW */
         fmt_int(val, (int32_t)(hv_base(TSEL, 1) / 16u) + 1);
@@ -2408,6 +2449,19 @@ static void ui_draw_page(uint32_t counting)
     felucca_dbg.stage = 3;
     draw_head();
     felucca_dbg.stage = 4;
+    if (msg_popup()) {                                  /* (Dah) a message: its window, the page waits under it */
+        if (ui.msg_t && !--ui.msg_t && ui.msg2[0]) {
+            str_cpy(ui.msg, ui.msg2, sizeof ui.msg);
+            ui.msg2[0] = 0;
+            ui.msg_t = 60;
+        }
+        if (ui.bpm_t)
+            ui.bpm_t--;
+        if (ui.hot_t)
+            ui.hot_t--;
+        ui.force = 0;
+        return;
+    }
     draw_columns();
     felucca_dbg.stage = 5;
     draw_graph();
