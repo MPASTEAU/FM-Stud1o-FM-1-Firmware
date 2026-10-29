@@ -1732,13 +1732,6 @@ static void presets_turn(int32_t s)
     const page_t *pg = cur_page();
     uint32_t g = pg->graph;
     uint64_t held = lock_held();
-    if (detail_on()) {                                    /* DETAIL (1.5.1): the cursor (its KNOB 1 is CHANCE) */
-        if (chain_busy())
-            ui_message("STOP TO EDIT");
-        else
-            cursor_move(ui.cursor + s);
-        return;
-    }
     if (held) {                                           /* STEP with steps held: their NUDGE (1.2) */
         nudge_turn(held, s);
         return;
@@ -1749,7 +1742,7 @@ static void presets_turn(int32_t s)
         edit_param(0, s);
     } else if (g == GR_PATTERN || g == GR_FILE) {          /* (Dah) the list (its knobs are the actions) */
         g == GR_PATTERN ? pt_move(s) : file_move(s);
-    } else if (g == GR_ROLL || g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG ||
+    } else if (g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_PATS || g == GR_SONG ||
                g == GR_EVENTS) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
