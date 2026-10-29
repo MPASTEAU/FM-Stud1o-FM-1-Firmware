@@ -446,7 +446,8 @@ static void graph_chain(const track_t *t, uint16_t c)
             cv_rect(PANEL_X0 + 5, y0, 2, y1 - y0, T_RAISE);
     }
     my += 1;
-    cv_rrect(x0 - 2, my, bw + 4, ph - 1, 5, T_ACCENT, T_SURF);   /* (the frame) */
+    cv_rrect(x0 - 2, my, bw + 4, ph - 1, -6, T_ACCENT, T_SURF);   /* (the frame: an outline only, as the selectors') */
+    cv_rrect(x0, my + 2, bw, ph - 5, -4, T_SURF, T_ACCENT);
     for (i = 0; i < (int32_t)rows; i++) {
         int32_t y = i * ph - vt, sel = y > my - ph / 2 && y < my + ph / 2;
         int32_t in = sel ? 0 : 4, by = y + 2 + (sel ? 0 : 2), bh = ph - 5 - (sel ? 0 : 4);   /* (Dah: the one in the
@@ -474,13 +475,13 @@ static void graph_chain(const track_t *t, uint16_t c)
             uint16_t cc = ms || fx_mst(t) ? T_MID : c;   /* (Dah: the MASTER's chain grey: no track's colour) */
             cv_rrect(PANEL_X0, cy, 12, 12, 6, sel ? T_ACCENT : cc, T_SURF);
             cv_text_in(PANEL_X0, cy + CAP_IN(S, 12), 12, &AF_S, d, T_INK, sel ? T_ACCENT : cc);
-            cv_rrect(x0 + in, by, bw - 2 * in, bh, 4, T_RAISE, sel ? T_ACCENT : T_SURF);   /* (Dah: the one picked
-                                                         * outlined only, its inside as the others') */
+            if (!sel)                                   /* (Dah: the one picked in the outline alone, no fill) */
+                cv_rrect(x0 + in, by, bw - 2 * in, bh, 4, T_RAISE, T_SURF);
             if (sel) {
                 int32_t mty = by + CAP_IN(M, bh);
                 if (ms)
-                    nx = cv_text_on(nx, mty, &AF_M, "M", T_THEME, T_RAISE) + 6;
-                cv_text_on(nx, mty, &AF_M, FXU_N[u[i]], ms ? T_MID : T_TEXT, T_RAISE);
+                    nx = cv_text_on(nx, mty, &AF_M, "M", T_THEME, T_SURF) + 6;
+                cv_text_on(nx, mty, &AF_M, FXU_N[u[i]], ms ? T_MID : T_TEXT, T_SURF);
             } else {
                 nx += in;
                 if (ms)
@@ -488,7 +489,7 @@ static void graph_chain(const track_t *t, uint16_t c)
                 cv_text_on(nx, ty, &AF_S, FXU_N[u[i]], ms ? T_MID : T_TEXT, T_RAISE);
             }
             fx_unit_info(t, u[i], inf);
-            cv_text_r(x0 + bw - 6 - in, ty, &AF_S, inf, sel ? T_TEXT : T_MID, T_RAISE);
+            cv_text_r(x0 + bw - 6 - in, ty, &AF_S, inf, sel ? T_TEXT : T_MID, sel ? T_SURF : T_RAISE);
         } else {                                        /* + ADD */
             int32_t k, bx = x0 + in, bw2 = bw - 2 * in;   /* (Dah) a dashed row, as HOME's spare one: what to do, said */
             uint16_t dc = sel ? T_TEXT : T_DIM;
