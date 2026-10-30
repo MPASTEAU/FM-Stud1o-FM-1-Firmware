@@ -5361,9 +5361,7 @@ static int test_step_leds(void)
                 }
                 kc = (uint32_t)__builtin_popcount(keys);
                 if (glow)
-                    want_dim = (uint32_t)__builtin_popcount((drum ? grid_glow() : 0x7FFFFFFu) & ~keys);
-                else if (drum)                              /* (OFF, INV: the grid's beats alone glow) */
-                    want_dim = (uint32_t)__builtin_popcount(grid_beats() & ~keys);
+                    want_dim = (uint32_t)__builtin_popcount(0x7FFFFFFu & ~keys);   /* (Dah: the DRUM grid glows as any page) */
                 snprintf(what, sizeof what, "STEP %s, %s, LEDS %s: buttons and keys as the mode says (%u lit, %u glow)",
                          drum ? "DRUM grid" : "piano roll", run ? "playing" : "stopped", LEDS_NAME[m],
                          (unsigned)keys_lit, (unsigned)keys_dim);
@@ -5373,67 +5371,13 @@ static int test_step_leds(void)
                                        (!glow || keys_lit + keys_dim >= 25u) &&
                                        ((fm1_led[LED_PLAY_GREEN >> 3] >> (LED_PLAY_GREEN & 7u)) & 1u) == run);
                 bad += check("  the mid level: the grid's beats in DIM HI / LO only, never a lit key",
-                             lit_keys(fm1_led_mid) == (glow && drum ? grid_beats() & ~keys : 0u) &&
+                             lit_keys(fm1_led_mid) == 0u &&
                              !(lit_keys(fm1_led_mid) & lit_keys(fm1_led)));
                 if (run) {
                     transport_req = 2;
                     events_block(CTL);
                 }
             }
-    {   /* the DRUM grid's beats (ui_input.c grid_beats): "5111 5111 5111 5111", the first step of each four brighter
-         * where no hit shows, the hits lit and the playhead as before; LEN cuts them, a page shows its own; groups of
-         * four whatever LEN / DIV; DIM HI / LO: fm1_led_mid over the glow, OFF / INV: the glow alone */
-        uint32_t want, beats, keys, kick = 1u << DV_KICK, ok = 1, mi;
-        for (mi = 0; mi < LEDS_COUNT; mi++) {
-            uint32_t m = MODES[mi], glow = m == LEDS_DIM || m == LEDS_DIM_LO;
-            char what[128];
-            ui_power_on();
-            song.sel = 0;
-            set_engine_of(TSEL, ENGI_DRUM);
-            TSEL->engine = TSEL->eng_req;
-            TSEL->p[P_SLEN] = 16;
-            TSEL->step[4] = (step_t){.hit = kick, .time = ST_NOTE};   /* a kick on step 5 (a beat) and on step 3 */
-            TSEL->step[2] = (step_t){.hit = kick, .time = ST_NOTE};
-            TSEL->seq_active = 1;
-            settings_leds = (uint8_t)m;
-            open_family(FAM_SEQ);
-            frame();
-            for (k = 0; k < NPAGES && cur_page()->graph != GR_ROLL; k++) {
-                open_family(FAM_SEQ);
-                frame();
-            }
-            ui.lane = 0;
-            ui_leds();
-            keys = key_leds(0);
-            beats = grid_beats();
-            want = step_keys(1u << 0 | 1u << 8 | 1u << 12);   /* steps 1, 9, 13 (5 holds a hit: lit) */
-            ok = beats == want && (keys & step_keys(1u << 4 | 1u << 2)) == step_keys(1u << 4 | 1u << 2) &&
-                 lit_keys(fm1_led_mid) == (glow ? want : 0u) && (lit_keys(fm1_led_dim) & want) == want &&
-                 (glow || !(lit_keys(fm1_led_dim) & ~want)) && host_dim_lo == (m == LEDS_DIM_LO);
-            snprintf(what, sizeof what, "DRUM grid beats, LEDS %s: steps 1 9 13 %s, the hits 3 5 lit", LEDS_NAME[m],
-                     glow ? "at the mid level over the glow" : "glow (nothing else does)");
-            bad += check(what, ok);
-            if (m != LEDS_DIM)
-                continue;
-            ui.lane = 1;                                /* another lane: none of its hits there, 1 5 9 13 */
-            ok = grid_beats() == step_keys(0x1111u);
-            ui.lane = 0;
-            TSEL->p[P_SLEN] = 12;                       /* LEN 12 (3/4): 1 5 9; 13 is past it */
-            ok &= grid_beats() == step_keys(1u << 0 | 1u << 8);
-            TSEL->p[P_SLEN] = 16; TSEL->p[P_SDIV] = 4;  /* (DIV changes nothing: steps are counted) */
-            ok &= grid_beats() == want;
-            song.playing = 1; TSEL->seq_idx = 8;        /* the playhead on step 9: it lights it, no mid there */
-            ui_leds();
-            ok &= grid_beats() == step_keys(1u << 0 | 1u << 12) && (lit_keys(fm1_led) & step_keys(1u << 8)) &&
-                  !(lit_keys(fm1_led_mid) & step_keys(1u << 8));
-            song.playing = 0;
-            TSEL->p[P_SLEN] = 32;                       /* page 2: its own steps 17 21 25 29 */
-            TSEL->step[20] = (step_t){.hit = kick, .time = ST_NOTE};
-            ui.bank = 1; ui.cursor = 16;
-            ok &= grid_beats() == step_keys(1u << 0 | 1u << 8 | 1u << 12);
-            bad += check("  another lane, LEN 12, DIV, the playhead, page 2: the beats as the steps show", ok);
-        }
-    }
     settings_leds = LEDS_DIM;
     led_pos_init();
     ui_power_on();

@@ -175,38 +175,6 @@ static uint32_t grid_leds(void)
     return m;
 }
 
-/* the DRUM grid's beats, bit k = key k (ui_leds: a steady brighter glow than the other steps', hal/fm1_input.h
- * fm1_led_mid): the first step of each group of four on the page shown, steps 1 5 9 13 of 16 ("5111 5111 5111 5111"),
- * within LEN, where grid_leds shows no hit (the lane's, its accents while ACC is held) and not the playhead. Always
- * groups of four from the pattern's first step, whatever LEN or DIV (a 3/4 or a DIV 1/8 pattern too): the steps are
- * counted, not the time */
-static uint32_t grid_beats(void)
-{
-    const track_t *t = TSEL;
-    uint32_t k, m = 0, len = (uint32_t)t->p[P_SLEN], b = detail_on() ? 0xFFu : 1u << ui.lane;
-    uint32_t acc = !detail_on() && black_held(GK_ACC);
-    uint32_t ph = song.playing && t->seq_idx < len && t->seq_idx / 16u == ui.bank ? t->seq_idx % 16u : 0xFFu;
-    for (k = 0; k < 27u; k++) {
-        uint32_t p = key_place(k), i = ui.bank * 16u + p;
-        if (key_black(k) || p % 4u || i >= len || p == ph)
-            continue;
-        m |= (uint32_t)(((acc ? step_accents(&seq_steps(t)[i]) : step_lanes(&seq_steps(t)[i])) & b) == 0u) << k;
-    }
-    return m;
-}
-
-/* the DRUM grid's keys that do something, bit k = key k (they glow with the idle LEDs, ui_leds): the page's steps
- * within LEN, the lane keys, ACC, the page keys while there is more than one page */
-static uint32_t grid_glow(void)
-{
-    uint32_t k, m = 0, len = (uint32_t)TSEL->p[P_SLEN];
-    for (k = 0; k < 27u; k++) {
-        uint32_t p = key_place(k);
-        m |= (uint32_t)(!key_black(k) ? ui.bank * 16u + p < len : p < NLANE || p == GK_ACC || len > 16u) << k;
-    }
-    return m;
-}
-
 /* an ARP playing on any part flashes the ARP button on the beat, the bar's first beat longer: 1 lit, 0 dark,
  * 2 no ARP playing */
 static uint32_t arp_led(void)
@@ -450,7 +418,8 @@ static void ui_leds(void)
                                                         /* (Dah: the VIEW open, OCT+ held: it glows; SONG: then only) */
     led_put(nb, panel.btn[B_OCTDN], (k & OCT_BREATH_DN) != 0u);
     c = key_leds(&br);
-    g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? grid_glow() : 0u;   /* (key_leds: the grid's map) */
+    g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? 0x7FFFFFFu : 0u;   /* (Dah: the DRUM grid glows as any
+                                                         * page, no map of what does what: it misled) */
     if (song_keys_on()) {                               /* (Dah) SONG: the white keys the cell's track's patterns: its
                                                          * own lit, the others it has breathing */
         uint32_t kk;
@@ -461,7 +430,7 @@ static void ui_leds(void)
         }
         keys_map = 1;
     }
-    beat = g ? grid_beats() & ~c : 0u;                  /* (the grid's empty beat starts: brighter than the glow) */
+    beat = 0;                                           /* (Dah: no beats of the grid brighter) */
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
         uint32_t in = (sc >> k) & 1u, rt = (sr >> k) & 1u, idle = !((c >> k) & 1u);
