@@ -2102,8 +2102,24 @@ static void draw_splash(void)
             }
         }
         if (SPL_NAME_Y >= y0 && SPL_BASED_Y + AF_S.h <= y0 + SPL_STRIP) {
-            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(3), "splash lines centred");
-            cv_text_in(0, SPL_NAME_Y - y0, 240, &AF_L, SPLASH_LINES[0], T_TEXT, T_BG);   /* (Dah: the name large) */
+            {   /* (Dah: the name large, its "FM" and its "1" orange as the logo's leaves, the rest TEXT) */
+                const char *nm = SPLASH_LINES[0];
+                int32_t x = ink_in(&AF_L, nm, 240);
+                uint32_t i = 0, j, ns = 1;
+                char seg[16];
+                for (j = 1; nm[j]; j++)                 /* (its parts: one centred line to the checks) */
+                    ns += (j < 2u || nm[j] == '1') != (j - 1u < 2u || nm[j - 1u] == '1');
+                GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(ns), "splash name centred");
+                while (nm[i]) {
+                    int org = i < 2u || nm[i] == '1';
+                    for (j = 0; nm[i + j] && j < sizeof seg - 1u && (int)(i + j < 2u || nm[i + j] == '1') == org; j++)
+                        seg[j] = nm[i + j];
+                    seg[j] = 0;
+                    x = cv_text_on(x, SPL_NAME_Y - y0, &AF_L, seg, org ? 0xFC6Cu : T_TEXT, T_BG);
+                    i += j;
+                }
+            }
+            GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_N(2), "splash lines centred");
             cv_text_in(0, SPL_VER_Y - y0, 240, &AF_M, SPLASH_LINES[1], T_THEME, T_BG);
             cv_text_in(0, SPL_BASED_Y - y0, 240, &AF_S, SPLASH_LINES[2], T_MID, T_BG);
         }

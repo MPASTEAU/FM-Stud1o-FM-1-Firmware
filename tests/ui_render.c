@@ -1660,7 +1660,7 @@ static void draw(int s)
     }
     if (s == S_SPLASH) {                          /* the power-on splash (main.c, before the UI): its lines, the version
                                                    * shown FELUCCA_VERSION (run_tests.sh: src/felucca.c's) */
-        static const char WANT[] = FW_NAME "|" FELUCCA_VERSION "|based on Felucca";
+        static const char WANT[] = "FM| Stud|1|o|" FELUCCA_VERSION "|based on Felucca";   /* (Dah: the name in its parts, "FM" and "1" orange) */
         splash_seen[0] = 0;
         in_splash = 1;
         draw_splash();

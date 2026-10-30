@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 SPLASH_SIZE = 144                       # (Dah: the fruit larger)
-KEEP = [(40, 215, 60), (25, 150, 40)]   # (Dah) gen_logo.py's leaf greens
+KEEP = [(248, 140, 96), (190, 96, 62)]   # (Dah) gen_logo.py's leaves, ICE's ACCENT and its vein
 ROOT = Path(__file__).resolve().parent.parent
 
 
