@@ -39,7 +39,7 @@
                                   * some parts; 0 = none of it */
 #endif
 #define C1_NP (FELUCCA_CPU2 ? NPART : 1)   /* the copies of the state a part's render writes that parts shared before the
-                                            * second core (mod.c, voice.c SPREAD, eng_formant.c): one each with two cores,
+                                            * second core (voice.c SPREAD, eng_formant.c): one each with two cores,
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
 #ifndef FELUCCA_GROWL
@@ -75,9 +75,9 @@ enum {                          /* per-track parameters */
     P_VOICE, P_GLIDE, P_PAN, P_MUTE,
     P_GLMODE, P_PRIO, P_ALLOC, P_DETUNE,
     P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH,      /* SLICER insert (slicer.c) */
-    P_M1SRC, P_M1DST, P_M1AMT,                 /* modulation matrix (mod.c): 4 slots of SRC, DST, AMT; */
-    P_M2SRC, P_M2DST, P_M2AMT,                 /* new common parameters go just before P_E0 (user presets */
-    P_M3SRC, P_M3DST, P_M3AMT,                 /* and projects map by count) */
+    P_M1SRC, P_M1DST, P_M1AMT,                 /* the modulation matrix's 4 slots of SRC, DST, AMT (removed): inert, */
+    P_M2SRC, P_M2DST, P_M2AMT,                 /* kept for the formats / protocol; new common parameters go just */
+    P_M3SRC, P_M3DST, P_M3AMT,                 /* before P_E0 (user presets and projects map by count) */
     P_M4SRC, P_M4DST, P_M4AMT,
     P_FM1_ATK, P_FM1_DEC, P_FM1_SUS, P_FM1_REL, P_FM1_LEVEL,
     P_FM2_ATK, P_FM2_DEC, P_FM2_SUS, P_FM2_REL, P_FM2_LEVEL,
@@ -155,7 +155,7 @@ static int drum_from_phys(uint32_t engine, int16_t *e)
 /* SAMPLE SET 4 was PERC, the GM-mapped drum kit (tools/gen_samples.py); retired after 1.0.2: its index stays
  * (SET / GRAIN SRC 4 is an alias of PIANO, USR1..3 keep 5..7). A sound that selected it is the DRUM engine with
  * its default kit (eng_drum.c DRUM_PRESETS[0]: the same GM key map, so its patterns still play as drums): its E
- * values become the kit's, the rest of the sound (mix, sends, matrix, ..) stays. 1 = it was one (its engine is
+ * values become the kit's, the rest of the sound (mix, sends, ..) stays. 1 = it was one (its engine is
  * ENGI_DRUM now); projects (project.c proj_perc), user presets (upreset.c up_migrate), factory preset 4 and
  * favourites (ui.c, settings_persist.c). Idempotent */
 #define ENGI_SAMPLE 4u
@@ -302,7 +302,6 @@ typedef struct track {
     int32_t lfo_val;             /* Q15 */
     int32_t lfo_fade;            /* Q15 ramp after note-on */
     uint32_t lfo_rnd;
-    int16_t lfo_prev;            /* the S&H value of the cycle before (mod.c SLEW glides from it to lfo_rnd's) */
     /* keyboard / arp input: held notes in press order */
     uint8_t held[16];
     uint8_t nheld;
@@ -366,13 +365,9 @@ typedef struct track {
     uint8_t xf_on, xf;           /* fading; blocks of the fade still to render */
     int16_t pe_old[8];           /* P_E0..P_E7 of the sounding engine: the fade renders with these */
     uint8_t xp_n, xp_note[4], xp_vel[4];   /* note-ons during the fade, played on the new engine */
-    /* modulation matrix (mod.c): MIDI performance controllers of the track's channel, 0..127 */
-    uint8_t mw, at;              /* CC1 mod wheel, channel aftertouch */
-    uint8_t ex_off;              /* 127 - CC11 expression (0: full, the MIDI default) */
-    uint8_t m_vel, m_key, m_vi;  /* the latest note-on: velocity, note, voice index (per-block destinations) */
+    uint8_t mw;                  /* MENU > SELECT MODW: the mod wheel sent as CC1 (ui_input.c sel_play), 0..127 */
+    uint8_t m_vel;               /* the latest note-on's velocity, before UNISON's scaling (voice.c: the voices' mvel) */
     uint8_t sp_alt;              /* SPREAD: the side the next voice starts on (alternating, voice.c voice_start) */
-    int16_t m_rnd;               /* .. its RAND */
-    int32_t m_env;               /* the amp envelope of voice m_vi, last block (Q15) */
 } track_t;
 /* the audio ISR indexes trk[] with a multiply by a small immediate and a shift while the size is a multiple of 16; 1.5's
  * new track parameters (the INSERT, the filter TYPE, ENV SYNC) and state would make it no multiple (the constant

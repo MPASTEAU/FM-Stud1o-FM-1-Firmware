@@ -760,7 +760,7 @@ static void sg_fresh(void)
 enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, S_PROJECT,
        S_SONG_EMPTY, S_SONG, S_STEP, S_AUTO_STEPS, S_AUTO_ADD_CHANCE, S_MOTION, S_DRUM, S_DRUM_HAND, S_DRUM_CYM, S_MIXER,
        S_MIXER_HOME, S_MIXER_PAN,
-       S_ENV, S_ENVDEST, S_LFO, S_MOD, S_FX, S_SLICER, S_DLY, S_SCL, S_CHORD, S_CHORD_WIDE, S_CHORD_OFF, S_CHORD_KIT, S_ARP, S_VOICE, S_CLOCK, S_MENU_MIDI,
+       S_ENV, S_ENVDEST, S_LFO, S_FX, S_SLICER, S_DLY, S_SCL, S_CHORD, S_CHORD_WIDE, S_CHORD_OFF, S_CHORD_KIT, S_ARP, S_VOICE, S_CLOCK, S_MENU_MIDI,
        S_EDIT_ANALOG, S_EDIT_DIGITAL, S_OP_ENV, S_EDIT_WHEEL, S_EDIT_SAMPLE, S_EDIT_GRAIN, S_EDIT_PHYS,
        S_ALG1, S_ALG2, S_ALG3, S_ALG4, S_ALG5, S_ALG6, S_ALG7, S_ALG8, S_OP_LEVEL,
        S_FM6_ALG1, S_FM6_ALG5, S_FM6_ALG22, S_FM6_ALG32, S_FM6_OP, S_FM6_OP_FIXED, S_FM6_OP2, S_FM6_OP_ENV, S_FM6_OP_ENV_REL,
@@ -791,7 +791,7 @@ enum { S_HOME, S_HOME_IDLE, S_MESSAGE, S_MESSAGE_KEY, S_MESSAGE_NOFILE, S_USER, 
        S_MENU_MIDI_TRACK, S_MENU_MIDI_TCH_UNUSED, S_MENU_MIDI_AUTO, S_HOME_TRACKS_MIDI, S_MIXER_MIDI, S_EDIT_PHASE_FOLD, S_FX_CHAIN, S_FX_DIST, S_FX_EQ, S_FX_EQ2, S_FX_EQ_BOOST, S_FX_SENDS, S_FX_SC, S_FX_COMP, S_COUNT };
 static const char *const S_NAME[S_COUNT] = {"home", "home_idle", "message", "message_key", "message_nofile", "user",
     "project", "song_empty", "song", "step", "auto_steps", "auto_add_chance", "automation", "drum",
-    "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "mod", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
+    "drum_hand", "drum_cym", "mixer", "mixer_from_home", "mixer_pan", "env", "env_dest", "lfo", "fx", "slicer", "dly", "scl", "chord", "chord_wide", "chord_off", "chord_kit", "arp",
     "voice", "clock", "menu_midi", "edit_analog", FELUCCA_FM4 ? "edit_digital" : "edit_fm6", "op_env", "edit_wheel", "edit_sample",
     "edit_grain", "edit_phys", "alg_1", "alg_2", "alg_3", "alg_4", "alg_5", "alg_6", "alg_7", "alg_8", "op_level", "fm6_alg_01", "fm6_alg_05", "fm6_alg_22", "fm6_alg_32", "fm6_op", "fm6_op_fixed", "fm6_op2", "fm6_op_env", "fm6_op_env_rel", "confirm_project", "confirm_user",
     "confirm_erase", "menu", "menu_speaker", "about", "about_rec", "about_credits", "about_end", "uboot", "calibration", "splash",
@@ -1146,8 +1146,6 @@ static void setup(int s)
     case S_ENV_DEST_SYNC: TSEL->p[P_ESYNC] = 1; go_title("ENV DEST"); break;
     case S_FILTER: TSEL->p[P_FTYPE] = 1; go_title("FILTER"); break;   /* 1.5: ANALOG's TYPE CUT RES KTR */
     case S_LFO: go_title("LFO"); break;
-    case S_MOD: TSEL->p[P_M1SRC] = 1; TSEL->p[P_M1DST] = 2; TSEL->p[P_M1AMT] = 40; TSEL->p[P_M2SRC] = 6;
-        TSEL->p[P_M2DST] = 14; TSEL->p[P_M2AMT] = -64; mod_ui_slot = 1; go_title("MOD"); break;
     case S_FX: go_title("CHAIN"); break;
     case S_SLICER: TSEL->p[P_SLCR] = 1; go_title("SLICER"); break;
     case S_DLY: TSEL->p[P_DLY] = 50; go_title("DELAY"); break;
@@ -1769,7 +1767,7 @@ static void sweep_columns(void)
                 const param_desc_t *d = PAGES[i].scope == SC_GLOBAL || PAGES[i].scope == SC_TRACK || PAGES[i].scope == SC_ENGINE
                                         ? page_desc(cur_page(), c, &vp) : 0;
                 int32_t v, v0;
-                if (!d || !d->label || d->label[0] == '-' || PAGES[i].graph == GR_MOD) continue;
+                if (!d || !d->label || d->label[0] == '-') continue;
                 v0 = *vp;
                 lg_span_begin();
                 for (v = d->min; v <= d->max; v++) {
@@ -1846,40 +1844,6 @@ static void sweep_columns(void)
                             draw(-1);
                             lint();
                         }
-        }
-    }
-    {   /* the MOD page's cards: every source, destination (with each source) and amount, card by card (#251) */
-        int32_t v, sr;
-        for (e = 0; e < NENGINES; e++) {
-            if (!eng_ok(e)) continue;
-            state(); pal(UI_GREY_INDEX); eng(e); go_title("MOD");
-            snprintf(name, sizeof name, "%s%s/MOD cards", large_on ? "LARGE " : "", ENGINES[e]->name);
-            cur_name = name;
-            mod_ui_slot = 0;
-            lg_span_begin();
-            for (v = 0; v < MS_N; v++) { TSEL->p[P_M1SRC] = (int16_t)v; lg_draw_one(1); }
-            lg_span_end(1, "SRC");
-            for (sr = 0; sr < MS_N; sr++) {
-                TSEL->p[P_M1SRC] = (int16_t)sr;
-                lg_span_begin();
-                for (v = 0; v < MD_N; v++) { TSEL->p[P_M1DST] = (int16_t)v; lg_draw_one(2); }
-                lg_span_end(2, "DST");
-            }
-            TSEL->p[P_M1SRC] = 1; TSEL->p[P_M1DST] = 1;
-            lg_span_begin();
-            for (v = TP[P_M1AMT].min; v <= TP[P_M1AMT].max; v++) { TSEL->p[P_M1AMT] = (int16_t)v; lg_draw_one(3); }
-            lg_span_end(3, "AMT");
-        }
-    }
-    for (e = 0; e < 4u; e++) {                           /* the MOD page: every source and destination */
-        int32_t v;
-        state(); pal(UI_GREY_INDEX); go_title("MOD");
-        cur_name = large_on ? "LARGE MOD sweep" : "MOD sweep";
-        for (v = 0; v < MD_N; v++) {
-            TSEL->p[P_M1SRC] = (int16_t)(v % MS_N); TSEL->p[P_M1DST] = (int16_t)v; TSEL->p[P_M1AMT] = (int16_t)(e * 40 - 64);
-            mod_ui_slot = (uint8_t)(v & 3u);
-            draw(-1);
-            lint();
         }
     }
 }

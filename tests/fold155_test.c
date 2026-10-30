@@ -406,9 +406,7 @@ static void fresh(uint32_t pi)                         /* the boot state, track 
     dc_l = dc_r = dce_l = dce_r = 0;
     vage = 0;
     rng_state = 0x1234567u;
-    mod_seed = 0x2545F491u;
     memset(trk, 0, sizeof trk);
-    MOD_W_CLEAR();
     memset(sl, 0, sizeof sl);
     host_tracks_init();
     for (k = 0; k < NPART; k++)

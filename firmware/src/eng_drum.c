@@ -28,9 +28,8 @@
  * voices come from the shared budget (voice.c), up to 8 per part. A closed hat chokes the open one.
  *
  * What applies (engine_t.oneshot): the hit is the envelope. VOICE (always POLY), GLIDE, the ADSR, ENV DEST,
- * LFO DEST PIT / FLT / SHP, the global TUNE and the matrix's PITCH CUT SHP do nothing; LEVEL, PAN, the
- * sends, DIST, the SLICER, LFO DEST AMP, velocity, the matrix's AMP and its E1..E8 (the knobs, per
- * block) do. A released key does not end a hit.
+ * LFO DEST PIT / FLT / SHP and the global TUNE do nothing; LEVEL, PAN, the sends, DIST, the SLICER,
+ * LFO DEST AMP, velocity and E1..E8 (the knobs) do. A released key does not end a hit.
  *
  * State: 8 lanes per part in the part's engine memory (engines.c eng_mem; drum_kit_of: the parameters, coefficients, voice and metal
  * source of each lane). */

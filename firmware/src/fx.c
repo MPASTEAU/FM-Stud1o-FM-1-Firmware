@@ -886,7 +886,7 @@ static __attribute__((noinline)) void track_insert(track_t *t, int32_t *b, uint3
     t->ins_run = s->w != 0;                             /* (mix_part calls again while it fades) */
 }
 
-/* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)
+/* one block of the whole mix (shared with hostsim.c): events -> each part
  * -> dist -> INSERT -> SLICER -> level / pan / sends -> buses -> master; out: stereo Q15 */
 static void events_block(uint32_t n);                    /* seq.c */
 static volatile int32_t master_pk;                       /* (Dah) the output's peak since MIXER last read it */
@@ -1197,7 +1197,6 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
 #if FELUCCA_CPU2
     uint32_t nr;
 #endif
-    mod_begin(t);                                       /* the matrix's per-block values into t->p (mod.c) */
     T_SPREAD(t) = t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
 #if FELUCCA_CPU2
     nr = track_render(t, b, n);
@@ -1212,8 +1211,6 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])
             ins_rest(t);                                /* TYPE OFF while silent: no fade-out left for the next note */
-        if (MOD(t).on)
-            mod_end(t);
         return;
     }
     if (T_SPREAD(t)) {
@@ -1264,8 +1261,6 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     }
     if (pf.thr)
         perf_throw(t, b, SM(d), SM(v), n);              /* perform.c: REV / ECHO THROW (1.5.1), the sends towards full */
-    if (MOD(t).on)
-        mod_end(t);                                     /* the stored values back */
 }
 
 /* the HOME oscilloscope (ui_graph.c graph_scope): every other sample of the left channel. MENU > DISPLAY > SCOPE (1.2,
@@ -1311,7 +1306,7 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
  * the parts of each block into its own sums (mx[1]) while this core renders the others; then this core adds them in
  * and goes on (the LFOs' blocks, the FX layer, the buses, the master) as with one core. The sums are integers, so the
  * order they add up in changes nothing: the output is bit for bit one core's. A part's render touches its own state
- * only (its track_t with its SPREAD, ENV SYNC and LFO phase, its voices, its matrix: mod.c MOD, its SPREAD buffer,
+ * only (its track_t with its SPREAD, ENV SYNC and LFO phase, its voices, its SPREAD buffer,
  * its engine's memory) and what nobody writes meanwhile (song, the tables); what parts share is done before the
  * split (events_block: the notes, voice stealing; the FX layer's perf_begin) or after it (the LFOs' S&H draw from the
  * shared generator, part by part: voice.c track_lfo_end). tests/dualcore_test.c checks it, under ThreadSanitizer too.

@@ -82,7 +82,7 @@ static uint32_t lfo_rand(track_t *t)
 }
 
 /* LFO 2 (1.2, #154; params.c N_LSYNC): with SYNC on, one cycle lasts the note value of the tempo (fx.c div_samples:
- * BPM, or the external clock's measured tempo while it runs), whatever RATE says (the matrix's RATE too): the phase
+ * BPM, or the external clock's measured tempo while it runs), whatever RATE says: the phase
  * advances 2^32 x CTL / cycle a block (two 32-bit divides; the 1-bit truncation of 0xFFFFFFFF drifts by less than a
  * millionth of a cycle a cycle). OFF: RATE's table, as before */
 static uint32_t div_samples(uint32_t div);         /* (fx.c) */
@@ -98,9 +98,9 @@ static __attribute__((noinline)) uint32_t lfo_sync_inc(const track_t *t)   /* (n
 }
 
 #if FELUCCA_CPU2
-/* the LFO's block, in two: its phase on the part's own core, in track_render (at the RATE the matrix may have moved,
- * mod.c), and the rest after the parts (fx.c mix_block, part by part as before: lfo_rand's shared generator is drawn
- * in the same order on one core or two). Nothing reads the LFO between the two */
+/* the LFO's block, in two: its phase on the part's own core, in track_render, and the rest after the parts (fx.c
+ * mix_block, part by part as before: lfo_rand's shared generator is drawn in the same order on one core or two).
+ * Nothing reads the LFO between the two */
 static void track_lfo_adv(track_t *t)
 {
     uint32_t old = t->lfo_ph;
@@ -111,7 +111,6 @@ static void track_lfo_end(track_t *t)
 {
     if (t->lfo_wrap) {
         t->lfo_wrap = 0;
-        t->lfo_prev = (int16_t)mod_sh(t);               /* mod.c SLEW: it glides on from there */
         t->lfo_rnd = lfo_rand(t);
     }
     t->lfo_val = lfo_wave(t, t->lfo_ph);
@@ -133,7 +132,6 @@ static void track_lfo_tick(track_t *t)                  /* (one core: the whole 
     uint32_t old = t->lfo_ph;
     t->lfo_ph += t->p[P_LSYNC] ? lfo_sync_inc(t) : LFO_INC[t->p[P_LRATE] & 127];
     if (t->lfo_ph < old) {
-        t->lfo_prev = (int16_t)mod_sh(t);               /* mod.c SLEW: it glides on from there */
         t->lfo_rnd = lfo_rand(t);
     }
     t->lfo_val = lfo_wave(t, t->lfo_ph);
@@ -343,9 +341,7 @@ static void voice_start(track_t *t, voice_t *v, uint32_t note, uint32_t vel, int
     v->stage = 1;
     v->age = ++vage;
     v->pitch16 = (int32_t)note * 16;
-    v->mvel = t->m_vel;                                 /* mod.c: the note's VEL and RAND */
-    v->mrnd = t->m_rnd;
-    t->m_vi = (uint8_t)(v - t->v);
+    v->mvel = t->m_vel;                                 /* the note-on's velocity, before UNISON's scaling (eng_fm6.c) */
     glide_set(t, v, glide);
     if (!sounding) {
         v->env = 0;
@@ -399,7 +395,6 @@ static void mono_play(track_t *t, uint32_t note, uint32_t vel, int retrig, int g
             v->note = (uint8_t)note;
             v->pitch16 = (int32_t)note * 16;
             v->mvel = t->m_vel;
-            v->mrnd = t->m_rnd;
             if (vel > v->vel && nv == 1u)
                 v->vel = (uint8_t)vel;
             glide_set(t, v, glide);
@@ -451,7 +446,7 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         t->xp_vel[i] = (uint8_t)vel;
         return;
     }
-    vel = mod_note(t, note, vel);                       /* the matrix's VEL / KEY / RAND (1.5.6: VEL as a destination) */
+    t->m_vel = (uint8_t)vel;                            /* (the voices' mvel: before UNISON's level scaling) */
     if (t->engine != ENGI_DRUM || drum_lane(note) <= DV_CLAP)   /* (KICK SNARE CLAP) */
         duck_hit |= (uint8_t)(1u << ((uint32_t)(t - trk) % NPART));
     for (i = 0; i < NVOICE; i++)
@@ -748,8 +743,6 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     int16_t pe_new[8];
     for (i = 0; i < n; i++)
         out[i] = 0;
-    if (MOD(t).on && MOD(t).ldep < 32767)                     /* the matrix's DEPTH (mod.c) */
-        lfo = mulq15(lfo, MOD(t).ldep);
     if (T_SPREAD(t))
         SPREAD_CLEAR(t);
     if (fade)                                           /* engine switch: the old engine, its own values */
@@ -813,8 +806,6 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         if (v->vel > 110)                               /* accent opens the filter with the env */
             m.cutoff += (m.envq15 * 24) >> 7;
         m.shape = (64 << 8) + ((lfo * p[P_LD_SHP]) >> 7) + ((m.envq15 * p[P_ED_SHP]) >> 7);
-        if (MOD(t).on)                                  /* the modulation matrix (mod.c) */
-            mod_voice(t, v, &m, v->fine + tune_fine + bend_fine);
         e->render(t, v, T_SPREAD(t) > v->side ? SPREAD_BUF(t) : out, n, &m);   /* (SPREAD: the left ones) */
         nr++;
     }

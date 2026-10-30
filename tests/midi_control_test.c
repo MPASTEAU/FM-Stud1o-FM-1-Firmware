@@ -47,8 +47,8 @@ static int controls_test(void)
     bad += check("bend smoothing reaches the exact target without changing saved pitch", midi_bend_q8[0] == 3200 && t->p[P_TRANS] == 0 && t->v[0].note == 60);
     queued(0xB0, 121, 0, 1);
     bad += check("Reset Controllers centres bend and preserves RPN sensitivity", !midi_bend_target[0] && midi_ch[0].semis == 12 && gate_note(t, 60));
-    queued(0xB0, 1, 87, 1); queued(0xB0, 11, 23, 1); queued(0xD0, 90, 0, 1);
-    bad += check("existing modwheel/expression/aftertouch stay routed to the track", t->mw == 87 && t->ex_off == 104 && t->at == 90);
+    queued(0xB0, 1, 87, 1);
+    bad += check("CC1 sets the channel's mod wheel", midi_ch[0].wheel == 87);
     queued(0xE3, 127, 127, 1);
     bad += check("drum track ignores pitch bend", !midi_bend_target[3]);
     return bad;
@@ -253,14 +253,14 @@ static int route_test(void)
     queued(0xE8, 127, 127, 1); queued(0xEF, 0, 0, 2); queued(0xE9, 127, 127, 1);
     bad += check("CH1-8: pitch bend on channels 9, 10, 16 bends no part", !midi_bend_target[0] && !midi_bend_target[1] && !midi_bend_target[2] && !midi_ch[8].bend && !midi_ch[15].bend);
     queued(0xB8, 1, 99, 1); queued(0xB9, 11, 10, 2); queued(0xDF, 77, 0, 1);
-    bad += check("CH1-8: CC1 / CC11 and aftertouch on channels 9..16 reach no MOD source", !trk[2].mw && !trk[2].ex_off && !trk[2].at && !trk[0].mw && !trk[0].at);
+    bad += check("CH1-8: CC1 on channels 9..16 is ignored", !midi_ch[8].wheel);
     queued(0xB8, 101, 0, 1); queued(0xB8, 100, 0, 1); queued(0xB8, 6, 24, 1);
     bad += check("CH1-8: RPN on channel 9 changes nothing", midi_ch[8].semis != 24u);
     queued(0xB8, 64, 127, 1); queued(0x81, 62, 0, 1);
     bad += check("CH1-8: a channel 9 sustain pedal does not hold channel 2's note", !gate_note(&trk[1], 62) && !midi_notes[1][62]);
     queued(0x91, 62, 100, 1); queued(0xB1, 1, 50, 1);
     queued(0xB8, 120, 0, 1); queued(0xB9, 123, 0, 2); queued(0xBF, 121, 0, 1);
-    bad += check("CH1-8: CC120 / CC123 / CC121 on channels 9..16 leave parts 1..4 sounding", gate_note(&trk[1], 62) && gate_note(&trk[3], 40) && midi_owners[1] == 1u && trk[1].mw == 50);
+    bad += check("CH1-8: CC120 / CC123 / CC121 on channels 9..16 leave parts 1..4 sounding", gate_note(&trk[1], 62) && gate_note(&trk[3], 40) && midi_owners[1] == 1u && midi_ch[1].wheel == 50);
     queued(0xB1, 123, 0, 1); queued(0x83, 40, 0, 2);
     bad += check("CH1-8: panic on channel 2 still works", !gate_note(&trk[1], 62) && !midi_owners[1] && !midi_owners[3]);
 
@@ -268,7 +268,7 @@ static int route_test(void)
     queued(0x90, 60, 100, 1); queued(0x98, 62, 100, 2); queued(0x99, 64, 100, 1); queued(0x9F, 65, 100, 2);
     bad += check("SEL: channels 1, 9, 10, 16 all play the selected track", gate_note(&trk[2], 60) && gate_note(&trk[2], 62) && gate_note(&trk[2], 64) && gate_note(&trk[2], 65) && !gate_note(&trk[0], 60) && midi_owners[2] == 4u);
     queued(0xEF, 127, 127, 1); queued(0xB9, 1, 66, 2); queued(0xD8, 33, 0, 1);
-    bad += check("SEL: bend, CC1 and aftertouch from channels 9..16 reach the selected track", midi_bend_target[2] == 512 && trk[2].mw == 66 && trk[2].at == 33);
+    bad += check("SEL: bend and CC1 from channels 9..16 are taken (the bend the selected track's)", midi_bend_target[2] == 512 && midi_ch[9].wheel == 66);
     queued(0xB8, 64, 127, 1); queued(0x88, 62, 0, 2);
     bad += check("SEL: channel 9 pedal holds its note", gate_note(&trk[2], 62) && (midi_notes[8][62] & MIDI_PEDAL_NOTE));
     song.g[G_ROUTE] = 0; events_block(CTL);
@@ -307,7 +307,7 @@ static int route_block_test(void)
         ok &= midi_bend_target[1] == 512 && !midi_bend_target[0] && !midi_bend_target[2];
         queued(0xB0 | (b + 2u), 7, 5, 1); queued(0xB0 | (b + 2u) % 16u, 1, 44, 1);
         queued(0xB0 | (b + 4u) % 16u, 7, 9, 1);           /* (the next block's first channel: ignored) */
-        ok &= trk[2].p[P_LEVEL] == 5 && trk[2].mw == 44 && trk[0].p[P_LEVEL] != 9 && trk[3].p[P_LEVEL] != 9;
+        ok &= trk[2].p[P_LEVEL] == 5 && midi_ch[b + 2u].wheel == 44 && trk[0].p[P_LEVEL] != 9 && trk[3].p[P_LEVEL] != 9;
         queued(0xB0 | (b + 4u) % 16u, 123, 0, 1); queued(0xB0 | (b + 4u) % 16u, 120, 0, 1);
         ok &= gate_note(&trk[0], 40u + b) && gate_note(&trk[3], 43u + b);
         queued(0xB0 | (b + 3u), 123, 0, 1);
@@ -398,7 +398,7 @@ static int route_track_test(void)
           !gate_note(&trk[3], 50) && !gate_note(&trk[3], 52) && midi_notes[9][50] == 1u && midi_notes[4][52] == 3u;
     bad += check("TRACK: T1 on 10, T2 on 2, T3 OMNI (every other channel), T4 OFF (none; the selected track too)", ok);
     queued(0xE9, 127, 127, 1); queued(0xB9, 1, 77, 1); queued(0xD9, 66, 0, 1); queued(0xB9, 7, 0, 1);
-    ok = midi_bend_target[0] == 512 && !midi_bend_target[1] && !midi_bend_target[3] && trk[0].mw == 77 && trk[0].at == 66 &&
+    ok = midi_bend_target[0] == 512 && !midi_bend_target[1] && !midi_bend_target[3] && midi_ch[9].wheel == 77 &&
          trk[0].p[P_LEVEL] == 0 && trk[3].p[P_LEVEL] != 0;
     queued(0xB1, 7, 127, 1);
     ok &= trk[1].p[P_LEVEL] == TP[P_LEVEL].max;

@@ -4,7 +4,7 @@
 /* Shared USB/TRS channel controls. Included by seq.c after its input helpers.
  * USB and TRS intentionally share channel state, matching the existing routing.
  * A synth part has one live bend/wheel state; channels assigned to the same part
- * share it (last controller wins). Drum hits ignore bend and sustain. CC1 keeps the existing matrix routing. */
+ * share it (last controller wins). Drum hits ignore bend and sustain. */
 typedef struct {
     int16_t bend;                           /* signed 14-bit value, zero = centre */
     uint8_t wheel, pedal, targets;
@@ -401,11 +401,8 @@ static void __attribute__((noinline)) midi_event(uint32_t st, uint32_t ch, uint3
     else if (st == 0xE0u) {
         midi_channel(ch)->bend = (int16_t)((int32_t)(d1 | (d2 << 7)) - 8192);
         midi_expression_channel(ch);
-    } else if (st == 0xB0u) {
-        mod_midi(midi_track(ch), st, d1, d2);
+    } else if (st == 0xB0u)
         midi_control(ch, d1, d2);
-    } else if (st == 0xD0u)
-        mod_midi(midi_track(ch), st, d1, d2);
     else if (st == 0xC0u && mpc_io)                /* Program Change: the main loop loads it (ui.c midi_pc_poll) */
         mpc_io[trk_index(midi_track(ch))] = (uint8_t)(0x80u | d1);
 }

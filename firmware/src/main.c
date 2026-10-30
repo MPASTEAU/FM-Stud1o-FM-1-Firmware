@@ -706,18 +706,13 @@ static void felucca_demo(void)
         {5, P_REV, 40}, {5, P_DLY, 0}, {5, P_CHOR, 0}, {5, P_PAN, 6}, {5, DS_CIN, 10}, {5, DS_COUT, 4},
         {6, P_REV, 10}, {6, P_DLY, 0}, {6, P_CHOR, 0},                       /* the kick */
         {7, P_ATK, 60}, {7, P_REL, 100}, {7, P_SUS, 127}, {7, P_REV, 90}, {7, P_DLY, 40}, {7, P_SPRD, 127},
-        /* the sounds alive: each its LFO (free, slow, synced to bars) and its MOD slots (SRC 1 LFO 3 VEL 5 RAND 9 S&H;
-         * DST 2 CUT 3 SHP 5 PAN 14 E3) */
+        /* the sounds alive: each its LFO (free, slow, synced to bars) */
         {0, P_LWAVE, 0}, {0, P_LSYNC, 2}, {0, P_LTRIG, 1}, {0, P_LD_FLT, 26},   /* arpeggio: its filter breathing */
-        {0, P_M1SRC, 3}, {0, P_M1DST, 2}, {0, P_M1AMT, 30}, {0, P_M2SRC, 5}, {0, P_M2DST, 5}, {0, P_M2AMT, 20},
-        {1, P_LWAVE, 1}, {1, P_LSYNC, 1}, {1, P_LTRIG, 1},                  /* air: its grains thicker, thinner; */
-        {1, P_M1SRC, 1}, {1, P_M1DST, 14}, {1, P_M1AMT, 34}, {1, P_M2SRC, 9}, {1, P_M2DST, 5}, {1, P_M2AMT, 26},   /* .. wandering */
+        {1, P_LWAVE, 1}, {1, P_LSYNC, 1}, {1, P_LTRIG, 1},                  /* air */
         {2, P_LWAVE, 1}, {2, P_LSYNC, 2}, {2, P_LTRIG, 1}, {2, P_LD_SHP, 30}, {2, P_LD_FLT, 12},   /* chords: their timbre */
-        {2, P_M1SRC, 1}, {2, P_M1DST, 5}, {2, P_M1AMT, 24},                 /* .. moving, swirling */
         {3, P_LWAVE, 0}, {3, P_LRATE, 70}, {3, P_LFADE, 80}, {3, P_LD_PIT, 3},   /* motif: a vibrato coming in */
-        {3, P_M1SRC, 3}, {3, P_M1DST, 3}, {3, P_M1AMT, 20},
         {4, P_ED_FLT, 30}, {4, P_LWAVE, 0}, {4, P_LSYNC, 3}, {4, P_LD_FLT, 10},   /* bass: its filter on each note */
-        {7, P_LRATE, 40}, {7, P_M1SRC, 1}, {7, P_M1DST, 5}, {7, P_M1AMT, 40},   /* riser: round the room */
+        {7, P_LRATE, 40},   /* riser: round the room */
         {8, P_DIST, 8}, {8, P_EQLO, 8}, {8, P_EQ1F, 100}, {8, P_EQ1G, 6},    /* the MASTER */
     };
     static const int8_t EQ[8][6] = {          /* LOW CUT, HIGH CUT (118: open), a bell; the level; the COMPRESSOR */
@@ -891,18 +886,15 @@ static void felucca_demo(void)
     enum { DS_DIN = 200, DS_CIN, DS_COUT };
     static const int16_t DS[][3] = {          /* track (8 the MASTER), parameter (DS_*: the extras), value */
         {0, P_ATK, 110}, {0, P_REL, 120}, {0, P_REV, 110}, {0, P_SPRD, 127},           /* the drone */
-        {0, P_LWAVE, 1}, {0, P_LSYNC, 1}, {0, P_LTRIG, 1}, {0, P_M1SRC, 1}, {0, P_M1DST, 14}, {0, P_M1AMT, 40},
-        {0, P_M2SRC, 9}, {0, P_M2DST, 5}, {0, P_M2AMT, 30},
+        {0, P_LWAVE, 1}, {0, P_LSYNC, 1}, {0, P_LTRIG, 1},
         {1, P_ATK, 90}, {1, P_REL, 110}, {1, P_SUS, 127}, {1, P_SPRD, 100}, {1, P_REV, 80},   /* the string, phased */
         {1, P_ITYPE, IT_PHASER}, {1, P_IA, 4}, {1, P_IB, 80}, {1, P_IMIX, 70},
         {2, P_ATK, 100}, {2, P_REL, 120}, {2, P_SUS, 127}, {2, P_SPRD, 127}, {2, P_GLIDE, 90},   /* the chord: */
         {2, P_REV, 100}, {2, P_CHOR, 80}, {2, P_DLY, 20},
         {2, P_ITYPE, IT_CHORUS}, {2, P_IA, 8}, {2, P_IB, 90}, {2, P_IMIX, 60},     /* .. wide, its timbre turning */
         {2, P_LWAVE, 1}, {2, P_LSYNC, 1}, {2, P_LTRIG, 1}, {2, P_LD_SHP, 40}, {2, P_LD_FLT, 16},
-        {2, P_M1SRC, 1}, {2, P_M1DST, 5}, {2, P_M1AMT, 28}, {2, P_M2SRC, 10}, {2, P_M2DST, 3}, {2, P_M2AMT, 20},
         {3, P_ATK, 110}, {3, P_REL, 120}, {3, P_SPRD, 110}, {3, P_GLIDE, 90}, {3, P_REV, 120}, {3, P_CHOR, 60},
         {3, P_LWAVE, 0}, {3, P_LSYNC, 2}, {3, P_LTRIG, 1}, {3, P_LD_FLT, 20}, {3, P_LD_AMP, 30},   /* the choir: */
-        {3, P_M1SRC, 9}, {3, P_M1DST, 5}, {3, P_M1AMT, 30},                                     /* .. breathing */
         {4, P_VOICE, V_MONO}, {4, P_ATK, 60}, {4, P_SUS, 127}, {4, P_REL, 90}, {4, P_REV, 0}, {4, P_DLY, 0},
         {4, P_CHOR, 0}, {4, P_LWAVE, 0}, {4, P_LSYNC, 1}, {4, P_LD_FLT, 14},
         {5, P_REV, 50}, {5, P_DLY, 10}, {5, P_CHOR, 0}, {5, DS_CIN, 12}, {5, DS_COUT, 6},   /* the kit: hit hard */
@@ -1082,7 +1074,7 @@ static void felucca_demo(void)
     enum { DS_DIN = 200, DS_CIN, DS_COUT };
     static const int16_t DS[][3] = {          /* track (8 the MASTER), parameter (DS_*: the extras), value */
         {0, P_ATK, 110}, {0, P_REL, 120}, {0, P_REV, 110}, {0, P_SPRD, 127},
-        {0, P_LWAVE, 1}, {0, P_LSYNC, 1}, {0, P_LTRIG, 1}, {0, P_M1SRC, 1}, {0, P_M1DST, 14}, {0, P_M1AMT, 40},
+        {0, P_LWAVE, 1}, {0, P_LSYNC, 1}, {0, P_LTRIG, 1},
         {1, P_ATK, 90}, {1, P_REL, 110}, {1, P_SUS, 127}, {1, P_SPRD, 100}, {1, P_REV, 90},
         {1, P_ITYPE, IT_PHASER}, {1, P_IA, 4}, {1, P_IB, 80}, {1, P_IMIX, 60},
         {2, P_ATK, 90}, {2, P_REL, 120}, {2, P_SUS, 127}, {2, P_SPRD, 127}, {2, P_REV, 100}, {2, P_CHOR, 70},
@@ -1090,8 +1082,7 @@ static void felucca_demo(void)
         {2, P_ITYPE, IT_CHORUS}, {2, P_IA, 6}, {2, P_IB, 90}, {2, P_IMIX, 50},
         {2, P_LWAVE, 1}, {2, P_LSYNC, 1}, {2, P_LTRIG, 1}, {2, P_LD_SHP, 36}, {2, P_LD_FLT, 14},
         {3, P_ATK, 110}, {3, P_REL, 120}, {3, P_SUS, 127}, {3, P_SPRD, 127}, {3, P_REV, 110}, {3, P_CHOR, 60},
-        {3, P_LWAVE, 0}, {3, P_LSYNC, 2}, {3, P_LTRIG, 1}, {3, P_LD_FLT, 24}, {3, P_M1SRC, 9}, {3, P_M1DST, 5},
-        {3, P_M1AMT, 30},
+        {3, P_LWAVE, 0}, {3, P_LSYNC, 2}, {3, P_LTRIG, 1}, {3, P_LD_FLT, 24},
         {4, P_VOICE, V_MONO}, {4, P_ATK, 60}, {4, P_SUS, 127}, {4, P_REL, 90}, {4, P_REV, 0}, {4, P_DLY, 0},
         {4, P_CHOR, 0},
         {5, P_REV, 70}, {5, P_DLY, 10}, {5, P_CHOR, 0}, {5, DS_CIN, 12}, {5, DS_COUT, 8}, {5, P_DIST, 14},

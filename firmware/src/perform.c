@@ -413,7 +413,7 @@ static __attribute__((noinline)) void perf_pre(const int32_t *ml, const int32_t 
 }
 
 /* REV THROW / ECHO THROW (1.5.1): track t's reverb / delay send towards full (127) while held, b its signal as its sends
- * take it (fx.c mix_part, after the mute key; t's values as the matrix has them this block). What the full send adds to
+ * take it (fx.c mix_part, after the mute key). What the full send adds to
  * the track's own (REV / DLY) goes in at the share rw / ew, which glides from the block's start to its end a sample at
  * a time (THR_SLOPE: no click; every track the same glide). The track's REV / DLY are never changed: nothing is saved
  * or recorded, and when the key is let go the share glides back to 0 and the buses ring out as they are */

@@ -2,18 +2,13 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Host test of the roadmap's sound items (Discussions #132, #104, #148), same sources as the firmware (hostsim.c):
  *   build/host/sound14_test [DEMO_DIR]      (run_tests.sh builds and runs it; demos in build/sound14_demo/)
- * 1. the matrix (mod.c): the lists only grew (every stored SRC / DST keeps its name), S&H holds one value a cycle of the
- *    track LFO (the value LFO WAVE S&H plays), steps at the cycle's start, spreads over both signs; SLEW is continuous,
- *    glides from the cycle before's value to this one's, stays inside S&H's range; DEPTH scales the LFO (its LFO DEST
- *    routings and the matrix's LFO source) as AMP does a voice, several slots multiply, none = untouched (bit for bit);
- *    RATE (the LFO's rate) with them: the modulator modulated; values past the lists do nothing.
  * 2. ANALOG WAVE SYNC / SUB (eng_analog.c): WAVE 0..4 untouched (the golden renders: regress.c), the labels (SYNC, SUB),
  *    no DC, bounded, not silent; SUB an octave below (period twice the note's), SYNC periodic at the note whatever DTN,
  *    its sweep (DTN, SHP) brightens it, no restart click (largest sample step against the plain saw's).
  * 3. SPREAD (fx.c mix_spread): SPRD 0 / MONO / LEGATO bit for bit the plain mix, a POLY note hard left / the next hard
  *    right at SPRD 127, a chord's L and R differ, the mono sum's level, UNISON's voices alternate, the SLICER's gate and
  *    the mute key close the side too, the sends stay mono; the cost per part and per voice.
- * 4. demos (DEMO_DIR): S&H on the cutoff, LFO rate / depth modulation, ANALOG SUB and SYNC, SPREAD on a pad. */
+ * 4. demos (DEMO_DIR): ANALOG SUB and SYNC, SPREAD on a pad. (1., the modulation matrix: removed with it) */
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
@@ -42,13 +37,6 @@ static void blocks(uint32_t n)
                 hash *= 0x100000001B3ull;
             }
     }
-}
-
-static void slot(track_t *t, uint32_t k, int32_t s, int32_t d, int32_t a)
-{
-    t->p[P_M1SRC + 3u * k] = (int16_t)s;
-    t->p[P_M1DST + 3u * k] = (int16_t)d;
-    t->p[P_M1AMT + 3u * k] = (int16_t)a;
 }
 
 static uint32_t eng_by_name(const char *n)
@@ -84,9 +72,7 @@ static void fresh(uint32_t e, uint32_t pi)        /* the boot state (no FX tails
     dc_l = dc_r = dce_l = dce_r = 0;                      /* (the master's DC blockers: no residue of a run before) */
     vage = 0;                                             /* the seeds: every run the same (ANALOG's noise by age) */
     rng_state = 0x1234567u;
-    mod_seed = 0x2545F491u;
     memset(trk, 0, sizeof trk);
-    MOD_W_CLEAR();
     memset(sl, 0, sizeof sl);
     host_tracks_init();
     for (k = 0; k < NPART; k++)
@@ -135,185 +121,6 @@ static uint64_t phrase_child(uint32_t e, uint32_t pi, void (*setup)(track_t *t))
     close(fd[0]);
     waitpid(pid, 0, 0);
     return h;
-}
-
-/* ------------------------------------------------------------------ 1 --- */
-static void test_matrix(void)
-{
-    static const char *const SRC_V12[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR"};
-    static const char *const DST_V12[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
-                                          "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8"};
-    track_t *t = &trk[0];
-    uint32_t i, k, steps = 0, changes_in_cycle = 0, pos = 0, neg = 0, same_as_wave = 1;
-    int32_t prev_sh, max_slew_step = 0, max_sh_step = 0, prev_slew, lo = 0, hi = 0, slew_ok = 1, wrap_ok = 1;
-    int ok = 1;
-
-    for (i = 0; i < NELEM(SRC_V12); i++)
-        ok &= str_eq(N_MSRC[i], SRC_V12[i]);
-    for (i = 0; i < NELEM(DST_V12); i++)
-        ok &= str_eq(N_MDST[i], DST_V12[i]);
-    check("SRC / DST lists only grew: every stored value keeps its name (S&H SLEW, DEPTH appended)",
-          ok && MS_SH == 9 && MS_SLEW == 10 && MS_N == 11 && MD_DEPTH == 20 && MD_N == 23 /* (1.5.6: VEL TIME, #213) */ &&
-          str_eq(N_MSRC[MS_SH], "S&H") && str_eq(N_MSRC[MS_SLEW], "SLEW") && str_eq(N_MDST[MD_DEPTH], "DEPTH") &&
-          TP[P_M1SRC].max == MS_N - 1 && TP[P_M1DST].max == MD_N - 1);
-    check("DST names: DEPTH is not an engine parameter (E1..E8 only)", str_eq(mod_dst_name(t, MD_DEPTH), "DEPTH") &&
-          !MD_ENGINE(MD_DEPTH) && MD_ENGINE(MD_E1 + 7));
-
-    /* S&H and SLEW over a few LFO cycles: one value per cycle, the steps at the wraps; SLEW continuous */
-    fresh(0, 0);
-    t->p[P_LRATE] = 90;                                   /* a few Hz */
-    t->p[P_LWAVE] = 4;                                    /* S&H: the LFO's own value is the same random */
-    trk_note_on(t, 60, 100);
-    blocks(1);
-    prev_sh = mod_sh(t);
-    prev_slew = mod_tsrc(t, MS_SLEW, 0);
-    for (k = 0; k < 4u * FS / CTL; k++) {
-        uint32_t ph0 = t->lfo_ph;
-        int32_t sh, sl;
-        blocks(1);
-        sh = mod_sh(t);
-        sl = mod_tsrc(t, MS_SLEW, 0);
-        if (t->lfo_ph < ph0) {                            /* a new cycle */
-            steps++;
-            wrap_ok &= t->lfo_prev == prev_sh;            /* SLEW starts from the old value */
-            if (sh != prev_sh) {
-                int32_t d = sh - prev_sh;
-                d = d < 0 ? -d : d;
-                max_sh_step = d > max_sh_step ? d : max_sh_step;
-            }
-        } else {
-            changes_in_cycle += sh != prev_sh;
-        }
-        if (t->lfo_rnd)
-            same_as_wave &= sh == t->lfo_val;             /* (WAVE S&H, POL BI) */
-        pos += sh > 8000;
-        neg += sh < -8000;
-        {
-            int32_t d = sl - prev_slew;
-            d = d < 0 ? -d : d;
-            max_slew_step = d > max_slew_step ? d : max_slew_step;
-        }
-        lo = sl < lo ? sl : lo;
-        hi = sl > hi ? sl : hi;
-        slew_ok &= sl >= -32768 && sl <= 32767;
-        prev_sh = sh;
-        prev_slew = sl;
-    }
-    check("S&H: one value per LFO cycle (none changes inside one), the LFO's S&H value", steps >= 8u &&
-          !changes_in_cycle && same_as_wave);
-    printf("sound14:   %u cycles in 4 s; S&H steps up to %d, SLEW moves at most %d a block (%.1f %% of S&H's)\n",
-           steps, max_sh_step, max_slew_step, 100.0 * max_slew_step / (max_sh_step ? max_sh_step : 1));
-    check("S&H: values on both sides (bipolar)", pos > 0u && neg > 0u);
-    check("SLEW: continuous (a block's move small against S&H's steps), inside S&H's range, from the cycle before's value",
-          slew_ok && wrap_ok && max_slew_step * 8 < max_sh_step && hi > 0 && lo < 0);
-
-    /* S&H follows RATE: a faster LFO steps more often */
-    {
-        uint32_t s1 = 0, s2 = 0;
-        fresh(0, 0);
-        t->p[P_LRATE] = 70;
-        for (k = 0; k < 2u * FS / CTL; k++) {
-            uint32_t ph0 = t->lfo_ph;
-            blocks(1);
-            s1 += t->lfo_ph < ph0;
-        }
-        fresh(0, 0);
-        t->p[P_LRATE] = 70;
-        slot(t, 0, MS_MODW, MD_RATE, 63);                 /* the matrix's RATE: S&H with it */
-        t->mw = 127;
-        for (k = 0; k < 2u * FS / CTL; k++) {
-            uint32_t ph0 = t->lfo_ph;
-            blocks(1);
-            s2 += t->lfo_ph < ph0;
-        }
-        check("S&H: the matrix's RATE (MODW -> RATE) makes it step faster", s2 > s1 * 2u && s1 > 0u);
-    }
-
-    /* DEPTH: the LFO's gain, as AMP's */
-    fresh(0, 0);
-    t->lfo_val = 32767;
-    t->lfo_fade = 32767;
-    slot(t, 0, MS_MODW, MD_DEPTH, 63);
-    t->mw = 0;
-    mod_begin(t);
-    check("MODW -> DEPTH +63: the wheel down closes the LFO (gain 1.6 %)", MOD(t).on && MOD(t).ldep >= 500 && MOD(t).ldep <= 512);
-    mod_end(t);
-    t->mw = 127;
-    mod_begin(t);
-    check("MODW -> DEPTH +63: the wheel up leaves it whole", MOD(t).ldep >= 32700);
-    mod_end(t);
-    slot(t, 0, MS_MODW, MD_DEPTH, -64);
-    mod_begin(t);
-    check("MODW -> DEPTH -64: the wheel up closes it", MOD(t).ldep == 0);
-    mod_end(t);
-    slot(t, 0, MS_MODW, MD_DEPTH, 63);
-    slot(t, 1, MS_LFO, MD_CUT, 63);
-    t->mw = 0;
-    mod_begin(t);
-    check("DEPTH scales the matrix's LFO source too (LFO -> CUT with the wheel down: ~1.6 %)",
-          MOD(t).cut > 0 && MOD(t).cut < ((32767 * 63) >> 7) / 40);
-    mod_end(t);
-    slot(t, 2, MS_AT, MD_DEPTH, 63);
-    t->mw = 127;
-    t->at = 64;
-    mod_begin(t);
-    check("two DEPTH slots multiply (wheel up x AT half)", MOD(t).ldep > 16000 && MOD(t).ldep < 17000);
-    mod_end(t);
-    slot(t, 0, MS_LFO, MD_DEPTH, 63);                     /* the LFO on its own depth: the unscaled LFO */
-    slot(t, 1, 0, 0, 0);
-    slot(t, 2, 0, 0, 0);
-    mod_begin(t);
-    check("LFO -> DEPTH: takes the LFO unscaled (at its top: whole)", MOD(t).ldep >= 32700);
-    mod_end(t);
-    slot(t, 0, MS_SH, MD_CUT, 40);                        /* no DEPTH slot: the LFO untouched */
-    mod_begin(t);
-    check("no DEPTH slot: the LFO untouched (track_render leaves it alone)", MOD(t).ldep == 32767);
-    mod_end(t);
-    slot(t, 0, 11, MD_CUT, 40);                           /* past the lists: nothing */
-    slot(t, 1, MS_LFO, MD_N, 40);
-    mod_begin(t);
-    check("a SRC / DST past the lists does nothing", MOD(t).cut == 0 && MOD(t).nk == 0 && MOD(t).nv == 0);
-    mod_end(t);
-}
-
-/* DEPTH in the sound: an LFO DEST PIT vibrato with MODW -> DEPTH -64 (whole with the wheel down, closed with it up) */
-static void vib_plain(track_t *t)
-{
-    t->p[P_LRATE] = 80;
-    t->p[P_LD_PIT] = 0;
-}
-static void vib_depth0(track_t *t)                /* the wheel up: DEPTH 0, no vibrato */
-{
-    t->p[P_LRATE] = 80;
-    t->p[P_LD_PIT] = 40;
-    slot(t, 0, MS_MODW, MD_DEPTH, -64);
-    t->mw = 127;
-}
-static void vib_depth1(track_t *t)
-{
-    vib_depth0(t);
-    t->mw = 0;
-}
-static void vib_full(track_t *t)
-{
-    t->p[P_LRATE] = 80;
-    t->p[P_LD_PIT] = 40;
-}
-static void sh_on_nothing(track_t *t)             /* S&H and SLEW slots with AMT 0: nothing */
-{
-    slot(t, 0, MS_SH, MD_CUT, 0);
-    slot(t, 1, MS_SLEW, MD_PITCH, 0);
-    slot(t, 2, MS_LFO, MD_DEPTH, 0);
-}
-static void test_matrix_sound(void)
-{
-    uint64_t h0 = phrase_child(0, 0, 0), hn = phrase_child(0, 0, sh_on_nothing);
-    uint64_t p0 = phrase_child(0, 0, vib_plain), d0 = phrase_child(0, 0, vib_depth0);
-    uint64_t d1 = phrase_child(0, 0, vib_depth1), f1 = phrase_child(0, 0, vib_full);
-    check("S&H / SLEW / DEPTH slots at AMT 0: bit for bit no matrix", h0 && h0 == hn);
-    check("DEPTH closed: LFO DEST PIT plays nothing (bit for bit LFO DEST PIT 0)", p0 && p0 == d0);
-    check("DEPTH open: the vibrato is there (not the plain note), as without the matrix but for the gain",
-          d1 != p0 && f1 != p0);
 }
 
 /* ------------------------------------------------------------------ 2 --- */
@@ -674,9 +481,8 @@ static uint64_t instr_now(void)
 #endif
     return 0;
 }
-/* instructions per sample of ANALOG SOFT PAD POLY with nv notes, SPRD sp; or matrix slots (S&H -> CUT, SLEW -> PITCH,
- * MODW -> DEPTH, ENV -> RATE) with mx */
-static double cost(uint32_t nv, int32_t sp, int mx, uint32_t wave)
+/* instructions per sample of ANALOG SOFT PAD POLY with nv notes, SPRD sp, WAVE wave */
+static double cost(uint32_t nv, int32_t sp, uint32_t wave)
 {
     static const uint8_t NOTES[8] = {48, 52, 55, 59, 60, 64, 67, 71};
     track_t *t = &trk[0];
@@ -687,14 +493,6 @@ static double cost(uint32_t nv, int32_t sp, int mx, uint32_t wave)
     t->p[P_SUS] = 127;
     t->p[P_SPRD] = (int16_t)sp;
     t->p[P_E0] = (int16_t)wave;
-    if (mx) {
-        slot(t, 0, MS_SH, MD_CUT, 30);
-        slot(t, 1, MS_SLEW, MD_PITCH, 4);
-        slot(t, 2, MS_MODW, MD_DEPTH, 40);
-        slot(t, 3, MS_ENV, MD_RATE, 20);
-        t->mw = 90;
-        t->p[P_LD_FLT] = 20;
-    }
     for (i = 0; i < nv; i++)
         trk_note_on(t, NOTES[i], 100);
     blocks(FS / 4u / CTL);
@@ -709,28 +507,23 @@ static double cost(uint32_t nv, int32_t sp, int mx, uint32_t wave)
 }
 static void test_cost(void)
 {
-    double c1, c1s, c8, c8s, m0, m1, a0, a5, a6;
+    double c1, c1s, c8, c8s, a0, a5, a6;
     if (!instr_now()) {
         printf("sound14: cost: no instruction counter on this host (proc_pid_rusage), skipped\n");
         return;
     }
-    c1 = cost(1, 0, 0, 0);
-    c1s = cost(1, 64, 0, 0);
-    c8 = cost(8, 0, 0, 0);
-    c8s = cost(8, 64, 0, 0);
+    c1 = cost(1, 0, 0);
+    c1s = cost(1, 64, 0);
+    c8 = cost(8, 0, 0);
+    c8s = cost(8, 64, 0);
     printf("sound14: cost: SPREAD, ANALOG SOFT PAD POLY: 1 voice %.0f -> %.0f (+%.0f), 8 voices %.0f -> %.0f (+%.0f) "
            "instructions / sample: per part +%.0f, per voice %+.1f\n", c1, c1s, c1s - c1, c8, c8s, c8s - c8,
            c1s - c1, ((c8s - c8) - (c1s - c1)) / 7.0);
     check("cost: SPREAD a fixed cost per part (< 3 % of an 8-voice part), next to nothing per voice",
           (c8s - c8) < c8 * 0.03 && ((c8s - c8) - (c1s - c1)) / 7.0 < 2.0);
-    m0 = cost(8, 0, 0, 0);
-    m1 = cost(8, 0, 1, 0);
-    printf("sound14: cost: matrix S&H -> CUT, SLEW -> PITCH, MODW -> DEPTH, ENV -> RATE on 8 voices: %.0f -> %.0f (+%.1f %%)\n",
-           m0, m1, (m1 - m0) * 100 / m0);
-    check("cost: the new sources / DEPTH within the matrix's allowance (+5 %)", (m1 - m0) * 100 / m0 <= 5.0);
-    a0 = cost(8, 0, 0, 0);
-    a5 = cost(8, 0, 0, 5);
-    a6 = cost(8, 0, 0, 6);
+    a0 = cost(8, 0, 0);
+    a5 = cost(8, 0, 5);
+    a6 = cost(8, 0, 6);
     printf("sound14: cost: ANALOG 8 voices SAW %.0f, SYNC %.0f (%+.1f %%), SUB %.0f (%+.1f %%) instructions / sample\n", a0, a5,
            (a5 - a0) * 100 / a0, a6, (a6 - a0) * 100 / a0);
     check("cost: SYNC / SUB within 25 % of SAW (regress.c's CPU allowance)", a5 < a0 * 1.25 && a6 < a0 * 1.25);
@@ -773,56 +566,6 @@ static int demos(const char *dir)
     uint32_t n = 0, k;
     FILE *f;
     track_t *t = &trk[0];
-    /* S&H -> CUT: ANALOG ACID, a held note, the cutoff jumps once per LFO cycle (1/16 at 120 BPM: SYNC) */
-    fresh(0, preset_by_name(0, "SAW LEAD"));
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_E4] = 50;
-    t->p[P_E5] = 90;
-    t->p[P_LSYNC] = 8;                                    /* 1/16 */
-    slot(t, 0, MS_SH, MD_CUT, 63);
-    if ((f = demo_open(dir, "sh_cutoff", 6u * FS / CTL * CTL))) {
-        chord_on(t, PAD, 2);
-        demo_blocks(f, 5u * FS / CTL);
-        chord_off(t, PAD, 2);
-        demo_blocks(f, FS / CTL);
-        fclose(f);
-        n++;
-    }
-    /* SLEW -> CUT, the same: the smooth random line */
-    fresh(0, preset_by_name(0, "SAW LEAD"));
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_E4] = 50;
-    t->p[P_E5] = 90;
-    t->p[P_LSYNC] = 6;                                    /* 1/8 */
-    slot(t, 0, MS_SLEW, MD_CUT, 63);
-    if ((f = demo_open(dir, "slew_cutoff", 6u * FS / CTL * CTL))) {
-        chord_on(t, PAD, 2);
-        demo_blocks(f, 5u * FS / CTL);
-        chord_off(t, PAD, 2);
-        demo_blocks(f, FS / CTL);
-        fclose(f);
-        n++;
-    }
-    /* LFO rate and depth modulated: LFO DEST PIT vibrato; ENV -> RATE speeds it up as the note decays .. no: MODW
-     * rises over 4 s: MODW -> DEPTH opens the vibrato, MODW -> RATE speeds it up (a mod-wheel vibrato that quickens) */
-    fresh(0, preset_by_name(0, "SINE KEY"));
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_SUS] = 127;
-    t->p[P_LRATE] = 55;
-    t->p[P_LD_PIT] = 12;
-    slot(t, 0, MS_MODW, MD_DEPTH, 63);
-    slot(t, 1, MS_MODW, MD_RATE, 40);
-    if ((f = demo_open(dir, "lfo_rate_depth", 6u * FS / CTL * CTL))) {
-        trk_note_on(t, 69, 100);
-        for (k = 0; k < 5u * FS / CTL; k++) {
-            t->mw = (uint8_t)(k * 127u / (5u * FS / CTL));
-            demo_blocks(f, 1);
-        }
-        trk_note_off(t, 69);
-        demo_blocks(f, FS / CTL);
-        fclose(f);
-        n++;
-    }
     /* ANALOG SUB: a bass line, SUB at 0 .. 127 over it */
     fresh(0, preset_by_name(0, "SQR BASS"));
     t->p[P_E0] = 6;
@@ -901,15 +644,12 @@ static int demos(const char *dir)
         fclose(f);
         n++;
     }
-    printf("sound14: %u demos in %s (sh_cutoff, slew_cutoff, lfo_rate_depth, analog_sub, analog_sync, spread_pad, "
-           "spread_unison)\n", n, dir);
-    return n == 7u;
+    printf("sound14: %u demos in %s (analog_sub, analog_sync, spread_pad, spread_unison)\n", n, dir);
+    return n == 4u;
 }
 
 int main(int argc, char **argv)
 {
-    test_matrix();
-    test_matrix_sound();
     test_analog();
     test_spread();
     test_spread_fx();

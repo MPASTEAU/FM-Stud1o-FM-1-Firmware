@@ -27,7 +27,7 @@
  *   - the sine is Felucca's 1024-point SINE (Q15), linearly interpolated, scaled by the Q24 gain to msfa's
  *     Q24 operator output;
  *   - a block is CTL (32) samples (msfa: 64);
- *   - no portamento, no operator switches, no controllers (mod wheel, breath, ...): Felucca's matrix does that.
+ *   - no portamento, no operator switches, no controllers (mod wheel, breath, ...).
  * The patch is the 155-byte single-voice layout (FP_* below), operator 0 = the sixth operator, as msfa. */
 
 #define FM6_N CTL

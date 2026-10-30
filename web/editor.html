@@ -79,7 +79,6 @@
   .smp .bad { text-decoration: underline wavy; }
   footer { margin-top: 24px; font-size: 11px; color: var(--dim); }
   .row.pushed .v { font-weight: 600; }
-  .row.modrow { grid-template-columns: 16px 1fr 1fr 1fr 52px; }
   /* librarian: local library and the device's user bank side by side, stacked on a phone */
   .libcols { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 8px 24px; margin-top: 6px; }
   .libcols > div { min-width: 0; }
@@ -1686,8 +1685,6 @@ function makeMockDevice(opt = {}) {
   const NONOFF = ["OFF", "ON"], NDIV = ["1/4", "1/8", "1/16", "1/32", "8T", "16T", "1/2", "1/1", "2BAR", "4BAR"], NGO = ["--", "GO"], NDASH = ["--"];
   const D = (label, fmt, min, max, def, names = null, unit = "") => ({ label, fmt, min, max, def, names, unit });
   const E = (label, names, def) => D(label, F.ENUM, 0, names.length - 1, def, names);
-  const MSRC = ["OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"];   /* (append-only: S&H SLEW, #132) */
-  const MDST = ["OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE", "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"];   /* (DEPTH: #132; VEL TIME: 1.5.6, #213) */
   const TP = [
     D("LVL", F.DB, 0, 127, 104),
     D("ATK", F.TIME, 0, 127, 10), D("DEC", F.TIME, 0, 127, 70), D("SUS", F.PCT, 0, 127, 90), D("REL", F.TIME, 0, 127, 60),
@@ -1702,7 +1699,8 @@ function makeMockDevice(opt = {}) {
     E("VCE", ["POLY", "MONO", "LEG", "UNI"], 0), D("GLD", F.TIME, 0, 127, 0), D("PAN", F.BIPCT, -64, 63, 0), E("MUTE", NONOFF, 0),
     E("GLMOD", ["RATE", "TIME"], 0), E("PRIO", ["LAST", "LOW", "HIGH"], 0), E("ALLOC", ["ROT", "REUSE"], 0), D("DTUNE", F.INT, 0, 127, 40),
     E("SLCR", ["OFF", "GATE", "STUT"], 0), D("PAT", F.INT, 1, 16, 1), E("RATE", ["1/8", "1/16", "1/32", "8T", "16T", "32T"], 1), D("DEPTH", F.PCT, 0, 127, 127),
-    ...[1, 2, 3, 4].flatMap((k) => [E("SRC" + k, MSRC, 0), E("DST" + k, MDST, 0), D("AMT" + k, F.BIPCT, -64, 63, 0)]),   /* the matrix */
+    ...[1, 2, 3, 4].flatMap((k) => [D("SRC" + k, F.INT, 0, 10, 0), D("DST" + k, F.INT, 0, 22, 0), D("AMT" + k, F.BIPCT, -64, 63, 0)]),   /* ids 49..60: the
+                                                     modulation matrix's (removed), inert: stored, on no page */
   ];
   const GP = [
     D("BPM", F.BPM, 40, 240, 120), D("SWG", F.PCT, 0, 100, 0), E("CLK", ["INT", "USB", "TRS"], 0), D("TUNE", F.INT, -50, 50, 0),
@@ -1905,8 +1903,8 @@ function makeMockDevice(opt = {}) {
     [1, 2, 3, 4].forEach((id, k) => { st.p[id] = pr.env[k]; });
     st.p[37] = pr.mono ? 2 : 0;
     st.p[33] = 0; st.p[34] = 24; st.p[35] = 28; st.p[36] = 36;
-    for (let i = P_SLCR + 4; i < P_E0; i++) if (!trackOwn(i, P_E0)) st.p[i] = TP[i].def;   /* a factory preset turns the
-                                                     matrix off; the SLICER, the chord keys, the steps and the other track
+    for (let i = P_SLCR + 4; i < P_E0; i++) if (!trackOwn(i, P_E0)) st.p[i] = TP[i].def;   /* a factory preset resets the
+                                                     inert matrix ids; the SLICER, the chord keys, the steps and the other track
                                                      settings stay (ui.c apply_preset_to) */
     if (st.engine === FM6_E) {                    /* eng_fm6.c fm6_track_loaded */
       const t = st.tracks[st.sel];
@@ -2536,7 +2534,7 @@ const GLYPH = {
   waveform_noise_white: 0xEA7A, waveform_harmonic: 0xEAC5,
 };
 /* section headings (LAYOUT titles) and page titles */
-const HEAD_IC = { ENV: "function_env_adsr_exp", LFO: "waveform_sine", MOD: "symbol_waves", EDIT: "ui_knob", VOICE: "symbol_keyboard",
+const HEAD_IC = { ENV: "function_env_adsr_exp", LFO: "waveform_sine", EDIT: "ui_knob", VOICE: "symbol_keyboard",
   FX: "symbol_effector", SCL: "symbol_tuning", ARP: "control_arrow_up_down", "SEQ PATTERN": "symbol_grid",
   GLOBAL: "symbol_cog", INSTRUMENT: "symbol_keyboard" };
 const PAGE_IC = { FLT: "function_filter_lpf_peak", FILT: "function_filter_lpf_peak", DLY: "symbol_echo", REVERB: "symbol_spring", CHORUS: "symbol_waves",
@@ -2899,7 +2897,6 @@ const P = { LEVEL: 0, SLEN: 29 };
 const LAYOUT = (pe0) => [
   { t: "ENV", pages: [["ENV", 0, [1, 2, 3, 4]], ["ENV DEST", 0, [5, 6, 7, 8]]] },
   { t: "LFO", pages: [["LFO", 0, [9, 10, 11, 12]], ["LFO DEST", 0, [13, 14, 15, 16]]] },
-  ...(pe0 >= 61 ? [{ t: "MOD", mod: 49 }] : []),   /* the matrix: P_M1SRC 49 .. P_M4AMT 60, one row per slot */
   { t: "EDIT", engine: true, pages: [["EDIT 1", 0, [pe0, pe0 + 1, pe0 + 2, pe0 + 3]], ["EDIT 2", 0, [pe0 + 4, pe0 + 5, pe0 + 6, pe0 + 7]],
     ...(pe0 >= 91 && engName() === "DRUM" ? [["LANES", 0, P_LANES.slice(0, 4)], ["LANES 2", 0, P_LANES.slice(4)]] : [])] },   /* lane levels 83..90 */
   ...(pe0 >= 81 && engName() === "DIGITAL" ? [{ t: "OP ENV", pages: [   /* P_FM1_ATK 61: ATK DEC SUS REL LVL per operator (a
@@ -3154,12 +3151,6 @@ function updateBrowser() {
 }
 
 function visible(d) { return d && d.max > d.min && d.label !== "-"; }
-/* a matrix destination E1..E8 by the engine's label of that parameter (as the device shows it) */
-function modDst(d, txt) {
-  const m = d && /^DST\d$/.test(d.label) && /^E([1-8])$/.exec(txt);
-  const e = m && dev && dev.pdesc[dev.info.pe0 + +m[1] - 1];
-  return e && visible(e) ? e.label : txt;
-}
 
 function buildGroups() {
   ctl.clear();
@@ -3170,18 +3161,6 @@ function buildGroups() {
   if (knownLayout(info)) {
     for (const g of LAYOUT(info.pe0)) {
       const div = el("div", { class: "group" }, el("h2", { ic: HEAD_IC[g.t], text: g.engine ? `EDIT ${info.engines[dev.dump.engine] || ""}` : g.t }));
-      if (g.mod != null) {                          /* MOD: slot number, SRC, DST, AMT in one row */
-        for (let k = 0; k < 4; k++) {
-          const r = [0, 1, 2].map((j) => paramRow(0, g.mod + 3 * k + j));
-          if (r.some((x) => !x)) continue;
-          const row = el("div", { class: "row modrow" }, el("span", { text: String(k + 1) }), r[0].children[1], r[1].children[1],
-            r[2].children[1], r[2].children[2]);
-          for (let j = 0; j < 3; j++) ctl.get(key(0, g.mod + 3 * k + j)).row = row;   /* (the push highlight) */
-          div.append(row);
-        }
-        groups.groups.push(div);
-        continue;
-      }
       for (const [title, s, ids] of g.pages) {
         const rows = ids.map((id) => paramRow(s, id)).filter(Boolean);
         if (!rows.length) continue;
@@ -3216,7 +3195,7 @@ function paramRow(s, id) {
     if (wave) input.append(el("button", {}, el("selectedcontent")));
     for (const v of enumShown(d)) {                 /* (note divisions longest first: #48) */
       const [txt] = fmtValue(d, v);
-      const name = d.fmt === F.ENUM && d.names[v - d.min] == null ? String(v) : modDst(d, txt);
+      const name = d.fmt === F.ENUM && d.names[v - d.min] == null ? String(v) : txt;
       const alias = d.fmt === F.ENUM && aliasOf(d.names, v - d.min) !== v - d.min;   /* shown when set, not offered */
       input.append(el("option", { value: v, ic: wave && WAVE_IC[name], hidden: alias }, name));
     }
@@ -3258,7 +3237,7 @@ function paramRow(s, id) {
 function showValue(k, v, force) {
   const c = ctl.get(k);
   if (!c || v == null) return;
-  const [txt0, unit] = fmtValue(c.desc, v), txt = modDst(c.desc, txt0);
+  const [txt, unit] = fmtValue(c.desc, v);
   c.out.textContent = unit ? `${txt} ${unit}` : txt;
   if (force || !touched(k)) c.input.value = String(v);
 }

@@ -5,7 +5,7 @@
  *   LFO 2      SYNC: one cycle per note value of the tempo (several values and tempi, the external clock's measured
  *              tempo), RATE ignored meanwhile; OFF: RATE's table exactly as before. TRIG: NOTE restarts at PHS on a
  *              fresh phrase (as before), FREE never (with SYNC: from PHS when PLAY starts). POL: UNI 0..+1 (the
- *              wave's range, LFO DEST AMP and the matrix's AMP as ENV takes it), BI as before.
+ *              wave's range, LFO DEST AMP as ENV takes it), BI as before.
  *   NUDGE      live recording keeps a note's time (1/16 of a step, rounded, -8..+7) in a fresh step, early notes as
  *              the next step's negative nudge; QUANTIZE ON (the default) plays every step on its start as before;
  *              OFF plays it nudged, late and early, once per pass, never twice with what live recording sounds
@@ -140,19 +140,6 @@ static int lfo(void)
         printf("ui:   POL BI %d..%d, UNI %d..%d\n", lo[0], hi[0], lo[1], hi[1]);
         bad += check("POL UNI: 0..+1 (0..32767), BI -1..+1 as before", lo[0] < -32000 && hi[0] > 32000 && lo[1] >= 0 &&
                      lo[1] < 300 && hi[1] <= 32767 && hi[1] > 32400);
-    }
-    {   /* the matrix's AMP from the LFO: BI takes it as 0..1 ((x + 1) / 2), UNI as it is (as ENV) */
-        int32_t g[4];
-        t->p[P_M1SRC] = MS_LFO; t->p[P_M1DST] = MD_AMP; t->p[P_M1AMT] = 63;
-        t->lfo_fade = 32767;
-        t->p[P_LPOL] = 0; t->lfo_val = 0; mod_begin(t); g[0] = MOD(t).gain; mod_end(t);
-        t->p[P_LPOL] = 1; t->lfo_val = 0; mod_begin(t); g[1] = MOD(t).gain; mod_end(t);
-        t->lfo_val = 16384; mod_begin(t); g[2] = MOD(t).gain; mod_end(t);
-        t->p[P_LPOL] = 0; t->lfo_val = -32768; mod_begin(t); g[3] = MOD(t).gain; mod_end(t);
-        bad += check("  the matrix's LFO > AMP: UNI 0 = BI -1 (closed), UNI 0.5 = BI 0", g[1] == g[3] && abs(g[2] - g[0]) < 64 &&
-                     g[1] < 1000);
-        t->p[P_M1SRC] = t->p[P_M1DST] = t->p[P_M1AMT] = 0;
-        t->p[P_LPOL] = 0;
     }
     bad += check("LFO 2 is no automation (motion_param), its page SYNC TRIG POL after LFO (LFO's family)",
                  !motion_param(P_LSYNC) && !motion_param(P_LTRIG) && !motion_param(P_LPOL) && !motion_param(P_SQNT) &&

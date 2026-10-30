@@ -569,12 +569,12 @@ static void chain_play_ui(void)
 }
 
 
-/* parameter locks: a page whose KNOB 1..4 can lock (a track's sound: one of its parameters can be motion; not MOD's
- * slots), the parameter KNOB k locks (ui.plk_src's page, HOME's four), 0xFF = none */
+/* parameter locks: a page whose KNOB 1..4 can lock (a track's sound: one of its parameters can be motion), the parameter KNOB
+ * k locks (ui.plk_src's page, HOME's four), 0xFF = none */
 static int lock_page_ok(uint32_t i)
 {
     uint32_t k;
-    if (i >= NPAGES || (PAGES[i].scope != SC_TRACK && PAGES[i].scope != SC_ENGINE) || PAGES[i].graph == GR_MOD)
+    if (i >= NPAGES || (PAGES[i].scope != SC_TRACK && PAGES[i].scope != SC_ENGINE))
         return 0;
     for (k = 0; k < 4u; k++)
         if (PAGES[i].id[k] != 0xFFu && motion_param(PAGES[i].id[k]))

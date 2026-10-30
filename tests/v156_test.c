@@ -1,208 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* 1.5.6, on the real sources (with the stubs of tests/ui_test.c):
- *   HUMANIZE  (#213) the matrix's VEL and TIME destinations, appended after DEPTH: VEL moves a note-on's velocity
- *             (every note-on, RAND its own per note, the matrix's VEL source sees the new one, clamped 1..127), TIME
- *             plays a sequencer step late (0..30 ms, at most 7/16 of the step; QUANTIZE ON and OFF with NUDGE; a
- *             ratchet on time); with no such slot nothing changes (the RAND draws, mod_begin, the timing); saved
  *   KITS      (#216) DRUM KIT DEEP TIGHT PERC (9..11) from the five kits' pieces, three DRUM presets after DRUM KIT; the
  *             lanes' names, the 8 lanes play, saved; an older KIT range reads them as 77
  *   LEDS      (#212) MENU > LEDS INV LO / INV HI appended: INV with its lit LEDs at the mid level (LO the darker), saved as
  *             INV plus a level byte, older settings as before
- *   SELECT    (#84) MENU > SELECT MODW / VEL after BPM / PAGE: the selected track's mod wheel (the matrix's MODW, CC1 out) or
+ *   SELECT    (#84) MENU > SELECT MODW / VEL after BPM / PAGE: the selected track's mod wheel (CC1 out) or
  *             the keys' velocity (sounding, sent); GLO + SELECT the tempo; PAGE's bit as 1.5.5, saved; CLOCK's hint
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
-
-/* ---------------------------------------------------------- HUMANIZE --- */
-static void mslot(track_t *t, uint32_t k, int32_t s, int32_t d, int32_t a)
-{
-    t->p[P_M1SRC + 3u * k] = (int16_t)s;
-    t->p[P_M1DST + 3u * k] = (int16_t)d;
-    t->p[P_M1AMT + 3u * k] = (int16_t)a;
-}
-static void mslots_off(track_t *t)
-{
-    uint32_t k;
-    for (k = 0; k < 4u; k++)
-        mslot(t, k, 0, 0, 0);
-}
-/* the velocity of the voice note n started on track t (0: none) */
-static uint32_t vel_of(const track_t *t, uint32_t n)
-{
-    uint32_t i;
-    for (i = 0; i < NVOICE; i++)
-        if (t->v[i].active && t->v[i].gate && t->v[i].note == n)
-            return t->v[i].vel;
-    return 0;
-}
-
-static uint32_t P16;
-static track_t *seq1(uint32_t qntz)                 /* track 1 alone: 16 notes of 1/16, 120 BPM, no swing */
-{
-    track_t *t;
-    uint32_t i;
-    ui_power_on();
-    t = &trk[0];
-    track_defaults_steps(t);
-    t->p[P_SLEN] = 16;
-    t->p[P_SDIV] = 2;
-    t->p[P_SGATE] = 64;
-    t->p[P_SSWING] = 0;
-    t->p[P_VOICE] = V_POLY;
-    t->p[P_SQNT] = (int16_t)qntz;
-    song.g[G_SWING] = 0;
-    song.g[G_BPM] = 120;
-    P16 = div_samples(2);
-    for (i = 0; i < 16u; i++)
-        t->step[i] = (step_t){{(uint8_t)(60u + i)}, 1, ST_NOTE, 0, 100};
-    mslots_off(t);
-    return t;
-}
-/* the sample of the block each of the first n note-ons started in (from PLAY) */
-static uint32_t play(track_t *t, uint32_t blocks, uint32_t *at, uint32_t nat)
-{
-    uint32_t b, n = 0;
-    seq_start();
-    for (b = 0; b < blocks; b++) {
-        uint32_t v0 = vage;
-        seq_tick(t, CTL);
-        for (; v0 < vage; v0++, n++)
-            if (n < nat)
-                at[n] = b * CTL;
-    }
-    seq_stop();
-    return n;
-}
-static uint32_t blk(uint32_t i, uint32_t off) { uint32_t s = i * P16 + off; return (s + CTL - 1u) / CTL * CTL; }
-
-static int humanize(void)
-{
-    int bad = 0, ok;
-    track_t *t;
-    uint32_t i, at[32], at2[32], n, v, lo = 127, hi = 0, h;
-    int16_t rnd[8];
-
-    ok = MD_VEL == MD_DEPTH + 1 && MD_TIME == MD_VEL + 1 && MD_N == MD_TIME + 1 && str_eq(N_MDST[MD_VEL], "VEL") &&
-         str_eq(N_MDST[MD_TIME], "TIME") && TP[P_M1DST].max == MD_N - 1 && MD_DEPTH == 20;
-    ok &= str_eq(mod_dst_name(&trk[0], MD_VEL), "VEL") && str_eq(mod_dst_name(&trk[0], MD_TIME), "TIME");
-    bad += check("HUMANIZE (#213): VEL and TIME appended after DEPTH (20): 21, 22; the names", ok);
-
-    /* VEL: no slot: the velocity as asked, the RAND draws as before */
-    t = seq1(1);
-    mod_seed = 0x2545F491u;
-    for (i = 0; i < 8u; i++) {
-        trk_note_on(t, 40u + i, 100);
-        rnd[i] = t->m_rnd;
-    }
-    ok = vel_of(t, 40) == 100u && t->m_vel == 100u;
-    trk_all_off(t);
-    mslot(t, 0, MS_RAND, MD_VEL, 32);
-    mod_seed = 0x2545F491u;
-    for (i = 0; i < 8u; i++) {
-        trk_note_on(t, 40u + i, 100);
-        ok &= t->m_rnd == rnd[i];                        /* (the same draws: one per note) */
-        v = vel_of(t, 40u + i);
-        ok &= v == t->m_vel && v >= 1u && v <= 127u;     /* (the matrix's VEL source sees the new one) */
-        ok &= (int32_t)v == clamp(100 + ((((int32_t)rnd[i] * 32) >> 6) * 127 >> 15), 1, 127);
-        lo = v < lo ? v : lo, hi = v > hi ? v : hi;
-    }
-    ok &= hi > lo + 20u;
-    bad += check("  VEL: RAND -> VEL AMT 32: each note its own velocity (100 +- 63, 1..127), the RAND draws as without it", ok);
-
-    trk_all_off(t);
-    mslots_off(t);
-    mslot(t, 1, MS_MODW, MD_VEL, 63);
-    t->mw = 127;
-    trk_note_on(t, 50, 60);
-    ok = vel_of(t, 50) == 127u;                         /* (clamped at 127) */
-    mslot(t, 1, MS_MODW, MD_VEL, -64);
-    trk_note_on(t, 51, 60);
-    ok &= vel_of(t, 51) == 1u;                          /* (and at 1: a note still plays) */
-    t->mw = 0;
-    trk_note_on(t, 52, 60);
-    ok &= vel_of(t, 52) == 60u;
-    mslot(t, 1, MS_MODW, MD_VEL, 0);                    /* (AMT 0: nothing) */
-    t->mw = 127;
-    trk_note_on(t, 53, 60);
-    ok &= vel_of(t, 53) == 60u;
-    t->mw = 0;
-    trk_all_off(t);
-    mslot(t, 1, MS_RAND, MD_VEL, 40);
-    mslot(t, 2, MS_RAND, MD_TIME, 40);
-    ok &= mod_begin(t) == 0 && !MOD(t).on;              /* (no per-block work for VEL / TIME) */
-    mslot(t, 3, MS_LFO, MD_CUT, 10);
-    ok &= mod_begin(t) == 1;
-    mod_end(t);
-    bad += check("  VEL: MODW -> VEL clamps to 127 / 1, 0 nothing; VEL / TIME slots do no per-block work", ok);
-
-    /* TIME: no slot: every step on its start (QUANTIZE ON) */
-    t = seq1(1);
-    n = play(t, (15u * P16 + 2000u) / CTL, at, 32);
-    ok = n == 16u;
-    for (i = 0; i < 16u; i++)
-        ok &= at[i] == blk(i, 0);
-    /* MODW -> TIME AMT 63, MODW full: every step late by the same, below 30 ms */
-    mslot(t, 0, MS_MODW, MD_TIME, 63);
-    t->mw = 127;
-    h = (uint32_t)(((uint32_t)((127 * 258 * 63) >> 6) * MOD_TIME_MAX) >> 15);
-    n = play(t, (15u * P16 + 2000u) / CTL, at2, 32);
-    ok &= n == 16u && h > MOD_TIME_MAX * 9u / 10u && h <= MOD_TIME_MAX && MOD_TIME_MAX == FS * 30u / 1000u;
-    for (i = 0; i < 16u; i++)
-        ok &= at2[i] == blk(i, h);
-    bad += check("  TIME: none: on the step; MODW full AMT 63: every step late by ~30 ms (QUANTIZE ON)", ok);
-
-    /* RAND -> TIME: each step its own delay, 0 .. 30 ms, never early, all played once */
-    mslot(t, 0, MS_RAND, MD_TIME, 63);
-    t->mw = 0;
-    n = play(t, (15u * P16 + 2000u) / CTL, at2, 32);
-    ok = n == 16u;
-    lo = ~0u, hi = 0;
-    for (i = 0; i < 16u; i++) {
-        uint32_t d = at2[i] - blk(i, 0);
-        ok &= at2[i] >= blk(i, 0) && d <= blk(0, MOD_TIME_MAX);
-        lo = d < lo ? d : lo, hi = d > hi ? d : hi;
-    }
-    ok &= hi > lo + 8u * CTL;
-    /* a ratcheted step on time; AMT < 0 with the source at 0: the most */
-    step_set_ratchet(&t->step[3], 2);
-    n = play(t, (15u * P16 + 2000u) / CTL, at2, 32);
-    ok &= n == 17u && at2[3] == blk(3, 0);
-    step_set_ratchet(&t->step[3], 1);
-    mslot(t, 0, MS_MODW, MD_TIME, -64);
-    n = play(t, (15u * P16 + 2000u) / CTL, at2, 32);
-    ok &= n == 16u && at2[5] == blk(5, (32767u * MOD_TIME_MAX) >> 15);
-    bad += check("  TIME: RAND: each step its own delay (0..30 ms, never early); a ratchet on time; AMT -64 at 0 the most", ok);
-
-    /* QUANTIZE OFF: a step's NUDGE and TIME add; a fast step: no more than 7/16 of it */
-    t = seq1(0);
-    step_set_nudge(&t->step[2], 3);
-    mslot(t, 0, MS_MODW, MD_TIME, 63);
-    t->mw = 127;
-    n = play(t, (15u * P16 + 2000u) / CTL, at2, 32);
-    ok = n == 16u && at2[2] == blk(2, 3u * P16 / NUDGE_DIV + h) && at2[4] == blk(4, h);
-    t->p[P_SDIV] = 3;                                   /* 1/32 at 120 BPM: 7/16 of it is 1205 samples < 30 ms */
-    t->p[P_SQNT] = 1;
-    P16 = div_samples(3);
-    n = play(t, (15u * P16 + 2000u) / CTL, at2, 32);
-    ok &= n == 16u && at2[6] == blk(6, P16 * 7u / NUDGE_DIV) && P16 * 7u / NUDGE_DIV < h;
-    t->mw = 0;
-    bad += check("  TIME: QUANTIZE OFF adds to the step's NUDGE; a short step: at most 7/16 of it (as NUDGE)", ok);
-
-    /* saved: a project keeps the slots */
-    t = seq1(1);
-    mslot(t, 0, MS_RAND, MD_VEL, 20);
-    mslot(t, 1, MS_SH, MD_TIME, -12);
-    song.playing = 0;
-    ok = project_save_as(1, "HUMAN") == 0;
-    mslots_off(t);
-    project_load(1);
-    ok &= t->p[P_M1DST] == MD_VEL && t->p[P_M1AMT] == 20 && t->p[P_M2DST] == MD_TIME && t->p[P_M2AMT] == -12 &&
-          t->p[P_M2SRC] == MS_SH;
-    bad += check("  a project keeps VEL / TIME slots (FUN10, no format change)", ok);
-    return bad;
-}
 
 /* -------------------------------------------------------------- KITS --- */
 /* (#216) DEEP TIGHT PERC: appended kit values 9..11 and DRUM presets 1..3 (the first, DRUM KIT, as it was); each lane one
@@ -381,20 +188,15 @@ static int select_play(void)
     ok &= mo_w == mo + 1u && midi_out_q[mo % MQ] == (0x0Bu | (0xB0u | trk_midi_ch(song.sel)) << 8 | 1u << 16 | 3u << 24);
     turn(EN_SELECT, -5);
     ok &= t->mw == 0u;                                  /* (stops at 0) */
-    t->p[P_M1SRC] = MS_MODW; t->p[P_M1DST] = MD_VEL; t->p[P_M1AMT] = 63;
     turn(EN_SELECT, 127);
     ok &= t->mw == 127u;
-    trk_note_on(t, 60, 40);
-    ok &= t->m_vel == 127u;                             /* (the matrix's MODW: the wheel SELECT turns) */
-    trk_all_off(t);
-    t->p[P_M1SRC] = t->p[P_M1DST] = t->p[P_M1AMT] = 0;
     btn_down(B_GLO); frame();
     turn(EN_SELECT, 2);
     ok &= song.g[G_BPM] == b0 + 2 && t->mw == 127u;     /* GLO + SELECT: the tempo */
     btn_up(B_GLO); frames(400);
     song.g[G_BPM] = b0;
     t->mw = 0;
-    bad += check("  MODW: the track's mod wheel 0..127 (shown), CC1 out on its channel, the matrix's MODW; GLO + SELECT tempo", ok);
+    bad += check("  MODW: the track's mod wheel 0..127 (shown), CC1 out on its channel; GLO + SELECT tempo", ok);
 
     menu_put(MI_SELECT, SEL_VEL);
     go_home(); frame();
@@ -420,7 +222,7 @@ static int select_play(void)
 
 int main(void)
 {
-    int bad = humanize() + kits() + leds() + select_play();
+    int bad = kits() + leds() + select_play();
     printf("%s\n", bad ? "1.5.6 TEST FAILED" : "1.5.6 tests passed");
     return bad != 0;
 }

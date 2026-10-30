@@ -54,7 +54,6 @@ static const struct {
 #undef T_
 #define NPATTERNS (sizeof PATTERNS / sizeof PATTERNS[0])
 #include "../firmware/src/params.c"
-#include "../firmware/src/mod.c"
 #include "../firmware/src/voice.c"
 #include "../firmware/src/slicer.c"
 #include "../firmware/src/fx.c"

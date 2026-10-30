@@ -82,10 +82,7 @@
 #                   CLEAN INIT (#190): every engine's basic sound (no sends, INSERT, LFO / ENV / MOD amounts; neutral ENV; FM6
 #                   the init voice), heard and ending; EDIT + F5 (E5: INIT); one undo; INIT as before. OCT- next to
 #                   the SEQ layer's OCT+ (QUANTIZE's APPLY, no octave) and FILL (GLO + E4).
-# 1.5.6 (tests/v156_test.c): HUMANIZE (#213): the matrix's VEL (a note-on's velocity, RAND per note, clamped 1..127) and
-#                   TIME (a sequencer step late, 0..30 ms, at most 7/16 of the step, with NUDGE, a ratchet on time),
-#                   appended after DEPTH; nothing changes without such a slot (RAND draws, mod_begin, timing); saved.
-#                   KITS (#216): DRUM KIT DEEP TIGHT PERC (9..11) from the five kits' pieces and their three presets after
+# 1.5.6 (tests/v156_test.c): KITS (#216): DRUM KIT DEEP TIGHT PERC (9..11) from the five kits' pieces and their three presets after
 #                   DRUM KIT, the lanes' names, the 8 lanes play, saved, an older range reads them as 77.
 #                   LEDS (#212): INV LO / INV HI after INV (INV's lit LEDs at the mid level), saved as INV + a level byte.
 #                   SELECT (#84): MODW (the track's mod wheel, CC1 out) and VEL (the keys' velocity) after BPM / PAGE.
@@ -93,11 +90,7 @@
 #                   the transport playing: the roll's bank is the playhead's (STEP and DETAIL), the cursor and the pattern
 #                   untouched; not for 16 steps, stopped, DRUM's grid, AUTOMATION, HOME; held from a knob's move of the
 #                   cursor, an edit of its step or step entry, free again after 3 s or one pass round; reset by stop / track.
-# MOD (tests/mod_test.c): the modulation matrix: slots that do nothing are bit-identical, every source on each
-#                   kind of destination, clamping, MIDI CC1 / CC11 / aftertouch routing, the cost of 4 active
-#                   slots (at most +5 %), demos in build/mod_demo/.
-# SOUND (tests/sound14_test.c; #132 #104 #148): the matrix's S&H / SLEW sources (a value per LFO cycle, the glide) and
-#                   DEPTH destination (the LFO's gain; none = untouched), ANALOG WAVE SYNC / SUB (pitch, no DC, bounded,
+# SOUND (tests/sound14_test.c; #104 #148): ANALOG WAVE SYNC / SUB (pitch, no DC, bounded,
 #                   the band-limited restart), SPREAD (SPRD 0 / MONO / LEGATO bit for bit, a note hard left / right, the
 #                   mono sum, UNISON, the SLICER's gate and the mute key on both sides, mono sends), the cost; demos in
 #                   build/sound14_demo/.
@@ -344,12 +337,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/robust_test" tests/robust_test.c -lm
     run "robustness: crafted sample slots, engine numbers, retained old projects, preset patterns, malformed requests" \
         "$OUT/robust_test"
-    $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/mod_test" tests/mod_test.c -lm
-    mkdir -p build/mod_demo
-    run "modulation matrix: off = bit-identical, the math, MIDI CC1 / CC11 / aftertouch, cost, demos" "$OUT/mod_test" build/mod_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/sound14_test" tests/sound14_test.c -lm
     mkdir -p build/sound14_demo
-    run "sound items: matrix S&H / SLEW / DEPTH, ANALOG SYNC / SUB, SPREAD (bit for bit at 0, L / R, mono sum), cost, demos" \
+    run "sound items: ANALOG SYNC / SUB, SPREAD (bit for bit at 0, L / R, mono sum), cost, demos" \
         "$OUT/sound14_test" build/sound14_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/insert_test" tests/insert_test.c -lm
     mkdir -p build/insert_demo

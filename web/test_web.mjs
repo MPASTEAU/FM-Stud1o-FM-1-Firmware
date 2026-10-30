@@ -75,14 +75,13 @@ async function editorMock() {
     await rq(E.req.set(0, 45, 0));
   }
   {
-    /* the modulation matrix (core.h P_M1SRC..P_M4AMT = 49..60, just before P_E0 61): SRC / DST / AMT x 4, the
-       DST names (20: more than 16) over DESC, every slot OFF after a factory preset (ui.c apply_preset_to) */
+    /* ids 49..60 (core.h P_M1SRC..P_M4AMT, just before P_E0 61): the modulation matrix's SRC / DST / AMT x 4, removed:
+       inert values, stored (their ranges as before, no names), reset by a factory preset (ui.c apply_preset_to) */
     const md = [];
     for (let i = 49; i < 61; i++) md.push(E.parse[E.CMD.DESC](await rq(E.req.desc(0, i))));
     ok(md.map((d) => d.label).join() === "SRC1,DST1,AMT1,SRC2,DST2,AMT2,SRC3,DST3,AMT3,SRC4,DST4,AMT4"
-      && md[0].names.join() === "OFF,LFO,ENV,VEL,KEY,RAND,MODW,AT,EXPR,S&H,SLEW" && md[1].names.length === 23
-      && md[1].names[11] === "VIB" && md[1].names[19] === "E8" && md[1].names[20] === "DEPTH" && md[1].names[21] === "VEL" && md[1].names[22] === "TIME" && md[2].min === -64 && md[2].max === 63 && md.every((d) => d.def === 0),
-      "editor: matrix parameters 49..60 over DESC (23 DST names: DEPTH, 1.5.6 VEL TIME appended; S&H SLEW)");
+      && md[0].max === 10 && md[1].max === 22 && md[2].min === -64 && md[2].max === 63 && md.every((d) => d.def === 0),
+      "editor: the inert ids 49..60 over DESC (the old matrix's ranges)");
     await rq(E.req.set(0, 52, 1));
     await rq(E.req.set(0, 53, 12));
     await rq(E.req.set(0, 54, -30));
@@ -90,7 +89,7 @@ async function editorMock() {
     await rq(E.req.preset(0, 2));
     const off = E.parse[E.CMD.DUMP](await rq(E.req.dump()), info);
     ok(on.p[52] === 1 && on.p[53] === 12 && on.p[54] === -30 && off.p.slice(49, 61).every((v) => v === 0),
-      "editor: a factory preset turns every matrix slot off");
+      "editor: a factory preset resets the inert ids 49..60");
   }
   {
     /* the chord keys (core.h P_CHRD, P_VOIC = 81, 82, just before P_E0 83): the track's, a factory preset keeps them */

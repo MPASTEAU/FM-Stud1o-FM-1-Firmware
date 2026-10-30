@@ -25,9 +25,9 @@
  *         the user presets, up_fm6.c). A stored value is never a bank slot: projects, user presets and motion
  *         load 9..40 as 8, OWN (params.c param_fit), and the patch comes with the project / the record. So a
  *         project or a preset made with a bank voice sounds the same after the bank is replaced
- * The operator envelopes are the voice's amplitude and end it (engine_t.ownenv / done): the track's ADSR,
- * ENV DEST and the matrix's ENV do nothing here. The track's FLT moves MLVL (ENV / LFO -> FLT, the
- * matrix's CUT), SHP the feedback, PIT the pitch (bend, glide, tune: the voice's pitch and fine factor).
+ * The operator envelopes are the voice's amplitude and end it (engine_t.ownenv / done): the track's ADSR
+ * and ENV DEST do nothing here. The track's FLT moves MLVL (ENV / LFO -> FLT), SHP the feedback, PIT the
+ * pitch (bend, glide, tune: the voice's pitch and fine factor).
  * Six voices per part at most (engine_t.poly).
  *
  * State: per voice an fm6_note_t (in the part's engine memory as PHYS's slots, engines.c eng_mem; fm6_note_of:

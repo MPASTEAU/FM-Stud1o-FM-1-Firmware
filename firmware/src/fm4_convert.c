@@ -55,7 +55,7 @@
  *                                  BRASS, ORGAN, PAD, MARIMBA, FUNK KEY -> PLUCK): what reloads when the sound is
  *                                  saved as a user preset again (a user preset keeps PTCH, not the patch); the
  *                                  OP ENV values their defaults (inert since; ids 61..80 stay, no id moves)
- * Not carried: the accent's index boost (velocity > 110), LFO / matrix amounts keep their values (FM6 reads FLT
+ * Not carried: the accent's index boost (velocity > 110), LFO amounts keep their values (FM6 reads FLT
  * as MLVL, SHP as the feedback). fm4_test.c renders DIGITAL (FELUCCA_FM4=1) against the conversion. */
 
 /* ------------------------------------------------- DIGITAL's tables --- */

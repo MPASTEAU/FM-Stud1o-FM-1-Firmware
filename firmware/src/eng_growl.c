@@ -5,8 +5,8 @@
  *   WAVE   the carrier: SAW SQR TRI SIN (SAW and SQR naive: the modulation moves their edges, the aliasing is part of
  *          the growl)
  *   RATIO  the modulator's frequency over the note: 0.5 1 1.5 2 3 4 5 7
- *   FM     the modulation index: 0 none .. ~2 cycles of phase; the SHP routings move it (ENV DEST / LFO DEST SHP, the
- *          matrix's SHP: the wob on the growl, not only on the filter)
+ *   FM     the modulation index: 0 none .. ~2 cycles of phase; the SHP routings move it (ENV DEST / LFO DEST SHP: the wob
+ *          on the growl, not only on the filter)
  *   FB     the modulator's feedback onto itself: a sine towards a saw, then noise
  *   CUT RES  a trapezoidal low-pass (dsp.c tsvf) after the drive; the filter routings move CUT; it follows the key by half
  *   DRV    a soft clip in front of the filter, 1x .. ~9x (the level kept)

@@ -3,7 +3,7 @@
 /* The second core (fx.c mix_block, hal/fm1_cpu1.h) on the host, after Jangada's tests/dualcore_test.c
  * (github.com/zednaked/jangada, GPL-3.0). Four parts of the same engine at once (every preset of every engine), and
  * mixes of different engines; every part with something that keeps state of its own while it renders: an INSERT, the
- * SLICER (part 1), SPREAD (part 2), the matrix with LFO S&H, which draws from the shared generator (parts 0 and 3),
+ * SLICER (part 1), SPREAD (part 2), LFO S&H, which draws from the shared generator (parts 0 and 3),
  * ENV SYNC (part 0); and PHYS's model changed under a sounding note. Each scene is rendered on one core, and again with
  * a thread as core 1 (tests/c1_host.h) taking every split of the parts in turn, the firmware's own choice
  * (mix_split) and fixed splits. The outputs must be bit for bit the same; built with -fsanitize=thread
@@ -40,14 +40,9 @@ static void part_setup(track_t *t, uint32_t k, uint32_t e)
     if (k == 2u)
         t->p[P_SPRD] = 100;                         /* SPREAD: t->spread_on, spread_buf[2] */
     if (k == 3u) {
-        t->p[P_LWAVE] = 4;                          /* S&H (part 3: its own generator) into the matrix */
+        t->p[P_LWAVE] = 4;                          /* S&H (part 3: its own generator) on the cutoff */
         t->p[P_LRATE] = 100;
-        t->p[P_M1SRC] = MS_SH;
-        t->p[P_M1DST] = MD_CUT;
-        t->p[P_M1AMT] = 40;
-        t->p[P_M2SRC] = MS_LFO;
-        t->p[P_M2DST] = MD_RATE;                    /* (a per-block destination: t->p while it renders) */
-        t->p[P_M2AMT] = 20;
+        t->p[P_LD_FLT] = 30;
     }
 }
 

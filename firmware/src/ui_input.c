@@ -82,7 +82,7 @@ static int mom_turn(uint32_t k, int32_t s)
     } else {
         if (act_cols() || lock_held() || !(pg->scope == SC_TRACK || pg->scope == SC_ENGINE || pg->scope == SC_GLOBAL) ||
             pg->graph == GR_EVENTS || pg->graph == GR_SONG || pg->graph == GR_USER ||
-            (pg->graph == GR_SLICES && k < 2u) || (pg->graph == GR_MOD && k == 0u))
+            (pg->graph == GR_SLICES && k < 2u))
             return 0;
         d = page_desc(pg, k, &vp);
     }
@@ -108,8 +108,8 @@ static int mom_turn(uint32_t k, int32_t s)
     return 1;
 }
 
-/* 1.5.6 (#84): MENU > SELECT MODW / VEL: SELECT plays. MODW: the selected track's mod wheel 0..127, as MIDI CC1 sets it (the
- * matrix's MODW source; sent as CC1 on the track's channel, where the keys' notes go); VEL: the panel keys'
+/* 1.5.6 (#84): MENU > SELECT MODW / VEL: SELECT plays. MODW: the selected track's mod wheel 0..127, sent as CC1
+ * on the track's channel, where the keys' notes go (nothing on the device reads it); VEL: the panel keys'
  * velocity 1..127 (100 from power-on, as before; MIDI OUT and live recording take it). Performance state, not saved, as
  * a keyboard's wheel. The value shows in the header. GLO + SELECT is the tempo, as with PAGE */
 static void sel_play(uint32_t m, int32_t s)
@@ -1380,10 +1380,6 @@ static void edit_param(uint32_t slot, int32_t steps)
     }
     if (xp_page(pg->graph)) {                            /* (HA HA HE HU) LFO DRAW, CURVE (ui_lfodraw.c) */
         xp_knob(slot, steps);
-        return;
-    }
-    if (pg->graph == GR_MOD && slot == 0u) {             /* MOD: KNOB 1 the slot, 2..4 its SRC DST AMT */
-        mod_ui_slot = (uint8_t)clamp((int32_t)mod_ui_slot + (steps > 0 ? 1 : -1), 0, 3);
         return;
     }
     if (pg->graph == GR_CHORD && TSEL->p[P_CHRD] == CH_MATCH && slot >= 2u) {   /* (Dah) MATCH: KNOB 3 COLOR, 4 NOTES */
@@ -2660,7 +2656,7 @@ static void ui_input(void)
             continue;
         }
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
-            ((pg->graph == GR_USER || pg->graph == GR_MOD) && k == 0u)
+            (pg->graph == GR_USER && k == 0u)
             || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph) || dln_page(pg->graph) ||
             (xp_page(pg->graph) && xp_field(k) != XP_NONE)) {   /* (not an empty
                                                                                                           * column) */

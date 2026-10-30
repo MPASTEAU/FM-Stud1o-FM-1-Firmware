@@ -6,8 +6,7 @@
  * Four tracks, one transport: every track's pattern loops on its own LEN / DIV /
  * SWING / GATE (polymeter). The keys play the selected track; MIDI IN by MENU > MIDI > MIDI IN (G_ROUTE):
  * CH1-4 (0) channels 1..4 play parts 1..4, channels 5..16 are ignored (midi_control.c midi_event); SEL (1)
- * every channel the selected track; 1.2: CH5-8, CH9-12, CH13-16 as CH1-4 on those four channels (midi_base). Their CC1 (mod wheel), CC11 (expression) and channel aftertouch go to
- * the same track's modulation matrix (mod.c; the selected track: the one selected then).
+ * every channel the selected track; 1.2: CH5-8, CH9-12, CH13-16 as CH1-4 on those four channels (midi_base).
  * A note into an armed track (song.rec) while
  * the transport runs is recorded into its pattern, quantised to its (swung) steps, with its
  * held length as TIE steps (rec_note, rec_hold, rec_release). With the ARP on, the notes the arp
@@ -1248,18 +1247,6 @@ static int32_t seq_nudge(const track_t *t, const step_t *s)
     return step_nudge(s);
 }
 
-/* 1.5.6 (#213): the matrix's TIME on step idx: how late it plays (samples, 0: on time). A NOTE step that plays
- * something, x1 (a ratcheted step's parts divide the step, as NUDGE); its VEL and first note are the sources' VEL
- * and KEY (mod.c mod_time). Not inlined: once a step, off the audio ISR's loop */
-static __attribute__((noinline)) uint32_t seq_time(track_t *t, uint32_t idx, uint32_t period)
-{
-    const step_t *s = &seq_play_steps(t)[idx];
-    uint32_t vel = (s->flags & SF_ACCENT) ? 127u : (s->vel ? s->vel : 96u);
-    if (s->time != ST_NOTE || (!s->n && !s->hit) || step_ratchet(s) != 1u)
-        return 0;
-    return mod_time(t, s->n ? s->note[0] : DRUM_LANE_NOTE[__builtin_ctz(s->hit) & (NLANE - 1u)], vel, period);
-}
-
 /* the automation a track plays: its slot's while a song plays (song_chain.c lanes; 0: a silent lane, none) */
 static const motion_store_t *chain_motion(const track_t *t)
 {
@@ -1293,16 +1280,6 @@ static __attribute__((noinline)) void seq_play(track_t *t, uint32_t idx, uint32_
     seq_step(t, s, idx, period, skip);
 }
 
-/* QUANTIZE ON: step seq_idx plays on its start, or (1.5.6, #213) late by the matrix's TIME (not inlined, as seq_play) */
-static __attribute__((noinline)) void seq_play_on(track_t *t, uint32_t period)
-{
-    uint32_t h = seq_time(t, t->seq_idx, period);
-    if (h)
-        t->nd_late = h + 1u;
-    else
-        seq_play(t, t->seq_idx, period);
-}
-
 /* NUDGE (1.2, #162; QUANTIZE OFF): a step plays at its start + nudge x DIV / 16. When a step starts its own late play
  * (nd_late) and the next step's early one (nd_early: that much before the end of this one) are latched; an early
  * play marks the step (nd_fired), whose start then plays nothing. A late play falls before the next start (at most
@@ -1334,11 +1311,10 @@ static __attribute__((noinline)) void seq_nd_start(track_t *t, uint32_t period, 
     t->nd_early = ND_NONE;
     if (t->nd_fired == t->seq_idx + 1u) {
         ;                                           /* (it played early) */
-    } else {                                        /* late by its NUDGE and (1.5.6) the matrix's TIME */
-        uint32_t h = seq_time(t, t->seq_idx, period);
+    } else {                                        /* late by its NUDGE */
         d = seq_nudge(t, &seq_play_steps(t)[t->seq_idx]);
-        if (d > 0 || h)
-            t->nd_late = (uint32_t)(d > 0 ? d : 0) * period / NUDGE_DIV + h + 1u;
+        if (d > 0)
+            t->nd_late = (uint32_t)d * period / NUDGE_DIV + 1u;
         else
             seq_play(t, t->seq_idx, period);
     }
@@ -1385,7 +1361,7 @@ static void seq_tick(track_t *t, uint32_t n)
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
         seq_enter(t, top, len);
         if (t->p[P_SQNT] == 1 && !t->nd_fired)
-            seq_play_on(t, period);                 /* QUANTIZE ON: every step on its start, as before 1.2 */
+            seq_play(t, t->seq_idx, period);        /* QUANTIZE ON: every step on its start, as before 1.2 */
         else
             seq_nd_start(t, period, len);
     }
