@@ -477,6 +477,9 @@ static int page_visible(uint32_t i)
     }
     if (PAGES[i].scope == SC_TRACK && PAGES[i].id[0] >= P_LN0 && PAGES[i].id[0] <= P_LN7)
         return TSEL->eng_req % NENGINES == ENGI_DRUM;
+    if (PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] == P_VOICE)   /* (Dah) VOICE: VCE GLIDE GLMOD PRIO, nothing a DRUM kit
+                                                         * reads (always POLY, no glide: voice.c trk_vmode) */
+        return !ENGINES[TSEL->eng_req % NENGINES]->oneshot;
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
     if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)

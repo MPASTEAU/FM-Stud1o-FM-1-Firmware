@@ -83,6 +83,8 @@ static const char *help_page(void)
     if (grid_on() && !detail_on())
         return H_GRID;
     t = cur_page()->title;
+    if (str_eq(t, "VOICE 2") && ENGINES[TSEL->eng_req % NENGINES]->oneshot)
+        return "[K3]PAN[K4]MUTE[EDIT]VOICE 3";          /* (Dah: a DRUM kit's, ALLOC DETUNE empty: params.c pg_unused) */
     for (i = 0; i < NELEM(HELP_PAGE); i++)
         if (str_eq(HELP_PAGE[i].title, t))
             return HELP_PAGE[i].hint;

@@ -575,9 +575,17 @@ static uint32_t fx_knob_id(const track_t *t, uint32_t c)
 static int eq_page(const page_t *pg) { return pg->fam == FAM_FX && pg->scope == SC_TRACK && pg->id[0] == P_EQLO; }
 static uint8_t eq_ui_band;        /* (Dah) the EQ page: the band picked (ui_graph_eq.c) */
 static uint32_t eq_ui_id(uint32_t c);                   /* (Dah) ui_graph_eq.c: the EQ page's knob c, the band picked's */
+/* (Dah) a knob of the EDIT family's VOICE pages that does nothing for the track's engine: shown empty. A DRUM kit
+ * (engine_t.oneshot, voice.c trk_vmode): always POLY, no glide, so ALLOC (which free voice: inaudible, a hit takes its
+ * lane's) and DETUNE (UNISON's) are left out; VOICE (VCE GLIDE GLMOD PRIO) is not shown at all (ui.c page_visible) */
+static int pg_unused(const page_t *pg, uint32_t id)
+{
+    return pg->fam == FAM_EDIT && (id == P_ALLOC || id == P_DETUNE) && ENGINES[eng_idx(TSEL->eng_req)]->oneshot;
+}
 static uint32_t page_id(const page_t *pg, uint32_t c)
 {
-    return pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : eq_page(pg) ? eq_ui_id(c) : pg->id[c & 3u];
+    uint32_t id = pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : eq_page(pg) ? eq_ui_id(c) : pg->id[c & 3u];
+    return pg_unused(pg, id) ? 0xFFu : id;
 }
 
 static track_t *fx_tsel(void);                         /* (Dah) ui.c: FX's track, or the MASTER (fx.c mtrk) */
@@ -587,7 +595,7 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
     uint32_t id = eq_page(pg) ? eq_ui_id(slot) : pg->id[slot];   /* (Dah: the EQ's knobs, the band picked's: not the
                                                          * page's table, 0xFF past KNOB 1) */
     track_t *ft = pg->fam == FAM_FX ? fx_tsel() : TSEL;
-    if (id == 0xFFu) {
+    if (id == 0xFFu || pg_unused(pg, id)) {
         *valp = 0;
         return 0;
     }
