@@ -1227,7 +1227,7 @@ static void layer_rec(void)
 static void layer_cards(uint32_t l)
 {
     char val[12];
-    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_GLO || l == LAYER_EDIT))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
+    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_GLO || l == LAYER_EDIT || l == LAYER_SCL))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
                                                          * them to the panel BG (no page left there) */
         lcd_fill(0, Y_LABEL + HOME_CARD_H, 240, Y_GRAPH - Y_LABEL - HOME_CARD_H, T_BG);
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
