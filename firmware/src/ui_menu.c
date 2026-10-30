@@ -183,7 +183,7 @@ static void menu_head(void)
  *                   between them; the selected row THEME with INK, as the browser's. A value THEME (M) at the right,
  *                   ON / OFF as a switch, COLOR its palette's five colours, CALIBRATION and ABOUT a chevron (OCT+
  *                   opens them); the labels in M too (a list's rows). LARGE: 28 px rows (a tab of up to 5)
- *   keys   224      ALGO TAB, PRESETS ROW, OCT-/+ VALUE (any of KNOB 1..4 too; CALIBRATION, ABOUT: OCT+ OPEN). HOME
+ *   keys   224      (Dah) KNOB 1 TAB, KNOB 2 ROW, KNOB 3 VALUE (OCT-/+ too; CALIBRATION, ABOUT: OCT+ OPEN). HOME
  *                   CLOSE is in the header: the four would not fit in S (cv_key_row drops words, from the last)
  * Drawn in two bands (the canvas holds 124 rows) split in a gap between two rows; while the tabs slide only their
  * strip (24..58) is drawn again */
@@ -409,9 +409,9 @@ static uint32_t menu_split(uint32_t n)
 }
 static void draw_menu(void)
 {
-    static const khint_t KEYS[3][3] = {{{KC_ALGO, "TAB"}, {KC_SELECT, "ROW"}, {KC_OCTPM, "VALUE"}},
-                                       {{KC_ALGO, "TAB"}, {KC_SELECT, "ROW"}, {KC_OCTUP, "OPEN"}},
-                                       {{KC_ALGO, "TAB"}, {KC_SELECT, "ROW"}, {KC_OCTUP, "CLEAR"}}};
+    static const khint_t KEYS[3][3] = {{{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_K3, "VALUE"}},
+                                       {{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTUP, "OPEN"}},
+                                       {{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTUP, "CLEAR"}}};
     uint32_t pass, k, first, n, split, sig;
     int32_t pos0 = mt.pos;
     if (ui.menu == 1)
@@ -534,12 +534,12 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
         enc_drop();
         return;
     }
-    if ((s = panel_enc(EN_SELECT)) != 0)              /* (Dah) SELECT the rows (PRESETS: nothing here) */
+    if ((s = panel_enc(EN_K1)) != 0)                   /* (Dah) as the other menus: KNOB 1 the tab, KNOB 2 the row, */
+        menu_tab_go(s);                                 /* KNOB 3 the value */
+    if ((s = panel_enc(EN_K2)) != 0)
         menu_move(s);
-    if ((s = panel_enc(EN_ALGO)) != 0)
-        menu_tab_go(s);
-    for (s = 0, k = 0; k < 4u; k++)                    /* KNOB 1..4, any of them */
-        s += panel_enc(EN_K1 + k);
+    s = panel_enc(EN_K3);
+    (void)k;
     if (menu_valued(ui.menu_sel)) {
         /* a step (OCT+ the next value, OCT- the previous); COLOR previews the palette, STYLE is drawn so from the next
          * frame (FX LATCH: the latched effects are off while the menu is up) */
