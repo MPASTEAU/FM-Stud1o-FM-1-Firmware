@@ -1513,8 +1513,9 @@ static void felucca_demo(void)
  * (A: Fm9 Bbm9 Eb13 Abmaj9; B: Dbmaj9 C7alt Fm9, the turnaround Db7 C7alt, chromatic); seven sections, nine times four
  * bars, from the SONG (2:00): the intro (the piano's filter opening), A, A with the lead (a call, the EP answers),
  * B twice, the break (the EP alone, the vinyl), A with the lead twice, the outro (the filter closing; the song goes
- * round). The drums sparse, laid back: a round kick, a rim on 2 and 4 late (NUDGE, QNTZ OFF), soft hats far apart in
- * velocity, some left out (CHANCE). Warm and dusty: every track a LOW PASS, a tape wow on the keys' LFOs, a dark ROOM:
+ * round). The drums sparse, laid back: a round kick, a rim on 2 and 4 late, soft hats far apart in velocity, some
+ * left out (CHANCE). Off the grid: QNTZ OFF everywhere, every step its NUDGE (lf_loose); the bass, the EP and the lead
+ * on the off-beats. Warm and dusty: every track a LOW PASS, a tape wow on the keys' LFOs, a dark ROOM:
  *   track 1  DRUM DEEP KIT, the kick (short, low; the gentle SIDECHAIN's source)   track 2  DRUM KIT, the rim, a brush of
  *   snare, the hats   track 3  ANALOG SUB BASS   track 4  SAMPLE PIANO, the chords, crushed (BITS, DRV; CHRD COLOR,
  *   VOIC AUTO on the keys; its CUT automated)   track 5  FM6 TINE EP, the answers, B's chords   track 6  LOFI, the lead
@@ -1526,9 +1527,9 @@ static const uint8_t LF_CH[2][4][4] = {
     {{53, 56, 60, 63}, {52, 56, 58, 63}, {55, 56, 60, 63}, {53, 56, 59, 63}}};  /* Dbmaj9 C7alt Fm9 Db7 */
 static const uint8_t LF_ALT[4] = {52, 56, 58, 63};                            /* .. then C7alt (the turnaround) */
 static const uint8_t LF_HK[2][12][3] = {       /* the lead's calls (bars 1 and 3; the EP answers): step, note, length */
-    {{3, 72, 3}, {6, 75, 2}, {8, 77, 6}, {28, 73, 2}, {30, 72, 2}, {32, 70, 4}, {38, 72, 8}, {56, 68, 2}, {58, 67, 6},
-     {0, 0, 0}},
-    {{2, 68, 2}, {4, 72, 2}, {6, 75, 4}, {10, 73, 2}, {12, 72, 4}, {34, 79, 2}, {36, 77, 2}, {38, 75, 6}, {52, 72, 8},
+    {{3, 72, 2}, {5, 75, 3}, {9, 77, 5}, {27, 73, 2}, {29, 72, 3}, {33, 70, 3}, {37, 72, 9}, {55, 68, 2}, {57, 67, 7},
+     {0, 0, 0}},                               /* (on the "e"s and the "a"s: off the beat, swung) */
+    {{1, 68, 2}, {3, 72, 3}, {7, 75, 3}, {10, 73, 1}, {11, 72, 5}, {33, 79, 2}, {35, 77, 3}, {38, 75, 5}, {51, 72, 9},
      {0, 0, 0}}};
 static void demo_var(uint32_t k, uint32_t v)
 {
@@ -1564,11 +1565,9 @@ static void demo_var(uint32_t k, uint32_t v)
                     if (i & 1u)
                         s->probability = (uint8_t)(b & 1u ? 60 : 80);       /* (the offbeats: some left out) */
                 }
-            demo_hit(t, s0 + 12u, 1u << 6, 70);                             /* the rim on 4, late */
-            step_set_nudge(&t->step[s0 + 12u], 3);
+            demo_hit(t, s0 + 12u, 1u << 6, 70);                             /* the rim on 4 (late: lf_loose) */
             if (v == 1u) {
                 demo_hit(t, s0 + 4u, 1u << 6, 62);                          /* .. on 2 */
-                step_set_nudge(&t->step[s0 + 4u], 2);
                 if (b & 1u)
                     demo_hit(t, s0 + 12u, 1u << 1, 34);                     /* a brush of snare */
                 if (b == 3u)
@@ -1581,9 +1580,10 @@ static void demo_var(uint32_t k, uint32_t v)
                 demo_note(&t->step[s0 + 8u], 36, 96); demo_hold(t, s0 + 8u, 7);
                 break;
             }
-            demo_note(&t->step[s0], r, 104); demo_hold(t, s0, 8);
-            demo_note(&t->step[s0 + 10u], r + 7u, 80); demo_hold(t, s0 + 10u, 3);
-            demo_note(&t->step[s0 + 14u], nb + (nb > r ? -1 : 1), 72); demo_hold(t, s0 + 14u, 2);
+            demo_note(&t->step[s0], r, 104); demo_hold(t, s0, 6);         /* the root, the fifth on the "a" of 2, the */
+            demo_note(&t->step[s0 + 7u], r + 7u, 76); demo_hold(t, s0 + 7u, 2);   /* root on the "e" of 3, a push */
+            demo_note(&t->step[s0 + 11u], r, 88); demo_hold(t, s0 + 11u, 3);      /* into the next on the "a" of 4 */
+            demo_note(&t->step[s0 + 15u], nb + (nb > r ? -1 : 1), 70);
             break;
         case 3:                                                             /* the piano */
             if (v >= 3u) {                                                  /* intro, outro: held */
@@ -1610,8 +1610,8 @@ static void demo_var(uint32_t k, uint32_t v)
             }
             if (b & 1u) {
                 const uint8_t sh[2] = {(uint8_t)(c[1] + 12u), (uint8_t)(c[3] + 12u)};
-                dm_chord(t, s0 + 4u, 3, sh, 2, 70);
-                dm_chord(t, s0 + 10u, 4, sh, 2, 58);
+                dm_chord(t, s0 + 5u, 3, sh, 2, 70);                         /* (off the beat) */
+                dm_chord(t, s0 + 11u, 4, sh, 2, 58);
             }
             break;
         default: {                                                          /* the air: two tones a bar */
@@ -1627,6 +1627,26 @@ static void demo_var(uint32_t k, uint32_t v)
         demo_auto(t, P_E4, 0, 56, 88, 20);
     if (k == 6u && v == 2u)                                                 /* the air: its POS drifting */
         demo_auto(t, P_E1, 0, 56, 30, 90);
+}
+/* off the grid (J Dilla-ish): each played step of track k's pattern v its NUDGE (sixteenths of a step), around the
+ * track's lean, a drift of its own: the kick here and there, the hats +-2, the rim and the snare late (+3..+5), the
+ * bass a hair behind the kick, the chords late, the lead loose; the air and the vinyl on the grid */
+static void lf_loose(uint32_t k, uint32_t v)
+{
+    static const int8_t LEAN[8] = {0, 0, 1, 2, 2, 1, 0, 0};
+    static const uint8_t DRIFT[8] = {1, 2, 1, 2, 2, 3, 0, 0};
+    track_t *t = &trk[k];
+    uint32_t i;
+    for (i = 0; i < 64u; i++) {
+        step_t *s = &t->step[i];
+        uint32_t h = (i * 2654435761u + (k * 8u + v) * 40503u) >> 13;
+        int32_t n = LEAN[k] + (int32_t)(h % (2u * DRIFT[k] + 1u)) - (int32_t)DRIFT[k];
+        if (s->time != ST_NOTE || (!s->n && !s->hit))
+            continue;
+        if (k == 1u && (s->hit & (1u << 1 | 1u << 6)))
+            n = 3 + (int32_t)(h % 3u);                                      /* the rim, the snare: late */
+        step_set_nudge(s, clamp(n, -8, 7));
+    }
 }
 static void felucca_demo(void)
 {
@@ -1666,7 +1686,7 @@ static void felucca_demo(void)
     };
     static const int16_t DS[][3] = {          /* track, parameter, value */
         {0, P_E2, 36}, {0, P_E3, 40},                                       /* the kick: dark, short */
-        {1, P_E2, 40}, {1, P_E3, 56}, {1, P_SSWING, 10}, {1, P_SQNT, 0},    /* the kit: dull, its NUDGEs played */
+        {1, P_E2, 40}, {1, P_E3, 56}, {1, P_SSWING, 10},                    /* the kit: dull */
         {2, P_VOICE, V_MONO}, {2, P_GLIDE, 16}, {2, P_E4, 28}, {2, P_ATK, 6}, {2, P_REL, 40},
         {3, P_E2, 50}, {3, P_E4, 88}, {3, P_E6, 26}, {3, P_ATK, 4}, {3, P_REL, 76},   /* the piano: BITS, CUT, DRV */
         {3, P_LRATE, 40}, {3, P_LD_PIT, 3}, {3, P_CHRD, CH_COLOR}, {3, P_VOIC, VC_AUTO},
@@ -1695,6 +1715,7 @@ static void felucca_demo(void)
             t->p[P_SDIV] = 2;
             demo_sound(t, SND[i][0], SND[i][1]);
             t->p[P_ROOT] = 5; t->p[P_SCALE] = 2;                            /* F minor */
+            t->p[P_SQNT] = 0;                                               /* QNTZ OFF: the NUDGEs played (lf_loose) */
             t->p[P_LEVEL] = (uint8_t)m[0]; t->p[P_PAN] = m[1]; t->p[P_SPRD] = m[2];
             t->p[P_CHOR] = m[3]; t->p[P_DLY] = m[4]; t->p[P_REV] = m[5];
             if (m[6]) {                                                     /* the SIDECHAIN on the kick */
@@ -1720,6 +1741,7 @@ static void felucca_demo(void)
             if (v > 1u)
                 (void)pattern_new(k, 0);
             demo_var(k, v);
+            lf_loose(k, v);
         }
     for (k = 0; k < 8u; k++)
         (void)pattern_go(k, 1);
