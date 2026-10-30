@@ -200,7 +200,7 @@ static void layer_lock_input(uint32_t pressed)
         lys.dt_l = 0;
     if (!ui.lock)
         return;
-    if ((pressed & ly_bit(ui.lock)) && (ui.lock == LAYER_SEQ || ui.lock == LAYER_REC)) {   /* (Dah) SEQ, REC held open:
+    if ((pressed & ly_bit(ui.lock)) && ui.lock >= LAYER_SCL) {   /* (Dah) SCL, EDIT, SEQ, REC held open:
                                                          * its button closes it */
         lys.eat = (uint8_t)ui.lock;
         if (ui.lock == LAYER_REC)
@@ -290,7 +290,7 @@ static uint32_t layer_gesture(uint32_t now, uint32_t combo)
         }
         return 0;
     }
-    if ((l == LAYER_SEQ || l == LAYER_REC) && (*t0 & LY_OPEN) && !(*t0 & LY_DEAD) && !combo && !ui.lock) {   /* (Dah) SEQ held open: it
+    if (l >= LAYER_SCL && (*t0 & LY_OPEN) && !(*t0 & LY_DEAD) && !combo && !ui.lock) {   /* (Dah) SCL EDIT SEQ REC held open: it
                                                          * stays when let go (its button again, or another, closes it) */
         ui.lock = (uint8_t)l;
         return 0;

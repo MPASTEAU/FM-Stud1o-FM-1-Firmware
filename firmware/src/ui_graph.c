@@ -560,8 +560,9 @@ static uint32_t trk_sounding(const track_t *t)
 }
 /* (Dah) SCL and CHORD: a piano, n keys up from the C lo (a C at both ends), y .. y + h in the panel: the white keys
  * tall with their gaps, the black ones shorter on them; st[i] the key lo + i's: 1 in (THEME, the black a shade
- * darker), 2 the root (ACCENT), 4 sounding (TEXT); none: light white keys, dark black ones, as a piano's; the C's
+ * darker), 2 the root (ACCENT), 4 sounding (C_PLAY: a fixed green, never the root's); none: light white keys, dark black ones, as a piano's; the C's
  * names under them */
+#define C_PLAY 0x2FE6u
 static void piano(int32_t y, int32_t h, uint32_t lo, uint32_t n, const uint8_t *st, uint16_t c)
 {
     uint32_t i, k, nw = n / 12u * 7u + 1u;
@@ -570,7 +571,7 @@ static void piano(int32_t y, int32_t h, uint32_t lo, uint32_t n, const uint8_t *
     for (k = 0; k < 2u; k++)                         /* the white keys, then the black ones on them */
         for (i = 0, x = x0; i <= n; i++) {
             uint32_t s = st[i], blk = (0x54Au >> ((lo + i) % 12u)) & 1u;
-            uint16_t cl = s & 4u ? T_TEXT : s & 2u ? T_ACCENT : s & 1u ? (blk ? ux_mix(c, T_BG, 35) : c) :
+            uint16_t cl = s & 4u ? C_PLAY : s & 2u ? T_ACCENT : s & 1u ? (blk ? ux_mix(c, T_BG, 35) : c) :
                           blk && !ux.light ? T_BG : ux_mix(T_SURF, T_TEXT, blk ? 60 : ux.light ? 12 : 22);
             if (blk != k) {
                 x += blk ? 0 : p;
@@ -603,7 +604,7 @@ static void graph_scale(const track_t *t, uint16_t c)
 }
 /* CHORD (SCL 1): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
  * C4) over the piano from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
- * root's ACCENT, those sounding TEXT. OFF or a kit: what to do instead */
+ * root's ACCENT, those sounding green. OFF or a kit: what to do instead */
 static void panel_note(const char *a, const char *b, const char *c);
 static void panel_alert(uint32_t id, const char *a);
 static void graph_chord(const track_t *t, uint16_t c)
