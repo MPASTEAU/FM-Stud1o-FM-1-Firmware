@@ -62,7 +62,7 @@ static const layer_t LAYERS[LAYER_N] = {
                                                          * GLO + ALGORITHM the pattern, said) */
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_K1, "ROW"}, {KC_K2, "VALUE"}, {KC_OCTDN, "UNDO"}}},
+    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_OCTDN, "UNDO"}}},   /* (Dah: the band OCT- alone) */
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
@@ -83,7 +83,6 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
-static const khint_t SEQ_CLR_FOOT[3] = {{KC_K1, "ROW"}, {KC_OCTUP, "CLEAR"}, {KC_OCTDN, "UNDO"}};   /* (CLEAR ALL picked) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -433,6 +432,8 @@ static void seq_presets(int32_t s)                     /* (Dah) KNOB 2, PRESETS:
         ui.page = pg;
     } else if (lys.sq_row == 2u)
         qz_turn(TSEL, s);
+    else                                                /* (Dah) CLEAR ALL: KNOB 2 turned asks it (the dialog) */
+        seq_key(0);
     ui.force = 1;
 }
 
@@ -784,11 +785,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
-    if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row < 3u) {   /* (Dah) SEQ: OCT+ on LEN, DIV, QUANTIZE: nothing (no
-                                                         * APPLY: the user's choice; QUANTIZE plays as set) */
-    } else if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row == 3u) {   /* (Dah) SEQ: OCT+ on CLEAR ALL: its dialog */
-        seq_key(0);
-        mine &= ~2u;
+    if ((mine & 2u) && lys.l == LAYER_SEQ) {           /* (Dah) SEQ: OCT+ nothing (no APPLY: QUANTIZE plays as set;
+                                                         * CLEAR ALL: KNOB 2) */
     } else if ((mine & 2u) && lys.l == LAYER_SEQ) {     /* (Dah) SEQ: OCT+ APPLY, QUANTIZE written */
         if (chain_busy())
             ui_message("STOP TO EDIT");
@@ -1293,13 +1291,12 @@ static void draw_layer(void)
         cv_begin(240, H_FOOT, T_BG);
         const khint_t *ft = l == LAYER_FX && fx_key_held() ? FX_KEY_FOOT : l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT :
                             l == LAYER_GLO && ui.lock == LAYER_GLO ? GLO_LOCK_FOOT :
-                            l == LAYER_SEQ && lys.sq_row == 3u ? SEQ_CLR_FOOT :
                             LAYERS[l].foot;
         int h = help_on() && help_row(HELP_LAYER[l], 21);   /* 1.5, HELP ON: a
                                                          * second row, what this one does not say */
         {
             int tall = foot_free() && !h;             /* (Dah: the panel reaches row 2: the keys' row there only) */
-            cv_key_row(8, 232, tall ? 21 : h ? 2 : 9, ft, ft[2].act ? 3u : 2u, 7u, T_BG);
+            cv_key_row(8, 232, tall ? 21 : h ? 2 : 9, ft, ft[2].act ? 3u : ft[1].act ? 2u : 1u, 7u, T_BG);
             if (tall)
                 cv_blit_from(0, Y_FOOT, FOOT_GAIN);
             else
