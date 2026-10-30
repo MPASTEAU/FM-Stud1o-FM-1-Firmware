@@ -321,13 +321,13 @@ static void menu_row(uint32_t k, uint32_t row)
         cv_icon_in(MR_VR - 12, y, 0, h, 12, ICON_X_RIGHT, sel ? T_INK : T_MID, bg);
         return;
     }
-    if (row == MI_HOLD || row == MI_TUNE) {            /* "0.4" s, "+12" ct: the value and its unit */
+    if (row == MI_HOLD) {                              /* "0.4" s: the value and its unit (Dah: TUNE's "ct" gone with
+                                                        * its row, GLO's menu) */
         char b[8] = "0.4";
         b[2] = (char)('0' + HOLD_MS[settings_hold % 4u] / 100u);
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row value centred up/down");
         GFX_HOOK_ALIGN(0, 0, 0, vy + AF_M.asc, AL_B, "menu row unit on its value's baseline");
-        cv_text_r(cv_text_r(MR_VR, vy + AF_M.asc - AF_S.asc, &AF_S, row == MI_TUNE ? "ct" : "s", sel ? T_INK : T_MID, bg) - 3,
-                  vy, &AF_M, row == MI_TUNE ? v : b, val, bg);
+        cv_text_r(cv_text_r(MR_VR, vy + AF_M.asc - AF_S.asc, &AF_S, "s", sel ? T_INK : T_MID, bg) - 3, vy, &AF_M, b, val, bg);
         return;
     }
     if (menu_n(row) == 2u && (str_eq(v, "ON") || str_eq(v, "OFF")) && !MI_TEXT(row)) {

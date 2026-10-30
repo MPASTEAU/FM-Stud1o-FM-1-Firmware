@@ -2574,9 +2574,8 @@ static int test_page_cycles(void)
             if (str_eq(PAGES[i].title, "CLOCK"))
                 clock = i + 1u;
         }
-        ok &= !clock && MI_TAB[MI_SYNC] == MTAB_AUDIO && MI_TAB[MI_SWING] == MTAB_AUDIO;   /* (Dah: CLOCK gone, its SYNC
-                                                         * and SWING MENU > AUDIO's) */
-        bad += check("1.2: no GLOBAL, no SYSTEM page (Dah: no CLOCK, SYNC SWING in MENU > AUDIO), TUNE and ROUT on no page", ok);
+        ok &= !clock;                                   /* (Dah: CLOCK gone, its SYNC and SWING GLO's menu's) */
+        bad += check("1.2: no GLOBAL, no SYSTEM page (Dah: no CLOCK, SYNC SWING in GLO's menu), TUNE and ROUT on no page", ok);
     }
     /* remembered pages: one that left its family, or out of range, gives the family's first (1.2: GLO's whatever it was,
      * GLOBAL and SYSTEM too, now SONG; HOME's never remembered: from HOME the MIXER) */

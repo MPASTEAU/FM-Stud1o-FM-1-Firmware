@@ -42,6 +42,9 @@ static const uint8_t ED_MENU[][2] = {
 #endif
 };
 #define ED_MENU_N NELEM(ED_MENU)
+/* (Dah) a row's tab for the editor: CLICK, CLICK LEVEL, COUNT-IN, TUNE are off the MENU (menu_items.c MTAB_OFF: REC's and
+ * GLO's held menus), still AUDIO's here as they were */
+#define ED_TAB(row) (MI_TAB[row] < MTAB_COUNT ? MI_TAB[row] : MTAB_AUDIO)
 
 /* rc as UI_SET: 0 applied and saved, 3 applied in RAM only (no flash, a failed write), 4 queued until STOP */
 static uint32_t ed_menu_save(void)
@@ -85,8 +88,8 @@ static int ed_menu_handle(uint32_t cmd, const uint8_t *a, uint32_t n)
         else
             for (i = 0; i < k; i++)
                 ed_str(menu_vname(row, i), 12);
-        ed_b(MI_TAB[row]);                             /* (after the names: an older editor stops before it) */
-        ed_str(MTAB_NAME[MI_TAB[row]], 12);
+        ed_b(ED_TAB(row));                             /* (after the names: an older editor stops before it) */
+        ed_str(MTAB_NAME[ED_TAB(row)], 12);
         return 1;
     }
     if (cmd != ED_MENU_SET)

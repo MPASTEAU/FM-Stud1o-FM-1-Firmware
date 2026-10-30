@@ -72,7 +72,7 @@ static int select_page(void)
     ui_power_on();
     memcpy(before, favorites.factory[15], 32);
     ok = menu_get(MI_SELECT) == 0u && str_eq(MI_NAME[MI_SELECT], "SELECT") && MI_TAB[MI_SELECT] == MTAB_CONTROL &&
-         MI_SELECT < MI_VALUES && str_eq(menu_vname(MI_SELECT, 0), "BPM") && str_eq(menu_vname(MI_SELECT, 1), "LIST") &&
+         MI_SELECT < MI_VALUES && str_eq(menu_vname(MI_SELECT, 0), "PATTERN") && str_eq(menu_vname(MI_SELECT, 1), "LIST") &&
          mtab_rows(MTAB_CONTROL) <= MTAB_ROWS;
     go_title("ENV"); frame();
     b0 = song.g[G_BPM];

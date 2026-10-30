@@ -916,12 +916,12 @@ static int menu_protocol(void)
         {"MIDI IN", "CH1-8,SEL,CH5-8,CH9-12,CH13-16,TRACK"}, {"TUNE", 0},   /* (1.2: the project's ROUT and TUNE; TUNE a number) */
         {"HOME", "SCOPE,TRACKS,LEVELS"},                                                       /* (1.3; 1.5: LEVELS) */
         {"HELP", "ON,OFF"},                                                                          /* (1.5) */
-        {"SELECT", "BPM,LIST,MODW,VEL"},                                                             /* (1.5.5; 1.5.6 MODW VEL) */
+        {"SELECT", "PATTERN,LIST,MODW,VEL"},                                                            /* (1.5.5; 1.5.6 MODW VEL) */
         {"T1 CHANNEL", TCH_NAMES}, {"T2 CHANNEL", TCH_NAMES}, {"T3 CHANNEL", TCH_NAMES}, {"T4 CHANNEL", TCH_NAMES},   /* (1.5.5) */
         {"AUTO SELECT", "OFF,ON"}, {"SCREEN WAKE", "+MIDI,PANEL"},                                   /* (1.5.5) */
         {"2ND CORE", "OFF,ON (BETA)"}};                                                           /* (1.6.1; OFF the default) */
     static const int32_t DEF[33] = {-1, 0, 0, 0, 2, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 2, 3, 0, 0, 0};   /* (COLOR: the default palette) */
-    static const uint8_t TAB[33] = {0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 4, 4, 2, 2, 2, 4, 1, 0, 4, 1, 1, 3, 2, 0, 0, 1, 3, 3, 3, 3, 3, 3, 4};   /* (Dah: SCREEN OFF, SCOPE in SYSTEM; HELP first of DISPLAY) */   /* DISPLAY CONTROL AUDIO
+    static const uint8_t TAB[33] = {0, 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 4, 2, 2, 2, 4, 1, 0, 4, 1, 1, 3, 2, 0, 0, 1, 3, 3, 3, 3, 3, 3, 4};   /* (Dah: SCOPE in SYSTEM; HELP first of DISPLAY; USB LEVEL in AUDIO; CLICK .. TUNE AUDIO for the editor, off the MENU) */   /* DISPLAY CONTROL AUDIO
                                                                                                          * MIDI SYSTEM (1.2) */
     static const char *const TABN[5] = {"DISPLAY", "CONTROL", "AUDIO", "MIDI", "SYSTEM"};
     int bad = 0, ok = 1;

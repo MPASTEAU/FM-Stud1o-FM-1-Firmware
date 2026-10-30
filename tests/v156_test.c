@@ -157,7 +157,7 @@ static int select_play(void)
     int16_t b0;
     uint32_t mo, pk;
     ui_power_on();
-    ok = menu_n(MI_SELECT) == 4u && str_eq(menu_vname(MI_SELECT, 0), "BPM") && str_eq(menu_vname(MI_SELECT, 1), "LIST") &&
+    ok = menu_n(MI_SELECT) == 4u && str_eq(menu_vname(MI_SELECT, 0), "PATTERN") && str_eq(menu_vname(MI_SELECT, 1), "LIST") &&
          str_eq(menu_vname(MI_SELECT, 2), "MODW") && str_eq(menu_vname(MI_SELECT, 3), "VEL") && menu_get(MI_SELECT) == 0u;
     menu_put(MI_SELECT, 1);
     ok &= ui_prefs2 == 0x10u && sel_mode() == SEL_PAGE;     /* (PAGE: 1.5.5's bit) */

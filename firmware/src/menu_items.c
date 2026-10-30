@@ -5,7 +5,7 @@
  * SCREEN OFF; 1.2: SCOPE; 1.3: HOME), the
  * controls (HOLD: the layer threshold, KNOB ACCEL, FX LATCH, BPM LOCK; 1.2: SCALE LEDS, the keys, STEP PREVIEW, CHORD
  * ENTRY; 1.5.5: SELECT, BPM or PAGE), the sound (SPEAKER EQ: FLAT LOWCUT BASS+,
- * USB LEVEL; 1.1: CLICK, CLICK LEVEL, COUNT-IN; 1.2: TUNE), MIDI (1.2: MIDI IN; 1.5.5: T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE; 1.5: LEARN CLEAR), USB SERIAL, RESTORE
+ * USB LEVEL; 1.1: CLICK, CLICK LEVEL, COUNT-IN; 1.2: TUNE: Dah, REC's and GLO's held menus now, MTAB_OFF), MIDI (1.2: MIDI IN; 1.5.5: T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE; 1.5: LEARN CLEAR), USB SERIAL, RESTORE
  * LAST (1.2), then CALIBRATION (the setup screen: HARDWARE CALIBRATION), INFO (1.2) and ABOUT, the rows with no value
  * (MI_VALUES: the rows before them hold one, but LEARN CLEAR: menu_valued). 1.0.5: in four tabs (MI_TAB); 1.2: five.
  * 1.5: LEARN CLEAR (MIDI) is an action, not a setting: OCT+ clears MIDI LEARN's map (midi_learn.c ml_clear_all; the editor
@@ -14,8 +14,8 @@
  * GLO > SYSTEM), the values the project holds and saves as before (no format change; a project load brings its own);
  * nothing of theirs is in the settings record (MI_PROJECT: menu_get / menu_put read and write song.g) */
 enum { MI_HELP, MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HOME, MI_HOLD, MI_ACCEL, MI_LATCH, MI_BPMLOCK, MI_SCLLED,
-       MI_PREVIEW, MI_CHADD, MI_SELECT, MI_SNDPV, MI_LOWCUT,
-       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_SYNC, MI_SWING, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_USB, MI_RESTORE, MI_SCOPE,
+       MI_PREVIEW, MI_CHADD, MI_SELECT, MI_SNDPV, MI_LOWCUT, MI_USB,
+       MI_CLICK, MI_CLKLVL, MI_COUNTIN, MI_TUNE, MI_MIDIIN, MI_TCH1, MI_TCH2, MI_TCH3, MI_TCH4, MI_MFOLLOW, MI_SCRWAKE, MI_LCLEAR, MI_SERIAL, MI_RESTORE, MI_SCOPE,
 #if FELUCCA_CPU2
        MI_CPU2,                                        /* (not in a FELUCCA_CPU2=0 build: core.h) */
 #endif
@@ -25,7 +25,9 @@ enum { MI_HELP, MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HO
                                                         * DISPLAY, TUNE in AUDIO, MIDI IN in MIDI, INFO in SYSTEM;
                                                         * 1.3: HOME in DISPLAY; 1.5: HELP in SYSTEM; 1.5.5: SELECT
                                                         * in CONTROL, T1..T4 CHANNEL, AUTO SELECT and SCREEN WAKE
-                                                        * in MIDI; 1.6.1: 2ND CORE in SYSTEM) */
+                                                        * in MIDI; 1.6.1: 2ND CORE in SYSTEM; Dah: USB LEVEL in AUDIO,
+                                                        * CLICK CLICK LEVEL COUNT-IN TUNE off the MENU (MTAB_OFF), SYNC
+                                                        * SWING gone: GLO's held menu has TEMPO SWING TUNE CLOCK) */
 #define MI_VALUES MI_PANEL
 #if FELUCCA_CPU2
 #define MI_TEXT(row) ((row) == MI_CPU2)                /* OFF / ON (BETA): its values as words, not a switch (ui_menu.c) */
@@ -33,14 +35,14 @@ enum { MI_HELP, MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HO
 #define MI_TEXT(row) 0
 #endif
 static int menu_valued(uint32_t row) { return row < MI_VALUES && row != MI_LCLEAR; }   /* (a row with a value) */
-#define MI_PROJECT(row) ((row) == MI_TUNE || (row) == MI_SYNC || (row) == MI_SWING || ((row) >= MI_MIDIIN && (row) <= MI_TCH4))   /* the project's values (song.g,
+#define MI_PROJECT(row) ((row) == MI_TUNE || ((row) >= MI_MIDIIN && (row) <= MI_TCH4))   /* the project's values (song.g,
                                                                                          * song.mch), not settings */
 #define MI_TCH(row) ((row) >= MI_TCH1 && (row) <= MI_TCH4)   /* 1.5.5 (#202): T1..T4 CHANNEL, MIDI IN TRACK's */
 static const char *const MI_NAME[MI_COUNT] = {"HELP", "COLOR", "STYLE", "LARGE", "ANIM", "LEDS", "SCREEN OFF", "HOME", "HOLD", "KNOB ACCEL",
                                               "FX LATCH", "BPM LOCK", "SCALE LEDS", "STEP PREVIEW", "CHORD ENTRY", "SELECT",
-                                              "PLAY ON PICK", "SPEAKER EQ", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE", "SYNC", "SWING",
+                                              "PLAY ON PICK", "SPEAKER EQ", "USB LEVEL", "CLICK", "CLICK LEVEL", "COUNT-IN", "TUNE",
                                               "MIDI IN", "T1 CHANNEL", "T2 CHANNEL", "T3 CHANNEL", "T4 CHANNEL",
-                                              "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR", "USB SERIAL", "USB LEVEL", "RESTORE LAST", "SCOPE",
+                                              "AUTO SELECT", "SCREEN WAKE", "LEARN CLEAR", "USB SERIAL", "RESTORE LAST", "SCOPE",
 #if FELUCCA_CPU2
                                               "2ND CORE",
 #endif
@@ -51,8 +53,9 @@ static const char *const MI_NAME[MI_COUNT] = {"HELP", "COLOR", "STYLE", "LARGE",
  * most MTAB_ROWS each (the page does not scroll: ui_menu.c fits them; 1.2: 7, the rows of such a tab 21 px; 1.3: 8,
  * 18 px). A new row
  * joins a tab here. Tabs are in the order the device shows them; a tab's index is what the editor is told, not an id
- * (1.2: MIDI came in before SYSTEM, SYSTEM's index 3 -> 4) */
-enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_MIDI, MTAB_SYSTEM, MTAB_COUNT };
+ * (1.2: MIDI came in before SYSTEM, SYSTEM's index 3 -> 4). (Dah) MTAB_OFF: a row the MENU does not show (CLICK, CLICK
+ * LEVEL, COUNT-IN: REC's held menu has them; TUNE: GLO's), still the editor's, in AUDIO there (editor_menu.c ED_TAB) */
+enum { MTAB_DISPLAY, MTAB_CONTROL, MTAB_AUDIO, MTAB_MIDI, MTAB_SYSTEM, MTAB_COUNT, MTAB_OFF = MTAB_COUNT };
 #define MTAB_ROWS 8u
 static const char *const MTAB_NAME[MTAB_COUNT] = {"DISPLAY", "CONTROL", "AUDIO", "MIDI", "SYSTEM"};
 static const uint8_t MI_TAB[MI_COUNT] = {
@@ -64,18 +67,18 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_CONTROL,                                                           /* SCALE LEDS (1.2) */
     MTAB_CONTROL, MTAB_CONTROL,                                             /* STEP PREVIEW, CHORD ENTRY (1.2) */
     MTAB_CONTROL,                                                           /* SELECT (1.5.5) */
-    MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO, MTAB_AUDIO,             /* (Dah) PLAY ON PICK (a sound / track picked
-                                                                             * heard), SPEAKER EQ, CLICK, CLICK LEVEL,
-                                                                             * COUNT-IN */
-    MTAB_AUDIO,                                                             /* TUNE (1.2) */
-    MTAB_AUDIO, MTAB_AUDIO,                                                 /* (Dah) SYNC, SWING: the project's clock
-                                                                             * and swing (HOME > CLOCK's, the page gone) */
+    MTAB_AUDIO, MTAB_AUDIO,                                                 /* (Dah) PLAY ON PICK (a sound / track picked
+                                                                             * heard), SPEAKER EQ */
+    MTAB_AUDIO,                                                             /* USB LEVEL (Dah: back in AUDIO, room again) */
+    MTAB_OFF, MTAB_OFF, MTAB_OFF,                                           /* CLICK, CLICK LEVEL, COUNT-IN (1.1; Dah:
+                                                                             * REC's held menu) */
+    MTAB_OFF,                                                               /* TUNE (1.2; Dah: GLO's held menu) */
     MTAB_MIDI,                                                              /* MIDI IN (1.2) */
     MTAB_MIDI, MTAB_MIDI, MTAB_MIDI, MTAB_MIDI,                             /* T1..T4 CHANNEL (1.5.5) */
     MTAB_MIDI,                                                              /* AUTO SELECT (1.5.5) */
     MTAB_MIDI,                                                              /* SCREEN WAKE (1.5.5: DISPLAY is full) */
     MTAB_MIDI,                                                              /* LEARN CLEAR (1.5) */
-    MTAB_SYSTEM, MTAB_SYSTEM,                                               /* USB SERIAL, USB LEVEL (Dah: AUDIO full) */
+    MTAB_SYSTEM,                                                            /* USB SERIAL */
     MTAB_SYSTEM, MTAB_SYSTEM,                                               /* RESTORE LAST, SCOPE (Dah: HELP went first) */
 #if FELUCCA_CPU2
     MTAB_SYSTEM,                                                            /* 2ND CORE (1.6.1) */
@@ -182,14 +185,16 @@ static const menu_flag_t *menu_flag(uint32_t row)
 static const char *const LEDS_ROW_N[LEDS_ROWS] = {"OFF", "DIM LO", "DIM HI", "INV", "INV LO", "INV HI"};
 
 /* MENU > CONTROL > SELECT (ui.c sel_mode): BPM, PAGE (1.5.5, #188), MODW, VEL (1.5.6, #84), append-only */
-static const char *const SELECT_N[SEL_N] = {"BPM", "LIST", "MODW", "VEL"};   /* (HA HA HE HU: PAGE became LIST) */
+static const char *const SELECT_N[SEL_N] = {"PATTERN", "LIST", "MODW", "VEL"};   /* (HA HA HE HU: PAGE became LIST; Dah:
+                                                        * BPM became PATTERN, SELECT's turn there: ui_input.c, the tempo
+                                                        * OCT+ or GLO held + SELECT) */
 
 /* a row's value as 0..menu_n(row) - 1 in the order the menu steps it (LEDS: OFF DIM LO DIM HI INV INV LO INV HI) */
 static uint32_t menu_n(uint32_t row)
 {
     return row == MI_COLOR ? palette_n() : row == MI_COUNTIN ? 2u : row == MI_LOWCUT || (row >= MI_CLICK && row <= MI_COUNTIN) ? 3u :
            row == MI_HOLD ? 4u : row == MI_LEDS ? LEDS_ROWS : row == MI_SCROFF ? NELEM(SCROFF_N) :
-           row == MI_TUNE ? TUNE_N : row == MI_SYNC ? NELEM(N_CLOCK) : row == MI_SWING ? 21u : row == MI_MIDIIN ? NELEM(N_ROUTE) : MI_TCH(row) ? MCH_N : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT :
+           row == MI_TUNE ? TUNE_N : row == MI_MIDIIN ? NELEM(N_ROUTE) : MI_TCH(row) ? MCH_N : row == MI_ANIM ? 3u : row == MI_HOME ? HV_COUNT :
            row == MI_SELECT ? SEL_N : 2u;
 }
 static uint32_t menu_get(uint32_t row)
@@ -211,8 +216,6 @@ static uint32_t menu_get(uint32_t row)
     case MI_CLICK: case MI_CLKLVL: case MI_COUNTIN: return rp_get(row - MI_CLICK);
     case MI_TUNE: return (uint32_t)(clamp(song.g[G_TUNE], TUNE_MIN, TUNE_MIN + (int32_t)TUNE_N - 1) - TUNE_MIN);
     case MI_MIDIIN: return (uint32_t)clamp(song.g[G_ROUTE], 0, (int32_t)NELEM(N_ROUTE) - 1);
-    case MI_SYNC: return (uint32_t)clamp(song.g[G_CLOCK], 0, (int32_t)NELEM(N_CLOCK) - 1);
-    case MI_SWING: return (uint32_t)clamp((song.g[G_SWING] + 2) / 5, 0, 20);   /* (5 % a step) */
     case MI_TCH1: case MI_TCH2: case MI_TCH3: case MI_TCH4: return mch_get(row - MI_TCH1);
     case MI_LEDS:
         while (i + 1u < LEDS_COUNT && LEDS_MENU[i] != settings_leds)
@@ -241,13 +244,6 @@ static const char *menu_vname(uint32_t row, uint32_t v)
     case MI_SELECT: return SELECT_N[v % SEL_N];
     case MI_LEDS: return LEDS_ROW_N[v % LEDS_ROWS];
     case MI_MIDIIN: return N_ROUTE[v % NELEM(N_ROUTE)];
-    case MI_SYNC: return N_CLOCK[v % NELEM(N_CLOCK)];  /* INT, USB, TRS: where the tempo comes from */
-    case MI_SWING: {                                   /* "0%" .. "100%" */
-        static char b[8];
-        fmt_int(b, (int32_t)(v % 21u) * 5);
-        str_cpy(b + str_len(b), "%", 2);
-        return b;
-    }
     case MI_TCH1: case MI_TCH2: case MI_TCH3: case MI_TCH4: {   /* "1".."16", OMNI, OFF */
         static char b[4];
         if (v >= 16u)
@@ -316,8 +312,6 @@ static void menu_put(uint32_t row, uint32_t v)
     case MI_CLICK: case MI_CLKLVL: case MI_COUNTIN: rp_put(row - MI_CLICK, v); break;   /* (at once: click.c, seq.c) */
     case MI_TUNE: song.g[G_TUNE] = (int16_t)((int32_t)v + TUNE_MIN); break;
     case MI_MIDIIN: song.g[G_ROUTE] = (int16_t)v; break;
-    case MI_SYNC: song.g[G_CLOCK] = (int16_t)v; break;
-    case MI_SWING: song.g[G_SWING] = (int16_t)(v * 5u); break;
     case MI_TCH1: case MI_TCH2: case MI_TCH3: case MI_TCH4:   /* (MIDI IN TRACK: what the channel no longer hears let */
         mch_set(row - MI_TCH1, v);                     /* go, seq.c events_block) */
         midi_route = MIDI_ROUTE_AGAIN;

@@ -1023,6 +1023,7 @@ static void setup(int s)
     state();
     pat_park();                                      /* (HA HA HE HU: the tracks on 32, patterns 1..4 the slots A..D) */
     memset(drum_mute, 0, sizeof drum_mute);          /* (1.4.1: no DRUM lane muted) */
+    lys.sq_row = 0;                                  /* (a held menu's first row: GLO CLOCK / TUNE set theirs) */
     switch (s) {
     case S_HOME: song.octave = 2; song.rec = 1; usb.config = 1; break;
     case S_HOME_IDLE: song.playing = 0; song.batt_raw = 570; ui.hot_col = 1; ui.hot_t = 30; break;
@@ -1060,7 +1061,7 @@ static void setup(int s)
      * first beat (STEP under it); the MENU's AUDIO tab with CLICK REC selected, COUNT-IN 1 BAR */
     case S_COUNTIN: song.playing = 0; song.rec = 1; cin_total = 4; cin_left = 3; go_home(); break;
     case S_COUNTIN2: song.playing = 0; song.rec = 1; cin_total = 8; cin_left = 8; go_page(GR_ROLL); break;
-    case S_MENU_AUDIO: ui.menu = 1; ui.menu_sel = MI_CLICK; rp_put(RP_CLICK, 1u); rp_put(RP_COUNTIN, 1u); break;
+    case S_MENU_AUDIO: ui.menu = 1; ui.menu_sel = MI_LOWCUT; break;   /* (Dah: CLICK .. COUNT-IN in REC's menu) */
     /* 1.2: the header's three slots (ui_draw.c draw_head): playing with the selected track armed; another track armed;
      * the BPM being turned (the accent's); BPM LOCK ON (the lock right of the BPM), and its message after a turn;
      * GLO with the tempo turned and BPM LOCK ON (the label right of the lock); the metronome on the bar's 1st beat
@@ -1196,11 +1197,11 @@ static void setup(int s)
     case S_CHORD_KIT: eng(ENGI_DRUM); TSEL->p[P_CHRD] = CH_DIA3; go_title("CHORD"); break;
     case S_ARP: go_title("ARP"); break;
     case S_VOICE: go_title("VOICE"); break;
-    case S_CLOCK: ui.menu = 1; ui.menu_sel = MI_SYNC; break;   /* (Dah: CLOCK's page gone: MENU > AUDIO SYNC) */
+    case S_CLOCK: go_home(); ui.layer = LAYER_GLO; lys.sq_row = 3; break;   /* (Dah: CLOCK's page gone: GLO's menu CLOCK) */
     /* 1.2: the old SYSTEM page's items in the MENU: MIDI > MIDI IN (ROUT) on CH5-8; AUDIO > TUNE (-12 ct) selected;
      * SYSTEM > INFO (the USB state, the CPU load) */
     case S_MENU_MIDI: ui.menu = 1; ui.menu_sel = MI_MIDIIN; song.g[G_ROUTE] = 2; break;
-    case S_MENU_TUNE: ui.menu = 1; ui.menu_sel = MI_TUNE; song.g[G_TUNE] = -12; break;
+    case S_MENU_TUNE: go_home(); ui.layer = LAYER_GLO; lys.sq_row = 2; song.g[G_TUNE] = -12; break;   /* (Dah: GLO's TUNE) */
     /* 1.3: HOME > TRACKS playing (T2 selected), stopped (T1 selected, its cursor's page), K2 just turned; the MENU's DISPLAY
      * tab with HOME TRACKS selected (8 rows) */
     case S_HOME_TRACKS: tracks_scene(1); break;
@@ -2021,19 +2022,14 @@ static void align_sweeps(void)
         cur_name = st ? "sweep LINE: menu rows" : "sweep FLAT: menu rows";
         ui.menu = 1;
         for (i = 0; i < MI_COUNT; i++)
-            for (k = 0; k < 4u; k++) {
+            for (k = 0; k < 4u && MI_TAB[i] < MTAB_COUNT; k++) {   /* (Dah: not the rows off the MENU) */
                 ui.menu_sel = (uint8_t)i; ui_prefs = k & 1u ? 0xFFu : 0u; settings_hold = (uint8_t)k; settings.lowcut = (uint8_t)(k % 3u);
                 ui_rec_prefs = (uint8_t)((k % 3u) | (k % 3u) << 2 | ((k + 1u) % 3u) << 4);   /* (CLICK, LEVEL, COUNT-IN: each value) */
                 settings_leds = (uint8_t)(k % LEDS_COUNT); ui.force = 1;   /* (every LEDS name) */
                 draw_menu();
             }
         ui_prefs = 0; ui_rec_prefs = 0;
-        cur_name = st ? "sweep LINE: menu TUNE / MIDI IN" : "sweep FLAT: menu TUNE / MIDI IN";   /* (1.2: the project's) */
-        for (k = 0; k < 2u * TUNE_N; k++) {             /* every TUNE (the cents, signed), selected or not, S and M */
-            ui.menu_sel = (uint8_t)(k & 2u ? MI_TUNE : MI_LOWCUT); ui_prefs = k & 1u ? PREF_LARGE : 0u;
-            song.g[G_TUNE] = (int16_t)((int32_t)(k / 2u) + TUNE_MIN); ui.force = 1;
-            draw_menu();
-        }
+        cur_name = st ? "sweep LINE: menu MIDI IN" : "sweep FLAT: menu MIDI IN";   /* (1.2: the project's; Dah: TUNE in GLO's menu) */
         for (k = 0; k < 4u * NELEM(N_ROUTE); k++) {     /* every MIDI IN, selected or not, S and M */
             ui.menu_sel = MI_MIDIIN; ui_prefs = k & 1u ? PREF_LARGE : 0u;
             song.g[G_ROUTE] = (int16_t)(k / 4u); ui.force = 1;
