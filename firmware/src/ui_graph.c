@@ -549,8 +549,6 @@ static void graph_detail(const track_t *t, uint16_t c)
         cv_text_on(nx, 4 - AF_S_CAP_Y, &AF_S, nb, T_ACCENT, T_SURF);
     }
 }
-/* SCL: the 12 keys as rounded bars (black keys high, white keys low): in the scale THEME, the root the
- * accent, out of the scale RAISE */
 /* (Dah) the notes the track sounds now: bit k = pitch class k (its voices with their gate on, the arp's, MONO's) */
 static uint32_t trk_sounding(const track_t *t)
 {
@@ -560,28 +558,59 @@ static uint32_t trk_sounding(const track_t *t)
             m |= 1u << (t->v[i].note % 12u);
     return m;
 }
+/* (Dah) SCL and CHORD: a piano, n keys up from the C lo (a C at both ends), y .. y + h in the panel: the white keys
+ * tall with their gaps, the black ones shorter on them; st[i] the key lo + i's: 1 in (THEME, the black a shade
+ * darker), 2 the root (ACCENT), 4 sounding (TEXT); none: light white keys, dark black ones, as a piano's; the C's
+ * names under them */
+static void piano(int32_t y, int32_t h, uint32_t lo, uint32_t n, const uint8_t *st, uint16_t c)
+{
+    uint32_t i, k, nw = n / 12u * 7u + 1u;
+    int32_t p = 216 / (int32_t)nw, x, x0 = 120 - (int32_t)nw * p / 2, bw = p * 3 / 5 | 1, bh = h * 3 / 5, kx, kw, kh;
+    char nb[6];
+    for (k = 0; k < 2u; k++)                         /* the white keys, then the black ones on them */
+        for (i = 0, x = x0; i <= n; i++) {
+            uint32_t s = st[i], blk = (0x54Au >> ((lo + i) % 12u)) & 1u;
+            uint16_t cl = s & 4u ? T_TEXT : s & 2u ? T_ACCENT : s & 1u ? (blk ? ux_mix(c, T_BG, 35) : c) :
+                          blk && !ux.light ? T_BG : ux_mix(T_SURF, T_TEXT, blk ? 60 : ux.light ? 12 : 22);
+            if (blk != k) {
+                x += blk ? 0 : p;
+                continue;
+            }
+            kx = blk ? x - bw / 2 - 1 : x, kw = blk ? bw : p - 1, kh = blk ? bh : h;
+            if (blk)
+                cv_rect(kx - 1, y, bw + 3, bh + 2, T_SURF);
+            cv_rrect(kx, y, kw, kh, blk ? 2 : 3, cl, T_SURF);
+            if (!blk) {
+                if ((lo + i) % 12u == 0u) {
+                    note_name(nb, lo + i);
+                    GFX_HOOK_ALIGN(x, 0, x + p - 1, 0, AL_H, "piano: a C's name under it");
+                    cv_text_in(x, y + h + 4, p - 1, &AF_S, nb, T_MID, T_SURF);
+                }
+                x += p;
+            }
+        }
+}
+/* SCL: two octaves from C4 (and the C over them): the scale's keys, its root, those sounding (TRN: its knob) */
 static void graph_scale(const track_t *t, uint16_t c)
 {
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint32_t i, mask = scale_mask(t), on = trk_sounding(t);
-    for (i = 0; i < 12u; i++) {
-        uint32_t deg = (i + 12u - (uint32_t)t->p[P_ROOT]) % 12u;
-        int32_t x = 13 + (int32_t)i * 18;
-        uint16_t col = (mask >> deg) & 1u ? (deg == 0u ? T_ACCENT : c) : T_RAISE;
-        cv_rrect(x + 3, BLACK[i] ? 6 : 38, 10, 52, 3, (on >> i) & 1u ? T_TEXT : col, T_SURF);   /* (Dah: sounding: TEXT) */
+    uint8_t st[25];
+    uint32_t i, mask = scale_mask(t), on = trk_sounding(t), r = (uint32_t)t->p[P_ROOT];
+    for (i = 0; i < 25u; i++) {
+        uint32_t deg = (i + 12u - r) % 12u;
+        st[i] = (uint8_t)((mask >> deg & 1u) | (!deg) << 1 | (on >> (i % 12u) & 1u) << 2);
     }
+    piano(14, (cv_split ? cv_split_h : (int32_t)cv_h) - 42, 60, 24, st, c);
 }
-/* CHORD (SCL 2): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
- * C4) over the keys from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
- * root's ACCENT, the others RAISE. OFF or a kit: what to do instead */
+/* CHORD (SCL 1): the chord's name ("Cm7": the last one the track played; before any, the one on its ROOT from
+ * C4) over the piano from the C below its lowest note (two octaves, three for a wide one): its notes THEME, its
+ * root's ACCENT, those sounding TEXT. OFF or a kit: what to do instead */
 static void panel_note(const char *a, const char *b, const char *c);
 static void panel_alert(uint32_t id, const char *a);
 static void graph_chord(const track_t *t, uint16_t c)
 {
-    static const uint8_t BLACK[12] = {0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0};
-    uint8_t nn[MATCH_MAX];
-    uint32_t n, i, j, k = trk_index(t), lo, cnt, w;
-    int32_t r;
+    uint8_t nn[MATCH_MAX], st[37];
+    uint32_t n, i, j, k = trk_index(t), lo, cnt;
+    int32_t r, full = cv_split ? cv_split_h : (int32_t)cv_h;
     uint16_t mask;
     char b[12];
     const char *cap = "LAST";
@@ -611,19 +640,17 @@ static void graph_chord(const track_t *t, uint16_t c)
     cv_text_r(226, 8 + AF_M.asc - AF_S.asc, &AF_S, cap, T_MID, T_SURF);   /* on the name's baseline */
     lo = nn[0] - nn[0] % 12u;
     cnt = nn[n - 1u] - lo < 24u ? 24u : 36u;
-    w = 216u / cnt;
-    GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H | AL_CELLS | AL_N(cnt), "chord keys centred");
-    for (i = 0; i < cnt; i++) {
-        uint32_t note = lo + i, on = 0;
-        int32_t x = 13 + (int32_t)(i * w);              /* (216 px of keys and their gaps: x 13 .. 227) */
+    for (i = 0; i <= cnt; i++) {
+        uint32_t note = lo + i;
+        st[i] = 0;
         for (j = 0; j < n; j++)
-            on |= nn[j] == note;
-        for (j = 0; j < NVOICE; j++)                    /* (Dah) sounding now: TEXT */
+            if (nn[j] == note)
+                st[i] = note % 12u == (uint32_t)r % 12u ? 3u : 1u;
+        for (j = 0; j < NVOICE; j++)                    /* (Dah) sounding now */
             if (t->v[j].active && t->v[j].gate && t->v[j].note == note)
-                on = 2;
-        cv_rrect(x, BLACK[note % 12u] ? 36 : 62, (int32_t)w - 2, 48, w > 6u ? 3 : 2,
-                 !on ? T_RAISE : on == 2u ? T_TEXT : note % 12u == (uint32_t)r % 12u ? T_ACCENT : c, T_SURF);
+                st[i] = 4u;
     }
+    piano(38, full - 66, lo, cnt, st, c);
 }
 /* INSERT pages (1.5, fx.c track_insert): the drives and CRUSH as their curve, input (-1.5 .. +1.5 of a voice's full
  * scale) across, output up, dry and wet blended by MIX (fx.c ins_shape: the same shape; the dry diagonal RAISE); the
@@ -680,38 +707,6 @@ static void graph_slicer(const track_t *t, uint16_t c, int32_t pw)   /* (Dah: pw
             cv_rect(x, 84, bw, 2, T_ACCENT);
     }
 }
-/* MOD page: the four slots as rows "1 LFO > CUT +50%" (M, a list's rows: the source to x 78, the arrow 84..98, the
- * destination of up to 5 characters 106..160, the amount from 172), the one KNOB 2..4 edit selected, slots that do
- * nothing (SRC, DST or AMT at 0) dim */
-static void graph_mod(const track_t *t, uint16_t c)
-{
-    uint32_t k;
-    for (k = 0; k < NMSLOT; k++) {
-        const int16_t *p = &t->p[P_M1SRC + 3u * k];
-        int32_t y = 14 + (int32_t)k * 24, on = p[0] && p[1] && p[2], sel = k == mod_ui_slot, x;
-        uint16_t bg = sel ? T_THEME : T_SURF, col = sel ? T_INK : on ? c : T_DIM;
-        char b[8];
-        const char *unit;
-        if (sel)
-            cv_rrect(6, y, 228, 17, 4, T_THEME, T_SURF);
-        b[0] = (char)('1' + k);
-        b[1] = 0;
-        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
-        cv_text_on(14, y + CAP_IN(M, 17), &AF_M, b, sel ? T_INK : T_MID, bg);
-        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
-        cv_text_on(30, y + CAP_IN(M, 17), &AF_M, N_MSRC[clamp(p[0], 0, MS_N - 1)], col, bg);
-        cv_line(84, y + 8, 98, y + 8, col);              /* an arrow */
-        cv_line(94, y + 4, 98, y + 8, col);
-        cv_line(94, y + 12, 98, y + 8, col);
-        cv_text_on(106, y + CAP_IN(M, 17), &AF_M, mod_dst_name(t, p[1]), col, bg);
-        param_format(&TP[P_M1AMT], p[2], b, &unit);
-        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
-        x = cv_text_on(172, y + CAP_IN(M, 17), &AF_M, b, col, bg) + 2;
-        GFX_HOOK_ALIGN(0, 0, 0, y + CAP_IN(M, 17) + AF_M.asc, AL_B, "mod row unit on its amount's baseline");
-        cv_text_on(x, y + CAP_IN(M, 17) + AF_M.asc - AF_S.asc, &AF_S, unit, sel ? T_INK : T_DIM, bg);   /* (a unit: S) */
-    }
-}
-
 static uint32_t steps_hash(const track_t *t)
 {
     uint32_t h = 2166136261u, i;
@@ -1481,8 +1476,6 @@ static uint32_t graph_signature(void)
             h ^= (ui_prefs & PREF_LARGE) ? 0x2545F491u : 0u;
         }
     }
-    if (pg->graph == GR_MOD)
-        h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
     if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
@@ -3617,6 +3610,7 @@ lists:
                 graph_roll(t, c);
             break;
         case GR_SCALE:
+            cv_oy = 0;
             graph_scale(t, c);
             break;
         case GR_CHORD:
@@ -3638,10 +3632,6 @@ lists:
                 graph_insert(t, c, FXV_LW);
                 fxv_split(t, DV_INS, c, "DRY", "WET", 0);
             }
-            break;
-        case GR_MOD:
-            cv_oy = 0;
-            graph_mod(t, c);
             break;
         case GR_SLOTS:
             cv_oy = 0;
