@@ -1415,28 +1415,15 @@ static int test_menu_tabs(void)
         ok &= n >= 1u && n <= MTAB_ROWS && f < MI_COUNT;
         for (i = 0; i < MI_COUNT; i++)                  /* its rows in one run */
             ok &= (MI_TAB[i] == t) == (i >= f && i < f + n);
-        ui.menu_sel = (uint8_t)f;
-        ui_prefs = 0;
-        ok &= mr_y(n) - mr_gap() + MP_PAD <= MK_Y - 6;
-        ui_prefs = PREF_LARGE;
-        ok &= mr_y(n) - mr_gap() + MP_PAD <= MK_Y - 6;
     }
-    ok &= MP_Y + MP_PAD + (int32_t)MTAB_ROWS * 19 - 1 + MP_PAD <= MK_Y - 6;   /* (room for MTAB_ROWS: 18 px rows 1 px apart) */
+    ui_prefs = 0;                                       /* (a list: 5 rows in view at least, LARGE too; more scroll) */
+    ok &= MP_END - MP_Y - 2 * MP_PAD >= 5 * (mr_h() + 2) - 2 && MP_END <= MK_Y - 4;
+    ui_prefs = PREF_LARGE;
+    ok &= MP_END - MP_Y - 2 * MP_PAD >= 5 * (mr_h() + 2) - 2;
     for (i = 0; i < MI_COUNT; i++) ok &= MI_TAB[i] < MTAB_COUNT;
-    {   /* the tab bar: MT_GAP between every two tabs at every place of the slide, inside MT_X0..MT_X1 (S and LARGE) */
-        int32_t a[MTAB_COUNT], x[MTAB_COUNT], w[MTAB_COUNT], p;
-        for (n = 0; n < 2u; n++)
-            for (p = 0; p <= (int32_t)(MTAB_COUNT - 1u) * MT_ONE; p++) {
-                ui_prefs = n ? PREF_LARGE : 0u;
-                mt.pos = (int16_t)p;
-                mt_layout(a, x, w);
-                ok &= x[0] >= MT_X0 && x[MTAB_COUNT - 1u] + w[MTAB_COUNT - 1u] <= MT_X1;
-                for (t = 1; t < MTAB_COUNT; t++) ok &= x[t] - (x[t - 1u] + w[t - 1u]) == MT_GAP;
-            }
-    }
     ui_prefs = 0;
-    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 8 8 7 rows: Dah SYNC SWING; 1.6.1 2ND CORE, a FELUCCA_CPU2=0 build SYSTEM 6; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, fit the page; tab gaps "
-                 "constant (S, LARGE)",
+    bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 8 8 7 rows: Dah SYNC SWING; 1.6.1 2ND CORE, a FELUCCA_CPU2=0 build SYSTEM 6; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, a list "
+                 "in the page (S, LARGE)",
                  ok && MTAB_COUNT == 5u && str_eq(MTAB_NAME[0], "DISPLAY") && str_eq(MTAB_NAME[MTAB_MIDI], "MIDI") &&
                  mtab_rows(MTAB_DISPLAY) == 8u && MI_TAB[MI_HOME] == MTAB_DISPLAY && mtab_rows(MTAB_CONTROL) == 8u && MI_TAB[MI_SELECT] == MTAB_CONTROL && mtab_rows(MTAB_AUDIO) == 8u &&
                  mtab_rows(MTAB_MIDI) == 8u && MI_TAB[MI_MFOLLOW] == MTAB_MIDI && MI_TAB[MI_SCRWAKE] == MTAB_MIDI && MI_SCRWAKE + 1u == MI_LCLEAR && MI_TAB[MI_LCLEAR] == MTAB_MIDI && MI_TAB[MI_TCH4] == MTAB_MIDI && mtab_rows(MTAB_SYSTEM) == 6u + FELUCCA_CPU2 &&
@@ -1624,24 +1611,26 @@ static int test_menu_tabs(void)
     menu_close();
     bad += check("MENU: HOME closes ABOUT too; reopened at the tabs; a value row breathes OCT- / OCT+ where they can go", ok);
 
-    /* the slide: ANIM ON, a few frames from DISPLAY to CONTROL drawing only the tab strip; ANIM OFF, at once */
+    /* the glide: ANIM ON, a few frames to the next row drawing only the rows' panel; ANIM OFF, at once */
     ui_power_on();
     hold(B_HOME);
     frame();
-    turn(EN_ALGO, 1);
-    ok = mt.pos > 0 && mt.pos < MT_ONE;                 /* (a step on the way) */
+    turn(EN_K2, 1);
+    frame();
+    ok = mr.dy > 0 && mr.dy < mr_h() + 2;               /* (a step on the way) */
     host_blit_rows = 0; frame();
-    ok &= host_blit_rows == (uint32_t)(MP_Y - H_HEAD);  /* (only the strip) */
-    for (i = 0; i < 8u && mt.pos != MT_ONE; i++) frame();
-    ok &= mt.pos == MT_ONE && i <= 6u;
+    ok &= host_blit_rows == (uint32_t)(MP_END - MP_Y);  /* (only the rows) */
+    for (i = 0; i < 16u && mr.dy; i++) frame();
+    ok &= mr.dy == 0 && i <= 14u;
     host_blit_rows = 0; frame();
     ok &= host_blit_rows == 0u;                         /* (settled: nothing drawn) */
     ui_prefs |= PREF_ANIM_OFF;
-    turn(EN_ALGO, 1);
-    ok &= mt.pos == 2 * MT_ONE;
+    turn(EN_K2, 1);
+    frame();
+    ok &= mr.dy == 0;
     ui_prefs &= ~PREF_ANIM_OFF;
     menu_close();
-    bad += check("MENU tabs slide with ANIM ON (their strip only, settled within 6 frames), snap with ANIM OFF", ok);
+    bad += check("MENU rows glide with ANIM ON (their panel only, settled within 14 frames), snap with ANIM OFF", ok);
     return bad;
 }
 

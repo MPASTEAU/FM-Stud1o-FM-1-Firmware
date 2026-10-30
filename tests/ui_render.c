@@ -1686,8 +1686,7 @@ static void draw(int s)
         return;
     }
     ui.force = 1;
-    mt.frame = ui.frame + 7u;                         /* (the MENU's tabs settled, as when it opens) */
-    if (s == S_MENU_SLIDE) mt.pos = 0, mt.frame = ui.frame;   /* (one step of the slide from DISPLAY) */
+    mr.dy = s == S_MENU_SLIDE ? (int16_t)(-2 * (mr_h() + 2)) : 0;   /* (the MENU's rows settled; SLIDE: gliding) */
     ui_draw();
 }
 
@@ -2059,13 +2058,14 @@ static void align_sweeps(void)
             usb.up = up0; usb.config = cf0; usb.setups = su0; usb.sof_seen = sof0; song.cpu_q8 = 0;
             ui.menu = 1;
         }
-        cur_name = st ? "sweep LINE: menu tabs sliding" : "sweep FLAT: menu tabs sliding";
-        for (i = 0; i < MI_COUNT; i++)                  /* every tab, from every place of the bar, S and M */
-            for (k = 0; k <= (MTAB_COUNT - 1u) * 16u; k++) {
+        cur_name = st ? "sweep LINE: menu rows gliding" : "sweep FLAT: menu rows gliding";
+        for (i = 0; i < MI_COUNT; i++)                  /* every row, at every step of a glide (both ways, wraps), S and M */
+            for (k = 0; k < 2u * 129u; k++) {
                 ui.menu_sel = (uint8_t)i; ui_prefs = k & 1u ? PREF_LARGE : 0u;
-                mt.pos = (int16_t)(k * 4u); mt.frame = ui.frame - 1u; ui.force = 1;
+                mr.dy = (int16_t)((int32_t)(k / 2u) - 64); ui.force = 1;
                 draw_menu();
             }
+        mr.dy = 0;
         ui.menu = 0; ui_prefs = 0; ui_rec_prefs = 0; settings_hold = 0; settings.lowcut = 0; settings_leds = 0;
         cur_name = st ? "sweep LINE: REC layer values" : "sweep FLAT: REC layer values";
         ui.home = 1; ui.layer = LAYER_REC;              /* (the map and the cards: every value of the three, each track) */
