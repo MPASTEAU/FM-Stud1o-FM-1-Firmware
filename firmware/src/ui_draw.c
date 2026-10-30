@@ -1166,7 +1166,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     card_span.fn = 0;
     fmt_named = 0;                                      /* (params.c: a name, for this card only) */
     card_mot_next = 0;                                  /* (the same: MOTION, this card only) */
-    if (home_bare() || ui.layer == LAYER_SEQ || ui.layer == LAYER_REC || ui.layer == LAYER_GLO) {         /* (Dah) HOME: knobs (SEQ's layer too, as SAVE's) */
+    if (home_bare() || ui.layer == LAYER_SEQ || ui.layer == LAYER_REC || ui.layer == LAYER_GLO || ui.layer == LAYER_EDIT) {         /* (Dah) HOME: knobs (SEQ's layer too, as SAVE's) */
         (void)vc; (void)icon; (void)sp; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
         (void)strip; (void)x; (void)lc; (void)vf; (void)n; (void)named; (void)mot; (void)kind;
         knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot, vc == T_DIM);

@@ -58,12 +58,12 @@ typedef struct {
 static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
-    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_ALGO, "PATTERN"}, {KC_PLAY, "RESTART"}, {KC_OCTDN, "UNDO"}}},   /* (Dah:
+    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah:
                                                          * GLO + ALGORITHM the pattern, said) */
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_OCTDN, "UNDO"}}},   /* (Dah: the band OCT- alone) */
-    {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_OCTDN, "UNDO"}}},   /* (Dah: as SEQ: OCT- alone; KNOB 1 the rows, 2 a value) */
+    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah: the band OCT- alone) */
+    {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah: as SEQ: OCT- alone; KNOB 1 the rows, 2 a value) */
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
 /* (Dah) GLO's menu: its rows' globals (the 5th: MIDI LEARN) */
@@ -86,7 +86,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
-static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
+static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "(HOLD) RESET SETTINGS"}, {0, 0}, {0, 0}};   /* (locked: PLAY plays, #183) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
 #define fx_keys (&favorites.factory[15][14])
@@ -771,8 +771,45 @@ static void layer_oct_open(uint32_t pressed)
 }
 
 /* OCT- / OCT+ in a SET layer: no octave; OCT- let go puts back what the layer changed. Returns the taps left */
+/* (Dah) OCT- held in GLO, REC or SEQ's menu: its settings back to their defaults (GLO: TEMPO SWING TUNE CLOCK, MIDI
+ * LEARN off; REC: CLICK COUNT-IN LEVEL, REC STARTS PLAY off; SEQ: the track's LEN DIV SWING GATE QUANTIZE) */
+static void layer_reset(uint32_t l)
+{
+    uint32_t k;
+    if (l == LAYER_GLO) {
+        for (k = 0; k < 4u; k++)
+            song.g[GLO_G[k]] = GP[GLO_G[k]].def;
+        if (ui.ml.on)
+            ml_toggle();
+    } else if (l == LAYER_REC) {
+        ui_rec_prefs &= 0xC0u;                          /* (the three fields 0: their defaults; bits 6, 7 the MENU's) */
+        ui_leds_inv &= (uint8_t)~REC_PLAY;
+        rp_apply();
+        lys.rp_dirty = 1;
+    } else if (chain_busy()) {
+        ui_message("STOP TO EDIT");
+        return;
+    } else {
+        for (k = P_SLEN; k <= P_SGATE; k++)
+            TSEL->p[k] = TP[k].def;
+        TSEL->p[P_SQNT] = TP[P_SQNT].def;
+    }
+    ui_message("SETTINGS RESET");
+    ui.force = 1;
+}
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 {
+    static uint32_t rs_ms;
+    uint32_t lo = layer_open();
+    if (lo && (lo == LAYER_GLO || lo == LAYER_REC || lo == LAYER_SEQ) && ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u)) {
+        if (!rs_ms)
+            rs_ms = fm1_ms | 1u;
+        else if (rs_ms != 2u && (int32_t)(fm1_ms - rs_ms) >= 700) {
+            layer_reset(lo);
+            rs_ms = 2u;                                 /* (once a hold) */
+        }
+    } else
+        rs_ms = 0;
     uint32_t dn = panel.btn[B_OCTDN], up = panel.btn[B_OCTUP], k, mine;
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
@@ -1190,7 +1227,7 @@ static void layer_rec(void)
 static void layer_cards(uint32_t l)
 {
     char val[12];
-    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_GLO))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
+    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_GLO || l == LAYER_EDIT))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
                                                          * them to the panel BG (no page left there) */
         lcd_fill(0, Y_LABEL + HOME_CARD_H, 240, Y_GRAPH - Y_LABEL - HOME_CARD_H, T_BG);
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */

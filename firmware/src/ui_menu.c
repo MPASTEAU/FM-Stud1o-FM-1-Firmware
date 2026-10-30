@@ -409,7 +409,7 @@ static uint32_t menu_split(uint32_t n)
 }
 static void draw_menu(void)
 {
-    static const khint_t KEYS[3][3] = {{{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_K3, "VALUE"}},
+    static const khint_t KEYS[3][3] = {{{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTDN, "(HOLD) RESET"}},
                                        {{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTUP, "OPEN"}},
                                        {{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTUP, "CLEAR"}}};
     uint32_t pass, k, first, n, split, sig;
@@ -521,8 +521,32 @@ static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / 
     k = ui.menu_row[t] < mtab_rows(t) ? ui.menu_row[t] : 0u;
     ui.menu_sel = (uint8_t)(mtab_first(t) + k);
 }
+/* (Dah) OCT- held: the device's settings back to their defaults (the MENU's rows; not the project's, not 2ND CORE) */
+static void menu_reset(void)
+{
+    static const uint8_t DEF[][2] = {{MI_HELP, 0}, {MI_COLOR, 0}, {MI_STYLE, 0}, {MI_LARGE, 0}, {MI_ANIM, 0}, {MI_LEDS, 2},
+                                     {MI_SCROFF, 0}, {MI_HOME, 1}, {MI_HOLD, 1}, {MI_ACCEL, 0}, {MI_LATCH, 0},
+                                     {MI_BPMLOCK, 0}, {MI_SCLLED, 0}, {MI_PREVIEW, 0}, {MI_CHADD, 1}, {MI_SELECT, 1},
+                                     {MI_SNDPV, 0}, {MI_LOWCUT, 0}, {MI_USB, 0}, {MI_MFOLLOW, 0}, {MI_SCRWAKE, 0},
+                                     {MI_SERIAL, 0}, {MI_RESTORE, 0}, {MI_SCOPE, 0}};
+    uint32_t i;
+    for (i = 0; i < NELEM(DEF); i++)
+        menu_put(DEF[i][0], DEF[i][1]);
+    ui_message("SETTINGS RESET");
+    ui.force = 1;
+}
 static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_taps */
 {
+    static uint32_t rs_ms;
+    if (ui.menu == 1 && ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u)) {   /* (Dah) OCT- held: the settings reset */
+        if (!rs_ms)
+            rs_ms = fm1_ms | 1u;
+        else if (rs_ms != 2u && (int32_t)(fm1_ms - rs_ms) >= 700) {
+            menu_reset();
+            rs_ms = 2u;
+        }
+    } else
+        rs_ms = 0;
     int32_t s;
     uint32_t k, up = (oct >> 1) & 1u, dn = oct & 1u;
     if (ui.menu >= 2) {                                /* ABOUT: PRESETS scrolls (bounded); INFO, ABOUT: OCT- back to
