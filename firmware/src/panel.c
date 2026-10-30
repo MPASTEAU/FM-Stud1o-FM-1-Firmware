@@ -107,13 +107,14 @@ static int leds_stored_ok(uint32_t v) { return v <= 1u || ((v & ~3u) == LEDS_TAG
 static void palette_apply(void);               /* (ui.c: the palette in use, CUSTOM or a built-in one) */
 static void settings_init(void)
 {
+#define UI_ICE_INDEX 3u                                 /* (Dah: ICE in tools/gen_ui_palettes.py's order) */
     if (settings.magic == SETTINGS_MAGIC_OLD && settings.palette < 20u) {
         settings.magic = SETTINGS_MAGIC;
         settings.palette = palette_from_stored(settings.palette);
     }
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
         settings.magic = SETTINGS_MAGIC;
-        settings.palette = UI_GREY_INDEX;      /* GREY (default; named MONO before 1.0.2) */
+        settings.palette = UI_ICE_INDEX;       /* (Dah) ICE, the default (GREY up to now) */
         settings.lowcut = 0;
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
     }

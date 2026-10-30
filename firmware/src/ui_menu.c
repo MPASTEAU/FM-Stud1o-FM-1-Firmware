@@ -524,7 +524,7 @@ static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / 
 /* (Dah) OCT- held: the device's settings back to their defaults (the MENU's rows; not the project's, not 2ND CORE) */
 static void menu_reset(void)
 {
-    static const uint8_t DEF[][2] = {{MI_HELP, 0}, {MI_COLOR, 0}, {MI_STYLE, 0}, {MI_LARGE, 0}, {MI_ANIM, 0}, {MI_LEDS, 2},
+    static const uint8_t DEF[][2] = {{MI_HELP, 0}, {MI_COLOR, 3}, {MI_STYLE, 0}, {MI_LARGE, 0}, {MI_ANIM, 0}, {MI_LEDS, 2},
                                      {MI_SCROFF, 0}, {MI_HOME, 1}, {MI_HOLD, 1}, {MI_ACCEL, 0}, {MI_LATCH, 0},
                                      {MI_BPMLOCK, 0}, {MI_SCLLED, 0}, {MI_PREVIEW, 0}, {MI_CHADD, 1}, {MI_SELECT, 1},
                                      {MI_SNDPV, 0}, {MI_LOWCUT, 0}, {MI_USB, 0}, {MI_MFOLLOW, 0}, {MI_SCRWAKE, 0},
