@@ -83,8 +83,12 @@ static const char *help_page(void)
     if (grid_on() && !detail_on())
         return H_GRID;
     t = cur_page()->title;
-    if (str_eq(t, "VOICE 2") && ENGINES[TSEL->eng_req % NENGINES]->oneshot)
-        return "[K3]PAN[K4]MUTE[EDIT]VOICE 3";          /* (Dah: a DRUM kit's, ALLOC DETUNE empty: params.c pg_unused) */
+    if (env_note(cur_page(), TSEL))
+        return 0;                                       /* (Dah: ENV on a kit, FM6: its note says it) */
+    if (str_eq(t, "VOICE 2") && page_id(cur_page(), 1u) == 0xFFu)
+        return "[K3]PAN[K4]MUTE";                       /* (Dah: DETUNE empty, not UNISON: params.c pg_unused) */
+    if (str_eq(t, "VOICE") && page_id(cur_page(), 1u) == 0xFFu)
+        return "[K1]POLY, MONO";                        /* (Dah: SLICE: no GLIDE) */
     for (i = 0; i < NELEM(HELP_PAGE); i++)
         if (str_eq(HELP_PAGE[i].title, t))
             return HELP_PAGE[i].hint;

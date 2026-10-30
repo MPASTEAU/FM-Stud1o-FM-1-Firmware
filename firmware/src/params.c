@@ -575,12 +575,47 @@ static uint32_t fx_knob_id(const track_t *t, uint32_t c)
 static int eq_page(const page_t *pg) { return pg->fam == FAM_FX && pg->scope == SC_TRACK && pg->id[0] == P_EQLO; }
 static uint8_t eq_ui_band;        /* (Dah) the EQ page: the band picked (ui_graph_eq.c) */
 static uint32_t eq_ui_id(uint32_t c);                   /* (Dah) ui_graph_eq.c: the EQ page's knob c, the band picked's */
-/* (Dah) a knob of the EDIT family's VOICE pages that does nothing for the track's engine: shown empty. A DRUM kit
- * (engine_t.oneshot, voice.c trk_vmode): always POLY, no glide, so ALLOC (which free voice: inaudible, a hit takes its
- * lane's) and DETUNE (UNISON's) are left out; VOICE (VCE GLIDE GLMOD PRIO) is not shown at all (ui.c page_visible) */
+/* (Dah) the track's sound has no use for the ADSR nor ENV DEST: a DRUM kit (engine_t.oneshot: the hit is the envelope,
+ * eng_drum.c drum_amp holds the ADSR at full), FM6 (engine_t.ownenv: its operators' envelopes; voice.c gives the
+ * engines no ENV, m.envq15 0). ENV shows a note, ENV DEST is not shown (ui.c page_visible) */
+static int env_unused(const track_t *t)
+{
+    const engine_t *e = ENGINES[eng_idx(t->eng_req)];
+    return e->oneshot || e->ownenv;
+}
+/* (Dah) the voice mode the track plays (voice.c trk_vmode, from the engine asked for) */
+static uint32_t ui_vmode(const track_t *t)
+{
+    return ENGINES[eng_idx(t->eng_req)]->oneshot ? V_POLY : (uint32_t)t->p[P_VOICE] & 3u;
+}
+/* (Dah) a knob that does nothing for the track's engine or its voice mode: shown empty (voice.c read for each):
+ *   ENV's four            a DRUM kit, FM6 (env_unused)
+ *   LFO DEST PIT FLT SHP  a DRUM kit (its voices read only their amplitude: eng_drum.c drum_render; AMP stays)
+ *   GLIDE GLMOD           SLICE (its slices play at their own rate: m.pitch16 - pitch_cur, eng_slice.c; only the sine
+ *                         of no material followed the key)
+ *   PRIO                  POLY (mono_pick: the mono modes')
+ *   ALLOC                 not POLY (voice_alloc), a DRUM kit (a hit takes its lane's voice: which free one, inaudible)
+ *   DETUNE                not UNISON (mono_play), SLICE (no pitch from the voice)
+ * A DRUM kit's VOICE (VCE GLIDE GLMOD PRIO) and VOICE 3 in MONO / LEGATO (SPREAD: POLY and UNISON's, fx.c) are not shown */
 static int pg_unused(const page_t *pg, uint32_t id)
 {
-    return pg->fam == FAM_EDIT && (id == P_ALLOC || id == P_DETUNE) && ENGINES[eng_idx(TSEL->eng_req)]->oneshot;
+    const track_t *t = TSEL;
+    uint32_t m;
+    if (pg->scope != SC_TRACK)
+        return 0;
+    if (pg->fam == FAM_ENV)
+        return env_unused(t);
+    if (pg->fam == FAM_LFO)
+        return (id == P_LD_PIT || id == P_LD_FLT || id == P_LD_SHP) && ENGINES[eng_idx(t->eng_req)]->oneshot;
+    if (pg->fam != FAM_EDIT)
+        return 0;
+    m = ui_vmode(t);
+#if FELUCCA_SLICE
+    if ((id == P_GLIDE || id == P_GLMODE || id == P_DETUNE) && ENGINES[eng_idx(t->eng_req)] == &ENG_SLICE)
+        return 1;
+#endif
+    return (id == P_PRIO && m == V_POLY) || (id == P_DETUNE && m != V_UNISON) ||
+           (id == P_ALLOC && (m != V_POLY || ENGINES[eng_idx(t->eng_req)]->oneshot));
 }
 static uint32_t page_id(const page_t *pg, uint32_t c)
 {

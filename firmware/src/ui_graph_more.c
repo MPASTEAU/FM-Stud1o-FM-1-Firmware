@@ -67,8 +67,11 @@ static void graph_envdest(const track_t *t, uint16_t c)
 }
 static void graph_voice(const track_t *t, uint16_t c)
 {
-    uint32_t i, n = 0, os = ENGINES[t->eng_req % NENGINES]->oneshot;
-    int32_t sw = (PANEL_W - 7 * 4) / 8, ly = graph_ht * 62 / 100, pan = t->p[P_PAN], spr = t->p[P_SPRD] > 0 ? t->p[P_SPRD] : 0;
+    const page_t *pg = cur_page();
+    uint32_t i, n = 0, m = ui_vmode(t);
+    int32_t sw = (PANEL_W - 7 * 4) / 8, ly = graph_ht * 62 / 100, pan = t->p[P_PAN];
+    int32_t spr = t->p[P_SPRD] > 0 && (m == V_POLY || m == V_UNISON) ? t->p[P_SPRD] : 0;   /* (what plays: params.c pg_unused) */
+    int32_t dt = pg_unused(pg, P_DETUNE) ? 0 : t->p[P_DETUNE];
     for (i = 0; i < NVOICE; i++) {                    /* the slots: the voices sounding, their notes */
         const voice_t *v = &t->v[i];
         int32_t x = PANEL_X0 + (int32_t)i * (sw + 4);
@@ -89,11 +92,11 @@ static void graph_voice(const track_t *t, uint16_t c)
     cv_rect(PANEL_X0 + PANEL_W / 2, ly - 4, 1, 9, T_GRID);
     for (i = 0; i < 4u; i++) {                        /* four voices: PAN, SPREAD apart, DETUNE their width */
         int32_t p = clamp(pan + (i & 1u ? spr : -spr) * (int32_t)(1u + i / 2u) / 4, -64, 63);
-        int32_t x = PANEL_X0 + (p + 64) * (PANEL_W - 6) / 127, w = 4 + (os ? 0 : t->p[P_DETUNE] / 24);
+        int32_t x = PANEL_X0 + (p + 64) * (PANEL_W - 6) / 127, w = 4 + dt / 24;
         cv_rrect(x - w / 2 + 3, ly - 3, w, 7, 3, c, T_SURF);
     }
-    if (!os) {                                        /* GLIDE: from one note to the next, its time the slope (a DRUM
-                                                         * kit: none, ui.c page_visible) */
+    if (!ENGINES[t->eng_req % NENGINES]->oneshot && !pg_unused(pg, P_GLIDE)) {   /* GLIDE: from one note to the next,
+                                                         * its time the slope (a kit, SLICE: none) */
         int32_t gy0 = graph_ht - 8, gy1 = graph_ht - 22, g = t->p[P_GLIDE], gx = PANEL_X0 + 60, gw = g * 100 / 127;
         cv_text_on(PANEL_X0, gy1 - 2, &AF_S, "GLD", T_MID, T_SURF);
         cv_rect(gx, gy0, 30, 2, c);

@@ -480,6 +480,11 @@ static int page_visible(uint32_t i)
     if (PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] == P_VOICE)   /* (Dah) VOICE: VCE GLIDE GLMOD PRIO, nothing a DRUM kit
                                                          * reads (always POLY, no glide: voice.c trk_vmode) */
         return !ENGINES[TSEL->eng_req % NENGINES]->oneshot;
+    if (PAGES[i].fam == FAM_EDIT && PAGES[i].id[0] == P_SPRD)   /* (Dah) VOICE 3: SPREAD, POLY and UNISON's (fx.c) */
+        return ui_vmode(TSEL) == V_POLY || ui_vmode(TSEL) == V_UNISON;
+    if (PAGES[i].fam == FAM_ENV && PAGES[i].id[0] == P_ED_FLT)   /* (Dah) ENV DEST: nothing for a kit, FM6 (params.c
+                                                         * env_unused; ENV itself shows why) */
+        return !env_unused(TSEL);
     if (PAGES[i].id[0] == P_FTYPE)                    /* FILTER (1.5, #104): ANALOG's */
         return ENGINES[TSEL->eng_req % NENGINES] == &ENG_ANALOG;
     if (PAGES[i].graph >= GR_FMOP && PAGES[i].graph <= GR_FMENV)

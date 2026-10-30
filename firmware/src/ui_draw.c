@@ -2431,7 +2431,8 @@ static void ui_draw_page(uint32_t counting)
         if (dln_syn_page(PAGES[ui.page].graph) && TSEL->eng_req % NENGINES == ENGI_DRUM)
             for (i = 0; i < NPAGES && PAGES[i].graph != GR_DLANE; i++)
                 ;
-        ui.page = (uint8_t)(i && i < NPAGES ? i : page_first(FAM_EDIT));
+        ui.page = (uint8_t)(i && i < NPAGES ? i : page_first(PAGES[ui.page].fam == FAM_ENV ? FAM_ENV : FAM_EDIT));   /* (Dah:
+                                                         * ENV DEST of a kit, FM6: ENV, its note) */
         page_entered();
     }
     cursor_fix();

@@ -1436,6 +1436,8 @@ static int32_t song_follow(const song_lay_t *L)
 
 /* MENU > LARGE's strip under the tall cards (ui.c LK_TALL): HOME's scope, ENV's ADSR, LFO's wave,
  * MIXER's tracks drawn small; on the other pages the page's title and number (their charts need the whole panel) */
+/* (Dah) ENV on a kit or FM6: no ADSR there (params.c env_unused), a note says where the envelope is */
+static int env_note(const page_t *pg, const track_t *t) { return pg->fam == FAM_ENV && env_unused(t); }
 enum { SK_NONE, SK_SCOPE, SK_ADSR, SK_LFO, SK_TRK, SK_TITLE };
 static uint32_t strip_kind(void)
 {
@@ -1445,7 +1447,7 @@ static uint32_t strip_kind(void)
     if (ui.home)
         return SK_SCOPE;
     g = cur_page()->graph;
-    return g == GR_ADSR ? SK_ADSR : g == GR_LFO ? SK_LFO : g == GR_TRK ? SK_TRK : SK_TITLE;
+    return g == GR_ADSR && !env_note(cur_page(), TSEL) ? SK_ADSR : g == GR_LFO ? SK_LFO : g == GR_TRK ? SK_TRK : SK_TITLE;
 }
 /* the page's title and its number in its family ("ENV DEST 2/2", EDIT: the engine's "OSC 1/2"); the piano roll: its
  * scale ("C MIN"); ti holds 20 (the footer, the strip) */
@@ -3668,7 +3670,12 @@ lists:
                                                          * FX pages' sound live, fx_eq.c) */
         switch (pg->graph) {
         case GR_ADSR:
-            graph_adsr(t, c);
+            if (!env_note(pg, t))
+                graph_adsr(t, c);
+            else if (ENGINES[t->eng_req % NENGINES]->oneshot)
+                panel_note("NO ENVELOPE ON KITS", "[EDIT] DECAY: EDIT 1, DESIGN", 0);
+            else
+                panel_note("ENVELOPES IN THE PATCH", "[EDIT] OP ENV", 0);
             break;
         case GR_LFO:
             graph_lfo(t, c);
