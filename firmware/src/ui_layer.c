@@ -62,7 +62,7 @@ static const layer_t LAYERS[LAYER_N] = {
                                                          * GLO + ALGORITHM the pattern, said) */
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_PRESETS, "QNTZ"}, {KC_OCTUP, "APPLY"}, {KC_OCTDN, "UNDO"}}},
+    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_SELECT, "ROW"}, {KC_OCTUP, "APPLY"}, {KC_OCTDN, "UNDO"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
@@ -80,6 +80,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
+static const khint_t SEQ_CLR_FOOT[3] = {{KC_SELECT, "ROW"}, {KC_OCTUP, "CLEAR"}, {KC_OCTDN, "UNDO"}};   /* (CLEAR ALL picked) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -90,6 +91,7 @@ static struct {
                                         * it opened (SEQ: a tool used); OCT- / OCT+ pressed in a SET layer (bits) */
     uint8_t rp_dirty;                  /* REC: a setting changed (settings_save when the layer lets go); FX: the key map */
     uint8_t fxk;                       /* FX: the white key pressed last in the layer (+ 1; 0 none): PRESETS assigns it */
+    uint8_t sq_row;                    /* (Dah) SEQ: the row picked (0 QUANTIZE, 1 CLEAR ALL; SELECT) */
     uint8_t mute[NPART];               /* EDIT: the DRUM lanes' mutes when it opened (eng_drum.c drum_mute; OCT-) */
     uint32_t eqh;                      /* EDIT: the keys (bits 0..26) of the HOLD quick actions held */
     int16_t v[9];                      /* the values when it opened: GLO mutes, levels, BPM; SCL ROOT..TRN, CHRD VOIC;
@@ -234,6 +236,7 @@ static void layer_opened(uint32_t l)
     lys.l = (uint8_t)l;
     lys.trk = song.sel;
     lys.loaded = 0;
+    lys.sq_row = 0;
     if (l == LAYER_SEQ || l == LAYER_REC) {             /* the track as it is now (OCT-) */
         memcpy(tl_open.step, TSEL->step, sizeof tl_open.step);
         motion_snapshot_track(TSEL, &tl_open.mo);
@@ -394,8 +397,14 @@ static void seq_key(uint32_t p)
     else
         confirm_open(CF_CLEAR_PAT, ps_num(song.sel));
 }
+static void seq_row(int32_t s)                         /* (Dah) SELECT: QUANTIZE / CLEAR ALL */
+{
+    lys.sq_row = s > 0;
+    ui.force = 1;
+}
 static void seq_presets(int32_t s)
 {
+    lys.sq_row = 0;
     if (chain_busy())
         ui_message("STOP TO EDIT");
     else
@@ -747,7 +756,10 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
-    if ((mine & 2u) && lys.l == LAYER_SEQ) {            /* (Dah) SEQ: OCT+ APPLY, QUANTIZE written */
+    if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row) {   /* (Dah) SEQ: OCT+ on CLEAR ALL: its dialog */
+        seq_key(0);
+        mine &= ~2u;
+    } else if ((mine & 2u) && lys.l == LAYER_SEQ) {     /* (Dah) SEQ: OCT+ APPLY, QUANTIZE written */
         if (chain_busy())
             ui_message("STOP TO EDIT");
         else if (qz_apply(&trk[lys.trk % NTRK]))
@@ -1050,36 +1062,39 @@ static void layer_edit(void)                            /* the engines from F3, 
         engine_sound_row(104);
 }
 
-/* (Dah) SEQ: QUANTIZE (its amount large, the steps inside LEN as cells, 16 a row: a note step's tick where it plays
- * at that amount, nudged ones in the colour) and F3's CLEAR ALL cell under it */
+/* (Dah) SEQ: a list of two rows, as HOME's (the one picked framed, SELECT moves): QUANTIZE (its amount at the right;
+ * under it the pattern as SAVE > PATTERN draws it, ui_graph.c pt_mini) and CLEAR ALL (F3 too) */
+static void sq_row(int32_t y, int32_t h, int sel)
+{
+    if (sel) {
+        cv_rrect(6, y, 228, h, 5, T_THEME, T_SURF);
+        cv_rrect(8, y + 2, 224, h - 4, 4, T_RAISE, T_THEME);
+    } else {
+        cv_rrect(6, y, 228, h, 5, T_RAISE, T_SURF);
+    }
+}
 static void layer_seq(void)
 {
     const track_t *t = TSEL;
-    uint32_t len = tl_len(t), i, rows = (len + 15u) / 16u, st = chain_busy() ? LS_DIM : LS_OFF;
-    int32_t h = rows > 2u ? 8 : 14, y0 = 34;
-    char n[3] = {'F', 0, 0};
-    GFX_HOOK_ALIGN(0, 4, 0, 24, AL_V, "seq quantize title on its line");
-    cv_text_on(14, 4 + CAP_IN(S, 20), &AF_S, "QUANTIZE", T_MID, T_SURF);
-    cv_text_r(226, 4 + CAP_IN(M, 20), &AF_M, N_QNT[clamp(t->p[P_SQNT], 0, 4)], t->p[P_SQNT] ? T_THEME : T_DIM, T_SURF);
-    for (i = 0; i < len; i++) {                         /* (14 px a step: x 8 .. 230) */
-        const step_t *sp = &t->step[i];
-        int32_t x = 8 + 14 * (int32_t)(i % 16u), y = y0 + (h + 2) * (int32_t)(i / 16u), nd;
-        int on = sp->time == ST_NOTE && (sp->n || sp->hit);
-        cv_rrect(x, y, 12, h, 2, on ? T_LANE : T_RAISE, T_SURF);
-        if (!on)
-            continue;
-        nd = seq_nudge(t, sp);                          /* (-8..+7 sixteenths of the step: the tick off the middle) */
-        cv_rect(x + 5 + nd * 5 / 8, y + 1, 2, h - 2, nd ? T_THEME : T_TEXT);
+    int32_t full = (int32_t)graph_h(), ch = full - 4 - 4 - 30 - 4, q = clamp(t->p[P_SQNT], 0, 4);
+    uint16_t dim = chain_busy() ? T_DIM : T_TEXT;
+    sq_row(4, ch, lys.sq_row == 0u);
+    GFX_HOOK_ALIGN(0, 4, 0, 30, AL_V, "seq quantize row title on its line");
+    cv_text_on(16, 4 + CAP_IN(M, 26), &AF_M, "QUANTIZE", dim, T_RAISE);
+    GFX_HOOK_ALIGN(0, 4, 0, 30, AL_V, "seq quantize row title on its line");
+    {   /* the amount at the right, PRESETS' keycap before it (the row picked) */
+        int32_t x = 224 - (int32_t)text_w(&AF_M, N_QNT[q]);
+        GFX_HOOK_ALIGN(0, 4, 0, 30, AL_V, "seq quantize row title on its line");
+        cv_text_on(x, 4 + CAP_IN(M, 26), &AF_M, N_QNT[q], q ? T_THEME : T_DIM, T_RAISE);
+        if (lys.sq_row == 0u)
+            cv_keycap(x - 6 - kc_w(KC_PRESETS), 4 + (26 - KC_H) / 2, KC_PRESETS, T_KEY, T_INK, T_RAISE);
     }
-    {                                                   /* F3: CLEAR ALL (its dialog) */
-        uint16_t ink, fill = lc_box(6, 88, 112, 24, lc_fill(st, &ink));
-        GFX_HOOK_ALIGN(0, 88, 0, 112, AL_V, "seq clear all cell on its middle");
-        cv_text_on(11, 88 + CAP_IN(S, 24), &AF_S, n, fill == T_RAISE || fill == T_SURF ? T_MID : ink, fill);
-        GFX_HOOK_ALIGN(0, 88, 0, 112, AL_V, "seq clear all cell on its middle");
-        cv_icon_in(24, 88, 0, 24, 12, ICON_CLEAR, ink, fill);
-        GFX_HOOK_ALIGN(0, 88, 0, 112, AL_V, "seq clear all cell on its middle");
-        cv_text_on(42, 88 + CAP_IN(S, 24), &AF_S, "CLEAR ALL", ink, fill);
-    }
+    pt_mini(ps_num(song.sel), 16, 32, 208, ch - 34, T_RAISE);
+    sq_row(4 + ch + 4, 30, lys.sq_row == 1u);
+    GFX_HOOK_ALIGN(0, ch + 8, 0, ch + 38, AL_V, "seq clear all row on its middle");
+    cv_icon_in(16, ch + 8, 0, 30, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
+    GFX_HOOK_ALIGN(0, ch + 8, 0, ch + 38, AL_V, "seq clear all row on its middle");
+    cv_text_on(34, ch + 8 + CAP_IN(M, 30), &AF_M, "CLEAR ALL", dim, T_RAISE);
 }
 
 /* REC: a row a key (26 px, 4 apart): the key's cell (its note, icon and name), then CLEAR's track and what it holds,
@@ -1199,7 +1214,8 @@ static void draw_layer(void)
         sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
         sig += (uint32_t)chain_busy() * 3u + song.sel * 977u + (uint32_t)TSEL->p[P_SQNT] * 131u + steps_sig(TSEL) * 7u +
-               (uint32_t)TSEL->p[P_SLEN] * 257u;                /* (Dah: QUANTIZE, the steps' nudges) */
+               (uint32_t)TSEL->p[P_SLEN] * 257u + lys.sq_row * 65537u + ps_gen * 3u;   /* (Dah: QUANTIZE, the
+                                                         * steps' nudges, the row picked) */
     else
         sig += snd_id() * 31u + (uint32_t)chain_busy() * 3u + up_gen * 101u +
                eqa_sig() * 2654435761u;
@@ -1226,6 +1242,7 @@ static void draw_layer(void)
         cv_begin(240, H_FOOT, T_BG);
         const khint_t *ft = l == LAYER_FX && fx_key_held() ? FX_KEY_FOOT : l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT :
                             l == LAYER_GLO && ui.lock == LAYER_GLO ? GLO_LOCK_FOOT :
+                            l == LAYER_SEQ && lys.sq_row ? SEQ_CLR_FOOT :
                             LAYERS[l].foot;
         int h = help_on() && help_row(HELP_LAYER[l], 21);   /* 1.5, HELP ON: a
                                                          * second row, what this one does not say */

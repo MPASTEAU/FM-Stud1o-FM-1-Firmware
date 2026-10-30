@@ -1923,6 +1923,7 @@ static void fx_assign(int32_t s);
 static void fx_default(void);
 static int layer_play(void);
 static void seq_presets(int32_t s);                    /* (Dah: ui_layer.c, the SEQ layer's QUANTIZE) */
+static void seq_row(int32_t s);                        /* (.. its row: QUANTIZE / CLEAR ALL) */
 static void tl_clear_all(track_t *t);                  /* (Dah: ui_tools.c, its CLEAR ALL) */
 static int layer_set_open(void);
 static uint32_t layer_oct(uint32_t pressed, uint32_t oct);
@@ -2200,6 +2201,10 @@ static void ui_input(void)
                                                          * ~1 s, + NEW at the end); else: another track: OCT- puts back
                                                          * the layer's track only */
             pattern_turn_ui(s);
+            combo = 1;
+        }
+        if (ui.ly == LAYER_SEQ && (s = panel_enc(EN_SELECT)) != 0) {   /* (Dah) SEQ + SELECT: its row */
+            seq_row(s);
             combo = 1;
         }
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
