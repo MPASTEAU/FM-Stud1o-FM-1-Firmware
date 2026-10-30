@@ -397,7 +397,7 @@ static uint32_t large_kind(void)
     uint32_t g;
     if (!(ui_prefs & PREF_LARGE))
         return LK_OFF;
-    if (ui.layer)
+    if (ui.layer || ui.menu)                            /* (Dah: the menus: HOME's look, their rows in M) */
         return LK_LABEL;
     if (ui.home)                                        /* (HOME > TRACKS: its rows need the panel, the cards as on */
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
@@ -407,7 +407,8 @@ static uint32_t large_kind(void)
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
 static int name_on(void);
-#define home_bare() (!ui.layer && !name_on() && large_kind() != LK_TALL)   /* (Dah: HOME's
+#define home_bare() (ui.menu || ui.layer || (!name_on() && large_kind() != LK_TALL))   /* (Dah: every menu
+                                                         * (MENU, the held layers) in HOME's look, LARGE or not) */   /* (Dah: HOME's
                                                          * look, the FX pages too) */   /* (Dah) HOME: no footer, the panel down to the screen's foot,
                                                          * its cards knobs (HOME_CARD_H) */
 #define HOME_CARD_H 40

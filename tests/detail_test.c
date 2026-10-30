@@ -105,8 +105,8 @@ static int page_cycle(void)
         page_title(ti);
         ok = str_eq(ti, "DETAIL 2/3");
     }
-    ok &= help_page() && str_eq(help_page(), "[PRESETS]STEP[K1]CHANCE, 1:4, FILL");
-    bad += check("  its footer title DETAIL 2/3 (not the scale), its HELP hint", ok);
+    ok &= !help_page();                                 /* (Dah: never a knob or PRESETS in a hint: none left) */
+    bad += check("  its footer title DETAIL 2/3 (not the scale), no HELP hint (it named knobs only)", ok);
     return bad;
 }
 

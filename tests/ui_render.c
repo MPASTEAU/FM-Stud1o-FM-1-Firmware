@@ -1690,6 +1690,59 @@ static void draw(int s)
     ui_draw();
 }
 
+/* (Dah) one header for every menu: MENU (and INFO, ABOUT) and the held layers (FX GLO SCL EDIT SEQ REC) draw HOME's
+ * (ui_draw.c head_home), LARGE or not: the same height (nothing drawn in it past HOME_HEAD_H, the rows under it to the
+ * cards BG), the name at the place of HOME's name (its ink within 1 px: glyphs differ, O overshoots), the
+ * menu's own name, the tempo where HOME's is. HOME's (S_HOME, FLAT) is the reference */
+static rbox_t hd_name, hd_bpm;
+static uint32_t hd_n, hd_bad;
+static int hd_box(const char *want, rbox_t *o)        /* the header's leftmost text (want 0), or the one reading want */
+{
+    uint32_t i;
+    int got = 0;
+    for (i = 0; i < nscr; i++) {
+        const rbox_t *b = &scr[i];
+        if (b->y1 > HOME_HEAD_H || (b->flags & 4u))
+            continue;
+        if (want ? !strcmp(b->s, want) : (!got || b->x0 < o->x0))
+            *o = *b, got = 1;
+    }
+    return got;
+}
+static void head_check(int s)
+{
+    rbox_t nm, bp;
+    char ti[20];
+    uint32_t i, y, bad = 0;
+    if (s == S_HOME && !(ui_prefs & PREF_LARGE)) {
+        if (!hd_box(0, &hd_name) || !hd_box("BPM", &hd_bpm) || strcmp(hd_name.s, "HOME")) {
+            fprintf(rep, "FIND %-26s HOME's header: no name or BPM to compare the menus' with\n", cur_name);
+            nfind++;
+        }
+        return;
+    }
+    if (!(ui.menu || ui.layer) || ui.msg_t || !hd_name.s[0])
+        return;
+    head_title(ti);
+    hd_n++;
+    for (i = 0; i < nscr; i++)                         /* (no header ink below HOME's band) */
+        bad += scr[i].y0 < HOME_HEAD_H && scr[i].y1 > HOME_HEAD_H;
+    for (y = HOME_HEAD_H; y < card_y(); y++)
+        for (i = 0; i < 240u; i++)
+            bad += host_screen[y * 240u + i] != host_screen[HOME_HEAD_H * 240u];
+    if (!hd_box(0, &nm) || strcmp(nm.s, ti) || nm.y0 < hd_name.y0 - 1 || nm.y0 > hd_name.y0 + 1 || nm.y1 < hd_name.y1 - 1 ||
+        nm.y1 > hd_name.y1 + 1 || nm.x0 < hd_name.x0 - 1 ||
+        nm.x0 > hd_name.x0 + 1)
+        bad++;
+    if (!hd_box("BPM", &bp) || bp.x0 != hd_bpm.x0 || bp.y0 != hd_bpm.y0 || bp.x1 != hd_bpm.x1 || bp.y1 != hd_bpm.y1)
+        bad++;
+    if (bad) {
+        fprintf(rep, "FIND %-26s the menu's header is not HOME's (name '%s' at %d,%d-%d,%d; HOME's '%s' at %d,%d-%d,%d)\n",
+                cur_name, nm.s, nm.x0, nm.y0, nm.x1, nm.y1, hd_name.s, hd_name.x0, hd_name.y0, hd_name.x1, hd_name.y1);
+        nfind++;
+        hd_bad++;
+    }
+}
 /* every value of every column on every page of every engine: labels and values fit their column */
 static uint32_t nsweep, nmotion;
 /* #251, MENU > LARGE: a tall card's value keeps its face (L, M or S) over the whole range of what the knob turns; a
@@ -2269,11 +2322,13 @@ int main(int argc, char **argv)
             if (p == UI_GREY_INDEX) aud = audf;
             draw((int)s);
             lint();
-            if (p == UI_GREY_INDEX) { audit_scene(S_NAME[s]); font_scene("FLAT", S_NAME[s]); aud = 0; }
+            if (p == UI_GREY_INDEX) { audit_scene(S_NAME[s]); font_scene("FLAT", S_NAME[s]); aud = 0; head_check((int)s); }
             mono_check();
             for (k = 0; k < sizeof SHOW / sizeof SHOW[0]; k++)
                 if (!strcmp(UI_PALETTES[p].name, SHOW[k])) write_ppm(out, SHOW[k], S_NAME[s]);
         }
+    if (hd_n < 20u) { fprintf(stderr, "ui_render: the menus' header checked on %u screens only\n", hd_n); return 1; }
+    printf("ui_render: one header: %u menu screens (MENU, the held layers) drawn with HOME's, %u not\n", hd_n, hd_bad);
     {   /* STYLE LINE (gfx.c ST_*): every screen in every palette, linted (GREY: gray, MONO: neutral); GREY MONO NIGHT
          * PAPER as OUTDIR/ppm/<STYLE>_<PALETTE>_<screen>.ppm (ui_render.py: sheet_<STYLE>_<PALETTE>.png) */
         static const char *const ST_N[2] = {"FLAT", "LINE"}, *const ST_PAL[] = {"GREY", "MONO", "NIGHT", "PAPER"};
@@ -2325,7 +2380,7 @@ int main(int argc, char **argv)
                     draw((int)s);
                     ntall += !ui.menu && !ui.confirm && !name_on() && large_kind() == LK_TALL;
                     lint();
-                    if (!st && p == UI_GREY_INDEX) font_scene("LARGE", S_NAME[s]);
+                    if (!st && p == UI_GREY_INDEX) { font_scene("LARGE", S_NAME[s]); head_check((int)s); }
                     mono_check();
                     if ((p == UI_GREY_INDEX || (!st && p == UI_BW_INDEX)))
                         write_ppm(out, tag, S_NAME[s]);

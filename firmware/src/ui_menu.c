@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Felucca menu (HOME held): its rows in tabs (1.0.5: DISPLAY CONTROL AUDIO SYSTEM; 1.2: MIDI before SYSTEM; ALGORITHM
- * between them, PRESETS within one; no scrolling), the rows in menu_items.c (the settings, shared with the editor's
- * MENU_DESC / MENU_SET; 1.2: TUNE and MIDI IN, the project's). No BACK row: HOME closes it (ui_input.c). The two-valued
- * rows are bits of ui_prefs (MENU_FLAGS). PRESETS scrolls from ABOUT through all credits (OCT- back to the tabs).
- * ui.menu: 1 the tabs, 2 ABOUT (information and credits), 3 INFO (1.2: the device's state, the old SYSTEM page's USB and
- * CPU readings). */
+/* Felucca menu (HOME held): one list of rows (Dah: no tabs on the device; menu_items.c MI_TAB: the editor's), the rows
+ * in menu_items.c (the settings, shared with the editor's MENU_DESC / MENU_SET; 1.2: TUNE and MIDI IN, the project's).
+ * No BACK row: HOME closes it, any other button too but PLAY, REC, OCT- and OCT+ (ui_input.c). The two-valued rows are
+ * bits of ui_prefs (MENU_FLAGS). KNOB 1 scrolls ABOUT through all credits (OCT- back to the list).
+ * ui.menu: 1 the list, 2 ABOUT (information and credits), 3 INFO (1.2: the device's state, the old SYSTEM page's USB
+ * and CPU readings). */
 /* ------------------------------------------------------------ menu --- */
 /* (the rows, their values and names, usb_serial_apply: menu_items.c) */
 
@@ -148,72 +148,92 @@ static int32_t menu_scroll_max(void)
     return h > MENU_DOC_H ? h - MENU_DOC_H : 0;
 }
 
-static void menu_dots(void);
-/* the menu's header (0..24): its icon and title, the REC mark, the way back (the tabs: HOME CLOSE before the dots) */
-static void menu_head(void)
-{
-    cv_begin(240, H_HEAD, T_BG);
-    GFX_HOOK_ALIGN(0, HEAD_MY + AF_M_CAP_Y, 0, HEAD_MY + AF_M_CAP_Y + AF_M_CAP_H, AL_V, "header icon on its title's line");
-    cv_icon_mid(8, H_HEAD / 2, 16, ui.menu >= 2 ? ICON_X_INFO : ICON_X_COG, T_THEME, T_BG);   /* (as draw_head's) */
-    GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-    cv_text(30, HEAD_MY, &AF_M, ui.menu == 3 ? "INFO" : ui.menu == 2 ? "ABOUT / CREDITS" : "MENU", T_TEXT);
-    if (ui.menu >= 2) {                               /* the way back at the right, the REC mark before it (then */
-        const char *w = song.rec ? 0 : "BACK";        /* the keycap goes without its word: no room for both) */
-        int32_t x = 232 - kh_w(KC_OCTDN, w);
-        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-        cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_OCTDN, w, 1, T_BG);
-        draw_rec_mark(x - 20, T_BG);
-    } else {
-        int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8) - 8;   /* (menu_dots' left; Dah: no HOME CLOSE) */
-        draw_rec_mark(x - 20, T_BG);
-        menu_dots();
-    }
-    cv_blit(0, Y_HEAD);
-}
-
-/* The page (1.0.5; Dah: as SEQ's held menu, its rows a list as PATTERN's / MY PRESETS'):
- *   header   0..24  the cog and MENU, the REC mark, HOME CLOSE, the tabs as dots at the right (the one shown a THEME
- *                   pill)
- *   cards           KNOB 1 the tab (its icon in the knob, its name under it), KNOB 2 the row (n/N), KNOB 3 its value
- *   rows    MP_Y..  one SURF panel (LINE: none), a row a RAISE cushion (SEQ's), its label at the left (TEXT), its value at
- *                   the right (THEME); ON / OFF a switch, COLOR its palette's five colours, CALIBRATION, INFO, ABOUT a
- *                   chevron. The selected one framed (THEME, RAISE in it), in M, its key's cap before its value (KNOB 3;
- *                   OCT+ where it opens / clears); the others S. A list as the app's (ui_graph.c tall_view): the frame
- *                   from the top down to the middle, the rows by under it, at the end on down; the rows cut by the
- *                   panel's edges small and faint; a scrollbar at the right (list_bar); ANIM ON: the rows glide (mr.dy)
- *   keys   224      (Dah) KNOB 1 TAB, KNOB 2 ROW, OCT- (HOLD) RESET / OCT+ OPEN / CLEAR. HOME CLOSE is in the header
- * Drawn in two bands (the canvas holds 124 rows); while the rows glide only they are drawn again */
-static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_MIDI, ICON_X_COG};
-#define MP_Y ((int32_t)card_y() + HOME_CARD_H + 4)      /* the rows' panel (Dah: under the knob cards) */
-#define MP_END (MK_Y - 4)
-#define MP_PAD 3
+/* The page (1.0.5; Dah: one list, as SEQ's held menu; every menu alike):
+ *   header   0..18  HOME's (ui_draw.c head_home): MENU, the pattern, the track, the load, the tempo, the battery
+ *   cards           KNOB 1 the row (n/N), KNOB 2 its value (OCT- / OCT+ step it too), KNOB 3 and 4 none
+ *   rows            the panel (graph_y, graph_h): every row of the old tabs DISPLAY CONTROL AUDIO MIDI SYSTEM one after
+ *                   the other (MI_TAB: the editor's tabs; the device shows none), CALIBRATION INFO ABOUT at the end. The
+ *                   shared list (ml_draw: GLO SEQ REC's too): a row a RAISE cushion, its label at the left (TEXT), its
+ *                   value at the right (THEME); ON / OFF a switch, COLOR its palette's five colours, CALIBRATION, INFO,
+ *                   ABOUT a chevron. The selected one framed (THEME, RAISE in it), in M, KNOB 2's cap before its value
+ *                   (OCT+'s where it opens / clears); the others S. The frame from the top down to the middle, the rows
+ *                   by under it, at the end on down (ui_graph.c tall_view); the rows cut by the panel's edges small and
+ *                   faint; a scrollbar at the right (list_bar); ANIM ON: the rows glide (mr.dy)
+ *   keys            the footer band (menu_foot): OCT- (HOLD) RESET SETTINGS, OCT+ OPEN / CLEAR. No knob there
+ * The panel in two canvases (panel_bands), split in a gap; while the rows glide only they are drawn again */
 #define MR_X 8                                         /* (INFO's rows) */
 #define MR_W 224
 #define MR_LX 16                                       /* a row's label */
 #define MR_VR 224                                      /* (INFO's) value's right edge */
-#define MK_Y 224                                       /* the key hints */
+#define MP_PAD 3                                       /* the rows' room: the panel less this, top and foot */
 static int menu_large(void) { return (ui_prefs & PREF_LARGE) != 0u; }
-static uint32_t menu_tab(void) { return MI_TAB[ui.menu_sel % MI_COUNT]; }
+static uint32_t menu_tab(void) { return MI_TAB[ui.menu_sel % MI_COUNT]; }   /* (the editor's tab of the row picked) */
 static int32_t mr_h(void) { return menu_large() ? 26 : 22; }   /* a row (2 px between two) */
-/* the rows' glide (px still to go, as ui_graph.c glide: a quarter a frame) */
+/* the rows' glide (px still to go, as ui_graph.c glide: a quarter a frame); one list shows at a time: every list's */
 static struct { int16_t dy, drawn; } mr;
-static void mr_glide(uint32_t was)                     /* the row picked changed from `was` (same tab) */
+static void ml_glide(uint32_t was, uint32_t now)      /* the row picked went from `was` to `now` */
 {
-    int32_t d = ((int32_t)ui.menu_sel - (int32_t)was) * (mr_h() + 2);
+    int32_t d = ((int32_t)now - (int32_t)was) * (mr_h() + 2);
     mr.dy = (ui_prefs & PREF_ANIM_OFF) ? 0 : (int16_t)clamp(mr.dy + d, -2 * (mr_h() + 2), 2 * (mr_h() + 2));
 }
-
-/* the header's tab dots at the right, the shown tab's a THEME pill */
-static void menu_dots(void)
+static void ml_tick(void)                              /* a step of the glide, a frame each */
 {
-    uint32_t k, t = menu_tab();
-    int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8);
-    for (k = 0; k < MTAB_COUNT; k++) {
-        cv_rrect(x, H_HEAD / 2 - 2, k == t ? 12 : 4, 4, -2, k == t ? T_THEME : T_DIM, T_BG);
-        x += (k == t ? 12 : 4) + 4;
+    if (ui_prefs & PREF_ANIM_OFF)
+        mr.dy = 0;
+    else
+        mr.dy = (int16_t)(mr.dy - (mr.dy / 4 ? mr.dy / 4 : mr.dy > 0 ? 1 : mr.dy < 0 ? -1 : 0));
+}
+/* the MENU's rows: every one in a tab (not MTAB_OFF: REC's, GLO's, the editor's), in their order */
+static uint32_t menu_nvis(void)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < MI_COUNT; i++)
+        n += MI_TAB[i] < MTAB_COUNT;
+    return n;
+}
+static uint32_t menu_vis(uint32_t k)                   /* the k-th shown row */
+{
+    uint32_t i;
+    for (i = 0; i < MI_COUNT; i++)
+        if (MI_TAB[i] < MTAB_COUNT && !k--)
+            return i;
+    return MI_COUNT - 1u;
+}
+static uint32_t menu_pos(uint32_t row)                 /* .. and a row's place among them */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < row && i < MI_COUNT; i++)
+        n += MI_TAB[i] < MTAB_COUNT;
+    return n;
+}
+/* every menu's footer: its keys (no knob: the cards say them) in HOME's band at the screen's foot */
+static void menu_foot(const khint_t *kh, uint32_t n, uint32_t ok)
+{
+    cv_begin(240, HOME_FOOT_H, T_BG);
+    if (n)
+        cv_key_row(4, 236, (HOME_FOOT_H - KC_H) / 2, kh, n, ok, T_BG);
+    cv_blit(0, 240u - HOME_FOOT_H);
+}
+/* every menu's panel (graph_y, graph_h tall: taller than the canvas) in two canvases, the second from `split` (a gap
+ * between two rows or cells: nothing cut); body draws in the panel's rows (cv_py) */
+static void panel_bands(void (*body)(void), int32_t split)
+{
+    int32_t gh = (int32_t)graph_h(), pass;
+    split = clamp(split, gh - (int32_t)(CV_MAX / 240u), (int32_t)(CV_MAX / 240u));
+    for (pass = 0; pass < 2; pass++) {
+        int32_t top = pass ? split : 0;
+        cv_begin(240, (uint32_t)((pass ? gh : split) - top), T_BG);
+        cv_split = 1;
+        cv_split_h = gh;
+        cv_py = -top;
+        cv_rrect(3, 0, 234, gh, 5, T_SURF, T_BG);
+        cv_bg = T_SURF;
+        body();
+        cv_py = 0;
+        cv_split = 0;
+        cv_blit(0, graph_y() + (uint32_t)top);
     }
 }
-
 /* a two-valued row whose values are ON and OFF: a switch (a 26 x 14 cushion, its knob at the right when ON) */
 static void menu_switch(int32_t xr, int32_t y, int32_t h, int on)
 {
@@ -229,7 +249,7 @@ static void menu_row(uint32_t row, int32_t y, int32_t h, int32_t xr, int big, in
     const aafont_t *f = big || menu_large() ? &AF_M : &AF_S;
     int32_t vy = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), x = xr, le;
     uint16_t val = T_THEME;
-    uint32_t kc = menu_valued(row) ? KC_K3 : KC_OCTUP;
+    uint32_t kc = menu_valued(row) ? KC_K2 : KC_OCTUP;
     const char *v = menu_valued(row) ? menu_vname(row, menu_get(row)) : "";
     char b[8];
     if (MI_TCH(row) && song.g[G_ROUTE] != ROUTE_TRACK)
@@ -322,36 +342,41 @@ static void info_rows(void)                            /* (in screen rows: cv_oy
     }
 }
 
-/* the shown tab's rows as a list (ui_graph.c tall_view, big_rows): in screen rows, cv_oy set by the caller */
-static void menu_rows(uint32_t first, uint32_t n)
+/* (Dah) every list menu's list (MENU; GLO, SEQ, REC held: ui_layer.c), one renderer so they cannot drift: n rows,
+ * sel the one picked, in the room y0 .. y1 (the panel's rows); paint(k, y, h, xr, big, hk) draws row k's label and
+ * value on its cushion (xr: the value's right edge; big: in the frame, M and its key's cap; hk: whole in this canvas,
+ * the lint's hooks), label(k) a row cut by the room's edges (small, faint). A list as the app's (ui_graph.c
+ * tall_view): the frame from the top down to the middle, the rows by under it, at the end on down; ANIM ON the rows
+ * glide (mr.dy); a scrollbar at the right (list_bar) when they do not all fit */
+typedef void (*ml_paint_fn)(uint32_t k, int32_t y, int32_t h, int32_t xr, int big, int hk);
+typedef const char *(*ml_label_fn)(uint32_t k);
+static void ml_draw(ml_paint_fn paint, ml_label_fn label, uint32_t n, uint32_t sel, int32_t y0, int32_t y1)
 {
-    int32_t h = mr_h(), y0 = MP_Y + MP_PAD, y1 = MP_END - MP_PAD, fy, k, ch = (int32_t)n * (h + 2) - 2;
-    int32_t vt = tall_view((int32_t)n, (int32_t)(ui.menu_sel - first), mr.dy, y1 - y0, &fy, h);
+    int32_t h = mr_h(), fy, k, ch = (int32_t)n * (h + 2) - 2;
+    int32_t vt = tall_view((int32_t)n, (int32_t)sel, mr.dy, y1 - y0, &fy, h);
     int32_t w = ch > y1 - y0 ? 220 : 228, xr = 6 + w - 10, on;   /* (left of the scrollbar, when there is one) */
-    uint16_t pb = ux.style ? T_BG : T_SURF;
+    uint16_t pb = T_SURF;
     int16_t c0 = cv_cy0, c1 = cv_cy1;
     fy = clamp(fy, 0, y1 - y0 - h);                   /* (a wrap's glide: the frame stays in the room) */
-    if (!ux.style)                                     /* FLAT: the rows' panel */
-        cv_rrect(4, MP_Y, 232, MP_END - MP_Y, 8, T_SURF, T_BG);
     cv_cy0 = (int16_t)clamp(y0 + CV_OY, 0, (int32_t)cv_h);   /* (the rows cut by the room's edges: clipped to it) */
     cv_cy1 = (int16_t)clamp(y1 + CV_OY, cv_cy0, (int32_t)cv_h);
     cv_scroll = 1;
-    on = y0 + fy == y0 + (int32_t)(ui.menu_sel - first) * (h + 2) - vt;   /* (settled: the frame on its row) */
+    on = y0 + fy == y0 + (int32_t)sel * (h + 2) - vt;   /* (settled: the frame on its row) */
     for (k = 0; k < (int32_t)n; k++) {
         int32_t y = y0 + k * (h + 2) - vt;
         if (y + h <= y0 || y >= y1 || y + h + CV_OY <= 0 || y + CV_OY >= (int32_t)cv_h)
             continue;
         if (y < y0 || y + h > y1) {                     /* (cut: small, faint) */
-            cv_text_on(MR_LX, y + CAP_IN(S, h), &AF_S, menu_label(first + (uint32_t)k), ux_mix(pb, T_MID, 55), pb);
+            cv_text_on(MR_LX, y + CAP_IN(S, h), &AF_S, label((uint32_t)k), ux_mix(pb, T_MID, 55), pb);
             continue;
         }
-        if (on && y == y0 + fy) {                       /* (SEQ's selected row: framed) */
+        if (on && y == y0 + fy) {                       /* (the selected row: framed) */
             cv_rrect(6, y, w, h, 5, T_THEME, pb);
             cv_rrect(8, y + 2, w - 4, h - 4, 4, T_RAISE, T_THEME);
         } else
-            cv_rrect(6, y, w, h, 5, T_RAISE, pb);         /* (SEQ's rows: a cushion each) */
-        menu_row(first + (uint32_t)k, y, h, xr, y > y0 + fy - h / 2 && y < y0 + fy + h / 2,   /* (near the frame: M) */
-                 y + CV_OY >= 0 && y + h + CV_OY <= (int32_t)cv_h);
+            cv_rrect(6, y, w, h, 5, T_RAISE, pb);         /* (a cushion each) */
+        paint((uint32_t)k, y, h, xr, y > y0 + fy - h / 2 && y < y0 + fy + h / 2,   /* (near the frame: M) */
+              y + CV_OY >= 0 && y + h + CV_OY <= (int32_t)cv_h);
     }
     if (!on) {                                         /* (gliding: the frame over the rows, an outline) */
         int32_t fy0 = y0 + fy;
@@ -369,27 +394,38 @@ static void menu_rows(uint32_t first, uint32_t n)
     cv_cy0 = c0;
     cv_cy1 = c1;
 }
-/* the rows' two bands meet at `split` (each at most 124 rows): in the gap above a row, never through one */
-static int32_t menu_split(uint32_t first, uint32_t n)
+/* where the panel's two canvases meet (panel_bands): in the gap above a row of the list, never through one */
+static int32_t ml_split(uint32_t n, uint32_t sel, int32_t y0, int32_t y1)
 {
-    int32_t h = mr_h(), y0 = MP_Y + MP_PAD, fy, k, y;
-    int32_t vt = tall_view((int32_t)n, (int32_t)(ui.menu_sel - first), mr.dy, MP_END - MP_PAD - y0, &fy, h);
-    for (k = 0; k < (int32_t)n; k++)
-        if ((y = y0 + k * (h + 2) - vt - 1) >= 240 - 124 && y <= (int32_t)card_y() + HOME_CARD_H + 124)
+    int32_t h = mr_h(), fy, k, y, gh = (int32_t)graph_h(), mx = (int32_t)(CV_MAX / 240u);
+    int32_t vt = tall_view((int32_t)n, (int32_t)sel, mr.dy, y1 - y0, &fy, h);
+    for (k = 0; k <= (int32_t)n; k++)
+        if ((y = y0 + k * (h + 2) - vt - 1) >= gh - mx && y >= gh / 3 && y <= mx)
             return y;
-    return (int32_t)card_y() + HOME_CARD_H + 124;
+    return gh / 2;
+}
+/* the MENU's row k (of the shown ones) */
+static const char *menu_lab(uint32_t k) { return menu_label(menu_vis(k)); }
+static void menu_paint(uint32_t k, int32_t y, int32_t h, int32_t xr, int big, int hk)
+{
+    menu_row(menu_vis(k), y, h, xr, big, hk);
+}
+static void menu_list(void)
+{
+    ml_draw(menu_paint, menu_lab, menu_nvis(), menu_pos(ui.menu_sel), MP_PAD, (int32_t)graph_h() - MP_PAD);
 }
 static void draw_menu(void)
 {
-    static const khint_t KEYS[3][3] = {{{KC_OCTDN, "(HOLD) RESET SETTINGS"}},   /* (Dah: the cards say K1 K2 K3) */
-                                       {{KC_OCTUP, "OPEN"}, {KC_OCTDN, "(HOLD) RESET SETTINGS"}},
-                                       {{KC_OCTUP, "CLEAR"}, {KC_OCTDN, "(HOLD) RESET SETTINGS"}}};
-    uint32_t pass, first, n, sig;
+    static const khint_t KEYS[3][2] = {{{KC_OCTDN, "(HOLD) RESET SETTINGS"}},   /* (Dah: the cards say what the knobs do) */
+                                       {{KC_OCTUP, "OPEN"}, {KC_OCTDN, "(HOLD) RESET"}},   /* (two: the room for both) */
+                                       {{KC_OCTUP, "CLEAR"}, {KC_OCTDN, "(HOLD) RESET"}}};
+    static const khint_t BACK = {KC_OCTDN, "BACK"};
+    uint32_t pass, n = menu_nvis(), sig;
     int32_t split;
-    if (ui.menu != 1 || (ui_prefs & PREF_ANIM_OFF))
+    if (ui.menu != 1)
         mr.dy = 0;
-    else                                               /* (a step of the glide, a frame each) */
-        mr.dy = (int16_t)(mr.dy - (mr.dy / 4 ? mr.dy / 4 : mr.dy > 0 ? 1 : mr.dy < 0 ? -1 : 0));
+    else
+        ml_tick();
     sig = ui.menu * 7u + ui.menu_sel * 131u + palette_cur() * 1009u + settings.lowcut * 7919u + settings_hold * 3511u +
           settings_leds * 6151u + ui_prefs * 4099u + ui_style * 257u + song.rec * 65537u + song.sel * 13u +
           ui_rec_prefs * 92821u + ui_scr * 131071u +          /* (#157: SCREEN OFF's value redraws its row) */
@@ -400,42 +436,38 @@ static void draw_menu(void)
            (uint32_t)song.mch[song.sel % NTRK] << 5) *
           2246822519u +                                   /* (1.5.5: T1..T4 CHANNEL) */
           (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) + (ui.menu == 3 ? info_sig() * 2654435761u : 0u);
-    first = mtab_first(menu_tab());
-    n = mtab_rows(menu_tab());
-    split = menu_split(first, n);
+    split = ml_split(n, menu_pos(ui.menu_sel), MP_PAD, (int32_t)graph_h() - MP_PAD);
+    if (ui.force || sig != ui.menu_sig)
+        ui.head_sig = 0;                                /* (the header as every page's: drawn again with the rest) */
+    head_home();
     if (!ui.force && sig == ui.menu_sig) {
         if (ui.menu == 1 && mr.dy != mr.drawn) {        /* only the rows glided: their panel */
-            for (pass = 0; pass < 2u; pass++) {
-                int32_t top_y = pass ? split : MP_Y;
-                cv_begin(240, (uint32_t)((pass ? MP_END : split) - top_y), T_BG);
-                cv_oy = -top_y;
-                menu_rows(first, n);
-                cv_oy = 0;
-                cv_blit(0, (uint32_t)top_y);
-            }
+            panel_bands(menu_list, split);
             mr.drawn = mr.dy;
         }
         return;
     }
     ui.menu_sig = sig;
     mr.drawn = mr.dy;
-    menu_head();
     if (ui.menu == 3) {                                /* INFO: its rows in the first band, the second clear */
+        lcd_fill(0, HOME_HEAD_H, 240, H_HEAD - HOME_HEAD_H, T_BG);
         for (pass = 0; pass < 2u; pass++) {
             uint32_t top_y = pass ? 132u : (uint32_t)H_HEAD;
-            cv_begin(240, pass ? 240u - 132u : 132u - H_HEAD, T_BG);
+            cv_begin(240, pass ? 240u - HOME_FOOT_H - 132u : 132u - H_HEAD, T_BG);
             cv_oy = -(int32_t)top_y;
             if (!pass)
                 info_rows();
             cv_oy = 0;
             cv_blit(0, top_y);
         }
+        menu_foot(&BACK, 1u, 1u);
         return;
     }
     if (ui.menu == 2) {
         int32_t scroll = ui.menu_scroll, max = menu_scroll_max();
         int32_t thumb = MENU_DOC_H * MENU_DOC_H / (max + MENU_DOC_H);
         if (thumb < 12) thumb = 12;
+        lcd_fill(0, HOME_HEAD_H, 240, H_HEAD - HOME_HEAD_H, T_BG);
         for (pass = 0; pass < 2u; pass++) {
             cv_begin(240, pass ? MENU_DOC_H - 124u : 124u, T_BG);
             cv_oy = pass ? -124 : 0;
@@ -447,47 +479,30 @@ static void draw_menu(void)
             cv_oy = 0;
             cv_blit(0, H_HEAD + pass * 124u);
         }
-        cv_begin(240, 240 - (H_HEAD + MENU_DOC_H), T_BG);
-        cv_key_hint(8, 4, KC_PRESETS, "SCROLL", 1, T_BG);
-        cv_blit(0, H_HEAD + MENU_DOC_H);
+        lcd_fill(0, H_HEAD + MENU_DOC_H, 240, 240u - HOME_FOOT_H - (H_HEAD + MENU_DOC_H), T_BG);
+        menu_foot(&BACK, 1u, 1u);
         return;
     }
-    {   /* (Dah) the knob cards, as every page: KNOB 1 the tab (its icon in the knob, its name under it), KNOB 2 the
-         * row, KNOB 3 its value */
+    draw_frame();                                      /* (the gaps between header, cards, panel and footer) */
+    {   /* (Dah) the knob cards, as every list menu's: KNOB 1 the row (n/N), KNOB 2 its value */
         char rb[8];
-        uint32_t r = ui.menu_sel - first;
+        uint32_t r = menu_pos(ui.menu_sel);
         fmt_int(rb, (int32_t)r + 1);
         str_cpy(rb + str_len(rb), "/", 2);
         fmt_int(rb + str_len(rb), (int32_t)n);
-        if (card_y() > (uint32_t)H_HEAD)
-            lcd_fill(0, H_HEAD, 240, card_y() - H_HEAD, T_BG);
-        {   /* (Dah) KNOB 1: the tab's number ("2/5") in the knob, its name under it */
-            char tb[6];
-            fmt_int(tb, (int32_t)menu_tab() + 1);
-            str_cpy(tb + str_len(tb), "/", 2);
-            fmt_int(tb + str_len(tb), (int32_t)MTAB_COUNT);
-            knob_card(0, MTAB_NAME[menu_tab()], tb, "", (int32_t)menu_tab() * 1000 / (MTAB_COUNT - 1u), 0, 0);
-        }
-        knob_card(1, "ROW", rb, "", n > 1u ? (int32_t)r * 1000 / (int32_t)(n - 1u) : 0, 0, 0);
+        knob_card(0, "ROW", rb, "", n > 1u ? (int32_t)r * 1000 / (int32_t)(n - 1u) : 0, 0, 0);
         if (menu_valued(ui.menu_sel)) {
             uint32_t vn = menu_n(ui.menu_sel), v = menu_get(ui.menu_sel);
-            knob_card(2, "VALUE", menu_vname(ui.menu_sel, v), "", vn > 1u ? (int32_t)(v * 1000u / (vn - 1u)) : 0, 0, 0);
+            knob_card(1, "VALUE", menu_vname(ui.menu_sel, v), "", vn > 1u ? (int32_t)(v * 1000u / (vn - 1u)) : 0, 0, 0);
         } else
-            knob_card(2, "VALUE", "", "", -1, 0, 1);
+            knob_card(1, "VALUE", "", "", -1, 0, 1);
+        knob_card(2, "", "", "", -1, 0, 0);
         knob_card(3, "", "", "", -1, 0, 0);
     }
-    for (pass = 0; pass < 2u; pass++) {
-        int32_t top_y = pass ? split : (int32_t)card_y() + HOME_CARD_H;
-        cv_begin(240, (uint32_t)((pass ? 240 : split) - top_y), T_BG);
-        cv_oy = -top_y;                               /* drawn in screen rows */
-        menu_rows(first, n);
-        if (pass)
-            {
-                uint32_t kk = ui.menu_sel == MI_LCLEAR ? 2u : !menu_valued(ui.menu_sel);
-                cv_key_row(8, 232, MK_Y, KEYS[kk], kk ? 2u : 1u, kk ? 3u : 1u, T_BG);
-            }
-        cv_oy = 0;
-        cv_blit(0, (uint32_t)top_y);
+    panel_bands(menu_list, split);
+    {
+        uint32_t kk = ui.menu_sel == MI_LCLEAR ? 2u : !menu_valued(ui.menu_sel);
+        menu_foot(KEYS[kk], kk ? 2u : 1u, kk ? 3u : 1u);
     }
 }
 static void enc_drop(void)                             /* knob turns nobody takes */
@@ -505,26 +520,16 @@ static void menu_close(void)
     ui.force = 1;                                       /* (Dah: back on the page it was opened from, as SEQ's layer) */
 }
 
-/* menu: ALGORITHM steps between the tabs, PRESETS between the rows of one (both wrap; a tab comes back at the row
- * last picked in it), any of KNOB 1..4 or OCT+ / OCT- change a value (menu_items.c menu_step), OCT+ opens CALIBRATION /
- * INFO / ABOUT (OCT- nothing there); OCT- in INFO and ABOUT goes back to the tabs. HOME closes it, from them too
- * (ui_input.c) */
-static void menu_move(int32_t s)                       /* PRESETS: the next / previous row of the tab */
+/* menu (Dah: as SEQ's held menu): KNOB 1 the row (one list, from the first of DISPLAY's to ABOUT; the ends stop it),
+ * KNOB 2 or OCT+ / OCT- change its value (menu_items.c menu_step), OCT+ opens CALIBRATION / INFO / ABOUT, clears
+ * LEARN; OCT- in INFO and ABOUT goes back to the list. HOME closes it, from them too; another button closes it and
+ * acts (ui_input.c, as a held layer's lock) */
+static void menu_move(int32_t s)                       /* KNOB 1: the next / previous row */
 {
-    uint32_t t = menu_tab(), f = mtab_first(t), n = mtab_rows(t), k = (ui.menu_sel - f + (s > 0 ? 1u : n - 1u)) % n,
-             was = ui.menu_sel;
-    ui.menu_sel = (uint8_t)(f + k);
-    mr_glide(was);
-    ui.menu_row[t] = (uint8_t)k;
-}
-static void menu_tab_go(int32_t s)                     /* ALGORITHM: the next / previous tab, at its last row */
-{
-    uint32_t t = menu_tab(), k;
-    ui.menu_row[t] = (uint8_t)(ui.menu_sel - mtab_first(t));
-    t = (t + (s > 0 ? 1u : MTAB_COUNT - 1u)) % MTAB_COUNT;
-    k = ui.menu_row[t] < mtab_rows(t) ? ui.menu_row[t] : 0u;
-    ui.menu_sel = (uint8_t)(mtab_first(t) + k);
-    mr.dy = 0;                                         /* (another list: at once) */
+    uint32_t n = menu_nvis(), was = menu_pos(ui.menu_sel), k = (uint32_t)clamp((int32_t)was + (s > 0 ? 1 : -1), 0,
+                                                                                 (int32_t)n - 1);
+    ui.menu_sel = (uint8_t)menu_vis(k);
+    ml_glide(was, k);
 }
 /* (Dah) OCT- held: the device's settings back to their defaults (the MENU's rows; not the project's, not 2ND CORE) */
 static void menu_reset(void)
@@ -558,16 +563,16 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
                                                         * the tabs */
         if (dn)
             ui.menu = 1, ui.force = 1;
-        else if (ui.menu == 2 && (s = panel_enc(EN_SELECT)) != 0)   /* (Dah: SELECT, as the rows) */
+        else if (ui.menu == 2 && (s = panel_enc(EN_K1) + panel_enc(EN_SELECT)) != 0)   /* (Dah: KNOB 1, as the rows) */
             ui.menu_scroll = (uint16_t)clamp((int32_t)ui.menu_scroll + clamp(s, -128, 128) * 18, 0, menu_scroll_max());
         enc_drop();
         return;
     }
-    if ((s = panel_enc(EN_K1)) != 0)                   /* (Dah) as the other menus: KNOB 1 the tab, KNOB 2 the row, */
-        menu_tab_go(s);                                 /* KNOB 3 the value */
-    if ((s = panel_enc(EN_K2)) != 0)
+    if (MI_TAB[ui.menu_sel % MI_COUNT] >= MTAB_COUNT)  /* (a row the list does not show: its first) */
+        ui.menu_sel = (uint8_t)menu_vis(0);
+    if ((s = panel_enc(EN_K1)) != 0)                   /* (Dah) as SEQ's held menu: KNOB 1 the row, KNOB 2 its value */
         menu_move(s);
-    s = panel_enc(EN_K3);
+    s = panel_enc(EN_K2);
     (void)k;
     if (menu_valued(ui.menu_sel)) {
         /* a step (OCT+ the next value, OCT- the previous); COLOR previews the palette, STYLE is drawn so from the next

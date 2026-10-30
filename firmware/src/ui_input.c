@@ -2071,8 +2071,21 @@ static void ui_input(void)
         pressed &= ~(1u << panel.btn[B_OCTUP]);
         ui_message("KEPT");
     }
+    if (ui.menu && !ui.confirm && (pressed & ~(1u << panel.btn[B_HOME] | 1u << panel.btn[B_PLAY] |
+                                               1u << panel.btn[B_REC] | 1u << panel.btn[B_OCTDN] |
+                                               1u << panel.btn[B_OCTUP]))) {
+        menu_close();                                   /* (Dah) the menu as a held layer's lock: another button but
+                                                         * PLAY, REC and OCT- / OCT+ closes it, and acts as always */
+        if (ui.home_t0)
+            ui.home_t0 |= 2u;                           /* (HOME still held: no tap, no hold) */
+    }
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
+    if (ui.menu && !ui.confirm && ((pressed >> panel.btn[B_REC]) & 1u)) {   /* (Dah) REC in the menu: as in a layer, it */
+        rec_tap();                                      /* arms / disarms (on the press: no REC layer here) */
+        ui.rec_t0 |= 2u;
+        pressed &= ~(1u << panel.btn[B_REC]);
+    }
     save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* (held: no tap) */
     if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && ui.confirm)
         ui.save_t0 |= 2u;                               /* (Dah: OCT- cancels the dialog; SAVE let go is no tap then) */
@@ -2183,10 +2196,16 @@ static void ui_input(void)
         }
     }
     if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on())   /* REC pressed in another layer (REC alone: */
-        rec_tap();                                      /* its layer's tap); nothing in the menu, a dialog or NAME */
-    if (ui.menu) {                                      /* SAVE / REC taps do nothing here (HOME: above) */
+        rec_tap();                                      /* its layer's tap); not a dialog or NAME (the menu: above) */
+    if (ui.menu) {                                      /* (Dah) PLAY plays and stops, as in a layer (HOME: above) */
         if (ui.save_t0)
             ui.save_t0 |= 2u;
+        if ((pressed >> panel.btn[B_PLAY]) & 1u) {
+            if (song.playing || chain_busy() || seq_counting())
+                transport_req = 2;
+            else
+                transport_req = 1;
+        }
         ui.pg_down = 0;
         if (!ui.home_t0)
             menu_input(oct);

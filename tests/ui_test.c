@@ -1417,9 +1417,9 @@ static int test_menu_tabs(void)
             ok &= (MI_TAB[i] == t) == (i >= f && i < f + n);
     }
     ui_prefs = 0;                                       /* (a list: 5 rows in view at least, LARGE too; more scroll) */
-    ok &= MP_END - MP_Y - 2 * MP_PAD >= 5 * (mr_h() + 2) - 2 && MP_END <= MK_Y - 4;
+    ok &= (int32_t)(240 - HOME_FOOT_H - (HOME_HEAD_H + 3 + HOME_CARD_H + 4) - 2) - 2 * MP_PAD >= 5 * (mr_h() + 2) - 2;
     ui_prefs = PREF_LARGE;
-    ok &= MP_END - MP_Y - 2 * MP_PAD >= 5 * (mr_h() + 2) - 2;
+    ok &= (int32_t)(240 - HOME_FOOT_H - (HOME_HEAD_H + 3 + HOME_CARD_H + 4) - 2) - 2 * MP_PAD >= 5 * (mr_h() + 2) - 2;
     for (i = 0; i < MI_COUNT; i++) ok &= MI_TAB[i] < MTAB_COUNT;
     ui_prefs = 0;
     bad += check("MENU tabs: DISPLAY CONTROL AUDIO MIDI SYSTEM (8 8 8 8 7 rows: Dah SYNC SWING; 1.6.1 2ND CORE, a FELUCCA_CPU2=0 build SYSTEM 6; 1.5.5: SELECT, T1..T4 CHANNEL, AUTO SELECT, SCREEN WAKE), 1..8 each in a run, a list "
@@ -1615,17 +1615,17 @@ static int test_menu_tabs(void)
     ui_power_on();
     hold(B_HOME);
     frame();
-    turn(EN_K2, 1);
+    turn(EN_K1, 1);
     frame();
     ok = mr.dy > 0 && mr.dy < mr_h() + 2;               /* (a step on the way) */
     host_blit_rows = 0; frame();
-    ok &= host_blit_rows == (uint32_t)(MP_END - MP_Y);  /* (only the rows) */
+    ok &= host_blit_rows == graph_h();                  /* (only the rows' panel) */
     for (i = 0; i < 16u && mr.dy; i++) frame();
     ok &= mr.dy == 0 && i <= 14u;
     host_blit_rows = 0; frame();
     ok &= host_blit_rows == 0u;                         /* (settled: nothing drawn) */
     ui_prefs |= PREF_ANIM_OFF;
-    turn(EN_K2, 1);
+    turn(EN_K1, 1);
     frame();
     ok &= mr.dy == 0;
     ui_prefs &= ~PREF_ANIM_OFF;

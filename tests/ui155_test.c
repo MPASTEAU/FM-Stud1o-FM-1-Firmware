@@ -173,7 +173,7 @@ static int oct_press(void)
     ok &= song.octave == -1;
     song.octave = 0;
     go_title("EDIT 2");
-    ok &= str_eq(help_page(), "[K1-4]SOUND[EDIT]HOLD: ENGINES");
+    ok &= str_eq(help_page(), "[EDIT]HOLD: ENGINES");   /* (Dah: no knob in a hint) */
     bad += check("  OCT- held + KNOB: an ordinary turn (no default), the octave as pressed; EDIT 2's hint as EDIT 1's", ok);
 
     hold(B_HOME);
@@ -244,8 +244,8 @@ static int project_erase_ui(void)
 
     turn(EN_K1, 1);
     ok = !act_ready();                                  /* (OPEN: the one played already) */
-    ok &= help_page() && str_eq(help_page(), "[PRESETS]PATTERN[K1]OPEN[K4]DELETE") && help_fits(help_page());
-    bad += check("  OPEN on the one played: nothing to do; its HELP hint", ok);
+    ok &= !help_page();                                 /* (Dah: its hint named knobs and PRESETS only: none) */
+    bad += check("  OPEN on the one played: nothing to do; no HELP hint (knobs and PRESETS are never named)", ok);
     return bad;
 }
 
@@ -413,9 +413,70 @@ static int oct_layers(void)
     return bad;
 }
 
+/* (Dah) every menu alike: MENU (HOME held) one list, KNOB 1 the row (across the old tabs), KNOB 2 its value; another
+ * button closes it and acts (a page button: its page), PLAY plays in it, HOME closes it; the held layers' lists the
+ * same (KNOB 1 the row, gliding); no knob, SELECT, ALGORITHM or PRESETS in any footer or help */
+static int knob_named(const char *h)
+{
+    return strstr(h, "[K1") || strstr(h, "[K2") || strstr(h, "[K3") || strstr(h, "[K4");
+}
+static int menus_alike(void)
+{
+    int bad = 0, ok;
+    uint32_t i, n = 0;
+    ui_power_on();
+    go_home(); frame();
+    hold(B_HOME);
+    ui.menu_sel = MI_HOME;                              /* (DISPLAY's last row) */
+    turn(EN_K1, 1);
+    ok = ui.menu == 1 && ui.menu_sel == MI_HOLD && menu_tab() == MTAB_CONTROL;   /* (on into CONTROL's first) */
+    turn(EN_K1, -1);
+    ok &= ui.menu_sel == MI_HOME;
+    ui.menu_sel = MI_LEDS;
+    i = menu_get(MI_LEDS);
+    turn(EN_K2, 1);
+    ok &= menu_get(MI_LEDS) == (i + 1u) % menu_n(MI_LEDS) || menu_get(MI_LEDS) == menu_n(MI_LEDS) - 1u;
+    ok &= menu_nvis() + 8u == MI_COUNT;                /* (every row but CLICK .. TUNE and T1..T4 CHANNEL: no tabs) */
+    for (i = 0; i < menu_nvis(); i++)
+        n += menu_pos(menu_vis(i)) == i;
+    ok &= n == menu_nvis() && menu_vis(menu_nvis() - 1u) == MI_ABOUT;
+    bad += check("MENU: one list (no tabs), KNOB 1 the row across DISPLAY into CONTROL, KNOB 2 the value", ok);
+    press(B_PLAY);
+    ok = ui.menu == 1 && (song.playing || transport_req == 1u);
+    press(B_PLAY); frames(100);
+    press(B_LFO);
+    ok &= ui.menu == 0 && !ui.home && cur_page()->fam == FAM_LFO;
+    hold(B_HOME);
+    ok &= ui.menu == 1;
+    press(B_HOME);
+    ok &= ui.menu == 0;
+    bad += check("  PLAY plays in it; another button closes it and acts (LFO: its page); HOME closes it", ok);
+    ok = 1;
+    for (i = 0; i < NELEM(HELP_PAGE); i++)
+        ok &= !knob_named(HELP_PAGE[i].hint) && !strstr(HELP_PAGE[i].hint, "[PRESETS]") &&
+              !strstr(HELP_PAGE[i].hint, "[ALGO") && !strstr(HELP_PAGE[i].hint, "[SELECT]");
+    for (i = 0; i < LAYER_N; i++)
+        ok &= !knob_named(HELP_LAYER[i]) && LAYERS[i].foot[0].key != KC_K14 && LAYERS[i].foot[1].key != KC_K14;
+    ok &= !strstr(H_HOME, "[ALGO") && FX_KEY_FOOT[0].key != KC_PRESETS && FX_LATCH_FOOT[1].key != KC_K14;
+    bad += check("  no knob, SELECT, ALGORITHM or PRESETS in a footer or a HELP hint", ok);
+    go_page(GR_ROLL); frame();
+    btn_down(B_REC); frames(900); btn_up(B_REC); frames(100);
+    ok = ui.layer == LAYER_REC && lys.sq_row == 0u;
+    turn(EN_K1, 1);
+    ok &= lys.sq_row == 1u && (mr.dy != 0 || (ui_prefs & PREF_ANIM_OFF));
+    turn(EN_K1, 5);
+    ok &= lys.sq_row == 2u;                             /* (a step a turn, as the MENU's) */
+    for (i = 0; i < 5u; i++) turn(EN_K1, 1);
+    ok &= lys.sq_row == 3u;                             /* (the last: it stops) */
+    press(B_LFO);
+    ok &= !ui.layer;
+    bad += check("  REC's list: KNOB 1 the row (gliding), stops at the last; another button closes it", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

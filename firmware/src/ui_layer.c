@@ -55,18 +55,17 @@ typedef struct {
 } layer_t;
 static const layer_t LAYERS[LAYER_N] = {
     {0, 0, 0, "", {{0, 0}, {0, 0}, {0, 0}}},
-    {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
-    {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah:
-                                                         * GLO + ALGORITHM the pattern, said) */
-    {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {0, 0}, {0, 0}}},
-    {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {0, 0}, {0, 0}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah: the band OCT- alone) */
-    {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah: as SEQ: OCT- alone; KNOB 1 the rows, 2 a value) */
+    {B_FX, LK_HOLD, FAM_HOME, "FX", {{KC_KEYS, "EFFECTS"}, {0, 0}, {0, 0}}},   /* (Dah: the header the menu's name, as
+                                                         * every page's; no knob in the footer: the cards say them) */
+    {B_GLO, LK_SET, FAM_HOME, "GLO", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},
+    {B_SCL, LK_SET, FAM_SCL, "SCL", {{KC_KEYS, "ROOT"}, {0, 0}, {0, 0}}},
+    {B_EDIT, LK_SET, FAM_HOME, "EDIT", {{KC_KEYS, "ENGINE"}, {0, 0}, {0, 0}}},
+    {B_SEQ, LK_SET, FAM_SEQ, "SEQ", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},
+    {B_REC, LK_SET, FAM_HOME, "REC", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
 /* (Dah) GLO's menu: its rows' globals (the 5th: MIDI LEARN) */
 static const uint8_t GLO_G[4] = {G_BPM, G_SWING, G_TUNE, G_CLOCK};
-static const char *const GLO_RN[5] = {"TEMPO", "SWING", "TUNE", "CLOCK", "MIDI LEARN"};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: LEN DIV SWING GATE (the length the tools work in; up to 1.1.5 the PATTERN page's) */
@@ -82,8 +81,8 @@ static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l =
 #define LY_CLEAN (LY_INIT + 1u)         /* .. and CLEAN INIT's, the next (1.5.5, #190: F5) */
 typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5) */
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
-static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
-static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
+static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_OCTDN, "ALL OFF"}, {0, 0}};
+static const khint_t FX_KEY_FOOT[3] = {{KC_EDIT, "DEFAULT"}, {0, 0}, {0, 0}};   /* (a key held; Dah: no knob named) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "(HOLD) RESET SETTINGS"}, {0, 0}, {0, 0}};   /* (locked: PLAY plays, #183) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -122,7 +121,7 @@ static uint32_t layer_bits(void)
     return m;
 }
 static uint32_t layer_btn(void) { return LAYERS[ui.layer % LAYER_N].btn; }
-static const char *layer_head(void) { return ui.layer == LAYER_FX && perf_latch_on ? "[FX] LATCH" : LAYERS[ui.layer % LAYER_N].head; }
+static const char *layer_head(void) { return ui.layer == LAYER_FX && perf_latch_on ? "FX LATCH" : LAYERS[ui.layer % LAYER_N].head; }
 static uint32_t layer_open(void) { return ui.ly && (ui.ly_t0 & LY_OPEN) && ly_down(ui.ly) && layer_allowed() ? ui.ly : 0u; }
 static int layer_set_open(void)                 /* (FX LATCH: FX is one too, OCT- turns all off) */
 {
@@ -247,6 +246,7 @@ static void layer_opened(uint32_t l)
     lys.l = (uint8_t)l;
     lys.trk = song.sel;
     lys.sq_row = 0;
+    mr.dy = 0;                                          /* (its list at once) */
 }
 
 /* the armed button: 0, or the layer whose button was tapped (let go) */
@@ -378,6 +378,7 @@ static void glo_tap(void)
     }
 }
 
+static uint32_t ly_rows(uint32_t l) { return l == LAYER_REC ? 4u : 5u; }   /* (Dah) GLO SEQ REC: their lists' rows */
 /* (Dah) SEQ: F3 CLEAR ALL (the dialog closes the layer); the other keys nothing. The PRESETS knob: QUANTIZE */
 static void seq_key(uint32_t p)                         /* (Dah: 0 CLEAR TRACK, 1 CLEAR PATTERN: every track's) */
 {
@@ -388,9 +389,11 @@ static void seq_key(uint32_t p)                         /* (Dah: 0 CLEAR TRACK, 
     else
         confirm_open(CF_CLEAR_PAT, ps_num(song.sel) | (p ? 0x80u : 0u));
 }
-static void seq_row(int32_t s)                         /* (Dah) KNOB 1: LEN / QUANTIZE / CLEAR ALL */
+static void seq_row(int32_t s)                         /* (Dah) KNOB 1: the list's rows (GLO, SEQ, REC), gliding */
 {
-    lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 4);
+    uint32_t was = lys.sq_row;
+    lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, (int32_t)ly_rows(ui.ly) - 1);
+    ml_glide(was, lys.sq_row);
     ui.force = 1;
 }
 static void seq_presets(int32_t s)                     /* (Dah) KNOB 2, PRESETS: the row picked's value (LEN DIV QUANTIZE) */
@@ -415,8 +418,6 @@ static void seq_presets(int32_t s)                     /* (Dah) KNOB 2, PRESETS:
 
 /* REC's settings, row r (G3 A3 B3, KNOB 1..3): CLICK, COUNT-IN, CLICK LEVEL as MENU > AUDIO steps them (ui.c rp_*) */
 static const uint8_t RL_F[3] = {RP_CLICK, RP_COUNTIN, RP_LEVEL};
-static const char *const RL_LABEL[3] = {"CLICK", "COUNT", "LEVEL"};   /* (COUNT-IN: too wide for a card or a key cell) */
-static const uint8_t RL_ICON[3] = {ICON_TEMPO, ICON_TIME, ICON_LEVEL};
 static const char *rl_name(uint32_t r, uint32_t v)
 {
     return r == 3u ? (v ? "ON" : "OFF") : (r == 0u ? CLICK_N : r == 1u ? COUNTIN_N : CLKLVL_N)[v % 3u];
@@ -658,8 +659,7 @@ static void layer_knob(uint32_t k, int32_t s)
         perf_k[k] = (int8_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
     } else if (l == LAYER_GLO) {                        /* (Dah) as SEQ: KNOB 1 the rows, KNOB 2 the row's value */
         if (k == 0u) {
-            lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 4);
-            ui.force = 1;
+            seq_row(s);
         } else if (k == 1u && lys.sq_row == 4u) {
             ml_toggle();                                /* MIDI LEARN on / off (midi_learn.c) */
         } else if (k == 1u) {
@@ -677,8 +677,7 @@ static void layer_knob(uint32_t k, int32_t s)
             edit_load(NENGINES, s);
     } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the rows, KNOB 2 the row's value (CLEAR: asked) */
         if (k == 0u) {
-            lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 3);
-            ui.force = 1;
+            seq_row(s);
         } else if (k == 1u)
             rec_set(lys.sq_row, (uint32_t)clamp((int32_t)rl_get(lys.sq_row) + (s > 0 ? 1 : -1), 0,
                                                  lys.sq_row == 1u || lys.sq_row == 3u ? 1 : 2));
@@ -836,18 +835,16 @@ static uint32_t layer_leds(uint32_t *br)
 }
 
 /* ------------------------------------------------------ the overlay --- */
-/* One template: the header names the button and the kind ("[GLO] SET"); the cards are KNOB 1..4; the panel the
- * map of the keys as cells (the key's note name, a Fukiai icon, a name; FX's 16 white keys: the note and the effect's
- * short name, 4 a row); the footer the keycaps. A cell: RAISE
+/* One template, every menu's (Dah: as the MENU's): HOME's header with the menu's name (FX, GLO, SCL, EDIT, SEQ, REC;
+ * the lock when held open), the cards KNOB 1..4 as HOME's knobs, the panel to the footer band (graph_y, graph_h): a
+ * list (GLO SEQ REC: ui_menu.c ml_draw) or the map of the keys as cells filling it (the key's note name, a Fukiai
+ * icon, a name; FX's 16 white keys: the note and the effect's short name, 4 a row); the footer the keys and buttons
+ * (never a knob: the cards say them). A cell: RAISE
  * (can be pressed), the selection's fill (the value now, SET), the accent (held, HOLD), DIM (cannot now: pressing
  * it says why), KEY (a muted track, as the MUTE badge); HOLD cells in a SET layer: a corner triangle */
 static const char B_NOTE[4] = {'F', 'G', 'A', 'C'};     /* black keys 1..4: F# G# A# C# */
 #define LC_X(c) (6 + 58 * (int32_t)(c))                 /* cell column c: 54 px wide, 4 px apart */
 #define LC_W 54
-#define LC_H 42                                          /* the big cells: rows at y 4 and 50 */
-#define LF_H 19                                          /* FX: the white keys' rows (F3 .. B3, C4 .. F4, G4 .. C5, D5 .. G5) */
-#define LM_Y 96                                          /* the black keys' row (22 px) */
-#define LM_H 22
 enum { LS_OFF, LS_SEL, LS_HELD, LS_WAIT, LS_DIM, LS_MUTE };
 /* 1.5 (#173): | LS_ALT, an idle (OFF, DIM) cell of the FX map's 2nd and 4th columns in a fill of its own, the columns
  * light / dark in turn as the piano roll's keys, so the effects are told apart at a glance: SURF -> TEXT 22 % (the
@@ -900,8 +897,12 @@ static void lcell(int32_t x, int32_t y, int32_t h, const char *note, uint32_t ic
 {
     uint16_t ink, fill = lc_fill(st, &ink), idle = fill == T_RAISE || ((st & LS_ALT) && fill == lc_alt());
     fill = lc_box(x, y, LC_W, h, fill);
-    if (note)
+    if (note && h > 30)
         cv_text_on(x + 5, y + 3, &AF_S, note, idle ? T_MID : ink, fill);
+    else if (note) {                                       /* (a key's row: the note on the name's line) */
+        GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer key cell note centred up/down");
+        cv_text_on(x + 5, y + CAP_IN(S, h), &AF_S, note, idle ? T_MID : ink, fill);
+    }
     if (h > 30) {                                   /* the icon's cell over the name, 6 px between, centred */
         int32_t t = y + HALF_UP(h - (16 + 6 + AF_S_CAP_H));
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V | AL_N(2), "layer cell icon + name centred up/down");
@@ -909,12 +910,20 @@ static void lcell(int32_t x, int32_t y, int32_t h, const char *note, uint32_t ic
         cv_icon_in(x, t, LC_W, 0, 16, icon, ink, fill);
         GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
         cv_text_in(x, t + 22 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
-    } else if (name && h > 24) {                           /* the same, 12 px, 2 px between (the icon at a side) */
-        int32_t t = y + HALF_UP(h - (12 + 2 + AF_S_CAP_H));
+    } else if (name && h > 24 && !note && icon >= ICON_COUNT) {   /* (no icon: the name alone on the middle) */
+        GFX_HOOK_ALIGN(x, y, x + LC_W, y + h, AL_HV, "layer cell name centred");
+        cv_text_in(x, y + CAP_IN(S, h), LC_W, &AF_S, name, ink, fill);
+    } else if (name && h > 24 && !note) {                  /* the icon over the name, 12 px, 4 px between their inks,
+                                                         * centred by their ink (Dah: EDIT's engines) */
+        int32_t b[4], ih, t;
+        icon_ink(12, icon, b);
+        ih = b[3] - b[1];
+        t = y + HALF_UP(h - (ih + 4 + AF_S_CAP_H));
         GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V | AL_N(2), "layer cell icon + name centred up/down");
-        cv_icon_on(note ? x + LC_W - 17 : x + 5, t, 12, icon, ink, fill);
         GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
-        cv_text_in(x, t + 14 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
+        cv_icon_in(x, t - b[1], LC_W, 0, 12, icon, ink, fill);
+        GFX_HOOK_ALIGN(x, 0, x + LC_W, 0, AL_H | AL_PASS, "layer cell icon / name centred across");
+        cv_text_in(x, t + ih + 4 - AF_S_CAP_Y, LC_W, &AF_S, name, ink, fill);
     } else if (name && *name) {                           /* a key's row: the icon and the name on its middle */
         if (!note && icon < ICON_COUNT) {                  /* (the EDIT layer: the engine's icon instead of the key) */
             GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer key cell icon / name centred up/down");
@@ -939,26 +948,29 @@ static void lcell(int32_t x, int32_t y, int32_t h, const char *note, uint32_t ic
 }
 static void bnote(char *n, uint32_t t) { n[0] = B_NOTE[t]; n[1] = '#'; n[2] = 0; }
 
+/* (Dah) the grids (FX, SCL, EDIT) fill the panel to its foot: rows rows from y 4, `foot` px kept under them; the row
+ * pitch (a row and its 4 px gap) */
+static int32_t lc_pitch(uint32_t rows, int32_t foot) { return ((int32_t)graph_h() - 4 - foot) / (int32_t)rows; }
 static void layer_fx(void)
 {
     uint32_t held = perf_kill ? 0u : perf_held | perf_latched, act = perf_act, ok = perf_avail(), p, e, st;
     uint32_t ed = fx_key_held() ? key_place(fx_key_held() - 1u) : PF_KEYS;
+    int32_t pt = lc_pitch(5u, 0), h = pt - 4;          /* (Dah: the white keys' four rows and the mutes', to the foot) */
     char n[3] = {0, 0, 0};
     for (p = 0; p < PF_KEYS; p++) {                     /* the white keys F3 .. G5, 4 a row: the effect each holds */
         e = perf_map[p];
         st = p == ed ? LS_SEL : e >= PF_NFX || !((ok >> e) & 1u) ? LS_DIM : !((held >> e) & 1u) ? LS_OFF
            : (act >> e) & 1u ? LS_HELD : LS_WAIT;       /* (the key PRESETS assigns: the selection's fill) */
         n[0] = W_NOTE[p];
-        lcell(LC_X(p % 4u), 4 + (LF_H + 4) * (int32_t)(p / 4u), LF_H, n, 0, 0, e < PF_NFX ? PF_CELL[e] : "",
+        lcell(LC_X(p % 4u), 4 + pt * (int32_t)(p / 4u), h, n, 0, 0, e < PF_NFX ? PF_CELL[e] : "",
               st | (p & 1u ? LS_ALT : 0u), 0);           /* (#173: the 2nd and 4th columns' idle cells their own fill) */
     }
     for (e = 0; e < 4u; e++) {                          /* the mutes of the black keys 1..4 (the bank's tracks) */
         bnote(n, e);
-        lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(trk_bank() + e, 0), 0,
+        lcell(LC_X(e), 4 + 4 * pt, h, n, ICON_MUTE, trk_icon(trk_bank() + e, 0), 0,
               (held >> (PF_M1 + trk_bank() + e)) & 1u ? LS_MUTE : LS_OFF, 0);
     }
 }
-static void sq_row(int32_t y, int32_t h, int sel);
 static const char *glo_val(uint32_t r, char *b)        /* (Dah) the GLO layer's row r's value */
 {
     const char *u;
@@ -973,35 +985,10 @@ static const char *glo_val(uint32_t r, char *b)        /* (Dah) the GLO layer's 
     }
     return b;
 }
-static void layer_glo(void)                             /* (Dah) as SEQ's: the rows, then the keys' two cells */
-{
-    char vb[16], n[3] = {0, 0, 0};
-    int32_t k;
-    for (k = 0; k < 5; k++) {
-        int32_t y = 3 + k * 21, x;
-        const char *v = glo_val((uint32_t)k, vb);
-        sq_row(y, 19, lys.sq_row == (uint32_t)k);
-        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "glo layer row on its middle");
-        cv_text_on(16, y + CAP_IN(S, 19), &AF_S, GLO_RN[k], T_TEXT, T_RAISE);
-        x = 224 - (int32_t)text_w(&AF_S, v);
-        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "glo layer row on its middle");
-        cv_text_on(x, y + CAP_IN(S, 19), &AF_S, v, T_THEME, T_RAISE);
-        if (lys.sq_row == (uint32_t)k)
-            cv_keycap(x - 6 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
-    }
-    if ((int32_t)graph_h() - 112 >= LC_H) {             /* the keys: D4 LEARN, E4 FILL (held), F4 TAP */
-        n[0] = 'D';
-        lcell(LC_X(0), 110, LC_H, n, ICON_MIDI, 0, "LEARN", ui.ml.on ? LS_SEL : LS_OFF, 0);
-        n[0] = 'E';
-        lcell(LC_X(1), 110, LC_H, n, ICON_STEPS, 0, "FILL", seq_fill ? LS_HELD : LS_OFF, 1);
-        n[0] = 'F';
-        lcell(LC_X(2), 110, LC_H, n, ICON_TEMPO, 0, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF, 0);
-    }
-}
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
 {
     uint32_t i, sc = (uint32_t)TSEL->p[P_SCALE];
-    int32_t p = ((int32_t)graph_h() - 4) / 4, h = p - 4;   /* (Dah: the four rows fill the panel to its foot) */
+    int32_t p = lc_pitch(4u, 0), h = p - 4;             /* (Dah: the four rows fill the panel to its foot) */
     for (i = 0; i < 16u && i <= (uint32_t)TP[P_SCALE].max; i++) {
         int32_t x = LC_X(i % 4u), y = 4 + p * (int32_t)(i / 4u);
         uint16_t ink, fill = lc_fill(i == sc ? LS_SEL : LS_OFF, &ink);
@@ -1010,10 +997,11 @@ static void layer_scl(void)                             /* KNOB 2's scales, 4 x 
         cv_text_in(x, y + CAP_IN(S, h), LC_W, &AF_S, TP[P_SCALE].names[i], ink, fill);
     }
 }
-/* 1.4.1: the engine's quick actions (black keys 1..n) in a row of n cells under the engines, 18 px high, 4 px apart
- * (8: 25 px, as SEQ TOOLS' lanes; 11: 17 px): the name; SET EQ_SHOW_MUTE: off a muted track's KEY; a HOLD one's
+/* 1.4.1: the engine's quick actions (black keys 1..n) in a row of n cells under the engines at y, 18 px high, 4 px
+ * apart (8: 25 px, as SEQ TOOLS' lanes; 11: 17 px): the name; SET EQ_SHOW_MUTE: off a muted track's KEY; a HOLD one's
  * corner triangle */
-static void eqa_row(uint32_t n)
+#define LE_FOOT 22                                       /* (Dah) EDIT: the sound's row (or the actions') under the grid */
+static void eqa_row(uint32_t n, int32_t y)
 {
     uint32_t i, w = (228u - 4u * (n - 1u)) / n;
     for (i = 0; i < n; i++) {
@@ -1021,46 +1009,44 @@ static void eqa_row(uint32_t n)
         uint32_t on = a->on(TSEL, a->arg) != 0u, st = a->show == EQ_SHOW_MUTE ? (on ? LS_OFF : LS_MUTE)
                     : on ? (a->kind == LK_HOLD ? LS_HELD : LS_SEL) : LS_OFF;
         int32_t x = 6 + (int32_t)((w + 4u) * i), j;
-        uint16_t ink, fill = lc_box(x, 100, (int32_t)w, 18, lc_fill(st, &ink));
-        GFX_HOOK_ALIGN(x, 100, x + (int32_t)w, 118, AL_HV, "edit quick action cell name centred");
-        cv_text_in(x, 100 + CAP_IN(S, 18), (int32_t)w, &AF_S, a->name(TSEL, a->arg), ink, fill);
+        uint16_t ink, fill = lc_box(x, y, (int32_t)w, 18, lc_fill(st, &ink));
+        GFX_HOOK_ALIGN(x, y, x + (int32_t)w, y + 18, AL_HV, "edit quick action cell name centred");
+        cv_text_in(x, y + CAP_IN(S, 18), (int32_t)w, &AF_S, a->name(TSEL, a->arg), ink, fill);
         for (j = 0; a->kind == LK_HOLD && j < 4; j++)
-            cv_rect(x + (int32_t)w - 7 + j, 102 + j, 4 - j, 1, ink);
+            cv_rect(x + (int32_t)w - 7 + j, y + 2 + j, 4 - j, 1, ink);
     }
 }
 static void layer_edit(void)                            /* the engines from F3, INIT next (LY_INIT), CLEAN INIT after */
 {                                                        /* it (1.5.5), the sound under them (cells show the engine's
                                                          * icon, not the key's note) */
-    uint32_t n = NENG_SHOWN < LY_INIT ? NENG_SHOWN : LY_INIT, cells = n + 2u, i, h = cells > 12u ? 20u : 28u;   /* 4 rows of 20: 8 px clear above the sound row */
+    uint32_t n = NENG_SHOWN < LY_INIT ? NENG_SHOWN : LY_INIT, cells = n + 2u, i;
+    int32_t p = lc_pitch((cells + 3u) / 4u, LE_FOOT), h = p - 4, sy = (int32_t)graph_h() - LE_FOOT;   /* (Dah: the
+                                                         * cells as big as the panel lets them) */
     uint32_t na = eqa_count(TSEL);
     for (i = 0; i < cells; i++) {
-        int32_t x = LC_X(i % 4u), y = 4 + (int32_t)(h + 4u) * (int32_t)(i / 4u);
+        int32_t x = LC_X(i % 4u), y = 4 + p * (int32_t)(i / 4u);
         const engine_t *en = ENGINES[eng_vis(i) % NENGINES];
         if (i < n)
-            lcell(x, y, (int32_t)h, 0, engine_icon(en->name), 0, h > 24u ? en->name : eng_abbr(en->name),
+            lcell(x, y, h, 0, engine_icon(en->name), 0, h > 24 ? en->name : eng_abbr(en->name),
                   eng_vis(i) == TSEL->eng_req % NENGINES ? LS_SEL : LS_OFF, 0);
         else
-            lcell(x, y, (int32_t)h, 0, i == n ? ICON_X_WARN : ICON_COUNT, 0, i == n ? "INIT" : "CLEAN",   /* (CLEAN: no
-                                                                                    * icon, the word fills the cell) */
+            lcell(x, y, h, 0, i == n ? ICON_X_WARN : ICON_COUNT, 0, i == n ? "INIT" : "CLEAN",   /* (CLEAN: no icon, the
+                                                                                    * word fills the cell) */
                   chain_busy() ? LS_DIM : LS_OFF, 0);
     }
     if (na)                                             /* the black keys' quick actions in the sound's place (KNOB 2 */
-        eqa_row(na);                                    /* still shows its number) */
+        eqa_row(na, sy);                                /* still shows its number) */
     else
-        engine_sound_row(104);
+        engine_sound_row(sy + 1);
 }
 
-/* (Dah) SEQ: a list of two rows, as HOME's (the one picked framed, SELECT moves): QUANTIZE (its amount at the right;
- * under it the pattern as SAVE > PATTERN draws it, ui_graph.c pt_mini) and CLEAR ALL (F3 too) */
-static void sq_row(int32_t y, int32_t h, int sel)
-{
-    if (sel) {
-        cv_rrect(6, y, 228, h, 5, T_THEME, T_SURF);
-        cv_rrect(8, y + 2, 224, h - 4, 4, T_RAISE, T_THEME);
-    } else {
-        cv_rrect(6, y, 228, h, 5, T_RAISE, T_SURF);
-    }
-}
+/* (Dah) GLO, SEQ, REC: their rows in the list every menu shows (ui_menu.c ml_draw, as the MENU's): KNOB 1 the row,
+ * KNOB 2 its value. A row: its label, its value at the right (THEME; ON / OFF a switch, as the MENU's), KNOB 2's cap
+ * before it on the one picked; SEQ's CLEAR TRACK / CLEAR PATTERN an icon before the label, no value (KNOB 2 asks) */
+typedef struct { const char *label, *val; uint16_t vc; uint8_t icon, sw; } lrow_t;
+static const char *const GLO_RL[5] = {"TEMPO", "SWING", "TUNE", "CLOCK", "MIDI LEARN"};
+static const char *const SEQ_RL[5] = {"LEN", "DIV", "QUANTIZE", "CLEAR TRACK", "CLEAR PATTERN"};
+static const char *const REC_RL[4] = {"CLICK", "COUNT-IN", "LEVEL", "REC STARTS PLAY"};
 static const char *seq_val(uint32_t r, char *b)        /* (Dah) the SEQ layer's row r's value: LEN, DIV, QUANTIZE */
 {
     const char *u;
@@ -1069,34 +1055,89 @@ static const char *seq_val(uint32_t r, char *b)        /* (Dah) the SEQ layer's 
     param_format(&TP[r ? P_SDIV : P_SLEN], TSEL->p[r ? P_SDIV : P_SLEN], b, &u);
     return b;
 }
+static const char *ly_lab(uint32_t k)
+{
+    return ui.layer == LAYER_GLO ? GLO_RL[k % 5u] : ui.layer == LAYER_REC ? REC_RL[k % 4u] : SEQ_RL[k % 5u];
+}
+/* row k of the layer's list, its value in b; the value's place (1000: its top), -1 none */
+static int32_t ly_row(uint32_t k, lrow_t *r, char *b)
+{
+    int32_t ratio = -1;
+    r->label = ly_lab(k);
+    r->vc = T_THEME;
+    r->icon = ICON_NONE;
+    r->sw = 0;
+    if (ui.layer == LAYER_GLO) {
+        r->val = glo_val(k, b);
+        if (k == 4u)
+            r->sw = (uint8_t)(1u + ui.ml.on), ratio = ui.ml.on ? 1000 : 0;
+        else {
+            const param_desc_t *g = &GP[GLO_G[k]];
+            ratio = g->max > g->min ? (song.g[GLO_G[k]] - g->min) * 1000 / (g->max - g->min) : 0;
+        }
+    } else if (ui.layer == LAYER_REC) {
+        uint32_t v = rl_get(k), n = k == 1u || k == 3u ? 2u : 3u;
+        r->val = rl_name(k, v);
+        if (n == 2u)
+            r->sw = (uint8_t)(1u + (v != 0u));
+        ratio = (int32_t)(v * 1000u / (n - 1u));
+    } else if (k >= 3u) {                               /* (SEQ) CLEAR TRACK / PATTERN: KNOB 2 asks it (the dialog) */
+        r->val = "";
+        r->icon = ICON_CLEAR;
+        r->vc = chain_busy() ? T_DIM : T_TEXT;
+    } else {
+        uint32_t id = k == 2u ? P_SQNT : k ? P_SDIV : P_SLEN;
+        r->val = seq_val(k, b);
+        if (k == 2u && !TSEL->p[P_SQNT])
+            r->vc = T_DIM;
+        ratio = TP[id].max > TP[id].min ? (TSEL->p[id] - TP[id].min) * 1000 / (TP[id].max - TP[id].min) : 0;
+    }
+    return ratio;
+}
+static void ly_paint(uint32_t k, int32_t y, int32_t h, int32_t xr, int big, int hk)
+{
+    const aafont_t *f = big || menu_large() ? &AF_M : &AF_S;
+    int32_t vy = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), x = xr, lx = MR_LX, le;
+    char b[16];
+    lrow_t r;
+    (void)ly_row(k, &r, b);
+    if (r.icon != ICON_NONE) {                          /* (CLEAR's: its icon before the label) */
+        if (hk) GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer list row icon centred up/down");
+        lx += cv_icon_in(lx, y, 0, h, 12, r.icon, chain_busy() ? T_DIM : T_MID, T_RAISE) + 6;
+    }
+    if (hk) GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer list row name centred up/down");
+    le = cv_text_on(lx, vy, f, r.label, r.icon != ICON_NONE ? r.vc : T_TEXT, T_RAISE);
+    if (r.sw) {
+        menu_switch(xr, y, h, r.sw == 2u);
+        x = xr - 26;
+    } else if (r.val[0]) {
+        if (hk) GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "layer list row value centred up/down");
+        x = cv_text_r(xr, vy, f, r.val, r.vc, T_RAISE);
+    } else
+        x = xr + 6;                                     /* (no value: the cap at the right) */
+    if (big && x - 6 - kc_w(KC_K2) >= le + 6)          /* (KNOB 2's cap before its value, as the MENU's) */
+        cv_keycap(x - 6 - kc_w(KC_K2), y + (h - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
+}
+/* the list's room: the panel, but SEQ's rows exactly (its preview under them) */
+static int32_t ly_list_end(void)
+{
+    int32_t full = (int32_t)graph_h() - MP_PAD;
+    if (ui.layer == LAYER_SEQ) {
+        int32_t e = MP_PAD + 5 * (mr_h() + 2) - 2;
+        return e < full ? e : full;
+    }
+    return full;
+}
+static void layer_list(void)
+{
+    ml_draw(ly_paint, ly_lab, ly_rows(ui.layer), lys.sq_row % ly_rows(ui.layer), MP_PAD, ly_list_end());
+}
 static void layer_seq(void)
 {
-    int32_t full = (int32_t)graph_h(), ph, k;
-    uint16_t dim = chain_busy() ? T_DIM : T_TEXT;
-    static const char *const RN[5] = {"LEN", "DIV", "QUANTIZE", "CLEAR TRACK", "CLEAR PATTERN"};
-    char vb[12];
-    for (k = 0; k < 5; k++) {                           /* (Dah) the rows, as HOME's (KNOB 1; KNOB 2 their value / ask) */
-        int32_t y = 3 + k * 21, sel = lys.sq_row == (uint32_t)k;
-        sq_row(y, 19, sel);
-        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "seq layer row on its middle");
-        cv_text_on(k >= 3 ? 34 : 16, y + CAP_IN(S, 19), &AF_S, RN[k], dim, T_RAISE);
-        if (k >= 3) {
-            GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "seq layer row on its middle");
-            cv_icon_in(16, y, 0, 19, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
-            if (sel)                                    /* (KNOB 2 asks it: its keycap at the right) */
-                cv_keycap(224 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
-        } else {                                        /* (the value at the right, KNOB 2's keycap before it: picked) */
-            const char *v = seq_val((uint32_t)k, vb);
-            int32_t x = 224 - (int32_t)text_w(&AF_S, v);
-            GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "seq layer row on its middle");
-            cv_text_on(x, y + CAP_IN(S, 19), &AF_S, v, k == 2 && !TSEL->p[P_SQNT] ? T_DIM : T_THEME, T_RAISE);
-            if (sel)
-                cv_keycap(x - 6 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
-        }
-    }
-    ph = full - 110;                                    /* (Dah) under them, what a CLEAR would empty: the track as HOME's
-                                                         * row (CLEAR TRACK), the pattern as SAVE's (CLEAR PATTERN) */
-    if (ph >= 14 && lys.sq_row == 3u) {
+    int32_t full = (int32_t)graph_h(), y = ly_list_end() + 6, ph = full - 4 - y;
+    layer_list();
+    if (ph >= 14 && lys.sq_row == 3u) {                 /* (Dah) under the rows, what a CLEAR would empty: the track as
+                                                         * HOME's row (CLEAR TRACK), the pattern as SAVE's (CLEAR PATTERN) */
         track_t *t = TSEL;
         rk_row_t R;
         int32_t oy = cv_oy;
@@ -1112,42 +1153,18 @@ static void layer_seq(void)
         R.bg = ux_mix(T_SURF, R.tc0, 16);
         R.rh = ph > 26 ? 26 : ph;
         rk_view(t, 1, &R.p0, &R.ph);
-        cv_oy = oy + 108;
+        cv_oy = oy + y;
         rk_paint(&R, -3);
         cv_oy = oy;
     } else if (ph >= 14 && lys.sq_row == 4u)
-        pt_mini(ps_num(song.sel), 16, 108, 208, ph > 30 ? 30 : ph, T_SURF);
+        pt_mini(ps_num(song.sel), 16, y, 208, ph > 30 ? 30 : ph, T_SURF);
 }
-
-/* REC: a row a key (26 px, 4 apart): the key's cell (its note, icon and name), then CLEAR's track and what it holds,
- * or the setting's three values, the one now with the selection's fill (as MENU > AUDIO steps them) */
-#define LR_KW 78                                         /* the key's cell; the values 46 px each: x 6 .. 234 */
-#define LR_VW 46
-#define LR_H 26
-static void layer_rec(void)
-{
-    static const char *const RN[4] = {"CLICK", "COUNT-IN", "LEVEL", "REC STARTS PLAY"};
-    int32_t k;
-    for (k = 0; k < 4; k++) {                           /* (Dah) the rows, as SEQ's (KNOB 1; KNOB 2 their value) */
-        int32_t y = 4 + k * 26, sel = lys.sq_row == (uint32_t)k, x;
-        const char *v = rl_name((uint32_t)k, rl_get((uint32_t)k));
-        sq_row(y, 22, sel);
-        GFX_HOOK_ALIGN(0, y, 0, y + 22, AL_V, "rec layer row on its middle");
-        cv_text_on(16, y + CAP_IN(M, 22), &AF_M, RN[k], T_TEXT, T_RAISE);
-        x = 224 - (int32_t)text_w(&AF_S, v);
-        GFX_HOOK_ALIGN(0, y, 0, y + 22, AL_V, "rec layer row on its middle");
-        cv_text_on(x, y + CAP_IN(S, 22), &AF_S, v, T_THEME, T_RAISE);
-        if (sel)
-            cv_keycap(x - 6 - kc_w(KC_K2), y + (22 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
-    }
-}
+static void layer_glo(void) { layer_list(); }
+static void layer_rec(void) { layer_list(); }
 
 static void layer_cards(uint32_t l)
 {
     char val[12];
-    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_GLO || l == LAYER_EDIT || l == LAYER_SCL))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
-                                                         * them to the panel BG (no page left there) */
-        lcd_fill(0, Y_LABEL + HOME_CARD_H, 240, Y_GRAPH - Y_LABEL - HOME_CARD_H, T_BG);
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
         int32_t m = perf_k[0];
         fmt_int(val, m < 0 ? -m : m);
@@ -1167,23 +1184,9 @@ static void layer_cards(uint32_t l)
             fmt_int(val, 100 - perf_k[3]);
             draw_column(3, "DEPTH", val, "%", VAL(3u), (100 - perf_k[3]) * 10, ICON_MIX);
         }
-    } else if (l == LAYER_GLO) {                        /* (Dah) as SEQ: KNOB 1 the row, KNOB 2 its value */
-        static const char *const RN[5] = {"TEMPO", "SWING", "TUNE", "CLOCK", "LEARN"};
-        uint32_t rr = lys.sq_row % 5u;
-        draw_column(0, "ROW", RN[rr], "", VAL(0u), (int32_t)rr * 250, ICON_NONE);
-        draw_column(1, RN[rr], glo_val(rr, val), "", VAL(1u), -1, ICON_NONE);
-        draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
-        draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
     } else if (l == LAYER_EDIT) {
         engine_columns();
-    } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the row, KNOB 2 its value, two empty */
-        static const char *const RN[4] = {"CLICK", "COUNT", "LEVEL", "PLAY"};
-        uint32_t rr = lys.sq_row % 4u;
-        draw_column(0, "ROW", RN[rr], "", VAL(0u), (int32_t)rr * 333, ICON_NONE);
-        draw_column(1, RN[rr], rl_name(rr, rl_get(rr)), "", VAL(1u), -1, ICON_NONE);
-        draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
-        draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
-    } else {                                            /* the page's four (SCL: LY_SCL) */
+    } else if (l == LAYER_SCL) {                        /* the page's four (LY_SCL) */
         uint8_t h = ui.home, pg = ui.page;
         ui.home = 0;
         ui.page = (uint8_t)page_first(LAYERS[l].fam);
@@ -1192,24 +1195,67 @@ static void layer_cards(uint32_t l)
         page_over = 0;
         ui.home = h;
         ui.page = pg;
-        if (l == LAYER_SEQ) {                           /* (Dah) KNOB 1: the row picked; KNOB 2: its value */
-            static const char *const RN[5] = {"LEN", "DIV", "QNTZ", "CLR T", "CLR P"};
-            char vb[12];
-            draw_column(0, "ROW", RN[lys.sq_row % 5u], "", VAL(0u), (int32_t)lys.sq_row * 250, ICON_NONE);
-            draw_column(1, lys.sq_row < 3u ? RN[lys.sq_row] : "CLEAR", lys.sq_row < 3u ? seq_val(lys.sq_row, vb) : "--", "",
-                        lys.sq_row < 3u ? VAL(1u) : T_ACCENT, -1, ICON_NONE);   /* (CLEAR ALL: KNOB 2 asks it) */
+    } else {                                            /* (Dah) GLO SEQ REC, as the MENU: KNOB 1 the row (n/N), KNOB 2
+                                                         * its value; SEQ: KNOB 3 4 SWING GATE (its page's) */
+        uint32_t n = ly_rows(l), r = lys.sq_row % n;
+        char rb[8];
+        lrow_t R;
+        int32_t ratio = ly_row(r, &R, val);
+        fmt_int(rb, (int32_t)r + 1);
+        str_cpy(rb + str_len(rb), "/", 2);
+        fmt_int(rb + str_len(rb), (int32_t)n);
+        if (l == LAYER_SEQ) {
+            uint8_t h = ui.home, pg = ui.page;
+            ui.home = 0;
+            ui.page = (uint8_t)page_first(LAYERS[l].fam);
+            page_over = ly_page(l);
+            draw_columns();
+            page_over = 0;
+            ui.home = h;
+            ui.page = pg;
+        } else {
+            draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
+            draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
         }
+        draw_column(0, "ROW", rb, "", VAL(0u), (int32_t)(r * 1000u / (n - 1u)), ICON_NONE);
+        draw_column(1, "VALUE", R.val[0] ? R.val : "ASK", "", R.val[0] ? VAL(1u) : T_ACCENT, ratio, ICON_NONE);   /* (CLEAR:
+                                                         * KNOB 2 asks it) */
     }
 }
 
+/* the panel: where its two canvases meet (panel_bands), in a gap between two rows of cells or of the list */
+static int32_t layer_split(uint32_t l)
+{
+    uint32_t n = NENG_SHOWN < LY_INIT ? NENG_SHOWN : LY_INIT;
+    return l == LAYER_FX ? 2 + 2 * lc_pitch(5u, 0) : l == LAYER_SCL ? 2 + 2 * lc_pitch(4u, 0)
+         : l == LAYER_EDIT ? 2 + 2 * lc_pitch((n + 5u) / 4u, LE_FOOT)
+         : ml_split(ly_rows(l), lys.sq_row % ly_rows(l), MP_PAD, ly_list_end());
+}
+static void layer_body(void)
+{
+    uint32_t l = ui.layer % LAYER_N;
+    if (l == LAYER_FX)
+        layer_fx();
+    else if (l == LAYER_GLO)
+        layer_glo();
+    else if (l == LAYER_SCL)
+        layer_scl();
+    else if (l == LAYER_SEQ)
+        layer_seq();
+    else if (l == LAYER_REC)
+        layer_rec();
+    else
+        layer_edit();
+}
 static void draw_layer(void)
 {
     uint32_t l = ui.layer % LAYER_N, sig = l * 7919u + ux.gen * 977u;
-    static uint8_t fx_foot;                             /* FX: the footer for a key held (PRESETS ASSIGN, EDIT DEFAULT) */
+    static uint8_t fx_foot;                             /* FX: the footer for a key held (EDIT DEFAULT) */
     if (fx_foot != (l == LAYER_FX && fx_key_held())) {
         fx_foot = (uint8_t)(l == LAYER_FX && fx_key_held());
         ui.force = 1;
     }
+    ml_tick();                                          /* (the list's glide) */
     layer_cards(l);
     if (l == LAYER_FX)
     {
@@ -1225,49 +1271,40 @@ static void draw_layer(void)
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
-        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)(ui_leds_inv & REC_PLAY) * 7u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u;
+        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)(ui_leds_inv & REC_PLAY) * 7u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u +
+               lys.sq_row * 65537u;
     else if (l == LAYER_SEQ)
         sig += (uint32_t)chain_busy() * 3u + song.sel * 977u + (uint32_t)TSEL->p[P_SQNT] * 131u + steps_sig(TSEL) * 7u +
-               (uint32_t)TSEL->p[P_SLEN] * 257u + lys.sq_row * 65537u + ps_gen * 3u;   /* (Dah: QUANTIZE, the
-                                                         * steps' nudges, the row picked) */
+               (uint32_t)TSEL->p[P_SLEN] * 257u + (uint32_t)TSEL->p[P_SDIV] * 8191u + lys.sq_row * 65537u + ps_gen * 3u;   /* (Dah:
+                                                         * QUANTIZE, the steps' nudges, the row picked) */
     else
         sig += snd_id() * 31u + (uint32_t)chain_busy() * 3u + up_gen * 101u +
                eqa_sig() * 2654435761u;
-    sig += graph_h() * 40503u;                          /* (Dah: the panel taller once HELP's row goes: drawn again) */
+    sig += graph_h() * 40503u + (uint32_t)(uint16_t)mr.dy * 1000003u + ui_prefs * 7u;   /* (the list gliding: its panel) */
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
-        cv_begin(240, graph_h(), T_BG);                  /* (Dah: the panel's height, the page's under it hidden) */
-        cv_rrect(3, 0, 234, graph_h(), 5, T_SURF, T_BG);
-        cv_bg = T_SURF;
-        if (l == LAYER_FX)
-            layer_fx();
-        else if (l == LAYER_GLO)
-            layer_glo();
-        else if (l == LAYER_SCL)
-            layer_scl();
-        else if (l == LAYER_SEQ)
-            layer_seq();
-        else if (l == LAYER_REC)
-            layer_rec();
-        else
-            layer_edit();
-        cv_blit(0, Y_GRAPH);
+        panel_bands(layer_body, layer_split(l));
     }
-    if (ui.force) {                                     /* the footer: what the keys, knobs and buttons do */
-        cv_begin(240, H_FOOT, T_BG);
+    if (ui.force) {                                     /* the footer: what the keys and buttons do (no knob) */
         const khint_t *ft = l == LAYER_FX && fx_key_held() ? FX_KEY_FOOT : l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT :
                             l == LAYER_GLO && ui.lock == LAYER_GLO ? GLO_LOCK_FOOT :
                             LAYERS[l].foot;
-        int h = help_on() && help_row(HELP_LAYER[l], 21);   /* 1.5, HELP ON: a
-                                                         * second row, what this one does not say */
-        {
-            int tall = foot_free() && !h;             /* (Dah: the panel reaches row 2: the keys' row there only) */
-            cv_key_row(8, 232, tall ? 21 : h ? 2 : 9, ft, ft[2].act ? 3u : ft[1].act ? 2u : 1u, 7u, T_BG);
-            if (tall)
-                cv_blit_from(0, Y_FOOT, FOOT_GAIN);
-            else
-                cv_blit(0, Y_FOOT);
+        khint_t kh[3];
+        char hb[48];
+        uint32_t n = ft[2].act ? 3u : ft[1].act ? 2u : 1u, i;
+        for (i = 0; i < n; i++)
+            kh[i] = ft[i];
+        if (help_on() && n < 3u) {                      /* 1.5, HELP ON: what the keys do not say, after them */
+            khint_t hk[3];
+            uint32_t m = help_parse(HELP_LAYER[l], hk, hb, sizeof hb);
+            int32_t w = -6;
+            for (i = 0; i < n; i++)
+                w += kh_w(kh[i].key, kh[i].act) + 6;
+            for (i = 0; i < m && n < 3u; i++)           /* (each whole, where it fits) */
+                if ((w += kh_w(hk[i].key, hk[i].act) + 6) <= 232)
+                    kh[n++] = hk[i];
         }
+        menu_foot(kh, n, 7u);
         ui.foot_sig = 0;
     }
 }

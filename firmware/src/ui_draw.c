@@ -444,6 +444,18 @@ static int msg_win(void)
     return (cards_b && str_eq(ui.msg, cards_a)) ||
            (ly_hint && ly_hint < 7u && ui.msg[0] == 'H' && ui.msg[4] == ' ' && ui.msg[5] == '[');
 }
+/* (Dah) the header's name: the menu's (MENU, INFO, ABOUT; a held layer's: FX, GLO, SCL, EDIT, SEQ, REC), else the page's */
+static void head_title(char *ti)
+{
+    if (ui.menu)
+        str_cpy(ti, ui.menu == 3 ? "INFO" : ui.menu == 2 ? "ABOUT" : "MENU", 20);
+    else if (ui.layer)
+        str_cpy(ti, layer_head(), 20);
+    else if (ui.home)
+        str_cpy(ti, "HOME", 20);
+    else
+        page_title(ti);
+}
 static void head_home(void)
 {
     char pn[16], sl[3], num[4] = {0}, ch[2], bp[12], ti[20];
@@ -471,12 +483,13 @@ static void head_home(void)
     ch[1] = 0;
     str_cpy(bp, "BPM ", sizeof bp);
     fmt_int(bp + 4, song.g[G_BPM]);
+    head_title(ti);                                     /* (the page's name, or the menu's: what the left side needs) */
     sig = 0x484F4D45u ^ (str_hash(k * 7u + mx_master * 3u, pn) + str_hash(1u, en) * 31u + str_hash(2u, num) * 131u +
                          (uint32_t)song.rec * 977u + tc * 13u +
                          (ui.msg_t && (song.playing || chain_busy() || !msg_win()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
                          (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
-                         (ui.home ? 0u : ui.page + 1u) * 3141592653u);
+                         str_hash(3u, ti) * 3141592653u + (uint32_t)layer_locked() * 524287u);
     if (!ui.force && sig == ui.head_sig)
         return;
     ui.head_sig = sig;
@@ -489,10 +502,6 @@ static void head_home(void)
         cv_text(xr - w, ty, &AF_S, bp + 4, ui.bpm_t ? T_ACCENT : T_TEXT);
         xr -= w + 8;
     }
-    if (ui.home)                                        /* (the page's name: what the left side needs) */
-        str_cpy(ti, "HOME", sizeof ti);
-    else
-        page_title(ti);
     lw = 6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 + 4;
     {   /* (Dah) the load: the voices sounding ("6V"), the audio's CPU ("42%"), read every HL_MS; the
          * accent when the CPU is over 85 %. Not where the page's name leaves no room for it */
@@ -522,8 +531,8 @@ static void head_home(void)
     if (6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 > xr && str_len(ti) > 10u &&
         ti[0] == 'A' && ti[4] == 'M')                   /* (no room: "AUTOMATION 3/3" -> "AUTO 3/3") */
         str_cpy(ti + 4, ti + 10, sizeof ti - 4);
-    if (ui.msg_t && (song.playing || chain_busy() || !msg_win())) {   /* (Dah) playing, or a plain one: small in the
-                                                         * header in the page's place (no window) */
+    if (ui.msg_t && (song.playing || chain_busy() || !msg_win() || ui.menu || ui.layer)) {   /* (Dah) playing, a plain
+                                                         * one, a menu: small in the header in the page's place (no window) */
         const char *m = ui.msg[0] == MSG_NOFILE[0] ? ui.msg + 1 : ui.msg;
         cv_free_hint(6, ty, m, T_ACCENT, T_BG, xr - 6);
         cv_blit(0, Y_HEAD);
@@ -538,6 +547,8 @@ static void head_home(void)
     GFX_HOOK_ALIGN(x, (hh - 14) / 2, x + 14, (hh - 14) / 2 + 14, AL_HV, "header track cushion digit centred");
     cv_text_in(x, (hh - 14) / 2 + CAP_IN(S, 14), 14, &AF_S, ch, T_INK, tc);
     x += 14 + 7;
+    if (layer_locked() && x + 16 <= xr)                 /* (Dah) a menu held open: its lock after the track */
+        cv_icon_mid(x - 3, hh / 2, 16, ICON_X_LOCK, T_THEME, T_BG);
     (void)en;                                           /* (its sound: in the footer, home_foot) */
     cv_blit(0, Y_HEAD);
 }
@@ -610,12 +621,12 @@ static void home_foot(void)
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig, n, ok = 0, i;
     khint_t kh[3];
-    static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_SELECT, "PAT"}},   /* HOME (OCT+ held: the VIEW) */
+    static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}},     /* HOME (OCT+ held: the VIEW) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
-                                     {{KC_FX, "CHAIN"}, {KC_SELECT, "PAT"}},     /* an effect's page (FX: back) */
-                                     {{KC_FX, "NEXT"}, {KC_SELECT, "PAT"}},      /* .. with a second page */
-                                     {{KC_OCTDN, "(HOLD) DEL"}, {KC_SELECT, "PAT"}}};   /* (Dah) MIXER: SELECT the pattern
-                                                         * too; OCT- held deletes the (last) track */
+                                     {{KC_FX, "CHAIN"}},                         /* an effect's page (FX: back) */
+                                     {{KC_FX, "NEXT"}},                          /* .. with a second page */
+                                     {{KC_OCTDN, "(HOLD) DEL"}}};      /* (Dah) MIXER: OCT- held deletes the (last) track.
+                                                         * Never SELECT, ALGORITHM, PRESETS or a knob: the cards say them */
     uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
                   cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
@@ -630,7 +641,7 @@ static void home_foot(void)
     } else if (hk < 5u) {
         kh[0] = KH[hk][0];
         kh[1] = KH[hk][1];
-        n = hk ? 2u : 1u;                               /* (Dah: HOME: OCT+'s VIEW alone, no SELECT PAT) */
+        n = hk == 1u ? 2u : 1u;                         /* (Dah: no SELECT PAT anywhere) */
         ok = 3u;
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
@@ -1167,8 +1178,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     card_span.fn = 0;
     fmt_named = 0;                                      /* (params.c: a name, for this card only) */
     card_mot_next = 0;                                  /* (the same: MOTION, this card only) */
-    if (home_bare() || ui.layer == LAYER_SEQ || ui.layer == LAYER_REC || ui.layer == LAYER_GLO || ui.layer == LAYER_EDIT ||
-        ui.layer == LAYER_SCL) {         /* (Dah) HOME: knobs (SEQ's layer too, as SAVE's) */
+    if (home_bare()) {                                  /* (Dah) HOME's look: knobs (every menu's too) */
         (void)vc; (void)icon; (void)sp; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
         (void)strip; (void)x; (void)lc; (void)vf; (void)n; (void)named; (void)mot; (void)kind;
         knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot, vc == T_DIM);
