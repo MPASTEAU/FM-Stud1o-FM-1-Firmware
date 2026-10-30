@@ -202,7 +202,7 @@ static int motion_put(track_t *t, uint32_t step, uint32_t id, int16_t value, uin
     for (i = 0; i < motion.count; i++)
         if (motion.event[i].place == (k << 6 | step) && MOTION_ID(&motion.event[i]) == id) break;
     if (i == MOTION_MAX) { motion_full = 1; motion_unguard(f); return 2; }
-    motion.event[i].place = (uint8_t)(k << 6 | step);
+    motion.event[i].place = (uint16_t)(k << 6 | step);
     motion.event[i].param = (uint8_t)(id | kind);
     motion.event[i].value = (int8_t)value;
     RING_PUBLISH();

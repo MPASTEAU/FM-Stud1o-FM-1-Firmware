@@ -112,7 +112,8 @@ static uint32_t ps_steps_put(const step_t *st, uint8_t *b)
             continue;
         }
         ps_step_pack(s, r);
-        if (r[4] == (ST_TIE << 3) && !(r[0] | r[1] | r[2] | r[3] | r[5] | r[6] | r[7] | r[8])) {   /* a plain TIE: a run */
+        if (i < NSTEP - 1u && r[4] == (ST_TIE << 3) && !(r[0] | r[1] | r[2] | r[3] | r[5] | r[6] | r[7] | r[8])) {   /* a plain
+                                                         * TIE: a run (not from the last step: 0xC0 | 63 is the end) */
             uint8_t q[9];
             for (j = i + 1u; j < NSTEP; j++) {
                 ps_step_pack(&st[j], q);
