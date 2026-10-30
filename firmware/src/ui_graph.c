@@ -3399,12 +3399,16 @@ static void graph_song(void)
         r1 = r1 < hi ? r1 : hi;
         {                                              /* (Dah) the overview, as HOME's: the whole song a line, the
                                                          * view on it a bar, the playhead a mark */
-            int32_t wt = L.x[L.n + 1u] > SG_W ? L.x[L.n + 1u] : SG_W, v0 = SG_X0 + off * SG_W / wt;
-            int32_t v1 = SG_X0 + (off + SG_W < wt ? off + SG_W : wt) * SG_W / wt;
-            cv_rect(SG_X0, 1, SG_W, 1, T_LINE);
+            int32_t wt = L.x[L.n] > 1 ? L.x[L.n] : 1, room = SG_W - (L.add ? SG_ADDW + SG_GAP : 0);
+            int32_t lw = wt - SG_GAP < room ? wt - SG_GAP : room, v0, v1;   /* (Dah: the song alone, its line ending
+                                                         * before + ADD) */
+            lw = lw > 2 ? lw : 2;
+            v0 = SG_X0 + off * lw / wt;
+            v1 = SG_X0 + (off + SG_W < wt ? off + SG_W : wt) * lw / wt;
+            cv_rect(SG_X0, 1, lw, 1, T_LINE);
             cv_rect(v0, 0, v1 - v0 > 2 ? v1 - v0 : 2, 3, T_MID);
             if (px >= 0)
-                cv_rect(SG_X0 + px * SG_W / wt, 0, 2, 3, T_ACCENT);
+                cv_rect(SG_X0 + px * lw / wt, 0, 2, 3, T_ACCENT);
         }
         if (sg_pend && ((ui.frame / 6u) & 1u)) {       /* (Dah) the section to add (a bar where it goes), to delete
                                                          * (framed), blinking */
