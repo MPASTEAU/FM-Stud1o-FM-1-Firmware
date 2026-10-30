@@ -5,32 +5,11 @@
  * the DRUM lane's):
  *   QUANTIZE   the PRESETS knob its amount (the track's P_SQNT: OFF 25 % 50 % 75 % ON, as it plays at once, seq.c
  *              seq_nudge); OCT+ APPLY writes the timing as it plays into the steps for good (each NUDGE scaled, ON: all
- *              gone) and QUANTIZE OFF (the steps play as written). One undo (SAVE held)
+ *              gone) and QUANTIZE OFF (the steps play as written)
  *   CLEAR ALL  F3: the dialog (CLEAR PATTERN n?), OCT+ empties the pattern: every step and its automation (events and
- *              locks); its number, LEN and place in the song stay. One undo (SAVE held)
- * KNOB 1..4 LEN DIV SWING GATE (ui_layer.c); the layer's OCT- puts back the track as it opened (tl_open) */
-/* the track as the layer opened (OCT-): in the pool (RAM's .bss is tight), taken by layer_opened */
-static struct { step_t step[NSTEP]; motion_store_t mo; } tl_open __attribute__((section(".pool")));
+ *              locks); its number, LEN and place in the song stay
+ * KNOB 1..4 LEN DIV SWING GATE (ui_layer.c) */
 static uint32_t tl_len(const track_t *t) { return (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP); }
-
-/* the undo copy of t as it is now (ui.c load_begin, but the automation is copied and stays): one action */
-static void tl_undo_take(track_t *t)
-{
-    uint32_t i = trk_index(t);
-    undo.trk = (uint8_t)(i + 1u);
-    undo.what = UNDO_PAT;
-    undo.keep = 0;                                      /* (the next load or action takes its own copy) */
-    undo.eng = t->eng_req;
-    undo.preset = t->preset;
-    undo.user = t->user;
-    memcpy(undo.p, t->p, sizeof undo.p);
-    memcpy(undo.step, t->step, sizeof undo.step);
-    memcpy(undo.fm6, fm6_patch[i], FP_SIZE);
-    undo.fm6_slot = fm6_slot[i];
-    undo.from = pat_from[i];
-    undo.from_h = pat_from_h[i];
-    motion_snapshot_track(t, &undo.motion_backup);
-}
 
 /* QUANTIZE: the amount turned (PRESETS; OFF 25 % 50 % 75 % ON, the ends held), said */
 static const uint8_t QZ_ORD[5] = {0, 2, 3, 4, 1};       /* (P_SQNT: 0 OFF, 1 ON, 2..4 25 % .. 75 %) */
@@ -67,7 +46,6 @@ static int qz_apply(track_t *t)
         ui_message("NOTHING TO QUANTIZE");
         return 0;
     }
-    edit_undo_take(t, 0x3000u, UNDO_PAT);
     for (i = 0; i < len; i++) {
         int32_t v = step_nudge(&t->step[i]);
         if (!v)
@@ -76,23 +54,20 @@ static int qz_apply(track_t *t)
         n++;
     }
     t->p[P_SQNT] = 0;
-    motion_undo_done(t);
     str_cpy(b, "QUANTIZED ", sizeof b);
     fmt_int(b + str_len(b), (int32_t)n);
     str_cpy(b + str_len(b), " STEPS", sizeof b - str_len(b));
     ui_message(b);
     return 1;
 }
-/* CLEAR ALL (the dialog's OCT+): every step of track t and its automation gone, the pattern kept; one undo */
+/* CLEAR ALL (the dialog's OCT+): every step of track t and its automation gone, the pattern kept */
 static void tl_clear_all(track_t *t)
 {
     uint32_t i;
-    tl_undo_take(t);
     for (i = 0; i < NSTEP; i++)
         step_clear(&t->step[i]);
     motion_clear(t);
     t->nheld = 0;
     ui_message("PATTERN CLEARED");
-    str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);
     ui.force = 1;
 }

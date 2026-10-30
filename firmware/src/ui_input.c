@@ -54,11 +54,11 @@ static int layer_set_open(void);                       /* (ui_layer.c) */
  * let go, it snaps back. OCT+ while
  * LFO is still held KEEPS them (the changes stay, nothing is put back; OCT+ breathes while something would go back;
  * LFO has no LED). LFO's tap (its page) is dropped once any knob turned with it; LFO alone still opens LFO. Temporary
- * turns are not recorded as automation (motion_capture) and take no undo; a sound or project load meanwhile (the
+ * turns are not recorded as automation (motion_capture); a sound or project load meanwhile (the
  * PRESETS knob, the editor, a song's section) puts that track's values (and the global ones) back first (mom_back: the
- * undo copy holds the sound as it was, the load's sound stays after). The menu, a dialog, NAME or a layer opening put
+ * load's sound stays after). The menu, a dialog, NAME or a layer opening put
  * them back too. Up to MOM_N values at a time ("MOMENTARY FULL" past them: the turn does nothing). LFO held did
- * nothing (it is no layer; OCT- is the octave and a layer's UNDO, so not it), so no gesture changes: LFO + a knob
+ * nothing (it is no layer; OCT- is the octave and a layer's, so not it), so no gesture changes: LFO + a knob
  * turned opened LFO's page on release before, and edited the page under it for good. The values: ui.c mom */
 static int mom_down(void)                              /* LFO held where its turns are momentary */
 {
@@ -135,7 +135,7 @@ static uint32_t oct_leds(void)
 {
     if (name_on() && !ui.confirm && !ui.menu)           /* NAME: OCT- cancels, OCT+ (breathing) writes */
         return 1u | OCT_BREATH;
-    if (layer_set_open())                               /* a SET layer: OCT- puts back (UNDO), OCT+ nothing */
+    if (layer_set_open())                               /* a SET layer: OCT- the layer's (held: RESET), OCT+ nothing */
         return 1u;
     if (ui.menu && !ui.confirm)
         return ui.menu >= 2u ? 1u :                    /* (INFO, ABOUT: OCT- back, lit) */
@@ -964,7 +964,6 @@ static void lock_turn(uint32_t k, int32_t s, uint64_t held)
     ui.plk_rm &= ~held;                                 /* (held for a lock: its hit stays) */
     d = track_desc(t, id);
     s = accel(EN_K1 + k, s, d->fmt == F_ENUM ? 0 : d->max - d->min);
-    motion_undo_take(t, 0x100u | k);                    /* (1.1.5: SAVE held takes the locks back) */
     for (i = 0; i < NSTEP; i++) {
         int16_t v;
         if (!((held >> i) & 1u))
@@ -974,7 +973,6 @@ static void lock_turn(uint32_t k, int32_t s, uint64_t held)
         if (motion_set_lock(t, i, id, (int16_t)param_turn(d, v, s)) == 2)
             break;                                      /* (full: ui_notices says so) */
     }
-    motion_undo_done(t);
     ui.auto_id = (uint8_t)(id + 1u);                    /* (Dah: STEP's lane shows it now) */
     ui.auto_trk = (uint8_t)song.sel;
 }
@@ -992,10 +990,8 @@ static int lane_turn(int32_t s)
         return 1;
     }
     d = track_desc(t, id);
-    motion_undo_take(t, 0x200u);
     (void)motion_set_lock(t, ui.cursor % NSTEP, id,
                           (int16_t)param_turn(d, lane_value(t, ui.cursor % NSTEP, id, &pt), accel(EN_SELECT, s, d->max - d->min)));
-    motion_undo_done(t);
     ui.auto_id = (uint8_t)(id + 1u);
     ui.auto_trk = (uint8_t)song.sel;
     return 1;
@@ -1010,19 +1006,16 @@ static void lock_clear(uint64_t held)
         ui_message("NO LOCKS");
         return;
     }
-    motion_undo_take(TSEL, 0);                          /* (1.1.5: SAVE held brings them back) */
     for (i = 0; i < NSTEP; i++)
         if ((held >> i) & 1u)
             n += motion_clear_locks(TSEL, i);
-    motion_undo_done(TSEL);
     ui_message(n ? "LOCKS CLEARED" : "NO LOCKS");
 }
 
 /* NUDGE (1.2, #162; core.h step_nudge): the steps `held` move by one sixteenth of a step (-8..+7) a detent: SEQ > STEP
  * with steps held (as for a lock: the grid's step keys, the roll's step being entered) and the PRESETS knob; let go,
  * PRESETS moves the cursor again (MENU > STEP PREVIEW: it sounds). SEQ > DETAIL's KNOB 3 is the other way. They play
- * with the track's QUANTIZE OFF (ON, the default, plays every step on its start: the message says so). One undo per
- * turn (SAVE held) */
+ * with the track's QUANTIZE OFF (ON, the default, plays every step on its start: the message says so) */
 static void nudge_turn(uint64_t held, int32_t steps)
 {
     uint32_t i;
@@ -1033,13 +1026,11 @@ static void nudge_turn(uint64_t held, int32_t steps)
         return;
     }
     ui.plk_rm &= ~held;                                 /* (a grid key held for it: its hit stays) */
-    step_undo_take(TSEL, 0x800u);                       /* (a knob turned on: one) */
     for (i = 0; i < NSTEP; i++)
         if ((held >> i) & 1u) {
             v = clamp(step_nudge(&TSEL->step[i]) + (steps > 0 ? 1 : -1), -8, 7);
             step_set_nudge(&TSEL->step[i], v);
         }
-    motion_undo_done(TSEL);
     if (TSEL->p[P_SQNT]) {
         ui_message("QUANTIZE IS ON");
         return;
@@ -1052,8 +1043,7 @@ static void nudge_turn(uint64_t held, int32_t steps)
  * 4:4, FILL, !FILL, ui_events.c ev_chance_turn), 2 RATCH (x1..x4), 3 NUDGE (-8..+7
  * sixteenths), 4 VEL (1..127) of the cursor step, the step's own fields (ui_events.c ev_sval,
  * ev_sput: one storage, nothing new stored). On the DRUM grid the white
- * keys held pick several steps: each moves by the turn. A step that plays nothing takes none (sd_takes: NO NOTE).
- * One undo per knob gesture on a step (SAVE held): walking to the next step starts another */
+ * keys held pick several steps: each moves by the turn. A step that plays nothing takes none (sd_takes: NO NOTE) */
 static uint64_t sd_held(void)                           /* the grid's step keys held on DETAIL (bit = step), 0 none */
 {
     uint32_t k, len = (uint32_t)TSEL->p[P_SLEN], keys = fm1_in.notes & ~kb_layer;
@@ -1082,7 +1072,6 @@ static void sd_turn(uint32_t slot, int32_t steps)
         ui_message("NO NOTE");
         return;
     }
-    step_undo_take(t, 0x4000u | slot << 6 | ui.cursor);   /* (this knob on this step: one undo) */
     for (i = 0; i < NSTEP; i++) {
         int32_t v;
         if (!((m >> i) & 1u) || !sd_takes(&t->step[i], k))
@@ -1092,13 +1081,12 @@ static void sd_turn(uint32_t slot, int32_t steps)
             k == EVK_VEL ? clamp(v + d, 1, 127) : clamp(v + d, -8, 7);
         ev_sput(&t->step[i], k, v);
     }
-    motion_undo_done(t);
     if (k == EVK_NUDGE && t->p[P_SQNT])
         ui_message("QUANTIZE IS ON");                   /* (kept: it plays once QUANTIZE is OFF) */
     else if (k == EVK_VEL && (t->step[ui.cursor].flags & SF_ACCENT))
         ui_message("ACC PLAYS 127");                    /* (kept: it plays once the ACC goes) */
 }
-/* DETAIL's EDIT: the steps' four back to 100 % / x1 / 0 / 96 (their notes stay); one undo */
+/* DETAIL's EDIT: the steps' four back to 100 % / x1 / 0 / 96 (their notes stay) */
 static void sd_reset(void)
 {
     track_t *t = TSEL;
@@ -1111,11 +1099,9 @@ static void sd_reset(void)
         ui_message("NOTHING TO RESET");
         return;
     }
-    step_undo_take(t, 0);
     for (i = 0; i < NSTEP; i++)
         for (k = 0; (m >> i) & 1u && k < 4u; k++)
             ev_sput(&t->step[i], SD_KIND[k], ev_sdefv(SD_KIND[k]));
-    motion_undo_done(t);
     ui_message("STEP RESET");
 }
 
@@ -1153,9 +1139,7 @@ static void step_edit(uint32_t slot, int32_t steps)
     case 2:                                               /* TIME; a note's LEN (1.5: ui.c note_set_len) */
         if (step_on(st)) {
             uint32_t was = note_len(TSEL, ui.cursor), n;
-            step_undo_take(TSEL, 0x2000u);                /* (a knob turned on: one undo, SAVE held) */
             n = note_set_len(TSEL, ui.cursor, (uint32_t)clamp((int32_t)was + steps, 1, NSTEP));
-            motion_undo_done(TSEL);
             if (steps > 0 && n == was)
                 ui_message(ui.cursor + n < (uint32_t)clamp(TSEL->p[P_SLEN], 1, NSTEP) ? "NOTE AHEAD" : "END OF PATTERN");
             break;
@@ -1709,8 +1693,8 @@ static void seq_entry(uint32_t pressed)
  *     1.2: with PATTERN, CHANCE and the old AUTOMATION gone, KNOB 1 is the cursor or the row on every SEQ page, so
  *     the PRESETS knob is no longer a second cursor where KNOB 1 was something else; TOOLS and SLICES: nothing
  *   HOME, PRESETS and every other page (EDIT, ENV, LFO, FX, SCL, ARP, MIXER, CLOCK, ...): the selected track's
- *     sound, one list over every engine, then the used user presets (preset_step). A sound load keeps the steps
- *     (SAVE held undoes it). Up to 1.0.3 it did that on HOME and PRESETS only */
+ *     sound, one list over every engine, then the used user presets (preset_step). A sound load keeps the steps.
+ *     Up to 1.0.3 it did that on HOME and PRESETS only */
 static void presets_turn(int32_t s)
 {
     const page_t *pg = cur_page();
@@ -1854,7 +1838,7 @@ static void sel_list(int32_t s)
 
 /* HOME / REC / SAVE: tap on release, hold 0.7 s fires once. t0 = press time | 1,
  * bit 1 = fired (or swallowed: then the release is no tap either) */
-enum { BT_NONE, BT_TAP, BT_HOLD, BT_UNDO };
+enum { BT_NONE, BT_TAP, BT_HOLD };
 static uint32_t btn_hold(uint32_t *t0, uint32_t label, uint32_t now, int hold_ok)
 {
     uint32_t tap;
@@ -2089,15 +2073,9 @@ static void ui_input(void)
     }
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
-    save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* held: how to UNDO */
+    save = btn_hold(&ui.save_t0, B_SAVE, now, !ui.menu && !ui.confirm);   /* (held: no tap) */
     if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && ui.confirm)
         ui.save_t0 |= 2u;                               /* (Dah: OCT- cancels the dialog; SAVE let go is no tap then) */
-    if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && !ui.menu && !ui.confirm &&
-        !name_on()) {                                   /* SAVE + OCT-: UNDO (ui.c undo_swap); SAVE let go */
-        ui.save_t0 |= 2u;                               /* after: no tap, and OCT- no octave */
-        pressed &= ~(1u << panel.btn[B_OCTDN]);
-        save = BT_UNDO;
-    }
     kb_master = mx_master;                              /* (Dah: the MASTER picked: the keys silent, seq.c) */
     if (mx_master && !ui.menu && !ui.confirm) {         /* .. FX, PLAY and FX's OCT+ OCT- REC only; ALGO leaves it */
         uint32_t ok = 1u << panel.btn[B_FX] | 1u << panel.btn[B_PLAY];
@@ -2121,7 +2099,7 @@ static void ui_input(void)
     oct_plain = !(ui.menu || ui.confirm || act_cols() || name_on() || layer_set_open() || ui.ml.on || ka_chain_page() ||
                   ka.st);                               /* (Dah: the octave, where nothing else takes OCT- / OCT+) */
     oct = oct_taps(pressed, !oct_plain);                /* (on their release; a tap where its press began) */
-    oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: put back) */
+    oct = layer_oct(pressed, oct);                      /* (a SET layer's OCT-: its own) */
     layer_masks();                                      /* seq.c: keys pressed with a layer's button are its own */
     lay = layer_held();
     glo = lay && ui.ly == LAYER_GLO;                    /* GLO held: SELECT is the tempo, BPM LOCK or not (#58) */
@@ -2145,15 +2123,15 @@ static void ui_input(void)
         combo |= (pressed & ~ly_bit(ui.ly) &            /* (REC + PLAY: PLAY plays and REC let go soon is still */
                   ~(ui.ly == LAYER_REC ? 1u << panel.btn[B_PLAY] : 0u)) != 0u;   /* a tap, it arms: as before) */
         notes = 0;                                      /* (the keys are the layer's, not the grid's or a step's) */
-        if (pressed & (1u << panel.btn[B_SAVE]))       /* no UNDO, no page */
+        if (pressed & (1u << panel.btn[B_SAVE]))       /* no page */
             ui.save_t0 |= 2u;
         if (pressed & (1u << panel.btn[B_HOME]))       /* no menu, no HOME */
             ui.home_t0 |= 2u;
         for (k = 0; k < 4u; k++)                        /* KNOB 1..4: the layer's (ui_layer.c layer_knob) */
             if ((ks[k] = panel_enc(EN_K1 + k)) != 0)
                 combo = 1;
-        if ((s = panel_enc(EN_PRESET)) != 0 && ui.ly == LAYER_SEQ) {   /* (Dah) SEQ: the QUANTIZE amount (once the layer */
-            qs = s;                                     /* has opened: its OCT- puts back what it was) */
+        if ((s = panel_enc(EN_PRESET)) != 0 && ui.ly == LAYER_SEQ) {   /* (Dah) SEQ: the QUANTIZE amount */
+            qs = s;
             combo = 1;
         } else if (s && ui.ly == LAYER_FX) {            /* (a stray turn would load another sound) */
             fx_assign(s);                               /* FX: the white key held takes the next effect */
@@ -2162,8 +2140,7 @@ static void ui_input(void)
         if (ui.ly == LAYER_FX && ((pressed >> panel.btn[B_EDIT]) & 1u))
             fx_default();                               /* .. EDIT: its default back */
         if ((s = panel_enc(EN_ALGO)) != 0 && glo) {     /* (Dah) GLO + ALGORITHM: the pattern, every track's (its list
-                                                         * ~1 s, + NEW at the end); else: another track: OCT- puts back
-                                                         * the layer's track only */
+                                                         * ~1 s, + NEW at the end); else: another track */
             pattern_turn_ui(s);
             combo = 1;
         }
@@ -2225,13 +2202,7 @@ static void ui_input(void)
         name_input(notes, oct);
         return;
     }
-    if (save == BT_UNDO && chain_busy())
-        ui_message("STOP TO UNDO");
-    else if (save == BT_UNDO)                                /* SAVE + OCT-: undo the last load or edit */
-        undo_swap();
-    else if (save == BT_HOLD)                                /* SAVE held alone: how (a hold no longer undoes) */
-        ui_message("SAVE + OCT-: UNDO");
-    else if (save == BT_TAP && !ui.confirm)             /* SAVE acts on release (a hold is the undo) */
+    if (save == BT_TAP && !ui.confirm)                  /* SAVE acts on release (a hold: nothing) */
         open_family(FAM_SAVE);
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
         if (ui.confirm == CF_PICK_FX) {                 /* (Dah) ADD's picker: SELECT (or KNOB 1) the effect */
@@ -2585,7 +2556,7 @@ static void ui_input(void)
             ui.hot_t = 40;
             continue;
         }
-        if (mom_down() && mom_turn(k, s)) {             /* MOMENTARY: LFO held (no automation, no undo) */
+        if (mom_down() && mom_turn(k, s)) {             /* MOMENTARY: LFO held (no automation) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
             continue;

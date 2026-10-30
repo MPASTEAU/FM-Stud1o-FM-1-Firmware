@@ -5,7 +5,7 @@
  * at or before the step, else the sound's own value; CURVE RAMP, trkx[].curve: joined as motion.c plays it) and a dot
  * where a step holds a point; the ruler and the step playing as HOME's (ui_graph.c graph_auto).
  * The piano roll's controls: KNOB 1 STEP (the cursor), 2 LANE, 3 VALUE (the lane's point at the cursor: an automation
- * event, motion_set_event; a lock there becomes one; one undo a knob turned on; AUTOMATION FULL past the 128), 4 CURVE
+ * event, motion_set_event; a lock there becomes one; AUTOMATION FULL past the 128), 4 CURVE
  * STEP / RAMP; OCT+ held the roll's VIEW (MOVE ZOOM FOLLOW, the same prv state); EDIT the lane's point at the cursor out,
  * the cursor on (STEP's EDIT CLEAR); REC arms as on STEP (armed and playing, VALUE records where it plays, motion_capture,
  * as HOME's knobs). Left of each lane its value at the cursor
@@ -131,7 +131,7 @@ static void au_enter(void)
         cursor_set((int32_t)au_len(TSEL) - 1);
 }
 /* KNOB slot as on the roll: 1 STEP (the cursor), 2 LANE, 3 VALUE (the lane's point at the cursor: an automation event,
- * a lock there becomes one; one undo a knob turned on), 4 CURVE STEP / RAMP (trkx[].curve) */
+ * a lock there becomes one), 4 CURVE STEP / RAMP (trkx[].curve) */
 static void au_knob(uint32_t slot, int32_t s)
 {
     track_t *t = TSEL;
@@ -167,10 +167,8 @@ static void au_knob(uint32_t slot, int32_t s)
             ui_message("AUTOMATION FULL");
         return;
     }
-    motion_undo_take(t, 0x200u | au_lane);              /* (a knob turned on: one) */
     r = motion_set_event(t, c, id, (int16_t)param_turn(d, lane_value(t, c, id, &pt),
                                                          accel(EN_K1 + slot, s, d->fmt == F_ENUM ? 0 : d->max - d->min)));
-    motion_undo_done(t);
     if (r == 2)
         ui_message("AUTOMATION FULL");
 }
@@ -184,9 +182,7 @@ static void au_clear(void)                              /* EDIT: the lane's poin
         return;
     }
     if (au_del_ready()) {
-        motion_undo_take(t, 0);
         motion_delete_event(t, c, au_id(au_lane));
-        motion_undo_done(t);
         ui_message("POINT CLEARED");
     } else
         ui_message("NO POINT HERE");

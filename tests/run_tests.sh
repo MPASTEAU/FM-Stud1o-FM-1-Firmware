@@ -31,13 +31,13 @@
 #                   (build/ui_new/align.txt). MENU > LARGE: every screen again (FLAT, LINE, every palette) and the page / value
 #                   sweep with the tall cards, the same lint and alignment; sheet_LARGE_GREY.png, sheet_LARGE_MONO.png.
 # UI (tests/ui_test.c): the UI sources against stub display / buttons / knobs: sound loads keep the steps and
-#                   the track's ARP / SCL / SLICER, the SAVE > PHRASES loader and its REPLACE? dialog, the
-#                   one-step undo of both (SAVE held), REC on TRACKS / SEQ / ARP, STEP and ARP while recording,
+#                   the track's ARP / SCL / SLICER, the SAVE > PHRASES loader and its REPLACE? dialog,
+#                   REC on TRACKS / SEQ / ARP, STEP and ARP while recording,
 #                   MIDI IN ROUT, saves refused while playing and the OVERWRITE? dialog, MUTE on TRACKS KNOB 1, FM6's operator
-#                   pages (each byte alone, SLOT OWN, the sound, undo, the macros, projects / user presets),
+#                   pages (each byte alone, SLOT OWN, the sound, the macros, projects / user presets),
 #                   the DRUM grid (keys, knobs, LEDs, pages, live recording into it, BEAT from PATTERNS).
 # DRUM STRESS (tests/drumfuzz_test.c, #211): ASan / UBSan, a synth sequence playing while the DRUM grid is edited at random
-#                   (keys, locks, lanes, HIT / ACC, EDIT, undo, SEQ TOOLS, engines, kits, the MENU), the audio ISR emulated
+#                   (keys, locks, lanes, HIT / ACC, EDIT, SEQ TOOLS, engines, kits, the MENU), the audio ISR emulated
 #                   anywhere in the main loop; also with a SONG playing; a step over 5 s is a hang.
 # Audio / persistence / editor: the real C paths against simulated DMA and NOR flash: bounded overload
 #                   fades, shared-voice limits, deferred settings and retries, failed-save rollback, the autosave
@@ -63,12 +63,12 @@
 #                   hits whole, one chance roll, swing, no slide or tie out, STOP), FUN8 round trip and older projects x1,
 #                   user preset patterns, SEQ > DETAIL's RATCH and the roll / grid drawing.
 # STEP 1.5 (tests/step15_test.c, #178 #173): SEQ > STEP's KNOB 3 LEN on a note (clean TIEs written after it and taken
-#                   back, stopping at the next note and at LEN, chords, undo, TIME elsewhere, the DRUM grid untouched,
+#                   back, stopping at the next note and at LEN, chords, TIME elsewhere, the DRUM grid untouched,
 #                   the longer note played), a step's VEL as it plays (96 by default, ACC 127, drum hits) and
-#                   SEQ > DETAIL's KNOB 4 (undo).
+#                   SEQ > DETAIL's KNOB 4.
 # DETAIL 1.5.1 (tests/detail_test.c, #199): SEQ > DETAIL (STEP -> DETAIL -> AUTOMATION), KNOB 1..4 the cursor step's
 #                   CHANCE RATCH NUDGE VEL walked with PRESETS (NO NOTE on a REST / empty step), the steps' own fields
-#                   (no motion record), EDIT resets, undo per gesture, the
+#                   (no motion record), EDIT resets, the
 #                   DRUM grid's keys picking steps (several held), a chord's ratchet, playback, STEP's marks.
 # SEQ 1.5.5 (tests/seq155_test.c, #209 #186 #85): CONDITIONS (1:2 .. 4:4 by each track's loops from PLAY / a SONG
 #                   section, FILL / !FILL with GLO + E4, a NUDGE early step 1, no lock on a failed one, the chance draws
@@ -80,7 +80,7 @@
 #                   knob with OCT- held an ordinary turn, the menu's OCT- back; SAVE > PROJECT ERASE (#199): KNOB 2, the dialog,
 #                   refused playing / empty (tests/persistence_test.c: the flash side, a cut before the record keeps it);
 #                   CLEAN INIT (#190): every engine's basic sound (no sends, INSERT, LFO / ENV / MOD amounts; neutral ENV; FM6
-#                   the init voice), heard and ending; EDIT + F5 (E5: INIT); one undo; INIT as before. OCT- next to
+#                   the init voice), heard and ending; EDIT + F5 (E5: INIT); INIT as before. OCT- next to
 #                   the SEQ layer's OCT+ (QUANTIZE's APPLY, no octave) and FILL (GLO + E4).
 # 1.5.6 (tests/v156_test.c): KITS (#216): DRUM KIT DEEP TIGHT PERC (9..11) from the five kits' pieces and their three presets after
 #                   DRUM KIT, the lanes' names, the 8 lanes play, saved, an older range reads them as 77.
@@ -265,7 +265,7 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/step15_test" tests/step15_test.c -lm
     run "1.5 STEP: a note's LEN (TIEs on KNOB 3), a step's VEL (playback, DETAIL's KNOB 4)" "$OUT/step15_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/detail_test" tests/detail_test.c -lm
-    run "1.5.1 SEQ > DETAIL: a step's CHANCE RATCH NUDGE VEL on KNOB 1..4 (walk, entries, undo, DRUM, chords, playback, marks)" "$OUT/detail_test"
+    run "1.5.1 SEQ > DETAIL: a step's CHANCE RATCH NUDGE VEL on KNOB 1..4 (walk, entries, DRUM, chords, playback, marks)" "$OUT/detail_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq155_test" tests/seq155_test.c -lm
     run "1.5.5 SEQ: conditions and FILL, SONG, storage, editor" "$OUT/seq155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm
@@ -299,12 +299,12 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O1 -w -Ibuild/gen -o "$OUT/settings_test" tests/settings_test.c
     run "settings: PER1..PER4 migration, palette ids and preference preservation" "$OUT/settings_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test" tests/ui_test.c -lm
-    run "UI: sounds keep steps, undo, recording, MIDI overflow, pending saves, panel recovery, drum grid, song chain, GREY gray, MONO neutral" "$OUT/ui_test"
+    run "UI: sounds keep steps, recording, MIDI overflow, pending saves, panel recovery, drum grid, song chain, GREY gray, MONO neutral" "$OUT/ui_test"
     $CC -w -DFELUCCA_CPU2=0 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_c1" tests/ui_test.c -lm
     run "UI, a FELUCCA_CPU2=0 build: MENU > SYSTEM without 2ND CORE, the rest as the default build" "$OUT/ui_test_c1"
     $CC -DPREEMPT -g -fwrapv -fsanitize=address,undefined -fno-sanitize=shift -fno-sanitize-recover=all -w \
         -Ibuild/gen -Ifirmware/src -o "$OUT/drumfuzz" tests/drumfuzz_test.c -lm
-    run "DRUM grid stress (#211, ASan / UBSan): random grid editing, locks, undo, engines over a playing synth, the ISR anywhere" \
+    run "DRUM grid stress (#211, ASan / UBSan): random grid editing, locks, engines over a playing synth, the ISR anywhere" \
         "$OUT/drumfuzz" 1 6 1500
     run "DRUM grid stress (#211) with a SONG playing" "$OUT/drumfuzz" 101 3 1500 song
     FV=$(sed -n 's/^#define FELUCCA_VERSION "\([^"]*\)".*/\1/p' firmware/src/felucca.c | head -n 1)   # (the splash, ABOUT: the real version)

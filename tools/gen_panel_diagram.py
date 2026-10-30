@@ -105,7 +105,6 @@ GROUPS = [
              (("GLO",), 1, ("Mute, solo, tap tempo; KNOB 1–4 levels", "ミュート・ソロ・タップ、ノブで音量"), None),
              (("SCL",), 1, ("A key sets the root; scale, chords", "鍵盤でルート、スケール・コード"), None),
              (("EDIT",), 1, ("A white key picks the engine", "白鍵でエンジンを選ぶ"), None),
-             (("SAVE",), 1, ("Undo the last load (again: redo)", "直前の読み込みを取り消し（再度でやり直し）"), None),
              (("REC",), 1, ("On SEQ: clear the sequence (asks first)", "SEQ で: シーケンスを消去（確認あり）"), None),
              (("HOME",), 1, ("Menu", "メニュー"), None),
              (("SEQ",), 1, ("Song: chain patterns", "ソング（パターンをつなぐ）"), None),

@@ -1275,8 +1275,7 @@ const P_QNTZ = 94;                                  /* core.h P_SQNT: QUANTIZE, 
 const trackOwn = (i, pe0) => TRACK_OWN.has(i) || (pe0 >= 83 && P_CHORD.includes(i)) || (pe0 >= 95 && i === P_QNTZ);
 /* play a patch without writing flash, as UP_LOAD would load it: the sound only. SET the engine (G_ENGSEL:
    engine defaults and its first preset), then every instrument parameter that differs, except the track's
-   own (TRACK_OWN). The steps are never touched. The device keeps a copy of the sound from before (SAVE held
-   there = undo) and treats the SETs right after G_ENGSEL as part of this load (EDITOR_PROTOCOL.md "undo").
+   own (TRACK_OWN). The steps are never touched (EDITOR_PROTOCOL.md "Sound loads").
    opt: {gEng: G_ENGSEL id, progress(i, n)} */
 async function auditionPatch(rq, info, pt, opt = {}) {
   await rq(req.set(1, opt.gEng ?? 20, pt.engine));
@@ -2617,8 +2616,8 @@ const TEXT = {
     noreply: "応答がありません", error: "エラー: ", busy: "処理中",
     applying: "書き込み中 ", applied: "読み込みました", badfile: "ファイルを読み込めません: ",
     savedSlot: "保存しました: スロット ", loadedSlot: "読み込みました: スロット ", emptySlot: "空のスロットです: ",
-    confirmSave: "スロット {n} に上書き保存しますか？", confirmLoad: "スロット {n} を読み込みますか？ 8 トラックすべての音色とシーケンスが置き換わります（元に戻せません）。",
-    confirmClear: "シーケンスを全部消しますか？", confirmInit: "音色を初期化しますか？ シーケンスはそのままです（本体の SAVE 長押しで元に戻せます）。",
+    confirmSave: "スロット {n} に上書き保存しますか？", confirmLoad: "スロット {n} を読み込みますか？ 8 トラックすべての音色とシーケンスが置き換わります。",
+    confirmClear: "シーケンスを全部消しますか？", confirmInit: "音色を初期化しますか？ シーケンスはそのままです。",
     samples: "サンプル", smpHelp: "ファイルを選択、または入力から録音。波形の両端でトリム、ホイールで拡大。1枠に16音、合計約7秒。",
     zones: "ゾーン", smpName: "名前", chooseFiles: "ファイルを選ぶ", upload: "書き込む", erase: "消去", clearList: "リストを消す",
     file: "ファイル", root: "ルート", keys: "鍵盤", length: "長さ", remove: "外す",
@@ -2643,11 +2642,11 @@ const TEXT = {
     confirmDelete: "「{name}」をライブラリから削除しますか？",
     promptName: "名前（本体では英数字 12 文字まで）", promptTags: "タグ（カンマ区切り）",
     promptNameAuto: "名前（英数字 12 文字まで。空なら本体が自動で付けます）",
-    auditioning: "試聴の準備中 ", auditioned: "試聴中（音色だけ。シーケンスはそのまま。本体の SAVE 長押しで元の音色に戻せます）: ",
+    auditioning: "試聴の準備中 ", auditioned: "試聴中（音色だけ。シーケンスはそのまま）: ",
     savedLib: "ライブラリに保存しました: ", copiedLib: "ライブラリにコピーしました: ", imported: "読み込みました: ",
     skippedN: " 件（読めないもの {n} 件）", patchesN: " 件",
     putDone: "本体に書き込みました: スロット ", storedSlot: "本体に保存しました: スロット ", erasedSlot: "消去しました: スロット ",
-    loadedUser: "音色を読み込みました（シーケンスはそのまま。SAVE 長押しで元に戻せます）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
+    loadedUser: "音色を読み込みました（シーケンスはそのまま）: ", reloaded: "本体で音色が変わったので読み直しました", readingBank: "スロットを読み込み中",
     badEngine: "このファームウェアにないエンジンです: ", flashFail: "書き込みに失敗しました（rc {rc}）",
     installer: "Felucca インストーラー",
     tabSeq: "シーケンサー", tabTracks: "トラック", tabSettings: "設定",
@@ -2720,8 +2719,8 @@ const TEXT = {
     noreply: "No reply from the device", error: "Error: ", busy: "Busy",
     applying: "Writing ", applied: "Loaded", badfile: "Cannot read the file: ",
     savedSlot: "Saved to slot ", loadedSlot: "Loaded slot ", emptySlot: "Empty slot: ",
-    confirmSave: "Overwrite slot {n}?", confirmLoad: "Load slot {n}? The sounds and sequences of all eight tracks are replaced (no undo).",
-    confirmClear: "Clear the whole sequence?", confirmInit: "Reset the sound to the engine defaults? The sequence stays (hold SAVE on the device to undo).",
+    confirmSave: "Overwrite slot {n}?", confirmLoad: "Load slot {n}? The sounds and sequences of all eight tracks are replaced.",
+    confirmClear: "Clear the whole sequence?", confirmInit: "Reset the sound to the engine defaults? The sequence stays.",
     samples: "Samples", smpHelp: "Choose files or record an input. Drag waveform ends to trim; wheel to zoom. Up to 16 sounds and about 7 s per slot.",
     zones: "zones", smpName: "Name", chooseFiles: "Choose files", upload: "Upload", erase: "Erase", clearList: "Clear list",
     file: "File", root: "Root", keys: "Keys", length: "Length", remove: "Remove",
@@ -2746,11 +2745,11 @@ const TEXT = {
     confirmDelete: "Delete \"{name}\" from the library?",
     promptName: "Name (the device keeps 12 ASCII characters)", promptTags: "Tags (comma separated)",
     promptNameAuto: "Name (12 ASCII characters; empty: the device names it)",
-    auditioning: "Preparing audition ", auditioned: "Auditioning (the sound only, the sequence stays; hold SAVE on the device to undo): ",
+    auditioning: "Preparing audition ", auditioned: "Auditioning (the sound only, the sequence stays): ",
     savedLib: "Saved to the library: ", copiedLib: "Copied to the library: ", imported: "Imported: ",
     skippedN: " ({n} unreadable)", patchesN: " patches",
     putDone: "Written to the device: slot ", storedSlot: "Stored on the device: slot ", erasedSlot: "Erased slot ",
-    loadedUser: "Sound loaded (the sequence stays; hold SAVE to undo): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
+    loadedUser: "Sound loaded (the sequence stays): ", reloaded: "The sound changed on the device: read again", readingBank: "Reading the slots",
     badEngine: "This firmware has no such engine: ", flashFail: "Write failed (rc {rc})",
     installer: "Felucca installer",
     tabSeq: "Sequencer", tabTracks: "Tracks", tabSettings: "Settings",

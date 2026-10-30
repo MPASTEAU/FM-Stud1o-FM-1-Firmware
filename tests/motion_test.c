@@ -196,14 +196,14 @@ static int loads_and_song(void)
     apply_preset_to(t, 1);
     bad += check("1.1.5: a sound load of the same engine keeps the motion (both kinds, the engine's own E1 too), the pattern",
                  motion_count(t) == 2u && motion_lock_get(t, 1, P_E0, &v) && t->step[0].note[0] == 60);
-    undo_swap();                                   /* (back to the sound before it: REV 21) */
     set_engine_of(t, e1);
     bad += check("  another engine: the motion on the common parameters (REV) stays, the engine's own (E1) goes",
                  motion_count(t) == 1u && !motion_lock_get(t, 1, P_E0, &v) && t->step[0].note[0] == 60);
-    undo_swap(); bad += check("sound undo restores the original motion pool and base", motion_count(t) == 2u && t->p[P_REV] == 21 &&
-                              t->eng_req == e0);
-    undo_swap(); bad += check("sound redo restores the loaded motion state", motion_count(t) == 1u && t->eng_req == e1);
-    undo_swap(); pat_keep(2);                      /* (the pattern kept as 2) */
+    set_engine_of(t, e0);                          /* (the motion of before again: REV, the E1 lock) */
+    motion_clear(t);
+    t->p[P_REV] = 21; motion_set_event(t, 0, P_REV, 100);
+    motion_set_lock(t, 1, P_E0, motion_base_value(t, P_E0));
+    pat_keep(2);                                   /* (the pattern kept as 2) */
     t->p[P_REV] = 43; t->step[0].note[0] = 72; chain_config.count = 1; chain_config.row[0] = chain_row_of(2, 1);
     bad += check("song preparation imports saved motion alongside steps", chain_prepare() == 0 && chain.source[0].motion.count == 2u);
     seq_start(); seq_tick(t, CTL);
@@ -700,8 +700,8 @@ static int lock_ui(void)
     song.playing = 0; chain.running = 0; song.rec = 0;
     return bad;
 }
-/* 1.1.5: lock edits by hand are one undo (SAVE held), redo too */
-static int lock_undo(void)
+/* 1.1.5: lock edits by hand: a step held + a knob, [EDIT] clears */
+static int lock_hand(void)
 {
     int bad = 0;
     int16_t v;
@@ -721,31 +721,18 @@ static int lock_undo(void)
     turn(EN_K1, 3);
     turn(EN_K1, 2);
     lk_up(k4);
-    bad += check("lock undo: a step held, KNOB 1 turned twice: one lock", motion_lock_get(t, 4, P_E1, &v) &&
-        v == motion_base_value(t, P_E1) + 5);
-    hold(B_SAVE);
-    bad += check("  SAVE held: the lock is gone (one undo for the whole turn), the step's hit stays",
-        !motion_lock_count(t) && (t->step[4].hit & 1u));
-    hold(B_SAVE);
-    bad += check("  held again (redo): the lock is back at its value", motion_lock_get(t, 4, P_E1, &v) &&
+    bad += check("locks by hand: a step held, KNOB 1 turned twice: one lock", motion_lock_get(t, 4, P_E1, &v) &&
         v == motion_base_value(t, P_E1) + 5);
     frames(2000);
     lk_down(k4);
     press(B_EDIT);
     lk_up(k4);
     bad += check("  a step held + [EDIT] clears it", !motion_lock_count(t) && str_eq(ui.msg, "LOCKS CLEARED"));
-    hold(B_SAVE);
-    bad += check("  SAVE held brings it back", motion_lock_get(t, 4, P_E1, &v) && v == motion_base_value(t, P_E1) + 5);
     frames(2000);
     lk_down(k4);
-    press(B_EDIT);
+    press(B_EDIT);                                       /* (no lock there now) */
     lk_up(k4);
-    lk_down(k4);
-    press(B_EDIT);                                       /* (no lock there now: NO LOCKS, the undo copy kept) */
-    lk_up(k4);
-    hold(B_SAVE);
-    bad += check("  [EDIT] on a step without locks takes no undo copy (the clear before stays undoable)",
-        motion_lock_count(t) == 1u);
+    bad += check("  [EDIT] on a step without locks: NO LOCKS", !motion_lock_count(t) && str_eq(ui.msg, "NO LOCKS"));
     return bad;
 }
 /* (Dah) SEQ > AUTOMATION (ui_events.c): HOME's four knobs as lanes; KNOB 2 the lane, KNOB 3 its event at the cursor,
@@ -779,8 +766,7 @@ static int auto_list(void)
     v = motion.event[0].value;
     turn(EN_K3, 2); turn(EN_K3, 2); turn(EN_K3, 2);
     ok = motion.event[0].value != v;
-    hold(B_SAVE);
-    bad += check("  KNOB 3 turned on (three turns): one undo", ok && motion.event[0].value == v);
+    bad += check("  KNOB 3 turned on (three turns): the event moves", ok);
     (void)motion_set_lock(t, 4, id0, 10);
     turn(EN_K3, 1);
     bad += check("  a lock there becomes an event, from the lock's value", motion_lock_count(t) == 0u &&
@@ -801,8 +787,7 @@ static int auto_list(void)
     cursor_set(4);
     press(B_EDIT);
     ok = motion_find(t, 4, id0) < 0 && str_eq(ui.msg, "POINT CLEARED") && ui.cursor == 5u;
-    hold(B_SAVE);
-    bad += check("  EDIT clears the lane's point at the cursor, the cursor on; SAVE held: back", ok && motion_find(t, 4, id0) >= 0);
+    bad += check("  EDIT clears the lane's point at the cursor, the cursor on", ok);
     motion_clear(t);
     song.rec = 1u << song.sel;
     seq_start();
@@ -820,6 +805,6 @@ int main(void)
 {
     int bad = motion_recording() + motion_capacity() + probability_playback() + compact_project() + fun7_89() + loads_and_song() + repeat_mode();
     bad += arp_new_modes();
-    bad += lock_playback() + lock_edit() + lock_project() + lock_ui() + lock_undo() + auto_list();
+    bad += lock_playback() + lock_edit() + lock_project() + lock_ui() + lock_hand() + auto_list();
     printf("%s\n", bad ? "MOTION TEST FAILED" : "motion/chance/compact storage tests passed"); return bad != 0;
 }

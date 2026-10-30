@@ -453,7 +453,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         } else if (na > 1u && chain_busy()) rc = 3;
         else if (na > 1u) {
             if (a[1] == 1u) { /* (Dah: PLAY ON / OFF gone: always on, the op taken and ignored) */ }
-            else if (a[1] == 2u) { load_begin(t, UNDO_PAT); motion_clear(t); load_end(t); }
+            else if (a[1] == 2u) { load_begin(t, LOAD_PAT); motion_clear(t); load_end(t); }
             else if (a[1] == 3u) rc = motion_set_event(t, a[2], a[3], (int16_t)ed_rv(a + 4));
             else if (a[1] == 4u && a[2] < NSTEP && motion_param(a[3])) motion_delete_event(t, a[2], a[3]);
             else if (a[1] == 5u) rc = motion_set_lock(t, a[2], a[3], (int16_t)ed_rv(a + 4));
@@ -508,10 +508,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
                 ed_load_after(&b);
             } else if (d->max > d->min) {
                 *vp = (int16_t)enum_orig(d, clamp(ed_rv(a + 2), d->min, d->max));
-                if (a[0] == 0) {
+                if (a[0] == 0)
                     (void)motion_capture(TSEL, a[1], *vp);
-                    load_extend(TSEL);                      /* (ui.c undo: an audition's values after G_ENGSEL) */
-                }
             }
             ui.force = 1;
             ed_w.v[a[0] ? P_COUNT + a[1] : a[1]] = *vp;   /* the editor's own change: no push */

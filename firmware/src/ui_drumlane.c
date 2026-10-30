@@ -17,8 +17,7 @@
  *   SYN METAL    LANE  LEVEL  TONE (the band, 2.6 .. 13 kHz)  DECAY
  * SHAPE and FILTER are two values each (WAVE and DRIVE, FILT and RESO): one knob steps through both. A layer at LEVEL 0
  * shows its other values DIM. The panel: the eight lanes, each with its VOICE (and its STACK), the lane picked in the
- * accent. A detent writes one value (dl_set, ds_set: the audio ISR takes it at its next block); each knob gesture is one
- * undo (SAVE held: the sound before it, ui.c edit_undo_take). Saved with projects and user presets in the track's patch
+ * accent. A detent writes one value (dl_set, ds_set: the audio ISR takes it at its next block). Saved with projects and user presets in the track's patch
  * (no new format, no new parameter ids: nothing here is automatable or lockable). Included by ui_graph.c (after
  * icons.c); the cards: ui_draw.c, the knobs: ui_input.c edit_param. */
 enum { DN_LANE = DL_NF, DN_S0, DN_SHAPE = DN_S0 + DS_NF, DN_FILT };   /* (the fields after the lane's own: dl_*; then
@@ -70,14 +69,12 @@ static uint32_t dln_get(uint32_t f)
     return ds_get(tr, k, (f - DN_S0) % DS_NF);
 }
 
-/* field f of the selected lane = v: one undo per knob gesture */
+/* field f of the selected lane = v */
 static void dln_write(uint32_t f, uint32_t v)
 {
     uint32_t tr = song.sel % NTRK, l = dln_lane(), k = dln_set();
-    track_t *t = TSEL;
     if (dln_get(f) == v)
         return;
-    edit_undo_take(t, 0x2000u | l << 5 | f, UNDO_SOUND);   /* (a knob turned on, this value: one copy) */
     if (f < DL_NF) {
         dl_set(tr, l, f, v);
     } else if (f == DN_SHAPE) {
@@ -89,7 +86,6 @@ static void dln_write(uint32_t f, uint32_t v)
     } else {
         ds_set(tr, k, (f - DN_S0) % DS_NF, v);
     }
-    motion_undo_done(t);
 }
 
 /* KNOB slot turned by steps on a lane page (KNOB 1 on a SYN page: the lanes that play a set) */

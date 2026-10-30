@@ -321,7 +321,7 @@ static int clean_sounds(track_t *t, uint32_t note)
 }
 static int clean_init(void)
 {
-    int bad = 0, ok = 1, ok2 = 1, ok3 = 1;
+    int bad = 0, ok = 1, ok3 = 1;
     uint32_t r, e;
     track_t *t;
     char a[24], b[24];
@@ -346,11 +346,8 @@ static int clean_init(void)
             ok = 0;
         }
         ok3 &= clean_sounds(t, e == ENGI_DRUM ? 36u : 60u);
-        hold(B_SAVE);                                   /* one undo: the dressed sound back */
-        ok2 &= t->p[P_DIST] == 30 && t->p[P_ITYPE] == 2 && t->p[P_M1AMT] == 50 && t->p[P_ATK] == 80 && t->eng_req == e;
     }
     bad += check("CLEAN INIT (#190), every engine: its E1..E8 defaults, no sends, INSERT OFF, no LFO / ENV / MOD amounts, POLY,", ok);
-    bad += check("  a neutral ENV (DRUM: its kit's), FM6 the init voice; LEVEL PAN and the steps kept; one undo", ok2);
     bad += check("  each engine's clean sound plays a note (heard, below full scale) and ends after its release", ok3);
 
     ui_power_on();

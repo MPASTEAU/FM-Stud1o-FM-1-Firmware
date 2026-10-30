@@ -328,8 +328,6 @@ static int pattern_go(uint32_t k, uint32_t num)
         return 1;
     ps_cur[k] = (uint8_t)num;
     ps_gen++;
-    if (undo.trk == k + 1u)                             /* (Dah: the undo copy is the other pattern's) */
-        undo.trk = 0;
     at = ps_find(k, num);
     if (at < 0 || !ps_decode(&trk[k], ps_heap + at + 4u, ps_rlen((uint32_t)at)))
         ps_blank(k);
@@ -459,8 +457,6 @@ static void pattern_del(uint32_t k, uint32_t num)
     k %= NTRK;
     ps_del(k, num);
     ps_song_forget(k, num);
-    if (undo.trk == k + 1u)
-        undo.trk = 0;
     if (num != ps_num(k))
         return;
     n = ps_list(k, nums);

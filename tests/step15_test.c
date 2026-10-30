@@ -4,11 +4,11 @@
  *   LEN   SEQ > STEP's KNOB 3 on a note (ui.c note_set_len): right writes clean TIE steps after it (a REST or an empty
  *         step; a chord ties whole), stopping at the next step holding notes (NOTE AHEAD; a REST's kept notes too) and
  *         at LEN (END OF PATTERN); left turns its last TIEs back into RESTs, never the note itself; nothing else moves
- *         (the steps' locks stay); one undo per turn (SAVE held), redo; on a REST / TIE / empty step KNOB 3 is TIME as
+ *         (the steps' locks stay); on a REST / TIE / empty step KNOB 3 is TIME as
  *         before; the DRUM grid's KNOB 3 is still HIT. Played: one note-on, held to the end of its last TIE (as a
  *         recorded hold plays).
  *   VEL   step_t.vel as it plays (seq.c seq_step: 0 = 96, ACC 127, a DRUM step's accented hit 127, its other hits the
- *         step's); SEQ > DETAIL's KNOB 4 1..127, SAVE held undoes; a pattern untouched plays as before (the golden
+ *         step's); SEQ > DETAIL's KNOB 4 1..127; a pattern untouched plays as before (the golden
  *         renders: tests/regress.c).
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
@@ -110,19 +110,6 @@ static int len_edit(void)
     ok &= note_len(t, 1) == 1u && is_rest(&t->step[2]) && is_rest(&t->step[3]) && t->step[1].n == 2u &&
           t->step[1].time == ST_NOTE;
     bad += check("  left: its last TIEs become RESTs, down to LEN 1 (the note stays)", ok);
-    hold(B_SAVE);                                    /* (the turns 1.5 s apart or less: one undo) */
-    ok = !memcmp(t->step, ref, sizeof ref);
-    hold(B_SAVE);
-    ok &= note_len(t, 1) == 1u && is_rest(&t->step[3]);
-    bad += check("  SAVE held: the knob's turns undone at once (back as it was); held again: redone", ok);
-    frames(2000);
-    turn(EN_K3, 2);
-    frames(2000);
-    turn(EN_K3, 1);
-    ok = note_len(t, 1) == 4u;
-    hold(B_SAVE);
-    ok &= note_len(t, 1) == 3u && is_rest(&t->step[4]);
-    bad += check("  turns apart: each its own undo", ok);
 
     t = roll(15);                                     /* the last step of LEN */
     put(t, 15, 60, ST_NOTE);
@@ -214,9 +201,7 @@ static int vel(void)
     frames(2000);
     turn(EN_K4, 100);
     ok &= t->step[4].vel == 127u;
-    hold(B_SAVE);
-    ok &= t->step[4].vel == 90u;
-    bad += check("DETAIL: KNOB 4 the cursor step's velocity (1..127), the others untouched; SAVE held: the turn undone", ok);
+    bad += check("DETAIL: KNOB 4 the cursor step's velocity (1..127), the others untouched", ok);
     return bad;
 }
 

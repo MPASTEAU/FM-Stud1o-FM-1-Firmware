@@ -195,7 +195,7 @@ at 1..3 and hides 6 5 8: what it sets still plays the right kit, and the device 
 | 5 DESC | scope, id | scope, id, fmt, min v14, max v14, def v14, label string, unit string, then for an enum (fmt 8) one name string per value (at most 24; firmware before the matrix: at most 16) |
 | 6 STEP_GET | index 0..NSTEP−1 | index, n (0..4 notes), note0..note3, time (0 NOTE, 1 TIE, 2 REST), flags (1 accent, 2 slide), vel, then (v5) hits (3 bytes, below), then (v7) chance 0..100, then (`52 01`) ratchet 1..4, then (`54 01`, 1.2) nudge + 8 (0..15: −8..+7 sixteenths of the step), then (`4B 01`, 1.5.5) condition 0..11 (0 none; with one the chance byte says 100) |
 | 7 STEP_SET | index, n, note0..3, time, flags, vel [, hits (3 bytes, v5) [, chance 0..100 (v7) [, ratchet 1..4 [, nudge + 8, 0..15 (1.2) [, condition 0..11 (1.5.5)]]]]] | same as STEP_GET (after the write). Without the hits the step keeps its own; without the chance, the ratchet or the nudge it keeps its own. The chance can only follow the hits, the ratchet the chance, the nudge the ratchet, the condition the nudge; a nudge byte above 15 or a condition above 11: no reply, nothing written. Without the condition byte a chance of 100 keeps the step's condition (below) |
-| 8 PRESET | engine, preset | engine, preset (applies the preset's sound to the selected track and sends; the steps and the track's own parameters stay, see "Sound loads and undo"). For another track, select it with `TRACK` first |
+| 8 PRESET | engine, preset | engine, preset (applies the preset's sound to the selected track and sends; the steps and the track's own parameters stay, see "Sound loads"). For another track, select it with `TRACK` first |
 | 9 PROJECT | op (0 load, 1 save, 2 query), slot 0..3 | op, slot, used (1/0). Save writes flash: allow ~2 s; it stops the transport first (see "Saves while playing") |
 | 10 NAMES | engine | engine, count, count preset-name strings, then the two edit-page titles |
 | 11 SMP_BEGIN | slot 0..2 | slot, rc (0 ok). Erases the slot's header sector: the slot is empty from now on |
@@ -280,7 +280,7 @@ case), all P_COUNT instrument parameters (v14 each, the same order as `DUMP`), a
 16 × (note 0..127 (0 = rest), flags: 1 accent, 2 slide, 4 tie, 8 | 16 the ratchet − 1 (firmware with `52 01`;
 before, 0: x1, and such firmware drops those bits when it loads the pattern)). Loading one applies the engine and
 the parameters of the sound, as a factory preset (the track's own parameters, the steps and LEN stay; see
-"Sound loads and undo"). The stored pattern is kept and returned by `UP_GET`; the device no longer loads it
+"Sound loads"). The stored pattern is kept and returned by `UP_GET`; the device no longer loads it
 (SAVE > PHRASES, which listed it as "U07", is gone). The slots are
 numbered 0..31 (the device shows U01..U32).
 
@@ -485,20 +485,14 @@ grid lives in the steps themselves, so every engine has it:
   unchanged. `G_MIDI`, `G_SYNC`, `G_INFO` (12, 13, 15) are on no page any more (MIDI's value was never read: the
   SYSTEM page's card showed the USB state; SYNC a placeholder; CPU a reading): the device's MENU > SYSTEM > INFO shows
   the USB state and the CPU load; `DESC` of them is unchanged.
-- **Sound loads and undo.** A load that changes a track's sound (`PRESET`, `SET` of `G_ENGSEL`, `UP_LOAD`,
+- **Sound loads.** A load that changes a track's sound (`PRESET`, `SET` of `G_ENGSEL`, `UP_LOAD`,
   and the same on the device) changes the sound only: the engine and the parameters of the sound. It
   never changes the steps, nor the track's own parameters: `P_LEVEL`, `P_PAN`, `P_MUTE` (0, 39, 40), the
   ARP pages, SCL and LEN / DIV / SWING / GATE (17..32), the SLICER (45..48). It does drop the track's recorded
-  motion (the device's SAVE held brings it back). (Before 1.0 a preset also
+  motion. (Before 1.0 a preset also
   set the arp and replaced the steps with its pattern; a factory preset turned the SLICER off.) The byte
   layout of every command is unchanged. Patterns are recorded or edited on the device, or written by
   the editor with `STEP_SET` / `TRACK_STEP`.
-  The device keeps one copy of the track from before the last load (any track); SAVE held 0.7 s on the
-  device swaps back what the load changed (the sound). Loads in a row on one track with nothing changed between them keep the copy from before
-  the first; `SET` (scope 0) within 1.5 s of a load on the selected track counts as part of that load, so
-  an audition (`G_ENGSEL`, then the patch's values by `SET`, the track's own parameters skipped as
-  `UP_LOAD` skips them) and the next one still undo to the state before the first. `PROJECT` load takes no
-  copy.
 - **Saves while playing.** A flash erase silences the audio and stalls the sequencer for a moment. The
   device refuses its own saves while the transport plays ("STOP TO SAVE"); `PROJECT` save, `UP_PUT`,
   `UP_STORE`, `UP_ERASE`, `BACKUP_LIST`, `BACKUP_PUT` and sample BEGIN / WRITE / END / ERASE from the editor stop the transport
@@ -565,7 +559,7 @@ when the track's engine is not the saved one).
   83..90 (the DRUM lane levels), 91..98 (the engine parameters; not the chord keys 81, 82). The device records them while the track is armed, playing and selected, from its knobs
   and from `SET` / `TRACK_PARAM` alike.
   - `MOTION` with the track alone is the query. `on` is always 1 (automation always plays; op 1 is taken and
-    ignored). Clear drops the track's events; on the device it is undone by SAVE held.
+    ignored). Clear drops the track's events.
   - Set: `value` must be inside the parameter's range for that track's engine (and −64..127); a
     new event when the 64 are used gets rc 2 ("MOTION FULL" on the device), an event that already exists is
     updated. A set turns the track's motion on. A delete of an event that does not exist succeeds.
@@ -575,13 +569,10 @@ when the track's engine is not the saved one).
     (the web editor does, while the sequencer tab shows).
   - `DUMP`, `TRACK_DUMP`, a user preset store and a project save give the sound's own (base) values;
     `GET`, `SET` and the pushes give what is sounding now, which differs while a motion event is in effect.
-  - A pattern load and a pattern clear on the device drop the track's motion; the device's UNDO brings it back.
-    `MOTION` clear does the same through the same undo copy. A sound load (a preset, `PRESET`, `G_ENGSEL`, `UP_LOAD`,
+  - A pattern load and a pattern clear on the device drop the track's motion, as `MOTION` clear does. A sound load (a preset, `PRESET`, `G_ENGSEL`, `UP_LOAD`,
     INIT SOUND) keeps it since 1.1.5 when the engine stays the same; when the engine changes the records on the
     engine's own ids (E1..E8 `P_E0..P_E7`, DIGITAL's 61..80, the DRUM lane levels) go and the rest (both kinds)
     stays, PLAY as it was (until 1.1 a sound load dropped the whole motion). Poll `MOTION` after a load.
-  - The device's own lock edits (a step held + a knob, SEQ > AUTOMATION (1.1.5's AUTO LIST)) go through its UNDO; `MOTION` ops
-    3..7 do not (the protocol is unchanged in 1.1.5).
 - **Projects (FUN7).** 3388 bytes, little endian, in the same A/B sectors as before: `46 55 4E 37` ("FUN7"),
   size u32 (3388), the 27 globals as i16 (bytes 8..61), sel, parts, phys (62..64), P_COUNT as stored (byte 66),
   then from byte 68 for each of the 4 tracks: P_COUNT bytes (value + 64), engine, preset, 64 steps of 9 bytes

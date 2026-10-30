@@ -842,19 +842,17 @@ static int pc_test(void)
     ok &= got.p[P_ITYPE] == TP[P_ITYPE].def && got.p[P_FTYPE] == TP[P_FTYPE].def && got.p[P_ESYNC] == TP[P_ESYNC].def;
     bad += check("  as PRESETS loads it: steps, LEVEL, ARP, SLICER kept; INSERT, TYPE, ESYNC the preset's", ok);
 
-    /* a run of them: the last wins, one undo */
+    /* a run of them: the last wins */
     midi_test_reset();
     set_engine_of(t, 0);
-    undo.keep = 0;                                       /* (the PCs' own undo copy) */
     was = *t;
     pc(0, 2); pc(0, 5);
     frame();
     ok = t->preset == 5;
     pc(0, 1); frame();
     ok &= t->preset == 1;
-    hold(B_SAVE);
-    ok &= same_sound(t, &was) && msg_is("UNDO/REDO T1");
-    bad += check("  two before a frame: the last loads; a run of PCs is one undo (SAVE held: the sound before)", ok);
+    (void)was;
+    bad += check("  two before a frame: the last loads", ok);
 
     /* the editor: a RELOAD for the selected track only */
     set_engine_of(&trk[1], 0);

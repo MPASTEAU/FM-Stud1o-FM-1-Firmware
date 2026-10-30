@@ -8,7 +8,7 @@
  * The other extra, CURVE (STEP: an automation event's value holds to the next, as always; RAMP: it moves in a line to
  * the next event of its parameter, motion.c motion_ramp_*), the track's (SEQ > AUTOMATION draws its lanes so; no knob
  * sets it since the lanes replaced the rows, Dah).
- * Not automatable, nor lockable; no undo (a knob back undoes a detent). Included by ui_graph.c (after
+ * Not automatable, nor lockable. Included by ui_graph.c (after
  * ui_drumlane.c); the cards: ui_draw.c, the knobs: ui_input.c edit_param, the pages: params.c PAGES. */
 enum { XP_POINT, XP_VALUE, XP_SHAPE, XP_SMOOTH, XP_NONE };
 static const char *const N_XSHAPE[] = {"SIN", "TRI", "SAW", "RAMP", "SQR", "PULSE", "WOB", "STEPS"};

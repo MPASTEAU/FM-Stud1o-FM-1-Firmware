@@ -464,7 +464,7 @@ static int up_load(uint32_t k)
         return 1;
     r = up_rec(k);
     up_values(r, v);
-    load_begin(t, UNDO_SOUND);                          /* (ui.c: the copy for SAVE held = undo) */
+    load_begin(t, LOAD_SOUND);
     panic_req |= (uint8_t)(1u << song.sel);
 #if !FELUCCA_FM4
     if (r->engine == ENGI_DIGITAL) {                    /* a DIGITAL sound (kept as it was stored): FM6 */

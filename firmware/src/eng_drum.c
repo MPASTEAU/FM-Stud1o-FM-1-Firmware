@@ -67,7 +67,7 @@ typedef struct {
 ENG_MEM_FITS("DRUM", sizeof(drum_lane_t) * DV_NLANE);
 /* 1.4.1: each part's lanes muted (bit l: lane l), the EDIT layer's black keys 1..8 (ui_layer.c EQA_DRUM): a channel
  * mute. The lane plays on as always (hits, keys, MIDI: its voice, the CPU, the choke) and drum_render drops its output,
- * so unmuted it sounds as if it never was. Performance state: not saved, not recorded, no undo; a sound load into the
+ * so unmuted it sounds as if it never was. Performance state: not saved, not recorded; a sound load into the
  * track (ui.c load_begin) and a project load (project_restore_runtime) clear it, power-off too */
 static uint8_t drum_mute[NPART];
 
@@ -147,7 +147,7 @@ static const char *drum_lane_abbr(const track_t *t, uint32_t l)
 /* ------------------------------------------------- the lanes designed --- */
 /* EDIT > DESIGN / DESIGN 2 (ui_drumlane.c): each lane's own VOICE, TUNE, DECAY, TONE, SNAP and STACK, on top of the
  * kit and the EDIT knobs. They live in the track's patch (eng_fm6.c fm6_patch, what an FM6 track plays; a DRUM track
- * has no use for it), so projects, user presets (up_fm6.c), undo and the editor's backup carry them as they are:
+ * has no use for it), so projects, user presets (up_fm6.c) and the editor's backup carry them as they are:
  * field n = lane x DL_NF + f at byte n / 11 x 21 + n % 11 of the 155-byte voice (an operator's rates, levels and
  * breakpoints: bytes the FM6 formats keep whole up to 99), marked by the name DL_SIG. A patch without the mark: every
  * lane at its default (the kit as it was). Loading a factory DRUM sound clears them (eng_fm6.c drum_track_loaded).
@@ -170,7 +170,7 @@ static const char *drum_lane_abbr(const track_t *t, uint32_t l)
  * noise's and the metal's decays) and 40 of the 42 bytes go to them; so five sets, not eight (an open and a closed
  * hat share one: their lanes' DECAY apart). Marked by 139 = 83 and 119 (op 5's AMS) = 2: a patch with lanes of before
  * (its bytes there whatever the FM6 voice had) reads SYN 1..5 as DV_SYN_DEF until the first write (eng_fm6.c dl_set)
- * puts them in. Projects, user presets, undo and the editor's backup carry the sets with the lanes, as they are. */
+ * puts them in. Projects, user presets and the editor's backup carry the sets with the lanes, as they are. */
 enum { DL_VOICE, DL_TUNE, DL_DECAY, DL_TONE, DL_SNAP, DL_STACK, DL_NF };
 #define DL_NVOICE (1u + DVT_COUNT + DV_NKIT * DV_NLANE)   /* (VOICE values before SYN 1..5) */
 #define DL_NAME 145u                     /* the voice's name (fm6_core.c FP_NAME) */

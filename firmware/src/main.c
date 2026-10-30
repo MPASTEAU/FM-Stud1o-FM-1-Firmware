@@ -1856,7 +1856,7 @@ static void felucca_init(void)
     mst_defaults();                           /* (Dah: the MASTER's chain, empty) */
     chain_from_row = 0;                       /* (Dah: SONG's GRID at the top) */
     chain_from_u = 0;
-    undo_depth++;                             /* (no undo copy of the power-on loads) */
+    load_depth++;                             /* (ui.c: the power-on loads are inner ones) */
     mix_solo = 0;                             /* (Dah: MIXER's SOLO, none) */
     fm6_init();                               /* every track's FM6 patch: the init voice */
     ps_reset();                               /* (each track on its pattern 1, no other) */
@@ -1878,7 +1878,7 @@ static void felucca_init(void)
     if (!(eq_mc.f & EQF_4))
         eq_adopt(mtrk.p, mtrk.p, &eq_mc);
 #endif
-    undo_depth--;
+    load_depth--;
     song.sel = 0;
     song.master_q12 = 2048;                   /* (the pot's level replaces it before the audio starts: master_boot) */
     ui.home = 1;

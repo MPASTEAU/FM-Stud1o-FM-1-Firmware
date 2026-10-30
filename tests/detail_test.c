@@ -8,7 +8,6 @@
  *   AUTOMATION the same fields: a value set here is its row there, back at its default the row is gone; EDIT there
  *              still deletes a row (the field back to its default)
  *   EDIT       the step's four back to 100 % / x1 / 0 / 96, its notes kept
- *   undo       one per knob gesture on one step (walking to the next step starts another), EDIT one
  *   DRUM       the white keys pick the step (no hit toggled), held together several; the key LEDs the steps with hits
  *   chords     one value for the whole chord (RATCH x3 = every note three times)
  *   playback   the sequencer plays them (RATCH parts, CHANCE 0 silent, VEL), a pattern untouched plays as before
@@ -197,23 +196,12 @@ static int knobs(void)
     return bad;
 }
 
-static int edit_undo(void)
+static int edit_reset(void)
 {
     int bad = 0, ok;
     track_t *t = pattern(0);
     step_t ref[NSTEP], want;
     go_detail();
-    memcpy(ref, t->step, sizeof ref);
-    kt(EN_K2, 1); kt(EN_K2, 1);                   /* step 1: x3, one gesture */
-    turn(EN_PRESET, 2);
-    kt(EN_K2, 1);                                   /* step 3: x2 (another gesture: another step) */
-    hold(B_SAVE);
-    want = ref[0]; step_set_ratchet(&want, 3);
-    ok = same_but1(t, ref, 0, &want);
-    hold(B_SAVE);
-    ok &= step_ratchet(&t->step[2]) == 2u && step_ratchet(&t->step[0]) == 3u;
-    bad += check("undo: the last gesture (step 3's) alone; held again redone", ok);
-    hold(B_SAVE);                                     /* (step 3 back at x1) */
     ui.cursor = 0;
     frames(2000);
     kt(EN_K1, -30);
@@ -227,10 +215,8 @@ static int edit_undo(void)
          str_eq(cur_page()->title, "DETAIL");
     press(B_EDIT);
     ok &= msg_is("NOTHING TO RESET");
-    hold(B_SAVE);
-    ok &= !memcmp(t->step, ref, sizeof ref);
     bad += check("EDIT: the step's CHANCE RATCH NUDGE VEL back to 100 % x1 0 96 (the note and the cursor stay; again: "
-                 "NOTHING TO RESET); SAVE held brings them back", ok);
+                 "NOTHING TO RESET)", ok);
     return bad;
 }
 
@@ -334,7 +320,7 @@ static int step_unchanged(void)
 
 int main(void)
 {
-    int bad = page_cycle() + knobs() + edit_undo() + chords_play() + drum() + step_unchanged();
+    int bad = page_cycle() + knobs() + edit_reset() + chords_play() + drum() + step_unchanged();
     printf("%s\n", bad ? "DETAIL TEST FAILED" : "detail tests passed");
     return bad != 0;
 }

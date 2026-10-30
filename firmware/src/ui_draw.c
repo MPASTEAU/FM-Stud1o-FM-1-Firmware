@@ -306,7 +306,7 @@ static int32_t head_hint_w(const char *s, int32_t maxw)
     text_fit(b, sizeof b, s, &AF_S, maxw - w);
     return w + text_w(&AF_S, b);
 }
-/* a key hint: a keycap first, or after the first word ("[SAVE] HOLD TO UNDO", "HOLD [GLO] QUICK"; cv_free_hint) */
+/* a key hint: a keycap first, or after the first word ("HOLD [GLO] QUICK"; cv_free_hint) */
 static int head_is_hint(const char *s)
 {
     uint32_t n, i;
@@ -318,7 +318,7 @@ static int head_is_hint(const char *s)
 }
 /* a message / a layer's label at x, or centred on x 120 (x < 0), at most maxw px with its
  * icon (ui.c MSG_NOFILE: the accent's) and a locked layer's lock. A message in M (as the panel's titles), a key hint
- * (a layer's label, "[SAVE] HOLD TO UNDO") in S as every keycap's word; a message M cannot hold in maxw (right of the
+ * (a layer's label, "HOLD [GLO] QUICK") in S as every keycap's word; a message M cannot hold in maxw (right of the
  * BPM; a long name) in S, ellipsised there if it must be */
 static void head_msg(int32_t x, int32_t maxw)
 {
@@ -2390,7 +2390,7 @@ static void ui_draw_page(uint32_t counting)
     if (!ui.home && !page_visible(ui.page) && PAGES[ui.page].fam != FAM_FX) {   /* (Dah: an effect's page stays while
                                                          * shown, its effect out of the chain or not) an OP page of a track that is not DIGITAL (without
                                                          * FELUCCA_FM4: any track): EDIT 1; a SYN page of a lane that
-                                                         * plays no layer set any more (an undo, the grid's lane): DESIGN */
+                                                         * plays no layer set any more (a sound load, the grid's lane): DESIGN */
         uint32_t i = 0;
         if (dln_syn_page(PAGES[ui.page].graph) && TSEL->eng_req % NENGINES == ENGI_DRUM)
             for (i = 0; i < NPAGES && PAGES[i].graph != GR_DLANE; i++)
