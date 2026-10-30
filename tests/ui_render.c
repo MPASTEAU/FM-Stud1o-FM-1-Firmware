@@ -627,7 +627,7 @@ static void mono_check(void)
         int32_t d = (int32_t)((c >> 5) & 63u) - (int32_t)(c >> 11) * 2;
         if (strstr(cur_name, "splash") && i % 240u - (240u - SPLASH_W) / 2u < SPLASH_W &&
             i / 240u - (uint32_t)SPL_PY < SPLASH_H)
-            continue;                                   /* (HA HA HE HU: the splash's picture keeps its colours) */
+            continue;                                   /* (the splash's picture keeps its colours) */
         if ((c >> 11) != (c & 31u) || (bw ? d < -2 || d > 2 : d != 0)) {
             if (!mono_bad) fprintf(rep, "%s %s: pixel %u,%u = %04x off %s\n", bw ? "MONO" : "GREY", cur_name, i % 240u, i / 240u, c,
                                    bw ? "neutral" : "gray");
@@ -725,7 +725,7 @@ static void song_steps(uint32_t k)
         }
 }
 /* SONG's sources: project slot k saved with track 1's LEN steps of DIV (N_DIV's order), the patterns song_steps(k) */
-/* HA HA HE HU: SONG's sources are each track's patterns (pstore.c): a scene's slot k (A..D) saved is kept as pattern k + 1
+/* SONG's sources are each track's patterns (pstore.c): a scene's slot k (A..D) saved is kept as pattern k + 1
  * too (the tracks play 32, rs_park), a section's slot k names pattern k + 1, 4 ("-") none */
 static int rs_save_as(uint32_t k, const char *name) { int r = project_save_as(k, name); pat_keep(k + 1u); return r; }
 static int rs_save(uint32_t k) { return rs_save_as(k, 0); }
@@ -1021,7 +1021,7 @@ static void setup(int s)
 {
     memset(kb_chn, 0, sizeof kb_chn);               /* no key held (roll_playing holds one) */
     state();
-    pat_park();                                      /* (HA HA HE HU: the tracks on 32, patterns 1..4 the slots A..D) */
+    pat_park();                                      /* (the tracks on 32, patterns 1..4 the slots A..D) */
     memset(drum_mute, 0, sizeof drum_mute);          /* (1.4.1: no DRUM lane muted) */
     lys.sq_row = 0;                                  /* (a held menu's first row: GLO CLOCK / TUNE set theirs) */
     switch (s) {
@@ -1032,7 +1032,7 @@ static void setup(int s)
     case S_MESSAGE_NOFILE:                          /* a missing sample (ui_input.c sample_notice): USR2 */
         eng(ENGI_SAMPLE); TSEL->p[P_E0] = (int16_t)(SMP_NSETS + 1); memset(snd_said, 0, sizeof snd_said); sample_notice(); break;
     case S_USER: song.playing = 0; up_store(3, "MY LONG BASS NAME"); up_store(4, "PAD"); ui.uslot = 3; go_page(GR_USER); break;
-    case S_PROJECT: song.playing = 0; pattern_new(0, 1); pattern_new(0, 0); go_page(GR_PATTERN); ui.act = 3; break;   /* (HA HA HE HU: PATTERN) */
+    case S_PROJECT: song.playing = 0; pattern_new(0, 1); pattern_new(0, 0); go_page(GR_PATTERN); ui.act = 3; break;   /* (PATTERN) */
     case S_SONG_EMPTY: song.playing = 0; go_page(GR_SONG); break;
     case S_SONG:
         song.playing = 0; rs_save(0); rs_save(1);
@@ -1452,7 +1452,7 @@ static void setup(int s)
         str_cpy(nm.s, "SUB BAS", sizeof nm.s); nm.len = 7; nm.cur = 6; nm.key = 9; nm.tap = 1; nm.t = fm1_ms;
         break;
     case S_NAME_123:
-        song.playing = 0; go_page(GR_FILE); name_open(NK_ARCH_SAVE, 0);   /* (HA HA HE HU: FILE's COPY) */
+        song.playing = 0; go_page(GR_FILE); name_open(NK_ARCH_SAVE, 0);   /* (FILE's COPY) */
         str_cpy(nm.s, "LIVE 2026", sizeof nm.s); nm.len = 9; nm.cur = 5; nm.num = 1;
         break;
     case S_NAME_EMPTY: song.playing = 0; go_page(GR_FILE); proj_name[0] = 0; name_open(NK_FILE_RENAME, 0); break;
@@ -1463,7 +1463,7 @@ static void setup(int s)
     case S_NAME_PLAYING: go_page(GR_USER); name_open(NK_USER_SAVE, 6); ui_message("STOP TO SAVE"); break;
     case S_PROJECT_NAMED:
         song.playing = 0; rs_save_as(0, "LOFI JAM"); rs_save_as(1, "MWMWMWMWMWMW"); rs_save_as(2, "");
-        go_page(GR_FILE); ui.act = 4; ui.msg_t = 0;   /* (HA HA HE HU: FILE, NEW picked) */
+        go_page(GR_FILE); ui.act = 4; ui.msg_t = 0;   /* (FILE, NEW picked) */
         break;
     /* 1.2 (Discussion #90): NAME's category (the widest, PLUCK) on a rename of a long name; PROJECT's random name */
     case S_NAME_CAT:
@@ -1595,7 +1595,7 @@ static void setup(int s)
     /* 1.5.5 (#188): MENU > CONTROL > SELECT PAGE (the tab's eighth row) */
     case S_MENU_SELECT: ui_prefs2 |= PREF_SEL_PAGE >> 16; ui.menu = 1; ui.menu_sel = MI_SELECT; break;
     /* 1.5.5 (#199): SAVE > PROJECT with KNOB 2 ERASE picked on a used slot; its dialog with the project's name */
-    case S_PROJECT_ERASE:                            /* (HA HA HE HU: PATTERN, another picked, OPEN; REC's DELETE dialog) */
+    case S_PROJECT_ERASE:                            /* (PATTERN, another picked, OPEN; REC's DELETE dialog) */
         song.playing = 0; pattern_new(0, 1); go_page(GR_PATTERN); pt_sel = 1; ui.act = 2; break;
     case S_CONFIRM_ERASE_PROJ: song.playing = 0; pattern_new(0, 1); ui.confirm = CF_DEL_PAT; ui.confirm_trk = 2; break;
     /* 1.5.5 (#190): CLEAN INIT's dialog (the EDIT layer's key after INIT) */

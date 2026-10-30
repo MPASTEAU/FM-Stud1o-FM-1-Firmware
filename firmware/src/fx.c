@@ -556,7 +556,7 @@ static __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *o
     hl.side = 1;
 }
 
-/* HA HA HE HU: a section with CUT started (song_chain.c chain_cut): the reverb and delay emptied at the next fx_buses */
+/* a section with CUT started (song_chain.c chain_cut): the reverb and delay emptied at the next fx_buses */
 static volatile uint8_t fx_cut;
 
 /* the reverb's buffers and states to silence (the model changed) */
@@ -634,7 +634,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
     int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
     int32_t dmix = song.g[G_DMIX] * 258;
     int32_t cdepth = song.g[G_CDEPTH] * 6, rt;
-    if (fx_cut) {                                       /* (HA HA HE HU: CUT, the tails gone) */
+    if (fx_cut) {                                       /* (CUT, the tails gone) */
         fx_cut = 0;
         rev_clear();
         for (i = 0; i < DLY_LEN; i++)
@@ -1089,7 +1089,7 @@ static const uint16_t ENG_VCOST[NENGINES] = {163, FELUCCA_FM4 ? 181 : 0, 162, 67
 };
 #endif
 
-/* HA HA HE HU: ORDER (P_FXORD, params.c N_FXORD), the track's DIST (0), INSERT (1) and SLICER (2) in a row, two bits each,
+/* ORDER (P_FXORD, params.c N_FXORD), the track's DIST (0), INSERT (1) and SLICER (2) in a row, two bits each,
  * first in the low bits. 0, D I S, is the chain as it always was */
 
 static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
@@ -1131,7 +1131,7 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
         dv_level(b, n, 0);                              /* (Dah: a send's page: the track going there) */
 }
 
-/* HA HA HE HU: DUCK, the sidechain. A track whose DUCK names a source track (T1..T4) dips when that track starts a note
+/* DUCK, the sidechain. A track whose DUCK names a source track (T1..T4) dips when that track starts a note
  * (voice.c duck_hit; a DRUM source: its KICK, SNARE and CLAP lanes): its level falls by DEPTH at once and comes back with REL's
  * time (P_DKREL -64..63: ~20 .. 400 ms, 0 ~210 ms; an exponential per block). Applied to the part's mono buffer after its FX chain, before LEVEL,
  * PAN and the sends: the sends dip with it. OFF: nothing runs (the track as before) */
@@ -1216,7 +1216,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
     if (T_SPREAD(t)) {
         mix_spread(t, b, n SM_ARG(sm));                 /* (its chain in ORDER, the DUCK after it) */
     } else {
-        fx_chain(t, b, n SM_ARG(sm));                   /* DIST INSERT SLICER EQ SIDECHAIN, in ORDER (HA HA HE HU) */
+        fx_chain(t, b, n SM_ARG(sm));                   /* DIST INSERT SLICER EQ SIDECHAIN, in ORDER */
         if ((pf.mute >> (t - trk)) & 1u)
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
     }
@@ -1329,7 +1329,7 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
     mixsum_t *sm = &mx[1];
     for (i = 0; i < n; i++)
         sm->l[i] = sm->r[i] = sm->c[i] = sm->d[i] = sm->v[i] = 0;
-    for (i = 0; i < trk_count(); i++)                   /* (HA HA HE HU: the project's tracks) */
+    for (i = 0; i < trk_count(); i++)                   /* (the project's tracks) */
         if (arg >> i & 1u)
             mix_part(&trk[i], n, sm);
 }
@@ -1341,13 +1341,13 @@ static uint32_t mix_split(void)
 {
     uint32_t m, i, best = 0, all = 0, lo, a = 0, g = 0;
     for (i = trk_count(); i < NPART; i++)
-        part_cost[i] = 0;                               /* (HA HA HE HU: past the project's tracks: nothing to render) */
+        part_cost[i] = 0;                               /* (past the project's tracks: nothing to render) */
     for (i = 0; i < NPART; i++)
         all += part_cost[i];
     lo = all;
     if (all <= C1_HAND)                                 /* (nothing to gain) */
         return 0;
-    for (m = 1; m < (1u << NPART); m++) {               /* (HA HA HE HU) every split in Gray code order: one part in or
+    for (m = 1; m < (1u << NPART); m++) {               /* every split in Gray code order: one part in or
                                                          * out a step, its cost added or taken off (8 parts: 255 steps,
                                                          * not 255 x 8) */
         uint32_t b = 1u << __builtin_ctz(m), w;
@@ -1379,7 +1379,7 @@ static void mix_block(int32_t *out, uint32_t n)
     if (m && !C1_RUN(c1_parts, m | n << 8))
         m = 0;
     c1_blocks += m != 0;
-    for (i = 0; i < trk_count(); i++)                   /* (HA HA HE HU: the project's tracks only) */
+    for (i = 0; i < trk_count(); i++)                   /* (the project's tracks only) */
         if (!(m >> i & 1u))
             mix_part(&trk[i], n, &mx[0]);
     if (m) {
@@ -1397,10 +1397,10 @@ static void mix_block(int32_t *out, uint32_t n)
     for (i = 0; i < NPART; i++)                         /* the LFOs' blocks, part by part (voice.c) */
         track_lfo_end(&trk[i]);
 #else
-    for (i = 0; i < trk_count(); i++)                   /* (one core: as 1.6; HA HA HE HU: the project's tracks) */
+    for (i = 0; i < trk_count(); i++)                   /* (one core: as 1.6; Dah: the project's tracks) */
         mix_part(&trk[i], n);
 #endif
-    duck_hit = 0;                                       /* (HA HA HE HU: this block's DUCK triggers taken) */
+    duck_hit = 0;                                       /* (this block's DUCK triggers taken) */
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
     fx_buses(send_c, send_d, send_r, wet, n);

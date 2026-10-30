@@ -1,5 +1,5 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* DRUM's lane pages (EDIT family, a DRUM track only, after LANES 2): each lane designed on its own (eng_drum.c dl_*, the
  * values in the track's patch). KNOB 1 is the lane (LANE 1..8, the grid's: ui.lane, one choice for SEQ > STEP and every
  * page here), KNOB 2..4 its values:

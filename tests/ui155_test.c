@@ -101,7 +101,7 @@ static int select_page(void)
     }
     bad += check("  PAGE: a bit of its own (MENU's 1.2 flags, bit 4), kept with the settings; 0 (older settings) = BPM", ok);
 
-    b0 = song.g[G_BPM];                                 /* (HA HA HE HU: LIST, 1.5.5's PAGE: the page's list, not the pages) */
+    b0 = song.g[G_BPM];                                 /* (LIST, 1.5.5's PAGE: the page's list, not the pages) */
     go_title("ENV"); frame();
     turn(EN_SELECT, 1);
     ok = title_is("ENV") && song.g[G_BPM] == b0 && ps_num(0) == 2u;   /* (Dah: no list: the pattern) */
@@ -188,7 +188,7 @@ static int oct_press(void)
     return bad;
 }
 
-/* ------------------------------------------- SAVE > PATTERN (HA HA HE HU) --- */
+/* ------------------------------------------- SAVE > PATTERN --- */
 /* the track's patterns (pstore.c): KNOB 1 OPEN, 2 COPY, 3 NEW, 4 DELETE (the dialog), OCT+ does it; REC deletes too */
 static int project_erase_ui(void)
 {

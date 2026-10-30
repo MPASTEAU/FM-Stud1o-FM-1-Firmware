@@ -360,7 +360,7 @@ static int route_block_test(void)
  * (channels 1..4) are CH1-4 exactly */
 static void tch(uint32_t k, uint32_t ch) { menu_put(MI_TCH1 + k, ch); events_block(CTL); }
 static void pc(uint32_t ch, uint32_t prog) { queued(0xC0u | ch, prog, 0, 1); }
-static void x_off(void) { for (uint32_t k = 4; k < NTRK; k++) mch_set(k, MCH_OFF); }   /* (HA HA HE HU: tracks 5..8 out of the way) */
+static void x_off(void) { for (uint32_t k = 4; k < NTRK; k++) mch_set(k, MCH_OFF); }   /* (tracks 5..8 out of the way) */
 static int route_track_test(void)
 {
     int bad = 0, ok; uint32_t ch, i, r;
@@ -379,7 +379,7 @@ static int route_track_test(void)
         for (ch = 0; ch < 16u; ch++) {
             queued(0x90 | ch, 40u + ch, 100, 1);
             for (i = 0; i < NTRK; i++)
-                ok &= gate_note(&trk[i], 40u + ch) == (ch < 8u && i == ch);   /* (HA HA HE HU: eight tracks, 1..8) */
+                ok &= gate_note(&trk[i], 40u + ch) == (ch < 8u && i == ch);   /* (eight tracks, 1..8) */
             ok &= midi_slot(ch) == (ch < 8u ? (int32_t)ch : -1);
         }
         bad += check(r ? "TRACK, the default channels: channels 1..8 play tracks 1..8, 9..16 nothing (as CH1-8)" :
@@ -791,7 +791,7 @@ static int learn_test(void)
 
     /* the stored codes with 1.5's parameters (the INSERT 96..100, TYPE 101, ESYNC 102, P_E0 103): a common parameter
      * id + 1, below ML_E0; an engine one ML_E0 + k whatever P_E0 is; every id back as it went in */
-    ok = P_E0 == 116u && P_COUNT == 124u && P_E0 < ML_E0;   /* (HA HA HE HU: ORDER DUCK DEPTH before P_E0) */
+    ok = P_E0 == 116u && P_COUNT == 124u && P_E0 < ML_E0;   /* (ORDER DUCK DEPTH before P_E0) */
     for (i = 0; i < P_COUNT; i++)
         ok &= ml_id(ml_code(i)) == i && (i < P_E0 ? ml_code(i) == i + 1u && ml_code(i) < ML_E0 : ml_code(i) == ML_E0 + i - P_E0);
     ok &= ml_id(0) == P_COUNT && ml_id(P_E0 + 1u) == P_COUNT && ml_id(ML_E0 - 1u) == P_COUNT;   /* (no such parameter) */

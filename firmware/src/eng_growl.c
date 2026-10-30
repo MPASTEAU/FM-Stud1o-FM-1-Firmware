@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* GROWL: one wave, phase-modulated by a sine, into a resonant low-pass, for growling FM basses. HA HA HE HU's.
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+/* GROWL: one wave, phase-modulated by a sine, into a resonant low-pass, for growling FM basses. This fork's.
  *
  *   WAVE   the carrier: SAW SQR TRI SIN (SAW and SQR naive: the modulation moves their edges, the aliasing is part of
  *          the growl)

@@ -492,8 +492,8 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         ed_b(0x43); ed_b(1); ed_b(ML_N);   /* 1.5: MIDI LEARN's map (cmds 78, 79; editor_learn.c) */
         ed_b(0x4B); ed_b(1); ed_b(NCOND);   /* 1.5.5: a step's condition (1..11) after its nudge */
         ed_b(0x45); ed_b(1); ed_b(ED_PAL_N);   /* 1.6: CUSTOM, the user's palette: 5 colours (cmds 80, 81; editor_palette.c) */
-        ed_b(0x58); ed_b(1); ed_b(1);   /* HA HA HE HU: a section's CUT, bit 6 of its repeat byte (SONG ops 4..7) */
-        ed_b(0x59); ed_b(1); ed_b(32);  /* HA HA HE HU: SONG ops 4..7 name a track's pattern 1..32 (0: "-") */
+        ed_b(0x58); ed_b(1); ed_b(1);   /* a section's CUT, bit 6 of its repeat byte (SONG ops 4..7) */
+        ed_b(0x59); ed_b(1); ed_b(32);  /* SONG ops 4..7 name a track's pattern 1..32 (0: "-") */
         break;
     case ED_GET:
     case ED_SET:
@@ -608,7 +608,7 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         if (na < 1u || a[0] >= SMP_USER_SLOTS || !flash_ok)
             return;
         ed_b(a[0]);
-        if (a[0] >= SMP_USER_WRITABLE) {                   /* (HA HA HE HU: USR2, USR3 are the projects': refused) */
+        if (a[0] >= SMP_USER_WRITABLE) {                   /* (USR2, USR3 are the projects': refused) */
             ed_b(1);
             break;
         }

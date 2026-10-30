@@ -7,12 +7,12 @@
  * Id 8 (the FM6 patch bank of 1.0..1.0.2) is listed empty since 1.0.3; a PUT of it from an older archive moves its
  * patches into the user presets restored before it (ids 6, 7), as the first boot after the update does (up_fm6.c).
  * Id 9 is the user presets' FM6 patches (up_fm6.c), appended in 1.0.3.
- * HA HA HE HU: ids 10..13 the PROJECT slots' tracks 5..8 (their FUNX objects, project.c proj_pack_x; empty when the
+ * ids 10..13 the PROJECT slots' tracks 5..8 (their FUNX objects, project.c proj_pack_x; empty when the
  * slot is, or its X belongs to no record there), restored after their slot (ids 2..5): tagged again with the slot's
  * record as restored (an older format is packed again: another hash). Ids 14..17 the same of their extras (FUNY, LFO DRAW
  * and CURVE, proj_pack_y). Retired with the PROJECTS (projfs.c: their flash is the projects' now): a PUT of them is
  * refused (rc 1, the page skips them).
- * Id 18 (HA HA HE HU): the PROJECTS, the flash of projfs.c as it is, up to its last used sector (whole sectors, 0: none).
+ * Id 18: the PROJECTS, the flash of projfs.c as it is, up to its last used sector (whole sectors, 0: none).
  * Read from the flash 256 bytes at a time; restored straight into it (a sector erased when its first chunk comes, the
  * ones after the image's end at the commit, its CRC read back), then scanned again. Restored before the settings
  * (the project open, PFS_CUR) and the live music (id 0: the project open is opened again, its eight tracks).
@@ -66,7 +66,7 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
         return (const uint8_t *)&upf;
     }
 #if FELUCCA_FLASH
-    if (id >= 10u && id <= 17u) {                   /* (HA HA HE HU) a slot's tracks 5..8 / extras: st_buf (st_current) */
+    if (id >= 10u && id <= 17u) {                   /* a slot's tracks 5..8 / extras: st_buf (st_current) */
         st_hdr_t h;
         uint32_t k = (id - 10u) & 3u, tag, y = id >= 14u;
         if (flash_ok && project_used(k) && st_current(y ? PX_YOF(PX_OBJ0 + k) : PX_OBJ0 + k, &h) >= 0 && h.len == PROJX_SIZE) {
@@ -85,7 +85,7 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
         return ed_smp_buf;
     }
 #endif
-    if (id >= 32u && id < 32u + SMP_USER_WRITABLE) {   /* (HA HA HE HU: no USR3) */
+    if (id >= 32u && id < 32u + SMP_USER_WRITABLE) {   /* (no USR3) */
         uint32_t k = id - 32u;
         const smp_user_hdr_t *h = (const smp_user_hdr_t *)smp_user_xip(k);
         if (usr_nz[k] && h->magic == SMP_USER_MAGIC && h->data_len <= SMP_USER_SIZE - SMP_USER_DATA)
@@ -143,7 +143,7 @@ static uint32_t ed_bk_commit(void)
     uint8_t *raw = ED_BK_RAW;
     uint32_t obj;
 #if FELUCCA_FLASH
-    if (ed_bk_id == ED_BK_PFS) {                    /* (HA HA HE HU) the projects: written already; the rest erased */
+    if (ed_bk_id == ED_BK_PFS) {                    /* the projects: written already; the rest erased */
         uint32_t off;
         pfs.ok = 0;
         proj_wire_gen++;
@@ -175,7 +175,7 @@ static uint32_t ed_bk_commit(void)
         if (ed_bk_id == 0u) {
             if (!ed_bk_len) return 2;
 #if FELUCCA_FLASH
-            if (flash_ok && pfs_there(pfs_cur()))      /* (HA HA HE HU: the project open, all its tracks) */
+            if (flash_ok && pfs_there(pfs_cur()))      /* (the project open, all its tracks) */
                 return pfs_read(pfs_cur()) ? 2u : 0u;
 #endif
             return project_restore_runtime(&proj_scratch) ? 2u : 0u;
@@ -204,7 +204,7 @@ static uint32_t ed_bk_commit(void)
         if (ed_bk_len) memcpy(&upf, raw, sizeof upf); else upf_empty();
         sync_reload = 1; ui.force = 1;
         return upf_save() == 2 ? 4u : 0u;           /* (a failed write keeps the restored RAM copy) */
-    } else if (ed_bk_id >= 10u && ed_bk_id <= 17u) {   /* (HA HA HE HU) a slot's tracks 5..8 / extras, its record's tag now */
+    } else if (ed_bk_id >= 10u && ed_bk_id <= 17u) {   /* a slot's tracks 5..8 / extras, its record's tag now */
         uint32_t k = (ed_bk_id - 10u) & 3u, magic, tag, sum, y = ed_bk_id >= 14u;
         if (!ed_bk_len) return 0;                   /* (none: the slot's own X, if any, no longer matches it) */
         memcpy(&magic, raw, 4); memcpy(&sum, raw + PROJX_SIZE - 4u, 4);

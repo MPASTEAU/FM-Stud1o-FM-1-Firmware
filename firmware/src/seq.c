@@ -71,7 +71,7 @@ static uint32_t trk_midi_ch(uint32_t i)
     int32_t b = midi_base();
     if (b == -2)
         return mch_get(i) < 16u ? mch_get(i) : i % NTRK;
-    return b > 0 ? (uint32_t)b + (i & 3u) : i % NTRK;   /* (HA HA HE HU: CH1-8 1..8; a block of four: 5..8 as 1..4) */
+    return b > 0 ? (uint32_t)b + (i & 3u) : i % NTRK;   /* (CH1-8 1..8; a block of four: 5..8 as 1..4) */
 }
 
 static int drum_track(const track_t *t) { return ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM; }
@@ -1242,7 +1242,7 @@ static int32_t seq_nudge(const track_t *t, const step_t *s)
 {
     if (t->p[P_SQNT] == 1 || s->time != ST_NOTE || (!s->n && !s->hit) || step_ratchet(s) != 1u)
         return 0;
-    if (t->p[P_SQNT] >= 2)                              /* (HA HA HE HU) 25 / 50 / 75 %: that much nearer the grid */
+    if (t->p[P_SQNT] >= 2)                              /* 25 / 50 / 75 %: that much nearer the grid */
         return step_nudge(s) * (5 - t->p[P_SQNT]) / 4;
     return step_nudge(s);
 }
@@ -1365,7 +1365,7 @@ static void seq_tick(track_t *t, uint32_t n)
         else
             seq_nd_start(t, period, len);
     }
-    if (mramp[(uint32_t)(t - trk) % NTRK].n)          /* (HA HA HE HU: automation in lines, motion.c) */
+    if (mramp[(uint32_t)(t - trk) % NTRK].n)          /* (automation in lines, motion.c) */
         motion_ramp_block(t, t->seq_pos, step_samples(t, period, t->seq_idx));
     if (t->rat_left)
         seq_ratchet(t, period);
@@ -1390,7 +1390,7 @@ static int32_t midi_slot_any(uint32_t ch)
     int32_t b = midi_base(), omni = -1;
     uint32_t i;
     if (b != -2)
-        return b >= 0 && ch - (uint32_t)b < (b ? 4u : NPART) ? (int32_t)(ch - (uint32_t)b) : -1;   /* (HA HA HE HU: CH1-8
+        return b >= 0 && ch - (uint32_t)b < (b ? 4u : NPART) ? (int32_t)(ch - (uint32_t)b) : -1;   /* (CH1-8
                                                 * eight channels, the other blocks four: tracks 1..4) */
     for (i = 0; i < NPART; i++) {
         uint32_t c = mch_get(i);

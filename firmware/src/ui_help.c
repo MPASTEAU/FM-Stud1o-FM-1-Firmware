@@ -18,7 +18,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ENV DEST", "[K1-4]ENV AMOUNTS[ENV]ENV"},
     {"LFO", "[K1-4]SHAPE[LFO]HOLD: MOMENTARY"},
     {"LFO 2", "[K1]SYNC TO BPM[LFO]LFO DEST"},
-    {"LFO DRAW", "[K1]POINT[K2]VALUE[K3]SHAPE"},   /* (HA HA HE HU) */
+    {"LFO DRAW", "[K1]POINT[K2]VALUE[K3]SHAPE"},
     {"LFO DEST", "[K1-4]LFO AMOUNTS[LFO]LFO"},
     {"CHAIN", "[K1]UNIT[K2]MOVE IT[OCT+]ITS PAGE"},
     {"DIST", "[K1]IN[K2]OUT[K3]COLOR"},
@@ -55,8 +55,8 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"VOICE 3", "[K1]STEREO SPREAD[EDIT]EDIT 1"},
     {"SONG", "[K1]SECTION[K3]PATTERN[REC]DELETE"},
     {"MY PRESETS", "[K2]LOAD[K3]DELETE[K4]SAVE"},
-    {"FILE", "[PRESETS]PROJECT[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: the projects; REC deletes, EDIT renames) */
-    {"PATTERN", "[PRESETS]PATTERN[K1]OPEN[K4]DELETE"},   /* (HA HA HE HU: a track's patterns; REC deletes) */
+    {"FILE", "[PRESETS]PROJECT[K1]OPEN[K4]DELETE"},   /* (the projects; REC deletes, EDIT renames) */
+    {"PATTERN", "[PRESETS]PATTERN[K1]OPEN[K4]DELETE"},   /* (a track's patterns; REC deletes) */
     {"ARP", "[K1]MODE[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[K3]LATCH[K4]ORDER[ARP]ARP"},
     {"STEP", "[KEYS]WRITE[K1]STEP[EDIT]CLEAR"},   /* (1.5.1: SEQ to DETAIL; Dah: EDIT clears the step) */

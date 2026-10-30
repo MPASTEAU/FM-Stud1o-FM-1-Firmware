@@ -32,7 +32,7 @@
  *    as 1., the level of its lane on STD), DC, its end; DECAY / TUNE / TONE / SNAP each move it; the corners under
  *    full scale; a retrigger the same; every GM note on its lane's piece, the lanes through the engine; the cost of
  *    a kit's 8 lanes at once.
- * 11. SYNTH (HA HA HE HU, the layered voice): SYN 1..5's sets, the layered kits' and the heaviest set sound (above -21
+ * 11. SYNTH (the layered voice): SYN 1..5's sets, the layered kits' and the heaviest set sound (above -21
  *    dBFS), stay under full scale with no DC, end, retrigger the same, the corners under full scale; TUNE DECAY TONE
  *    move it; the sets' storage (bytes of their own inside fm6_max, through fm6_pack / fm6_unpack, a patch of before);
  *    LAYER KIT and HARD KIT load their designs, every SYNTH lane sounds and frees its voice, the choke; the cost of
@@ -633,7 +633,7 @@ static void kit_fresh(void)
 {
     host_tracks_init();
     memset(trk[0].v, 0, sizeof trk[0].v);
-    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (tracks 3.. in the small regions) */
     host_preset(&trk[0], ENGI_DRUM, 0);
 }
 
@@ -652,7 +652,7 @@ static void lane_budget(void)
     static const uint8_t TOM[4] = {41, 43, 45, 47};
     uint32_t i, p, owner, kills, bad = 0;
     host_tracks_init();
-    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (tracks 3.. in the small regions) */
     for (p = 0; p < NPART; p++)
         memset(trk[p].v, 0, sizeof trk[p].v);
     host_preset(&trk[0], ENGI_DRUM, 0);

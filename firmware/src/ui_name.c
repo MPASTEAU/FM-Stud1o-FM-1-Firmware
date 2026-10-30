@@ -24,7 +24,7 @@
  *                takes it whole, then the keys edit it as any other).
  *   LEDs         every key that types or edits is lit; the key whose letters are being cycled blinks.
  * Spaces at either end are dropped when it is written; an empty name: USER the automatic one, PROJECT none. */
-enum { NK_NONE, NK_USER_SAVE, NK_USER_RENAME, NK_PROJ_SAVE, NK_PROJ_RENAME, NK_ARCH_SAVE, NK_FILE_RENAME };   /* (ARCH_SAVE: FILE's COPY) */   /* (HA HA HE HU: a project) */
+enum { NK_NONE, NK_USER_SAVE, NK_USER_RENAME, NK_PROJ_SAVE, NK_PROJ_RENAME, NK_ARCH_SAVE, NK_FILE_RENAME };   /* (ARCH_SAVE: FILE's COPY) */   /* (a project) */
 #define NM_LEN 12u
 #define NM_TAP_MS 800u                                 /* multi-tap: the next letter within this */
 #define NM_REP_MS 450u                                 /* a held arrow / DELETE repeats after this, */
@@ -101,7 +101,7 @@ static void name_open(uint32_t kind, uint32_t slot)
         else
             str_cpy(b, nm.ph, sizeof b);
         nm.cat = (uint8_t)(kind == NK_USER_RENAME ? up_cat(slot) : track_cat(TSEL));
-    } else if (kind == NK_ARCH_SAVE || kind == NK_FILE_RENAME) {   /* (HA HA HE HU) FILE: COPY's name, RENAME */
+    } else if (kind == NK_ARCH_SAVE || kind == NK_FILE_RENAME) {   /* FILE: COPY's name, RENAME */
         str_cpy(nm.ph, kind == NK_ARCH_SAVE ? "COPY" : "PROJECT", sizeof nm.ph);
         project_cur_name(b);
     }

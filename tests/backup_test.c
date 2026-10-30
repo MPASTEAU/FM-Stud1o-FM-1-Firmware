@@ -188,7 +188,7 @@ int main(void)
     bad += check("a project save after LIST reused the staging RAM: GET of the runtime is stale (5)",
                  get(0, 0, 64) == 5u);
     bad += check("a new LIST makes it readable again", list(0, &len, &crc) == 0 && get(0, 0, 64) == 0);
-    {   /* HA HA HE HU: SAVE > FILE's projects (projfs.c): a whole piece of music each (the tracks and their patterns,
+    {   /* SAVE > FILE's projects (projfs.c): a whole piece of music each (the tracks and their patterns,
          * the SONG, the extras), the size it takes; NEW: one empty track; OPEN brings it back; DELETE; an empty one
          * does not open */
         int ok;
@@ -212,7 +212,7 @@ int main(void)
         ok &= project_open(31) != 0 && project_delete(a) == 0 && !pfs_there(a) && pfs_cur() == 0u && pfs_count() == 1u;
         bad += check("FILE projects: SAVE (the tracks, their patterns, the SONG, the extras) / NEW / OPEN back / DELETE; an empty one refused", ok);
     }
-    {   /* HA HA HE HU: id 18, the PROJECTS' flash up to its last used sector: listed, read back, restored after a delete */
+    {   /* id 18, the PROJECTS' flash up to its last used sector: listed, read back, restored after a delete */
         static uint8_t img[0x28000];
         uint32_t a, ok;
         str_cpy(proj_name, "BACKED UP", sizeof proj_name);
@@ -224,8 +224,8 @@ int main(void)
         ok &= put_all(18, img, len, crc) == 0 && pfs_there(a);
         bad += check("id 18: the PROJECTS listed (whole sectors), read, restored after a delete", ok);
     }
-#if PROJ_FUNX                                        /* (HA HA HE HU: the slots' FUNX / FUNY retired: projfs.c holds them) */
-    {   /* HA HA HE HU: the tracks' extras (LFO DRAW, CURVE) travel with a project in its FUNY */
+#if PROJ_FUNX                                        /* (the slots' FUNX / FUNY retired: projfs.c holds them) */
+    {   /* the tracks' extras (LFO DRAW, CURVE) travel with a project in its FUNY */
         int ok;
         trkx[2].draw[5] = -40; trkx[2].smooth = 0; trkx[6].curve = 1;
         project_save(1);
@@ -235,7 +235,7 @@ int main(void)
         project_erase(1);
         bad += check("the extras (LFO DRAW, CURVE) saved and loaded with their project (FUNY)", ok);
     }
-    {   /* HA HA HE HU: id 10, slot A's tracks 5..8 (its FUNX), listed after a save and restored, tagged to the slot */
+    {   /* id 10, slot A's tracks 5..8 (its FUNX), listed after a save and restored, tagged to the slot */
         static uint8_t x[PROJX_SIZE];
         st_hdr_t h;
         int ok = list(10, &len, &crc) == 0 && len == PROJX_SIZE && st_current(PX_OBJ0, &h) >= 0;

@@ -770,7 +770,7 @@ async function editorLibrarian() {
     ok(keys104[96] === "E0" && good(sp) && good(lp) && good(nk),
       "library file: 104-parameter files (1.2 .. 1.4: patch, labelled, unlabelled) map the engine's 8 to 116..123, the INSERT, TYPE, ESYNC unset");
   }
-  {   /* files from Felucca 1.5 .. 1.6 (111 parameters, P_E0 103, before HA HA HE HU's ORDER DUCK DEPTH; id 8 FX): the
+  {   /* files from Felucca 1.5 .. 1.6 (111 parameters, P_E0 103, before ORDER DUCK DEPTH; id 8 FX): the
          engine's 8 land on 116..123, the rest in place (the operators' REL#n too), ORDER DUCK DEPTH unset; labelled, FX
          is not DUCK's REL (unset), unlabelled id 8 stays */
     const p111 = [...cap.p.slice(0, 103), ...cap.p.slice(116, 124)];
@@ -1436,7 +1436,7 @@ async function editorSong() {
   await ask(1, []);
   r = await ask(2);
   ok(r.rc === 1 && !r.playing, "SONG: empty chain does not PLAY");
-  /* sections (1.2 ops 4..7; HA HA HE HU: eight lanes, CUT in bit 6 of the repeat byte) */
+  /* sections (1.2 ops 4..7; Dah: eight lanes, CUT in bit 6 of the repeat byte) */
   ok(info.lanes === 8 && info.cutCaps === 1 && info.patNums === 32,
     "SONG: INFO says the sections (57 01 8), their CUT (58 01 1) and the patterns by number (59 01 32)");
   const secs = [{ slots: [1, 2, 0, 1, 0, 0, 2, 1], repeat: 3, cut: false }, { slots: [2, 2, 2, 2, 1, 1, 1, 1], repeat: 2, cut: true }];

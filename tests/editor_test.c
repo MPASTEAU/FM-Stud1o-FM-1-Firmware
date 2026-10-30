@@ -170,7 +170,7 @@ static int preferences(void)
     int bad = 0;
     uint8_t a[4] = {0, 7, 0, 0};
     reset();
-    uint32_t nx = request(ED_INFO, a, 0), n = nx - 6u;   /* (HA HA HE HU: 58 01 1, 59 01 32 last; the rest as before them) */
+    uint32_t nx = request(ED_INFO, a, 0), n = nx - 6u;   /* (58 01 1, 59 01 32 last; the rest as before them) */
     uint32_t e = n - 6u;                                  /* (1.5.5: 4B 01 NCOND, 1.6: 45 01 5, below) */
     bad += check("INFO explicitly tags display capabilities after SONG without changing command 33",
         ED_SONG == 33 && ED_UI_STATE == 34 && ED_FAV_SET == 38 &&
@@ -195,7 +195,7 @@ static int preferences(void)
         host_wire[n - 7] == 0x4B && host_wire[n - 6] == 1 && host_wire[n - 5] == NCOND);
     bad += check("INFO 1.6: 45 01 5, CUSTOM's colours",
         host_wire[n - 4] == 0x45 && host_wire[n - 3] == 1 && host_wire[n - 2] == 5);
-    bad += check("INFO HA HA HE HU: 58 01 1, a section's CUT (bit 6 of its repeat byte); 59 01 32, the patterns 1..32, last",
+    bad += check("INFO: 58 01 1, a section's CUT (bit 6 of its repeat byte); 59 01 32, the patterns 1..32, last",
         host_wire[nx - 7] == 0x58 && host_wire[nx - 6] == 1 && host_wire[nx - 5] == 1 &&
         host_wire[nx - 4] == 0x59 && host_wire[nx - 3] == 1 && host_wire[nx - 2] == 32);
     request(ED_UI_SET, a, 2);
@@ -452,7 +452,7 @@ static int song_protocol(void)
     chain.armed = 0; a[0] = 2;
     bad += check("SONG PLAY refuses extra argument bytes", !request(ED_SONG, a, 2) && !transport_req);
     {   /* 1.2 (`57 01 04`): sections with a slot per track, ops 4..7; the v6 ops see each section's clock lane */
-        static const uint8_t set[] = {5, 2, 1, 2, CHAIN_SILENT, 1, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 3,   /* (HA HA HE HU: eight lanes,
+        static const uint8_t set[] = {5, 2, 1, 2, CHAIN_SILENT, 1, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 3,   /* (eight lanes,
                                        * pattern numbers: 1 2 - 1) */
                                        CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, CHAIN_SILENT, 1};
         static const uint8_t q4[] = {4}, q0[] = {0}, bad5[] = {5, 1, 1, 1, 33, 1, 0, 0, 0, 0, 1}, old4[] = {1, 1, 4, 1};
@@ -467,7 +467,7 @@ static int song_protocol(void)
                      chain_config.row[1].slot[0] == CHAIN_SILENT && chain_config.row[1].repeat == 1);
         n = request(ED_SONG, q4, 1);
         bad += check("SONG op 4 queries them as set", n == 12u + 2u * (NTRK + 1u) && host_wire[5] == 4 && !memcmp(host_wire + 11, set + 2, 2u * (NTRK + 1u)));
-        {   /* HA HA HE HU (`58 01 1`): bit 6 of a section's repeat byte is its CUT, both ways */
+        {   /* `58 01 1`: bit 6 of a section's repeat byte is its CUT, both ways */
             uint8_t c5[sizeof set];
             memcpy(c5, set, sizeof set);
             c5[2u + NTRK] |= 0x40u;
@@ -629,7 +629,7 @@ static int fm6_patches(void)
     a[1] = 5;
     request(ED_FM6_GET, a, 2);
     bad += check("an erased preset's patch is gone (GET rc 2)", host_wire[7] == 2u);
-    a[0] = ED_FM6_TRACK; a[1] = NTRK;                  /* (HA HA HE HU: past the eighth) */
+    a[0] = ED_FM6_TRACK; a[1] = NTRK;                  /* (past the eighth) */
     request(ED_FM6_PUT, a, sizeof a);
     i = host_wire[7];
     request(ED_FM6_PUT, a, 20);

@@ -67,7 +67,7 @@ const splash = colours(a.screen());
 }
 a.render(800);
 check("  over by 1 s (~0.70 s)", a.ex.web_anim_levels() === 0);
-a.render(1700);                                               // HA HA HE HU: the splash stays 2.5 s (core.h FW_SPLASH_MS)
+a.render(1700);                                               // the splash stays 2.5 s (core.h FW_SPLASH_MS)
 const home = a.screen();
 check(`boots: the splash, then HOME (${colours(home)} colours), the HOME LED lit`,
       splash > 1 && colours(home) > 4 && (a.ex.web_lit_buttons() >> B.HOME & 1) === 1);
@@ -122,7 +122,7 @@ check("FX held: its button and the effects' keys breathe, none lit; let go: noth
 
 // ---- a user preset saved from the panel, kept across a fresh instance
 const w0 = a.ex.web_flash_writes_count();
-a.tap(B.SAVE);                                       // (HA HA HE HU: SAVE opens FILE, then PATTERN, then USER)
+a.tap(B.SAVE);                                       // (SAVE opens FILE, then PATTERN, then USER)
 a.tap(B.SAVE);
 a.tap(B.SAVE);
 a.tap(B.OCTUP);

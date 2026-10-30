@@ -144,7 +144,7 @@ static const char *drum_lane_abbr(const track_t *t, uint32_t l)
     return (kit & 4u) && l == DV_BELL ? "CY" : N[l];
 }
 
-/* ------------------------------------------------- the lanes designed (HA HA HE HU) --- */
+/* ------------------------------------------------- the lanes designed --- */
 /* EDIT > DESIGN / DESIGN 2 (ui_drumlane.c): each lane's own VOICE, TUNE, DECAY, TONE, SNAP and STACK, on top of the
  * kit and the EDIT knobs. They live in the track's patch (eng_fm6.c fm6_patch, what an FM6 track plays; a DRUM track
  * has no use for it), so projects, user presets (up_fm6.c), undo and the editor's backup carry them as they are:
@@ -511,12 +511,12 @@ static const preset_t DRUM_PRESETS[] = {
     {"DEEP KIT", {DK_DEEP, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 28), PAT(12)},
     {"TIGHT KIT", {DK_TIGHT, 64, 64, 56, 64, 100, 0, 16}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 8), PAT(12)},
     {"PERC KIT", {DK_PERC, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 24), PAT(12)},
-    /* HA HA HE HU (drum designer phase 2): the layered kits, their lanes designed (DRUM_DESIGN below), appended */
+    /* drum designer phase 2: the layered kits, their lanes designed (DRUM_DESIGN below), appended */
     {"LAYER KIT", {DK_STD, 64, 64, 64, 64, 100, 0, 0}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 16, 30), PAT(12)},
     {"HARD KIT", {DK_STD, 64, 64, 64, 64, 110, 0, 18}, {0, 100, 127, 100}, 0, 0, FX(0, 0, 0, 14), PAT(12)},
 };
 
-/* A factory kit's lanes designed (HA HA HE HU): a preset of DRUM_PRESETS with one loads it into the track's patch
+/* A factory kit's lanes designed: a preset of DRUM_PRESETS with one loads it into the track's patch
  * (eng_fm6.c drum_track_loaded; any other factory kit: no lanes, as before). Per lane VOICE TUNE DECAY TONE SNAP STACK
  * (DL_*), the five layer sets (DS_*). A user preset or a project made from it carries its own copy (the patch) */
 typedef struct {

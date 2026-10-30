@@ -12,12 +12,12 @@
 #define GOY 11                                       /* graphs drawn on a 100 px scale sit at y 11..111 */
 /* the height ADSR and LFO are drawn on: 100 px, or (MENU > LARGE's strip: draw_graph) the strip's ~ 56 */
 static int32_t graph_ht = 100;
-static uint32_t graph_arch_sig(void);              /* (HA HA HE HU: SAVE > FILE's projects, below) */
+static uint32_t graph_arch_sig(void);              /* (SAVE > FILE's projects, below) */
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
 #include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2, SYN TONE .. SYN METAL: DRUM's lanes
                                                      * (the list below) */
-#include "ui_lfodraw.c"                              /* (HA HA HE HU) LFO DRAW, CURVE: the track's extras */
-#include "ui_pattern.c"                              /* (HA HA HE HU) SAVE > PATTERN: a track's patterns */
+#include "ui_lfodraw.c"                              /* LFO DRAW, CURVE: the track's extras */
+#include "ui_pattern.c"                              /* SAVE > PATTERN: a track's patterns */
 
 /* Matches voice.c: attack is linear, decay and release are exponential
  * (env += (target - env) * k each tick, ~99 % after the set time). Time
@@ -83,7 +83,7 @@ static void graph_lfo(const track_t *t, uint16_t c)
         cv_rect(PANEL_X0 + (int32_t)((t->lfo_ph - ph) / (0xFFFFFFFFu / PANEL_W)), cy - a - 4, 1, 2 * a + 8, T_ACCENT);
 }
 
-/* HA HA HE HU: LFO DRAW's panel: the 16 points as bars from the middle line (the point picked in the colour, the others
+/* LFO DRAW's panel: the 16 points as bars from the middle line (the point picked in the colour, the others
  * fainter, a mark under it), the drawn cycle over them (as the LFO plays it: lfo_wave DRAW, stepped or joined; TEXT
  * while WAVE plays it, MID while not) */
 static void graph_ldraw(const track_t *t, uint16_t c)
@@ -1157,7 +1157,7 @@ static void graph_fm(const track_t *t, uint16_t c)
 static int32_t sg_lh = 11;                             /* (Dah) a lane's height: the panel shared by the eight (graph_song) */
 #define SG_LH sg_lh                                    /* (its number, the pattern's picture), SG_LG between two */
 #define SG_LG 2                                        /* (Dah: airier) */
-#define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)         /* (HA HA HE HU: the eight lanes at once, thin) */
+#define SG_H (NTRK * (SG_LH + SG_LG) - SG_LG)         /* (the eight lanes at once, thin) */
 #define SG_LY(k) (SG_Y + (int32_t)(k) * (SG_LH + SG_LG))   /* lane k's top */
 #define SG_GAP 2                                       /* between two blocks (in a block's width) */
 #define SG_MINW 16                                     /* a block's least width, its gap included: a letter in it */
@@ -1181,7 +1181,7 @@ static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
     while (b && a > 0xFFFFFFFFu / b) { a >>= 1; c >>= 1; }
     return c ? a * b / c : 0u;
 }
-/* HA HA HE HU: track k's pattern s as SONG draws it (pstore.c ps_info): its length (1/48 quarters), its LEN; 0 = none
+/* track k's pattern s as SONG draws it (pstore.c ps_info): its length (1/48 quarters), its LEN; 0 = none
  * there. Read again when a pattern changed (the heap, a track's steps or timing) */
 static struct { uint32_t gen; uint8_t ok[NTRK][33], sl[NTRK][33]; uint16_t len[NTRK][33]; } sgc __attribute__((section(".pool")));
 static uint32_t sg_gen(void)
@@ -1510,7 +1510,7 @@ static uint32_t graph_signature(void)
         h ^= sg_pend ? (sg_pend * 131u + sg_prow * 7u + ((ui.frame / 6u) & 1u)) * 2246822519u : 0u;   /* (Dah: blinking) */
         h = fnv(h, chain_config.row, sizeof chain_config.row);
         h ^= chain.running ? (chain.row + 1u) * 104729u + chain.remaining * 1299709u : 0u;
-        h ^= sg_gen();                               /* (HA HA HE HU: the patterns) */
+        h ^= sg_gen();                               /* (the patterns) */
         {                                            /* the timeline: its view (following, ui_graph.c song_follow), the playhead */
             song_lay_t L;
             song_layout(&L);
@@ -1522,9 +1522,9 @@ static uint32_t graph_signature(void)
     }
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
-    if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
+    if (pg->graph == GR_PATTERN)                     /* the track's patterns, the one picked, the memory */
         h ^= (ps_used + 1u) * 2654435761u + (pt_sel + 1u) * 7919u + (ps_num(song.sel) + 1u) * 104729u + steps_sig(t) * 31u;
-    if (pg->graph == GR_FILE)                        /* (HA HA HE HU) the projects (graph_arch_*), the one picked */
+    if (pg->graph == GR_FILE)                        /* the projects (graph_arch_*), the one picked */
         h ^= graph_arch_sig() * 31u + (ui.fsel + 1u) * 7919u + pfs_cur() * 104729u + pfs_mem_pct() * 613u;
     if (pg->graph == GR_EVENTS)                      /* AUTOMATION: the lanes, the view, the cursor */
         h = (h ^ au_sig()) * 16777619u;
@@ -1537,7 +1537,7 @@ static uint32_t graph_signature(void)
     if ((pg->scope == SC_ENGINE || fop_page(pg->graph)) && t->eng_req % NENGINES == ENGI_FM6)   /* the patch (PAT's algorithm,
                                                      * levels, FB; the operator pages: the operator, the stage) */
         h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (fop_op + 1u) * 40503u + (fop_stg + 1u) * 7919u;
-    if (xp_page(pg->graph))                          /* (HA HA HE HU) LFO DRAW: the track's points, the one picked */
+    if (xp_page(pg->graph))                          /* LFO DRAW: the track's points, the one picked */
         h ^= fnv(2166136261u, &trkx[(t - trk) % NTRK], sizeof(trkx_t)) * 31u + (xp_point + 1u) * 7919u + (xp_shape + 1u) * 131u +
              (uint32_t)t->p[P_LWAVE] * 104729u;
     if (dln_page(pg->graph))                         /* DESIGN: the lanes' values, the lane picked */
@@ -2319,7 +2319,7 @@ static void graph_pattern(void)
         cv_text_on(14, my - AF_S_CAP_Y, &AF_S, m, T_DIM, T_SURF);
     }
 }
-/* HA HA HE HU: SAVE > FILE's projects (projfs.c), read again when one changed (proj_wire_gen: a save, an open, a delete):
+/* SAVE > FILE's projects (projfs.c), read again when one changed (proj_wire_gen: a save, an open, a delete):
  * four rows round the one picked: the open one's id in the accent and "OPEN", each one's name and share of the memory */
 static struct { uint8_t ok, gen, n, ids[32], pct[32]; char name[32][13]; } gfile;
 static void graph_file_read(void)
@@ -2515,7 +2515,7 @@ static void meter_up(int32_t x, int32_t y, int32_t w, int32_t h, int32_t f, int 
     for (i = 0; i < f && i < h; i++)
         cv_rect(x, y + h - 1 - i, w, 1, mute ? T_DIM : meter_col(i, h));
 }
-/* HA HA HE HU: the MIXER as eight strips side by side (MX_PITCH apart), every track at once: the cushion in the track's
+/* the MIXER as eight strips side by side (MX_PITCH apart), every track at once: the cushion in the track's
  * colour (a muted one DIM; REC/ARM a dot), then (Dah) the panel's height for a fader (the LEVEL, a thumb on it) beside
  * the output meter (green to red), under them the PAN a dot on a line and the REV send a bar. No name, no dB: the
  * footer names the track, the cards above give the selected one's values. The selected strip RAISE, ringed in its
@@ -2649,7 +2649,7 @@ static void draw_tracks(void)
         for (c = 0; c < NTRK; c++)
             ts.meter[c] = 0;
     }
-    for (c = trk_bank(); c < trk_bank() + 4u; c++) {   /* (HA HA HE HU: the selected track's bank of four) */
+    for (c = trk_bank(); c < trk_bank() + 4u; c++) {   /* (the selected track's bank of four) */
         track_t *t = &trk[c];
         uint32_t sel = c == song.sel, lvl = trk_level(c), lit = (uint32_t)midi_lit(c);
         uint32_t mute = t->p[P_MUTE] != 0 || (perf_solo && !((perf_solo >> c) & 1u));
@@ -2658,7 +2658,7 @@ static void draw_tracks(void)
                                                                 * 3 REV, 4 MUTE (its badge) */
         int32_t pk = t->peak, m, pan = clamp(t->p[P_PAN], -64, 63), rv = clamp(t->p[P_SPRD], 0, 127);   /* (separated only) */
         uint16_t vc;
-        ux_tint(ux.trk[c]);                            /* (HA HA HE HU) each column in its track's colour */
+        ux_tint(ux.trk[c]);                            /* each column in its track's colour */
         vc = mute ? T_DIM : T_THEME;
         char b[16];
         t->peak = 0;
@@ -2754,7 +2754,7 @@ static void draw_tracks(void)
 #define TR_MY 4
 #define TR_MH 22
 static int32_t tr_bx(uint32_t i) { return 24 + (int32_t)i * 11 + (int32_t)(i / 4u) * 4; }
-/* HA HA HE HU: HOME's TRACKS as a channel rack, the eight tracks at once: the track's cushion in its colour (a muted
+/* HOME's TRACKS as a channel rack, the eight tracks at once: the track's cushion in its colour (a muted
  * one DIM), the steps of the page playing (the selected track's: the cursor's) in the track's colour (accented TEXT,
  * a tie fainter, empty a stub; the step playing its column lit), the output meter. Each row redrawn only when it
  * changed (ts.col), its meter alone otherwise.
@@ -3139,7 +3139,7 @@ static uint16_t sg_fill_at(const sg_fill_t *F, int32_t x)   /* the block's fill 
 /* the pattern's number at x, its capitals from the lane's top; 0: no room before x1 */
 static int32_t sg_letter(int32_t x, int32_t x1, int32_t y, uint32_t s, uint16_t ink, uint16_t bg)
 {
-    const aafont_t *f = &AF_S;                         /* (HA HA HE HU: S, the lanes are thin; a number now) */
+    const aafont_t *f = &AF_S;                         /* (S, the lanes are thin; a number now) */
     char a[4];
     fmt_int(a, (int32_t)s);
     int32_t w = text_w(f, a);
@@ -3306,13 +3306,13 @@ static void graph_song(void)
         if (x >= SG_X0 && x < hi)
             cv_rect(x, SG_Y, 1, SG_H, T_LINE);
     }
-    for (i = 0; i < L.n; i++) {                       /* (HA HA HE HU) a CUT section: an ACCENT bar at its start */
+    for (i = 0; i < L.n; i++) {                       /* a CUT section: an ACCENT bar at its start */
         int32_t x = SG_X0 + L.x[i] - off - (i ? 2 : 0);
         if ((chain_config.row[i].repeat & CHAIN_CUT) && x >= SG_X0 && x + 2 <= hi)
             cv_rect(x, SG_Y, 2, SG_H, T_ACCENT);
     }
     for (k = 0; k < trk_count(); k++)                    /* the lanes: a block per run of one slot, "-" a faint line */
-        for (ux_tint(ux.trk[k]), i = 0; i < L.n; i = j) {   /* (HA HA HE HU: each lane in its track's colour) */
+        for (ux_tint(ux.trk[k]), i = 0; i < L.n; i = j) {   /* (each lane in its track's colour) */
             uint32_t s = chain_config.row[i].slot[k];
             for (j = i + 1u; j < L.n && chain_config.row[j].slot[k] == s; j++)
                 ;
@@ -3436,7 +3436,7 @@ static void graph_song(void)
 }
 #include "ui_graph_more.c"                         /* (Dah) FILTER ENV DEST VOICE ARP DLY REVERB CHORUS CLOCK */
 static void draw_graph_in(void);
-/* HA HA HE HU: the panel (curves, scope, roll, grid) in the selected track's colour; MIXER and SONG colour each track */
+/* the panel (curves, scope, roll, grid) in the selected track's colour; MIXER and SONG colour each track */
 static void draw_graph(void)
 {
     ux_tint(ux.trk[song.sel % NTRK]);

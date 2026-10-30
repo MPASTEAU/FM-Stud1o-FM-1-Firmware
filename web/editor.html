@@ -453,7 +453,7 @@ const parse = {
       if (trailer[r] === 0x4E && trailer[r + 1] === 1) r += 3;                            /* and the MENU settings (1.0.4) */
       if (o.syncCaps && trailer[r] === 0x52 && trailer[r + 1] === 1) o.ratchet = trailer[r + 2];   /* RATCH: max hits */
     }
-    o.lanes = 0; o.cutCaps = 0; o.patNums = 0;    /* 1.2 `57 01 n`: SONG sections, a slot per track (ops 4..7); HA HA HE HU
+    o.lanes = 0; o.cutCaps = 0; o.patNums = 0;    /* 1.2 `57 01 n`: SONG sections, a slot per track (ops 4..7); then
                                                      `58 01 1`: a section's CUT in bit 6 of its repeat byte; `59 01 n`: a
                                                      track's pattern 1..n per section (0 "-") */
     for (let i = 1; i + 2 < trailer.length; i++) {
@@ -1067,7 +1067,7 @@ function buildSlot(name, zonesIn) {
    matched by name. The old single-sound file ("felucca-patch" version 1, "Save to file") is read too. */
 const LIB = { FORMAT: "felucca-library", VERSION: 1 };
 
-/* parameter keys by id from the instrument DESCs. HA HA HE HU: id 8 (FX, read by nothing) is DUCK's release REL, keyed
+/* parameter keys by id from the instrument DESCs. Id 8 (FX, read by nothing) is DUCK's release REL, keyed
    DKREL so the REL#n after it (the operators') stay those of Felucca's files */
 const KEY_AT = { 8: ["REL", "DKREL"] };
 function paramKeys(pdesc, pe0, pcount) {
@@ -1779,7 +1779,7 @@ function makeMockDevice(opt = {}) {
         E("KICK", ["PUNCH", "ROUND"], 0), D("DRV", F.PCT, 0, 127, 0)],
       presets: [P("DRUM KIT", [0, 64, 70, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),   /* (1.5.6, #216: the new kits) */
         P("DEEP KIT", [9, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("TIGHT KIT", [10, 64, 64, 56, 64, 100, 0, 16], [0, 100, 127, 100], 0, 12),
-        P("PERC KIT", [11, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),   /* (HA HA HE HU: the layered kits, lanes designed) */
+        P("PERC KIT", [11, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12),   /* (the layered kits, lanes designed) */
         P("LAYER KIT", [0, 64, 64, 64, 64, 100, 0, 0], [0, 100, 127, 100], 0, 12), P("HARD KIT", [0, 64, 64, 64, 64, 110, 0, 18], [0, 100, 127, 100], 0, 12)] },
     { name: "NOISE", titles: ["SRC", "MOVE"], edit: [E("MODE", ["ANLG", "DUST", "LFSR", "META"], 0), D("COLR", F.PCT, 0, 127, 64),
         D("FREQ", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("TRK", F.PCT, 0, 127, 64), D("DENS", F.PCT, 0, 127, 0),
@@ -1797,7 +1797,7 @@ function makeMockDevice(opt = {}) {
         E("DIV", ["4", "8", "16", "32", "AUTO", "MAN"], 2), D("START", F.INT, 0, 31, 0), D("PTCH", F.SEMI, -24, 24, 0),
         E("MODE", ["ONE", "GATE", "LOOP"], 0), E("REV", ["OFF", "ON"], 0), D("DCAY", F.TIME, 0, 127, 127), D("TONE", F.INT, 0, 127, 127)],
       presets: [P("CHOP", [0, 2, 0, 0, 0, 0, 127, 127], [0, 127, 127, 30], 0, 9), P("STUTTER", [0, 1, 0, 0, 1, 0, 90, 110], [0, 127, 127, 12], 0, 10)] },
-    /* 14: GROWL (HA HA HE HU, eng_growl.c) */
+    /* 14: GROWL (eng_growl.c) */
     { name: "GROWL", titles: ["FM", "TONE"], edit: [E("WAVE", ["SAW", "SQR", "TRI", "SIN"], 0),
         E("RATIO", ["0.5", "1", "1.5", "2", "3", "4", "5", "7"], 1), D("FM", F.PCT, 0, 127, 60), D("FB", F.PCT, 0, 127, 20),
         D("CUT", F.CUTOFF, 0, 127, 80), D("RES", F.PCT, 0, 127, 30), D("DRV", F.PCT, 0, 127, 60), D("SUB", F.PCT, 0, 127, 40)],
@@ -1845,7 +1845,7 @@ function makeMockDevice(opt = {}) {
                 "ESDCI", "ESICD", "ICDES", "ICDSE", "ICEDS", "ICESD", "ICSDE", "ICSED", "IDCES", "IDCSE",
                 "IDECS", "IDSCE", "IECDS", "IECSD", "IEDCS", "IESCD", "ISCDE", "ISCED", "ISDCE", "ISECD",
                 "SCDEI", "SCDIE", "SCEDI", "SCEID", "SCIDE", "SCIED", "SDCEI", "SDCIE", "SDECI", "SDICE",
-                "SECDI", "SECID", "SEDCI", "SEICD", "SICDE", "SICED", "SIDCE", "SIECD"], 0),   /* HA HA HE HU: FX ORDER (103; Dah: EQ, SIDECHAIN), its source, */
+                "SECDI", "SECID", "SEDCI", "SEICD", "SICDE", "SICED", "SIDCE", "SIECD"], 0),   /* FX ORDER (103; Dah: EQ, SIDECHAIN), its source, */
     E("SRC", ["OFF", "T1", "T2", "T3", "T4", "T5", "T6", "T7", "T8"], 0), D("DEPTH", F.PCT, 0, 127, 100),   /* depth (104, 105) */
     D("FREQA", F.CUTOFF, 0, 118, 0), D("FREQB", F.CUTOFF, 0, 118, 118), D("FREQC", F.CUTOFF, 0, 118, 40),   /* Dah: the EQ's four slots (106..113: */
     D("GAINC", F.BIPCT, -64, 63, 0), D("FREQD", F.CUTOFF, 0, 118, 90), D("GAIND", F.BIPCT, -64, 63, 0),   /* FREQ, GAIN / a cut's SLOPE), */
@@ -1853,7 +1853,7 @@ function makeMockDevice(opt = {}) {
   const P_COUNT = 124, G_COUNT = 27, NSTEP = 64, P_E0 = 116, G_ENGSEL = 20, P_SLCR = 45;
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
   const enumOrig = (d, v) => d.fmt === F.ENUM && d.names ? aliasOf(d.names, v - d.min) + d.min : v;   /* params.c enum_orig */
-  /* four tracks (firmware v3), four synth parts (1.0), HA HA HE HU's eight; engine / preset / p / step below are the
+  /* four tracks (firmware v3), four synth parts (1.0), now eight; engine / preset / p / step below are the
      selected track's */
   const NTRK = 8;
   const newTrack = () => ({ engine: 0, preset: 0, fm6: FM6.INIT_PK.slice(),
@@ -1967,7 +1967,7 @@ function makeMockDevice(opt = {}) {
     st.bank[slot] = snapshot(name);
     clearSteps(); st.p[29] = 16;
   });
-  /* the power-on sounds (engines.c TRK_DEF): ACID, PAD, PULSE LD, DRUM KIT; HA HA HE HU's BELL, PLUCK, CHOIR AAH, PERC KIT */
+  /* the power-on sounds (engines.c TRK_DEF): ACID, PAD, PULSE LD, DRUM KIT; then BELL, PLUCK, CHOIR AAH, PERC KIT */
   [[1, FM6_E, 4], [2, 3, 0], [3, 10, 0], [4, FM6_E, 1], [5, 0, 8], [6, 5, 0], [7, 10, 3], [0, 0, 4]].forEach(([i, e, p]) => { st.sel = i; setEngine(e); applyPreset(p); });
   /* the device powers on with its sequencers empty; the mock starts as a little demo to look at: track 1 with
      the ACID pattern, track 4 with BEAT, pads left, lead right */
@@ -3360,14 +3360,14 @@ function renderSong() {
   const rows = $("songrows");
   if (rows.contains(document.activeElement)) return;
   rows.replaceChildren();
-  if (s.op >= 4) {                                  /* sections (1.2; HA HA HE HU: eight tracks, CUT): a slot per track */
+  if (s.op >= 4) {                                  /* sections (1.2; Dah: eight tracks, CUT): a slot per track */
     const edit = (i, f) => { const next = s.rows.map((x) => ({ ...x, slots: x.slots.slice() })); f(next[i]); op(() => changeSong(5, next)); };
     s.rows.forEach((r, i) => {
       const line = el("div", { class: "bar", style: "margin:8px 0;flex-wrap:wrap;gap:4px" });
       line.append(el("span", { text: String(i + 1), style: "min-width:20px" }));
       r.slots.forEach((x, k) => {
         const sel = el("select", { disabled: !!s.playing, "aria-label": `T${k + 1} ${i + 1}`, title: `T${k + 1}` });
-        for (let v = 0; v <= (dev.info.patNums || 4); v++)   /* (HA HA HE HU: "-", then the track's patterns by number) */
+        for (let v = 0; v <= (dev.info.patNums || 4); v++)   /* ("-", then the track's patterns by number) */
           sel.append(el("option", { value: v, text: v ? `T${k + 1} ${v}` : `T${k + 1} ${t("songSilent")}` }));
         sel.value = String(x);
         sel.addEventListener("change", () => edit(i, (n) => { n.slots[k] = +sel.value; }));
@@ -5060,7 +5060,7 @@ async function fm6Refresh(d = dev) {
   try { fm6List = parse[CMD.FM6_LIST](await sessionRequest(d, req.fm6List())); } finally { fm6Listing = false; }
   renderFm6();
 }
-/* a DRUM track's patch is its lanes' DESIGN (HA HA HE HU: eng_drum.c dl_*, the voice named "DRUM LANES"), no FM6
+/* a DRUM track's patch is its lanes' DESIGN (eng_drum.c dl_*, the voice named "DRUM LANES"), no FM6
    voice: READ and SEND leave it alone (TRACK: the track's engine) */
 async function fm6Lanes(tr) {
   if (!hasTracks()) return false;

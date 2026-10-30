@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* HA HA HE HU: SAVE > PATTERN, the patterns (pstore.c; Dah: FL Studio's: a number is every track's), as a list:
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+/* SAVE > PATTERN, the patterns (pstore.c; Dah: FL Studio's: a number is every track's), as a list:
  * KNOB 1 (or SELECT, PRESETS) goes from one to the next, every track playing it at once (as GLO + ALGORITHM anywhere);
  * KNOB 2 COPY (a new one, a copy of the one playing), KNOB 3 NEW (a new, empty one), OCT+ does it; KNOB 4 or REC DELETE
  * (the dialog). A row: its number, every track's steps in it, a line each. The memory the patterns take (ps_used of

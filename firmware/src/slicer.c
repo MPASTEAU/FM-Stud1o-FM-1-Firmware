@@ -19,7 +19,7 @@
  * step_samples); sample exact. With the SLICER OFF and no ramp left, the signal is not touched. */
 #define SL_NPAT 16
 #define SL_LEN 4096u                    /* recording, 22.05 kHz samples a buffer: 186 ms, 8 KB */
-#define SL_NBUF 4u                      /* HA HA HE HU: four buffers (32 KB, perform.c borrows them whole) for eight tracks: a
+#define SL_NBUF 4u                      /* four buffers (32 KB, perform.c borrows them whole) for eight tracks: a
                                          * track takes one while its SLICER is STUT (sl_enter), gives it back when it is not;
                                          * none free: that STUT plays live, as while perform.c has them */
 #define SL_RAMP_LOG2 7

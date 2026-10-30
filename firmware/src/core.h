@@ -20,7 +20,7 @@
 
 /* ------------------------------------------------------------ sizes --- */
 #define NVOICE 8                 /* voices per part, and the budget shared by all parts */
-#define NPART 8                  /* synth parts: tracks 1..8 (HA HA HE HU; Felucca: 4). Parts 5..8 are light: no PHYS,
+#define NPART 8                  /* synth parts: tracks 1..8 (Felucca: 4). Parts 5..8 are light: no PHYS,
                                   * no GRAIN (engines.c NPART_BIG, eng_fits) */
 #define PROJ_NP_W 114u           /* (Dah) the parameters FUN10 / FUNX store: up to P_DKAMT, the eight engine values */
 #define NTRK_V10 4u              /* the tracks of every stored format up to FUN10 (Felucca's) */
@@ -43,7 +43,7 @@
                                             * one for all with one, as up to 1.6 */
 #define C1_PI(t) ((uint32_t)((t) - trk) % C1_NP)   /* a part's copy */
 #ifndef FELUCCA_GROWL
-#define FELUCCA_GROWL (FELUCCA_SLICE && !FELUCCA_FM4)   /* HA HA HE HU's GROWL (14, eng_growl.c): after SLICE, so with
+#define FELUCCA_GROWL (FELUCCA_SLICE && !FELUCCA_FM4)   /* GROWL (14, eng_growl.c): after SLICE, so with
                                                           * it; not with DIGITAL (its favourites take that row) */
 #endif
 #if FELUCCA_GROWL && !FELUCCA_SLICE
@@ -91,8 +91,8 @@ enum {                          /* per-track parameters */
     P_ITYPE, P_IA, P_IB, P_IC, P_IMIX,         /* 1.5 (#78, #177): the INSERT, its TYPE, three values and MIX (fx.c) */
     P_FTYPE,                                   /* 1.5 (#104): ANALOG's filter TYPE, LP (as before) / BP / HP (eng_analog.c) */
     P_ESYNC,                                   /* 1.5 (#175): ENV SYNC: ATK DEC REL as note values of the tempo (voice.c) */
-    P_FXORD,                                   /* HA HA HE HU: the order of DIST, INSERT and SLICER (fx.c mix_part) */
-    P_DKSRC, P_DKAMT,                          /* HA HA HE HU: DUCK, the sidechain: its source track, depth (fx.c); its release
+    P_FXORD,                                   /* the order of DIST, INSERT and SLICER (fx.c mix_part) */
+    P_DKSRC, P_DKAMT,                          /* DUCK, the sidechain: its source track, depth (fx.c); its release
                                                 * is P_DKREL (P_ED_FX's byte) */
     P_EQLO, P_EQHI, P_EQ1F, P_EQ1G, P_EQ2F, P_EQ2G,   /* Dah: the EQ's four slots (fx_eq.c EQ_FID EQ_SID): FREQ, and */
     P_EQ3G, P_EQ3F,                            /* SLOPE or GAIN (were LOW CUT, HIGH CUT and three bells' FREQ GAIN) */
@@ -100,7 +100,7 @@ enum {                          /* per-track parameters */
     P_E0, P_E1, P_E2, P_E3, P_E4, P_E5, P_E6, P_E7,
     P_COUNT
 };
-#define P_DKREL P_ED_FX                  /* HA HA HE HU: DUCK's release in the byte P_ED_FX kept (nothing read it) */
+#define P_DKREL P_ED_FX                  /* DUCK's release in the byte P_ED_FX kept (nothing read it) */
 
 enum {                          /* global parameters */
     G_BPM, G_SWING, G_CLOCK, G_TUNE,
@@ -257,7 +257,7 @@ static void step_set_nudge(step_t *s, int32_t v)
  * value holds until another one changes it. One record per (track, step, id), of either kind */
 #define MOTION_LOCK 0x80u
 #define MOTION_ID(e) ((uint32_t)(e)->param & 0x7Fu)
-/* HA HA HE HU (FUN11): eight tracks, so place is 16 bits, track << 6 | step (the same code, tracks 0..7) */
+/* FUN11: eight tracks, so place is 16 bits, track << 6 | step (the same code, tracks 0..7) */
 typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
 _Static_assert(sizeof(motion_store_t) == 516u, "motion layout (FUN11)");
@@ -268,8 +268,8 @@ _Static_assert(sizeof(motion_store_v10_t) == 388u, "motion disk layout (FUN10)")
 /* A song section (1.2, FUN10): the PROJECT slot each track plays (0..3, A..D; CHAIN_SILENT "-": that track plays
  * nothing there) and its repeats (1..16). Up to 1.1 a row was {slot, repeat}, all four tracks on that slot
  * (chain_v9_t, FUN6..FUN9): it loads as a section with the four on it (song_chain.c chain_from_v9) */
-#define CHAIN_SILENT 0u                /* (HA HA HE HU: a section names a pattern number per track, 1..PS_NUM; 0 "-") */
-/* HA HA HE HU: a section's repeat byte, bit 7 CUT: as it starts the FX tails go (the reverb and delay buses cleared,
+#define CHAIN_SILENT 0u                /* (a section names a pattern number per track, 1..PS_NUM; 0 "-") */
+/* a section's repeat byte, bit 7 CUT: as it starts the FX tails go (the reverb and delay buses cleared,
  * every sounding voice faded out at once): the drop dry and alone (song_chain.c chain_cut). Bits 0..6 the repeats */
 #define CHAIN_CUT 0x80u
 #define CHAIN_REP(r) ((uint32_t)(r).repeat & 0x7Fu)
@@ -392,7 +392,7 @@ typedef struct {
                                   * zeroed default, is T1..T4 on channels 1..4), MCH_OMNI (any channel no track has), MCH_OFF
                                   * (none); mch_get / mch_set. The project's, in FUN10's spare bytes (project.c PROJ_MIDI_OFF);
                                   * MENU > MIDI > T1..T4 CHANNEL */
-    uint8_t ntrk;                /* HA HA HE HU: the project's tracks, 1..NTRK (0: all, as every project before); the others
+    uint8_t ntrk;                /* the project's tracks, 1..NTRK (0: all, as every project before); the others
                                   * neither shown, nor played, nor stored (trk_count) */
 } song_t;
 #define ROUTE_SEL 1
@@ -403,8 +403,8 @@ typedef struct {
 
 static track_t trk[NTRK];        /* the instrument: four parts */
 static song_t song;
-static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ? song.ntrk : NTRK; }   /* (HA HA HE HU) */
-/* HA HA HE HU: a track's extras (project.c "FUNY", ui_lfodraw.c): LFO WAVE DRAW's 16 points (-64..63, voice.c lfo_wave),
+static inline uint32_t trk_count(void) { return song.ntrk && song.ntrk <= NTRK ? song.ntrk : NTRK; }
+/* a track's extras (project.c "FUNY", ui_lfodraw.c): LFO WAVE DRAW's 16 points (-64..63, voice.c lfo_wave),
  * stepped or joined by lines (smooth), and how its automation moves between two events (curve: 0 STEP, as always; 1 RAMP,
  * motion.c motion_ramp) */
 #define LDRAW_N 16u
@@ -426,7 +426,7 @@ typedef struct {
 } trkx_t;
 #define TRKX_V2 20u                      /* (Dah) the extras' size before tap and home */
 static trkx_t trkx[NTRK];
-/* HA HA HE HU: the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and
+/* the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and
  * mutes on F3..B3 and the black keys 1..4): the selected track's, 1..4 or 5..8 */
 static inline uint32_t trk_bank(void) { return (uint32_t)song.sel & ~3u; }
 #define TSEL (&trk[song.sel])    /* the selected track */

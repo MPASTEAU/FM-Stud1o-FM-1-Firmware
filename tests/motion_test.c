@@ -131,7 +131,7 @@ static void pack_fun7_89(project_store_t *out, const project_t *q, const motion_
             b[pos++] = s->vel; b[pos++] = s->hit; b[pos++] = s->acc; b[pos++] = s->probability;
         }
     }
-    {   /* (HA HA HE HU: the frozen FUN10 layouts, four tracks) */
+    {   /* (the frozen FUN10 layouts, four tracks) */
         chain_v10_t c10;
         motion_store_v10_t m10;
         chain_to_v10(&c10, &q->chain, 0);
@@ -174,7 +174,7 @@ static int fun7_89(void)
         proj_import(&before, &old, sizeof old) && proj_same(&before, &after));
     pack_fun7_89(&old, &before, &m);                                /* SONG: a slot of the old firmware */
     memcpy(&proj_slot[2], &old, sizeof old);
-    project_load(2);                                                /* (HA HA HE HU: its patterns kept as 4, SONG plays 4) */
+    project_load(2);                                                /* (its patterns kept as 4, SONG plays 4) */
     pat_keep(4);
     chain_config.count = 1; chain_config.row[0] = chain_row_of(4, 1);
     ok = chain_prepare() == 0;
@@ -203,7 +203,7 @@ static int loads_and_song(void)
     undo_swap(); bad += check("sound undo restores the original motion pool and base", motion_count(t) == 2u && t->p[P_REV] == 21 &&
                               t->eng_req == e0);
     undo_swap(); bad += check("sound redo restores the loaded motion state", motion_count(t) == 1u && t->eng_req == e1);
-    undo_swap(); pat_keep(2);                      /* (HA HA HE HU: the pattern kept as 2) */
+    undo_swap(); pat_keep(2);                      /* (the pattern kept as 2) */
     t->p[P_REV] = 43; t->step[0].note[0] = 72; chain_config.count = 1; chain_config.row[0] = chain_row_of(2, 1);
     bad += check("song preparation imports saved motion alongside steps", chain_prepare() == 0 && chain.source[0].motion.count == 2u);
     seq_start(); seq_tick(t, CTL);
@@ -592,7 +592,7 @@ static int lock_project(void)
             bad += check("    an id that store could not name (np): refused", !proj_motion_ids(&m, np[n]));
         }
     }
-    pat_keep(4);                                   /* (HA HA HE HU: the pattern kept as 4) */
+    pat_keep(4);                                   /* (the pattern kept as 4) */
     chain_config.count = 1; chain_config.row[0] = chain_row_of(4, 1);
     motion_clear(t); t->p[P_REV] = 20;
     bad += check("SONG: a pattern's locks come with its motion", chain_prepare() == 0 && chain.source[0].motion.count == 3u);

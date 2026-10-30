@@ -179,7 +179,7 @@ static int32_t roll_text(uint32_t k, int32_t x, int32_t y, const char *s, uint16
  * metronome's ink (mx0 .. mx1, past it); the BPM's rolling strip (sx0 .. sx1: between the metronome's cell, either
  * way round, and the lock's) */
 typedef struct { int32_t bx, b[4], mx0, mx1, sx0, sx1, px0, px1, gx0, gx1; } head_geo_t;
-/* HA HA HE HU: the track rail, the eight tracks left in the header while no message shows (head_rail_on): a cell each
+/* the track rail, the eight tracks left in the header while no message shows (head_rail_on): a cell each
  * (RAIL_W x 16, RAIL_P apart from x 3, the MASTER's M first, 3 .. 16, then 18 .. 96), the track's colour bright while it sounds, faint while silent, a well
  * when muted; the selected one ringed (TEXT), an armed one ringed REC. The play group then starts at RAIL_GX (not
  * centred on 120) and the cushion, the slot letter and the REC mark of before give way to it */
@@ -219,7 +219,7 @@ static void head_rail(void)
         GFX_HOOK_ALIGN(x, 4, x + RAIL_MW, 20, AL_HV, "rail digit centred");
         cv_text_in(x, 4 + CAP_IN(S, 16), RAIL_MW, &AF_S, "M", mx_master ? T_INK : T_MID, mx_master ? T_TEXT : T_RAISE);
     }
-    if (n < NTRK) {                                    /* (HA HA HE HU) the project's tracks, then a "+": ALGORITHM on adds one */
+    if (n < NTRK) {                                    /* the project's tracks, then a "+": ALGORITHM on adds one */
         int32_t x = RAIL_T0 + (int32_t)n * RAIL_P;
         cv_rrect(x, 4, RAIL_W, 16, 3, T_LINE, T_BG);
         cv_rrect(x + 1, 5, RAIL_W - 2, 14, 2, T_BG, T_LINE);
@@ -349,7 +349,7 @@ static int head_slot(char *b)
 {
     uint32_t k = song.sel % NTRK, s;
     b[1] = b[2] = 0;
-    s = chain.running ? chain.lane[k] : ps_num(k);   /* (HA HA HE HU) the track's pattern, its number; a song: its lane's */
+    s = chain.running ? chain.lane[k] : ps_num(k);   /* the track's pattern, its number; a song: its lane's */
     if (s == CHAIN_SILENT) {
         b[0] = '-';
         return 1;
@@ -358,7 +358,7 @@ static int head_slot(char *b)
     b[1] = (char)(s < 10u ? 0 : '0' + s % 10u);
     return 1;
 }
-/* HA HA HE HU: the pattern worked on, at the right while the rail shows: the selected track's slot letter (A..D; a song
+/* the pattern worked on, at the right while the rail shows: the selected track's slot letter (A..D; a song
  * playing: its lane's) on a badge in the track's colour, "*" after it when edited since; no slot: "-" outlined */
 #define HEAD_PAT_W 24                                  /* (Dah: "P" and the number: which pattern, plainly) */
 #define HEAD_PAT_X (HEAD_GRP_R - HEAD_PAT_W)
@@ -398,7 +398,7 @@ static void head_group(void)
     } else {
         str_cpy(b, song.octave > 0 ? "+" : "", sizeof b);
         fmt_int(b + str_len(b), song.octave);
-        if (head_rail_on()) {                          /* (HA HA HE HU: the rail's BPM further right, no room for OCT:
+        if (head_rail_on()) {                          /* (the rail's BPM further right, no room for OCT:
                                                         * the signed number alone) */
             x = HEAD_PAT_X - 4 - 4 - text_w(&AF_M, b);
         } else {
@@ -720,7 +720,7 @@ static void draw_head(void)
     ui.head_sig = sig;
     metro_x = -1;
     cv_begin(240, H_HEAD, T_BG);
-    if (head_rail_on())                                /* (HA HA HE HU: the eight tracks) */
+    if (head_rail_on())                                /* (the eight tracks) */
         head_rail();
     else
         cv_icon_mid(HEAD_TRK_X, H_HEAD / 2, 16, trk_icon(song.sel, 1), midi_lit(song.sel) ? T_TEXT : T_ACCENT, T_BG);   /* (1.5.5:
@@ -736,7 +736,7 @@ static void draw_head(void)
     if (!head_rail_on())
         draw_rec_mark(rx, T_BG);
     else
-        head_pattern(slot, sl);                        /* (HA HA HE HU: the pattern, top right) */
+        head_pattern(slot, sl);                        /* (the pattern, top right) */
     if (centre) {
         int32_t ib[4], lx = g.bx + g.b[2];             /* lx: the right end of the BPM (and its lock) */
         uint32_t id = song.playing ? (chain.running ? ICON_X_SONG : ICON_X_PLAY) : seq_counting() ? ICON_X_PLAY : ICON_X_STOP;
@@ -1327,7 +1327,7 @@ static void sound_name(const track_t *t, char *b)
 }
 
 static void draw_foot_in(void);
-/* HA HA HE HU: the footer's steps and engine in the selected track's colour, the page's name in its family's */
+/* the footer's steps and engine in the selected track's colour, the page's name in its family's */
 static void draw_foot(void)
 {
     ux_tint(ux.trk[song.sel % NTRK]);
@@ -1422,7 +1422,7 @@ static void engine_columns(void)
     draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
 }
 static void draw_columns_in(void);
-/* HA HA HE HU: the four cards in the colour of where one is: a page's family (ux.fam), HOME the selected track's */
+/* the four cards in the colour of where one is: a page's family (ux.fam), HOME the selected track's */
 static void draw_columns(void)
 {
     static uint8_t kb;
@@ -1600,7 +1600,7 @@ static void draw_columns_in(void)
             card_span_of(d);
             if (home_levels())                         /* 1.5: T1..T4 LEVEL, the track's cushion, muted: DIM */
                 draw_column(c, "LEVEL", val, unit, trk[trk_bank() + c].p[P_MUTE] ? T_DIM : VAL(c), RATIO(d, *vp),
-                            trk_icon(trk_bank() + c, 1));   /* (HA HA HE HU: the selected track's bank) */
+                            trk_icon(trk_bank() + c, 1));   /* (the selected track's bank) */
             else
                 draw_column(c, d->label, val, unit, VAL(c), RATIO(d, enum_rank(d, *vp)), param_icon(d, *vp));
         }
@@ -1631,7 +1631,7 @@ static void draw_columns_in(void)
         int used = row < chain_config.count, sec = ui.song_trk >= NTRK;
         fmt_int(val, (int32_t)row + 1);
         draw_column(0, "SEC", val, "", VAL(0u), -1, ICON_X_SONG);
-        if (sec) {                                     /* (HA HA HE HU) SEC: the whole section, KNOB 3 its CUT */
+        if (sec) {                                     /* SEC: the whole section, KNOB 3 its CUT */
             draw_column(1, "TRACK", "ALL", "", VAL(1u), -1, ICON_X_SONG);
             str_cpy(val, used ? (chain_config.row[row].repeat & CHAIN_CUT ? "ON" : "OFF") : "--", sizeof val);
             draw_column(2, "CUT", val, "", used && (chain_config.row[row].repeat & CHAIN_CUT) ? VAL(2u) : T_DIM, -1,
@@ -1642,7 +1642,7 @@ static void draw_columns_in(void)
             val[2] = 0;
             draw_column(1, "TRACK", val, "", VAL(1u), -1, trk_icon(k, 1));
             sl = used ? chain_config.row[row].slot[k] : CHAIN_SILENT;
-            if (used && sl != CHAIN_SILENT) fmt_int(val, (int32_t)sl);   /* (HA HA HE HU: the pattern's number) */
+            if (used && sl != CHAIN_SILENT) fmt_int(val, (int32_t)sl);   /* (the pattern's number) */
             else str_cpy(val, used ? "-" : "--", sizeof val);
             draw_column(2, "PAT", val, "", used ? VAL(2u) : T_DIM, -1, ICON_X_PATTERN);
         }
@@ -1761,7 +1761,7 @@ static void draw_columns_in(void)
         }
         return;
     }
-    if (xp_page(cur_page()->graph)) {                    /* (HA HA HE HU) LFO DRAW, CURVE: the track's extras (ui_lfodraw.c) */
+    if (xp_page(cur_page()->graph)) {                    /* LFO DRAW, CURVE: the track's extras (ui_lfodraw.c) */
         for (c = 0; c < 4u; c++) {
             const char *lb, *u;
             int32_t r;
@@ -2044,7 +2044,7 @@ static void draw_columns_in(void)
             draw_column(c, d->label, val, unit, T_DIM, RATIO(d, *vp), param_icon(d, *vp));
             continue;
         }
-        if (vp == &song.g[G_SLOT]) {                   /* (HA HA HE HU) FILE: the project's letter */
+        if (vp == &song.g[G_SLOT]) {                   /* FILE: the project's letter */
             val[0] = (char)('A' + clamp(*vp, 1, 4) - 1);
             val[1] = 0;
             draw_column(c, "SLOT", val, "", VAL(c), RATIO(d, *vp), param_icon(d, *vp));
@@ -2058,7 +2058,7 @@ static void draw_columns_in(void)
 }
 
 
-/* The power-on splash (main.c fm1_main, web/emu felucca_web.c; HA HA HE HU): on BG, the picture (build/gen/ui_splash.h,
+/* The power-on splash (main.c fm1_main, web/emu felucca_web.c): on BG, the picture (build/gen/ui_splash.h,
  * tools/gen_splash_image.py: SPLASH_W x SPLASH_H) centred near the top, under it centred the name (FW_NAME) and the
  * version in AF_M, then "based on Felucca" in AF_S (MID): the firmware this one is built on, as its licence asks. The
  * screen is more than the canvas (CV_MAX, 240 x 124): drawn as two canvases of SPL_STRIP rows, each with the part of
@@ -2184,7 +2184,7 @@ static void confirm_text(char *a, char *b)
     uint32_t k = ui.confirm_trk;
     b[0] = 0;
     switch (ui.confirm) {
-    case CF_DEL_PAT:                                 /* (HA HA HE HU) SAVE > PATTERN, REC */
+    case CF_DEL_PAT:                                 /* SAVE > PATTERN, REC */
         str_cpy(a, "DELETE PATTERN ", 24);
         fmt_int(a + str_len(a), (int32_t)k);
         str_cpy(a + str_len(a), "?", 4);
@@ -2198,12 +2198,12 @@ static void confirm_text(char *a, char *b)
         str_cpy(a + str_len(a), "?", 4);
         str_cpy(b, k & 0x80u ? "EVERY TRACK" : "EMPTY, EVERY TRACK", 24);
         break;
-    case CF_ADD_TRACK:                               /* (HA HA HE HU) ALGORITHM past the last track */
+    case CF_ADD_TRACK:                               /* ALGORITHM past the last track */
         str_cpy(a, "ADD TRACK 1?", 24);
         a[10] = (char)('1' + k % NTRK);
         str_cpy(b, track_def_name(k % NTRK), 24);
         break;
-    case CF_DEL_ARCH:                                /* (HA HA HE HU) SAVE > FILE: REC deletes */
+    case CF_DEL_ARCH:                                /* SAVE > FILE: REC deletes */
         str_cpy(a, "DELETE PROJECT?", 24);
         if (!pfs_name(k, b) || !b[0])
             str_cpy(b, "UNTITLED", 24);

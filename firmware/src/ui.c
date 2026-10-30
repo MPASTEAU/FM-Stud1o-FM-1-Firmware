@@ -26,8 +26,8 @@ static int project_name(uint32_t slot, char *b);
 static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, uint8_t *n);
 static int project_rename(uint32_t slot, const char *name);
 static int project_erase(uint32_t slot);
-static int project_new(void);                    /* (HA HA HE HU: project.c) */
-static uint32_t pfs_list(uint8_t *ids);           /* (HA HA HE HU: projfs.c, the projects) */
+static int project_new(void);                    /* (project.c) */
+static uint32_t pfs_list(uint8_t *ids);           /* (projfs.c, the projects) */
 static int pfs_there(uint32_t id);
 static int pfs_name(uint32_t id, char *b);
 static uint32_t pfs_pct(uint32_t id);
@@ -40,7 +40,7 @@ static int project_rename_cur(const char *name);
 static int project_delete(uint32_t id);
 static void file_enter(void);
 static uint32_t proj_wire_gen_ui(void);
-static uint32_t ps_num(uint32_t k);              /* (HA HA HE HU: pstore.c, ui_pattern.c) */
+static uint32_t ps_num(uint32_t k);              /* (pstore.c, ui_pattern.c) */
 static int pt_ready(uint32_t c);
 static void pt_enter(void);         /* (project.c: proj_wire_gen, a save / load / open changed something) */
 static void project_cur_name(char *b);
@@ -195,8 +195,8 @@ static struct {
     uint8_t help_t;              /* 1.5, MENU > HELP ON: frames the page's hint stays in the footer (ui_help.c) */
     uint8_t bpm_t;               /* frames the BPM stays highlighted after a SELECT turn */
     uint8_t act;                 /* action pages: the column whose action OCT+ does, + 1; 0 = none (act_col) */
-    uint8_t fl_del;              /* SAVE > FILE: KNOB 2 turned on past NEW, DELETE picked (HA HA HE HU) */
-    uint8_t fsel;                /* SAVE > FILE: the project picked, its id (HA HA HE HU) */
+    uint8_t fl_del;              /* SAVE > FILE: KNOB 2 turned on past NEW, DELETE picked */
+    uint8_t fsel;                /* SAVE > FILE: the project picked, its id */
     uint32_t rec_t0;             /* REC press time: a tap arms (btn_hold, no hold: held, REC opens its layer) */
     uint32_t save_t0;           /* SAVE press time (btn_hold: held = UNDO) */
     uint8_t confirm;             /* the OCT- / OCT+ dialog: CF_*, 0 = none */
@@ -237,7 +237,7 @@ static struct {
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
        CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_PAT, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_LOAD_USER, CF_DEL_TRK, CF_NEW_FROM };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
+       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_LOAD_USER, CF_DEL_TRK, CF_NEW_FROM };   /* (+ a track) */   /* (SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
@@ -632,9 +632,9 @@ static void page_entered(void)
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
     ui.act = pg->graph == GR_USER ? 4u : 0u;     /* the save screen is ready for OCT+ */
     if (pg->graph == GR_PATTERN)
-        pt_enter();                                  /* (HA HA HE HU: on the pattern the track plays) */
+        pt_enter();                                  /* (on the pattern the track plays) */
     if (pg->graph == GR_FILE)
-        file_enter();                               /* (HA HA HE HU: on the project open) */
+        file_enter();                               /* (on the project open) */
     ui.fl_del = 0;
     help_start();
     ui.force = 1;
@@ -942,7 +942,7 @@ static void open_family(uint32_t fam)
         uint32_t i;
         for (i = 0; i < NPAGES; i++)
             if (PAGES[i].graph == (fam == FAM_GLO ? GR_SONG : GR_FILE)) break;   /* (GLO: SONG, then its FX) */
-        ui.page = (uint8_t)i;                         /* (HA HA HE HU) SAVE enters FILE, the projects (was USER, the sound) */
+        ui.page = (uint8_t)i;                         /* SAVE enters FILE, the projects (was USER, the sound) */
     } else {
         uint32_t i = ui.fam_last[fam];
         ui.page = (uint8_t)(i && i < NPAGES && PAGES[i].fam == fam && page_visible(i) ? i : page_first(fam));
@@ -1319,7 +1319,7 @@ static uint32_t preset_rank(const engine_t *e, uint32_t k)
     return n;
 }
 
-#define preset_shown(e) (!eng_fits(song.sel, e) ? 0u : ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))   /* (HA HA HE HU: none of an engine the track cannot play) */
+#define preset_shown(e) (!eng_fits(song.sel, e) ? 0u : ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))   /* (none of an engine the track cannot play) */
 
 #if !FELUCCA_FM4
 /* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own
@@ -1418,7 +1418,7 @@ static void set_engine_of(track_t *t, uint32_t ei)
 {
     const engine_t *e;
     uint32_t i;
-    if (!eng_fits((uint32_t)(t - trk), ei % NENGINES))   /* (HA HA HE HU: PHYS GRAIN on tracks 1..4) */
+    if (!eng_fits((uint32_t)(t - trk), ei % NENGINES))   /* (PHYS GRAIN on tracks 1..4) */
         ei = 0;
     e = ENGINES[ei % NENGINES];
 #if !FELUCCA_FM4
@@ -1721,14 +1721,14 @@ static void track_select(uint32_t i)
     ui.force = 1;
 }
 
-/* HA HA HE HU: the project's tracks (song.ntrk, trk_count): one more, on its power-on sound (TRK_DEF) with no steps, and
+/* the project's tracks (song.ntrk, trk_count): one more, on its power-on sound (TRK_DEF) with no steps, and
  * selected; the last one off (its sound back to that, its steps and automation gone, its notes let go) */
 static const char *track_def_name(uint32_t k)
 {
     const engine_t *e = ENGINES[TRK_DEF[k % NTRK][0] % NENGINES];
     return TRK_DEF[k % NTRK][1] < e->npresets ? e->presets[TRK_DEF[k % NTRK][1]].name : e->name;
 }
-/* HA HA HE HU: SAVE > FILE: the project picked (one of pfs_list), on the one open when it is there */
+/* SAVE > FILE: the project picked (one of pfs_list), on the one open when it is there */
 static void file_enter(void)
 {
     uint8_t ids[32];
@@ -1786,7 +1786,7 @@ static void trk_count_changed(void)
     if (song.sel >= n)
         track_select(n - 1u);
 }
-#include "pstore.c"                               /* (HA HA HE HU) each track's patterns */
+#include "pstore.c"                               /* each track's patterns */
 
 #include "ui_slice.c"                             /* EDIT > SLICES: SLICE's slices by hand (an action page too) */
 #include "ui_events.c"                            /* SEQ > AUTOMATION: the four HOME knobs' lanes */

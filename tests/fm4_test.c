@@ -47,7 +47,7 @@ static void check(const char *what, int ok)
 static void reset(void)
 {
     memset(trk, 0, sizeof trk);
-    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (HA HA HE HU: tracks 3.. in the small regions) */
+    memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (tracks 3.. in the small regions) */
     memset(fm6_eff, 0, sizeof fm6_eff);
     memset(fm6_lfo, 0, sizeof fm6_lfo);
     memset(digital_env, 0, sizeof digital_env);

@@ -23,7 +23,7 @@ typedef struct {
 static chain_config_t chain_config;
 static uint8_t song_round = 1;                       /* (Dah) the song goes round (0: it stops at its end, as before) */
 static struct {
-    chain_pattern_t source[2];               /* (HA HA HE HU) the section playing's patterns, the next one's: row & 1 */
+    chain_pattern_t source[2];               /* the section playing's patterns, the next one's: row & 1 */
     uint8_t src_row[2], src_ok[2];
     chain_config_t config;
     int16_t timing[NTRK][4];                 /* the editable LEN DIV SWING GATE and QUANTIZE, back on STOP */
@@ -34,7 +34,7 @@ static struct {
     uint8_t clk;                             /* the track whose loop counts the section (chain_clock) */
     uint8_t rec;
     uint32_t carry;
-} chain __attribute__((section(".pool")));   /* (HA HA HE HU: eight tracks' sources, out of RAM's .bss) */
+} chain __attribute__((section(".pool")));   /* (eight tracks' sources, out of RAM's .bss) */
 /* a silent lane: its steps (empty: nothing plays) and its timing (a 4/4 bar of 1/16: the section's length when every
  * track is silent) */
 static const step_t chain_silent[NSTEP] = {{{0}}};
@@ -67,7 +67,7 @@ static int chain_valid(const chain_config_t *c)
         return 0;
     for (i = 0; i < c->count; i++) {
         for (k = 0; k < NTRK; k++)
-            if (c->row[i].slot[k] > 32u)       /* (HA HA HE HU: a pattern number, pstore.c PS_NUM; 0 silent) */
+            if (c->row[i].slot[k] > 32u)       /* (a pattern number, pstore.c PS_NUM; 0 silent) */
                 return 0;
         if (!CHAIN_REP(c->row[i]) || CHAIN_REP(c->row[i]) > 16u)
             return 0;
@@ -90,7 +90,7 @@ static int chain_from_v9(chain_config_t *c, const chain_v9_t *o)
     c->count = o->count;
     return 1;
 }
-/* HA HA HE HU: the sections of FUN10 (four tracks a row) <-> today's (eight): tracks base..base + 3 of each row, the
+/* the sections of FUN10 (four tracks a row) <-> today's (eight): tracks base..base + 3 of each row, the
  * others silent (from), the repeats and CUT as they are. 0: not a valid one */
 static int chain_from_v10(chain_config_t *c, const chain_v10_t *o)
 {
@@ -233,7 +233,7 @@ static void chain_stop(void)
     song.rec = chain.rec;
     chain.running = 0;
 }
-/* HA HA HE HU: section r starts; with CUT, the FX buses' tails cleared (fx.c fx_cut) and every voice faded at once */
+/* section r starts; with CUT, the FX buses' tails cleared (fx.c fx_cut) and every voice faded at once */
 static void chain_cut(uint32_t r)
 {
     uint32_t k, i;
@@ -263,7 +263,7 @@ static void chain_tick(uint32_t n)
         return;
     }
     chain.carry = t->seq_pos + n - length;
-    chain.src_ok[chain.cur] = 0;                    /* (HA HA HE HU: free for the one after, chain_poll) */
+    chain.src_ok[chain.cur] = 0;                    /* (free for the one after, chain_poll) */
     chain.row = chain.row + 1u < chain.config.count ? chain.row + 1u : 0u;   /* (Dah: the song round, no stop) */
     chain.remaining = CHAIN_REP(chain.config.row[chain.row]);
     chain_cut(chain.row);

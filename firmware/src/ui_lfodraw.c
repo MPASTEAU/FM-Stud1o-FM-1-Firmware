@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* HA HA HE HU: the track's extras (core.h trkx_t, saved in the projects' FUNY objects, project.c), LFO DRAW's page:
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+/* the track's extras (core.h trkx_t, saved in the projects' FUNY objects, project.c), LFO DRAW's page:
  *   LFO DRAW (LFO family, after LFO 2)  POINT (1..16)  VALUE (-64..63, the point picked)  SHAPE (a template drawn
  *            over all 16: SIN TRI SAW RAMP SQR PULSE WOB STEPS)  SMOOTH (STEP: each point held; LINE: joined)
  *            The panel: the 16 points as bars from the middle line, the point picked in the track's colour, the LFO's

@@ -90,7 +90,7 @@ static uint8_t cv_flip;          /* cv_alpha_hc: the cell mirrored left <-> righ
 static struct {
     uint16_t bg, surf, text, theme, accent;
     uint16_t mid, dim, line, sel, tint, ink, rec, raise, key, lane, grid;
-    uint16_t trk[8], fam[12], drum[8];   /* HA HA HE HU: the meaning colours (ux_hues): tracks, page families, drum lanes */
+    uint16_t trk[8], fam[12], drum[8];   /* the meaning colours (ux_hues): tracks, page families, drum lanes */
     uint8_t light, mono;
     uint8_t style;               /* MENU > STYLE (ui.c style_apply): ST_FLAT, ST_LINE */
     uint32_t gen;                /* bumped by palette_set (the text ramps follow) */
@@ -154,7 +154,7 @@ static void palette_custom_load(const uint8_t *b)
     ux_cust.accent = (uint16_t)(b[8] | b[9] << 8);
 }
 
-/* HA HA HE HU: the colours that say what a thing is, the same in every coloured palette (a darker shade on a light one):
+/* the colours that say what a thing is, the same in every coloured palette (a darker shade on a light one):
  * the four tracks (T1 cyan, T2 violet, T3 amber, T4 rose: their cushions, MIXER columns, SONG lanes, the panel of the
  * track edited), the page families (ui.c FAM_*, in that order: HOME, ENV lime, LFO aqua, FX orange, SCL yellow, EDIT
  * magenta, GLO sky, SAVE grey, ARP mint, SEQ blue, TRK, the knob cards' values and gauges: where one is), the drum lanes

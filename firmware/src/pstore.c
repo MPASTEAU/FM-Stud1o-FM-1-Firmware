@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* HA HA HE HU: each track's patterns, as many as fit (numbered 1..PS_NUM). The one a track plays and edits is on the
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+/* each track's patterns, as many as fit (numbered 1..PS_NUM). The one a track plays and edits is on the
  * track (its steps, LEN DIV SWING GATE QUANTIZE, its automation and locks in the shared motion store); the others are
  * in ps_heap, compact: a record [track][number][length, 2 bytes][the pattern], the pattern as
  *   LEN DIV SWING GATE QUANTIZE (2 bytes each), the steps that are not empty (their count, then index + FUN10's 9
@@ -548,7 +548,7 @@ static void ps_reset(void)                              /* no pattern but the on
     seq_off = 0;                                        /* (Dah: every track on its pattern again) */
 }
 
-/* HA HA HE HU: section r's patterns into buffer b (main loop: chain_prepare, chain_poll; Dah: the buffers in turn, the
+/* section r's patterns into buffer b (main loop: chain_prepare, chain_poll; Dah: the buffers in turn, the
  * song round); each track's pattern decoded from the heap (pstore.c), a silent or missing one empty */
 static void chain_fill(uint32_t r, uint32_t b)
 {

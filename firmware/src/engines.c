@@ -13,7 +13,7 @@
  * Sized by the largest, PHYS (3 x SYMP's slot); an engine that needs more than ENG_MEM_PART grows it for
  * every part (x NPART of the pool). Zero-initialised pool section: main.c fm1_cstart clears it. */
 #define ENG_MEM_PART 12888u
-/* HA HA HE HU: parts 1..2 (NPART_BIG) keep the region above; parts 3..8 a small one, ENG_MEM_SMALL (DRUM's lanes, the
+/* parts 1..2 (NPART_BIG) keep the region above; parts 3..8 a small one, ENG_MEM_SMALL (DRUM's lanes, the
  * largest of DRUM FM6 SLICE): PHYS and GRAIN play on tracks 1..2 only (eng_fits; the FM-1's RAM has no room for more
  * large regions with eight tracks) */
 #define NPART_BIG 2u
@@ -50,7 +50,7 @@ static uint8_t eng_mem_owner[NPART];       /* engine index + 1 whose state is in
 #include "eng_slice.c"
 #endif
 #if FELUCCA_GROWL
-#include "eng_growl.c"          /* GROWL: a wave phase-modulated by a sine into a low-pass (HA HA HE HU) */
+#include "eng_growl.c"          /* GROWL: a wave phase-modulated by a sine into a low-pass */
 #endif
 
 /* the editor protocol, user presets and projects store these indices: append, never reorder */
@@ -76,13 +76,13 @@ static const engine_t *const ENGINES[NENGINES] = {
     &ENG_SLICE,                  /* 13 (FELUCCA_SLICE=0 builds without it) */
 #endif
 #if FELUCCA_GROWL
-    &ENG_GROWL,                  /* 14 (HA HA HE HU) */
+    &ENG_GROWL,                  /* 14 */
 #endif
 };
 
 /* a track's engine number as an index (the audio paths: a compare, cheaper than % NENGINES; a bad number: 0) */
 static inline uint32_t eng_idx(uint32_t e) { return e < NENGINES ? e : 0u; }
-/* engine e can play on part p: its state fits the part's region (HA HA HE HU: PHYS and GRAIN on tracks 1..2 only) */
+/* engine e can play on part p: its state fits the part's region (PHYS and GRAIN on tracks 1..2 only) */
 static int eng_fits(uint32_t p, uint32_t e) { return p < NPART_BIG || ENGINES[eng_idx(e)]->mem <= ENG_MEM_SMALL; }
 _Static_assert(sizeof(drum_lane_t) * DV_NLANE <= ENG_MEM_SMALL && sizeof(fm6_note_t) * FM6_POLY <= ENG_MEM_SMALL
 #if FELUCCA_SLICE
@@ -145,7 +145,7 @@ static const uint8_t ENGINE_ORDER[NENG_SHOWN] = {
     13,                          /* SLICE */
 #endif
 #if FELUCCA_GROWL
-    14,                          /* GROWL (HA HA HE HU) */
+    14,                          /* GROWL */
 #endif
     10,                          /* DRUM */
 };
@@ -171,6 +171,6 @@ static uint32_t eng_step(uint32_t e, int32_t dir)
 /* the parts at power-on (engine, preset; the sequencers empty): bass, pad, lead, drums */
 static const uint8_t TRK_DEF[NPART][2] = {{0, 4}, {ENGI_FM6, 4}, {3, 0}, {ENGI_DRUM, 0},
                                           {ENGI_FM6, 1}, {0, 8}, {5, 0}, {ENGI_DRUM, 3}};
-                                          /* (HA HA HE HU: 5..8 FM6 BELL, ANALOG PLUCK, VOICE CHOIR AAH, DRUM PERC KIT) ANALOG ACID,
+                                          /* (5..8 FM6 BELL, ANALOG PLUCK, VOICE CHOIR AAH, DRUM PERC KIT) ANALOG ACID,
                                                                        * FM6 PAD (was DIGITAL PAD), LOFI PULSE LD, DRUM KIT */
 static uint32_t trk_def_engine(uint32_t i) { return TRK_DEF[i % NPART][0]; }

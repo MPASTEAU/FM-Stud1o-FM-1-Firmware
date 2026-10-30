@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Parameter descriptors, formatting and the page table. */
-static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H", "DRAW"};   /* (HA HA HE HU: DRAW, ui_lfodraw.c) */
+static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H", "DRAW"};   /* (DRAW, ui_lfodraw.c) */
 /* LFO 2 (1.2, #154). SYNC: OFF (RATE), or one cycle per note value of the tempo, longest first (LSYNC_DIV: its N_DIV);
  * TRIG: NOTE restarts it at PHS on a fresh phrase (as before), FREE never; POL: BI -1..+1 (as before), UNI 0..+1 */
 static const char *const N_LSYNC[] = {"OFF", "4BAR", "2BAR", "1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"};
@@ -18,7 +18,7 @@ static const char *const N_DTIME[] = {"1/4", "1/8", "1/16", "1/32", "8T", "16T",
 static const char *const N_SCALE[] = {"CHR", "MAJ", "MIN", "DOR", "MIX", "PEN", "MPEN", "HARM",
                                     "PHRY", "LYD", "LOC", "MEL", "BLUES", "WHOLE", "DIMHW", "DIMWH"};
 static const char *const N_ONOFF[] = {"OFF", "ON"};
-/* QUANTIZE (P_SQNT): OFF the steps' NUDGE as recorded, ON on the grid (as always: values 0 1); HA HA HE HU appends a
+/* QUANTIZE (P_SQNT): OFF the steps' NUDGE as recorded, ON on the grid (as always: values 0 1); then a
  * strength: 25 % .. 75 % of the way to the grid (seq.c seq_nudge) */
 static const char *const N_QNT[] = {"OFF", "ON", "25%", "50%", "75%"};
 /* ANALOG's filter TYPE (1.5, #104; eng_analog.c): the SVF's low-pass (as always), band-pass, high-pass output */
@@ -63,7 +63,7 @@ static const char *const N_SLCR[] = {"OFF", "GATE", "STUT"};             /* SL_O
 static const char *const N_SLDIV[] = {"1/8", "1/16", "1/32", "8T", "16T", "32T"};   /* SL_DEN */
 /* the INSERT's types (1.5, fx.c IT_*; append-only: stored). Its three values A B C mean what the type says (ins_desc) */
 static const char *const N_ITYPE[] = {"OFF", "SOFT", "HARD", "FOLD", "FUZZ", "CRUSH", "PHASR", "FLANG", "CHOR"};
-/* HA HA HE HU: ORDER, DIST (D) INSERT (I) SLICER (S) in a row (fx.c FX_ORDER); DUCK's source (fx.c duck_part) */
+/* ORDER, DIST (D) INSERT (I) SLICER (S) in a row (fx.c FX_ORDER); DUCK's source (fx.c duck_part) */
 /* (Dah) ORDER: DIST (D), INSERT (I), SLICER (S), EQ (E), SIDECHAIN (C): the 24 of D I S E first (C last: as they were),
  * then the rest (fx.c FX_ORDER, the same order) */
 static const char *const N_FXORD[] = {
@@ -90,7 +90,7 @@ static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-",
                                              "SLICE",
 #endif
 #if FELUCCA_GROWL
-                                             "GROWL",      /* 14 (HA HA HE HU): DESC of G_ENGSEL lists every engine */
+                                             "GROWL",      /* 14: DESC of G_ENGSEL lists every engine */
 #endif
 };
 
@@ -106,7 +106,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_ED_FLT] = PD("FLT", F_BIPCT, -64, 63, 0),
     [P_ED_PIT] = PD("PIT", F_BIPCT, -64, 63, 0),
     [P_ED_SHP] = PD("SHP", F_BIPCT, -64, 63, 0),
-    [P_ED_FX] = PD("REL", F_BIPCT, -64, 63, 0),   /* (P_DKREL, HA HA HE HU: DUCK's release; 0 ~210 ms; nothing else reads it) */
+    [P_ED_FX] = PD("REL", F_BIPCT, -64, 63, 0),   /* (P_DKREL: DUCK's release; 0 ~210 ms; nothing else reads it) */
     [P_LRATE] = PD("RATE", F_LFOHZ, 0, 127, 60),
     [P_LWAVE] = PE("WAVE", N_LWAVE, 0),
     [P_LPHASE] = PD("PHS", F_INT, 0, 127, 0),
@@ -479,7 +479,7 @@ enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACK
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_SLOTS, GR_USER, GR_TRK,
        GR_SLCR, GR_SONG, GR_CHORD, GR_SLICES, GR_EVENTS,
        GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DLANE, GR_DLANE2, GR_DSYN, GR_DSYN2, GR_DSYN3, GR_DSYN4, GR_DSYN5,
-       GR_LDRAW, GR_FILE, GR_PATTERN };   /* (GR_PATTERN: a track's patterns, ui_pattern.c) */   /* (HA HA HE HU: LFO DRAW, ui_lfodraw.c; FILE, the projects: projfs.c) */   /* (GR_DLANE..: DRUM's lane
+       GR_LDRAW, GR_FILE, GR_PATTERN };   /* (GR_PATTERN: a track's patterns, ui_pattern.c) */   /* (LFO DRAW, ui_lfodraw.c; FILE, the projects: projfs.c) */   /* (GR_DLANE..: DRUM's lane
                                  * pages, ui_drumlane.c; GR_DSYN..: a SYN lane's layer set) */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
 
 #define PS_TRK 0x80u                     /* (Dah) on a global page: this id is a track parameter (the selected track's) */
@@ -495,7 +495,7 @@ static const page_t PAGES[] = {
                                                                              * 1.5: ESYNC, ENV's times as note values */
     {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
     {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
-    {"LFO DRAW", FAM_LFO, SC_TRACK, GR_LDRAW, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (HA HA HE HU) POINT VALUE SHAPE SMOOTH */
+    {"LFO DRAW", FAM_LFO, SC_TRACK, GR_LDRAW, {0xFF, 0xFF, 0xFF, 0xFF}},   /* POINT VALUE SHAPE SMOOTH */
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
     /* (Dah) FX: CHAIN first, its effects as a list (KNOB 1 the row, KNOB 2 its type, KNOB 3 moves it; OCT+ its page, or
      * adds one; REC takes it out); then a page each, its own picture live (ui_graph_fx.c). (FX's overview page and its
@@ -507,7 +507,7 @@ static const page_t PAGES[] = {
     {"SLICER", FAM_FX, SC_TRACK, GR_SLCR, {P_SLCR, P_SLPAT, P_SLRATE, P_SLDEPTH}},
     {"EQ", FAM_FX, SC_TRACK, GR_NONE, {P_EQLO, 0xFF, 0xFF, 0xFF}},   /* (Dah) the EQ (fx_eq.c): KNOB 1 the band (past the
                                                          * last: one more), 2 its TYPE, 3 FREQ, 4 SLOPE / GAIN (eq_page) */
-    {"SIDECHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (HA HA HE HU, fx.c duck_part) */
+    {"SIDECHAIN", FAM_FX, SC_TRACK, GR_NONE, {P_DKSRC, P_DKAMT, P_DKREL, 0xFF}},   /* (fx.c duck_part) */
     {"COMP", FAM_FX, SC_TRACK, GR_NONE, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (Dah) the COMPRESSOR: AMOUNT RELEASE (trkx, fx_comp.c) */
     /* (Dah) the send effects, as the others: the track's SEND (PS_TRK: a track parameter on a global page) and the
      * buses' own settings, shared by every track (were GLO's) */
@@ -515,7 +515,7 @@ static const page_t PAGES[] = {
     {"DELAY", FAM_FX, SC_GLOBAL, GR_NONE, {PS_TRK | P_DLY, G_DTIME, G_DFDBK, G_DCOLOR}},
     {"DELAY 2", FAM_FX, SC_GLOBAL, GR_NONE, {G_DMIX, 0xFF, 0xFF, 0xFF}},
     {"REVERB", FAM_FX, SC_GLOBAL, GR_NONE, {PS_TRK | P_REV, G_RTYPE, G_RSIZE, G_RDAMP}},   /* TYPE: ROOM / SPRING / HALL */
-    {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's first (1.2; up to 1.1.5 SEQ's); HA HA HE HU: then
+    {"SONG", FAM_GLO, SC_GLOBAL, GR_SONG, {0xFF, 0xFF, 0xFF, 0xFF}},        /* GLO's first (1.2; up to 1.1.5 SEQ's); Dah: then
                                                                                * the global FX, DLY REVERB CHORUS (FX: the track's) */
     {"CHORD", FAM_SCL, SC_TRACK, GR_CHORD, {P_CHRD, P_VOIC, 0xFF, 0xFF}},   /* (Dah) SCL's first: the chord keys (chord.c) */
     {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_QUANT, P_TRANS}},   /* SCL again: the scale */
@@ -530,7 +530,7 @@ static const page_t PAGES[] = {
     {"SYN TONE 2", FAM_EDIT, SC_TRACK, GR_DSYN2, {0xFF, 0xFF, 0xFF, 0xFF}}, /* KNOB 1 the lane, then its layer set's */
     {"SYN NOISE", FAM_EDIT, SC_TRACK, GR_DSYN3, {0xFF, 0xFF, 0xFF, 0xFF}},  /* LEVEL PITCH DECAY / BEND SWEEP SHAPE / */
     {"SYN NOISE 2", FAM_EDIT, SC_TRACK, GR_DSYN4, {0xFF, 0xFF, 0xFF, 0xFF}},   /* LEVEL CUT DECAY / FILTER CLAP SPACE */
-    {"SYN METAL", FAM_EDIT, SC_TRACK, GR_DSYN5, {0xFF, 0xFF, 0xFF, 0xFF}},  /* / LEVEL TONE DECAY (HA HA HE HU) */
+    {"SYN METAL", FAM_EDIT, SC_TRACK, GR_DSYN5, {0xFF, 0xFF, 0xFF, 0xFF}},  /* / LEVEL TONE DECAY */
     {"SLICES", FAM_EDIT, SC_TRACK, GR_SLICES, {0xFF, 0xFF, 0xFF, 0xFF}},   /* SLICE only: the slices by hand (ui_slice.c) */
     {"OPERATOR", FAM_EDIT, SC_TRACK, GR_FMOP, {0xFF, 0xFF, 0xFF, 0xFF}},    /* FM6 only: KNOB 1 the operator, then its */
     {"OP ENV", FAM_EDIT, SC_TRACK, GR_FMENV, {0xFF, 0xFF, 0xFF, 0xFF}},     /* bytes of the track's patch (ui_fm6op.c): */
@@ -548,9 +548,9 @@ static const page_t PAGES[] = {
      * sounds one tap on; up to 1.4.1 the last), PHRASES, PROJECT, TOOLS. (Dah) PRESETS and TOOLS gone: the PRESETS knob
      * picks the sound from any page (its list full screen); INIT / CLEAN INIT in the EDIT layer; PHRASES (the factory
      * patterns' loader) gone too */
-    {"FILE", FAM_SAVE, SC_GLOBAL, GR_FILE, {0xFF, 0xFF, 0xFF, 0xFF}},       /* (HA HA HE HU) SAVE's first: the projects
+    {"FILE", FAM_SAVE, SC_GLOBAL, GR_FILE, {0xFF, 0xFF, 0xFF, 0xFF}},       /* SAVE's first: the projects
                                                                              * (projfs.c): the projects */
-    {"PATTERN", FAM_SAVE, SC_TRACK, GR_PATTERN, {0xFF, 0xFF, 0xFF, 0xFF}},  /* (HA HA HE HU) the selected track's patterns:
+    {"PATTERN", FAM_SAVE, SC_TRACK, GR_PATTERN, {0xFF, 0xFF, 0xFF, 0xFF}},  /* the selected track's patterns:
                                                                              * PATTERN, OPEN, COPY, NEW (ui_pattern.c) */
     {"MY PRESETS", FAM_SAVE, SC_GLOBAL, GR_USER, {0xFF, 0xFF, 0xFF, 0xFF}},       /* user presets: SLOT LOAD ERASE SAVE */
     {"ARP", FAM_ARP, SC_TRACK, GR_ARP, {P_AMODE, P_ARATE, P_AOCT, P_AGATE}},

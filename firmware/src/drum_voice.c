@@ -63,7 +63,7 @@
  * voices peak near -7 dBFS (the snare's, the clap's and the closed hat's spikes a little higher);
  * louder settings go into the output's soft knee.
  *
- * SYNTH (HA HA HE HU, DVT_SYNTH: a run of its own after the 12, a lane's VOICE SYN 1..5, eng_drum.c ds_*): three
+ * SYNTH (DVT_SYNTH: a run of its own after the 12, a lane's VOICE SYN 1..5, eng_drum.c ds_*): three
  * layers struck together and mixed, each with its own level and decay (slow envelopes, the level folded in per block):
  *   TONAL  a sine or a triangle swept down from BEND semitones above PITCH (the kick's sweep: the increment above the
  *          pitch decays with SWEEP's tau), a soft-clip DRIVE (off, x2..x8, the level kept) after its envelope
@@ -86,7 +86,7 @@ enum {
     DVT_PUNCH, DVT_ROUND, DVT_SNARE, DVT_CLAP, DVT_HATC, DVT_HATO, DVT_TOM, DVT_CONGA, DVT_RIM, DVT_CLAVE,
     DVT_BELL, DVT_CYM, DVT_COUNT
 };
-/* the layered voice (HA HA HE HU): a run of its own after Felucca's 12 (outside DV_DEF; eng_drum.c's VOICE values keep
+/* the layered voice: a run of its own after Felucca's 12 (outside DV_DEF; eng_drum.c's VOICE values keep
  * DVT_COUNT as they were). Its parameters: a layer set (ds_*), DS_NF bytes */
 #define DVT_SYNTH DVT_COUNT
 enum {
@@ -669,7 +669,7 @@ static void dv_setup_kit(dv_coef_t *c, const dv_param_t *p)
     }
 }
 
-/* SYNTH (HA HA HE HU): the layer sets SYN 1..DS_NSET start from (eng_drum.c ds_get: a patch without them), in DS_*
+/* SYNTH: the layer sets SYN 1..DS_NSET start from (eng_drum.c ds_get: a patch without them), in DS_*
  * order: a kick (a swept sine, a click of high-passed noise), a snare (185 Hz, band noise), a clap (band noise struck 4
  * times), a closed hat (the metal over high-passed noise), an open hat / crash (the same, long) */
 #define DS_NSET 5

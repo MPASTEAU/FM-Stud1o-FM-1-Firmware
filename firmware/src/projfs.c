@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
- * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments; HA HA HE HU fork */
-/* HA HA HE HU: the PROJECTS, as many as fit. Each one is a whole piece of music: its tracks (song.ntrk: their sounds,
+ * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
+/* the PROJECTS, as many as fit. Each one is a whole piece of music: its tracks (song.ntrk: their sounds,
  * FM6 patches, extras, MIDI IN channels), each track's patterns (pstore.c: the one it plays and the others in the
  * heap), the SONG, the globals, its name. It is kept in what was user sample slots USR2 and USR3 (eng_sample.c,
  * PFS_NSECT sectors from PFS_BASE) as one record over as many whole sectors as it needs:

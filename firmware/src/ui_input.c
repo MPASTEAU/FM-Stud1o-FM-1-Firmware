@@ -600,7 +600,7 @@ static void song_add(void)
         return;
     if (n)
         chain_config.row[n] = chain_config.row[n - 1u];
-    else {                                              /* (HA HA HE HU: the first: each track on the pattern it plays) */
+    else {                                              /* (the first: each track on the pattern it plays) */
         uint32_t k;
         chain_config.row[0] = chain_row_of(CHAIN_SILENT, 1);
         for (k = 0; k < trk_count(); k++)
@@ -628,7 +628,7 @@ static void song_keys(uint32_t notes)
                 return;
             song_add();
             if (chain_config.count == 1u)
-                chain_config.row[0] = chain_row_of((uint32_t)s + 1u, 1);   /* (HA HA HE HU: A..D's keys, patterns 1..4) */
+                chain_config.row[0] = chain_row_of((uint32_t)s + 1u, 1);   /* (A..D's keys, patterns 1..4) */
         }
         if (ui.song_trk >= NTRK) {                    /* SEC: the key puts the slot on every track of the section */
             uint32_t k;
@@ -740,7 +740,7 @@ static int rec_tap(void)                                /* 1: the arming changed
         ui.force = 1;                                   /* (Dah: no message, the header's dot says it) */
         return 1;
     }
-    if (g == GR_PATTERN) {                              /* (HA HA HE HU) on a list REC deletes: the dialog */
+    if (g == GR_PATTERN) {                              /* on a list REC deletes: the dialog */
         if (chain_busy()) ui_message("STOP TO EDIT");
         else confirm_open(CF_DEL_PAT, ps_num(song.sel));
         return 0;
@@ -1321,7 +1321,7 @@ static void edit_param(uint32_t slot, int32_t steps)
             return;
         }
         if (slot == 1u) {
-            int32_t l = ui.song_trk >= trk_count() ? (int32_t)trk_count() : ui.song_trk;   /* (HA HA HE HU: the project's
+            int32_t l = ui.song_trk >= trk_count() ? (int32_t)trk_count() : ui.song_trk;   /* (the project's
                                                        * tracks, then SEC: NTRK) */
             l = clamp(l + steps, 0, (int32_t)trk_count());
             ui.song_trk = (uint8_t)(l >= (int32_t)trk_count() ? NTRK : l);
@@ -1335,7 +1335,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         r = &chain_config.row[ui.song_row];
         if (slot == 2u && ui.song_trk >= NTRK)            /* SEC: KNOB 3 the section's CUT (right ON, left OFF) */
             r->repeat = (uint8_t)(steps > 0 ? r->repeat | CHAIN_CUT : r->repeat & ~CHAIN_CUT);
-        else if (slot == 2u) {                            /* (HA HA HE HU) "-", then the track's patterns */
+        else if (slot == 2u) {                            /* "-", then the track's patterns */
             uint8_t nums[PS_NUM];
             uint32_t k = ui.song_trk % NTRK, n = ps_list(k, nums), i;
             int32_t at = -1;
@@ -1393,7 +1393,7 @@ static void edit_param(uint32_t slot, int32_t steps)
         dln_knob(slot, steps);
         return;
     }
-    if (xp_page(pg->graph)) {                            /* (HA HA HE HU) LFO DRAW, CURVE (ui_lfodraw.c) */
+    if (xp_page(pg->graph)) {                            /* LFO DRAW, CURVE (ui_lfodraw.c) */
         xp_knob(slot, steps);
         return;
     }
@@ -1559,7 +1559,7 @@ static void act_do(void)
             pt_do(c + 1u);
         return;
     }
-    if (cur_page()->graph == GR_FILE) {                 /* (HA HA HE HU) FILE: OPEN, COPY (its name), NEW; the one open is
+    if (cur_page()->graph == GR_FILE) {                 /* FILE: OPEN, COPY (its name), NEW; the one open is
                                                          * saved first, so nothing is lost: no dialog */
         ui.act = 0;
         if (transport_busy() || chain_busy())
@@ -1826,7 +1826,7 @@ static void fx_tap(void)
     } else
         fx_go_chain();
 }
-/* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
+/* MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
  * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, SONG's sections, STEP's
  * cursor. On HOME and on a page with no list (ENV, LFO, ARP, SCL ..) the tempo (Dah) */
 static int sel_is_list(void)                           /* (Dah) the page shown has a list SELECT moves down */
@@ -1926,7 +1926,7 @@ static int page_tap(uint32_t b)
         au_clear();
         return 1;
     }
-    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_FILE) {   /* (HA HA HE HU) FILE: EDIT renames the project open */
+    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_FILE) {   /* FILE: EDIT renames the project open */
         if (ui.fsel && ui.fsel != pfs_cur())
             ui_message("OPEN IT TO RENAME");
         else
@@ -2093,7 +2093,7 @@ static void ui_input(void)
     if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && ui.confirm)
         ui.save_t0 |= 2u;                               /* (Dah: OCT- cancels the dialog; SAVE let go is no tap then) */
     if (((pressed >> panel.btn[B_OCTDN]) & 1u) && ((fm1_in.buttons >> panel.btn[B_SAVE]) & 1u) && !ui.menu && !ui.confirm &&
-        !name_on()) {                                   /* (HA HA HE HU) SAVE + OCT-: UNDO (ui.c undo_swap); SAVE let go */
+        !name_on()) {                                   /* SAVE + OCT-: UNDO (ui.c undo_swap); SAVE let go */
         ui.save_t0 |= 2u;                               /* after: no tap, and OCT- no octave */
         pressed &= ~(1u << panel.btn[B_OCTDN]);
         save = BT_UNDO;
@@ -2260,7 +2260,7 @@ static void ui_input(void)
                 up_ui(1u, ui.confirm_trk);
             } else if (kind == CF_LOAD_USER) {          /* (Dah) MY PRESETS: LOAD, answered */
                 up_ui(0u, ui.confirm_trk);
-            } else if (kind == CF_DEL_PAT) {       /* (HA HA HE HU) SAVE > PATTERN, REC */
+            } else if (kind == CF_DEL_PAT) {       /* SAVE > PATTERN, REC */
                 pt_delete();
             } else if (kind == CF_DEL_TRK) {           /* (Dah) MIXER, OCT- held: the last track gone, its patterns */
                 uint32_t k = trk_count() - 1u;
@@ -2275,7 +2275,7 @@ static void ui_input(void)
                 trk_count_changed();
                 track_select(song.ntrk - 1u);
                 ui_message("TRACK DELETED");
-            } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
+            } else if (kind == CF_ADD_TRACK) {     /* one track more: its power-on sound, no steps */
                 track_add();
             } else if (kind == CF_PICK_FX) {       /* (Dah) the one picked (SELECT), added last, its page open */
                 fx_chain_add(fx_tsel());
@@ -2346,7 +2346,7 @@ static void ui_input(void)
             if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
                 transport_req = 2;
             else if (!ui.home && cur_page()->graph == GR_SONG)
-                chain_play_ui();                        /* (HA HA HE HU: PLAY elsewhere plays the pattern) */
+                chain_play_ui();                        /* (PLAY elsewhere plays the pattern) */
             else
                 transport_req = 1;
             break;
@@ -2495,7 +2495,7 @@ static void ui_input(void)
             preset_step(s);                             /* (Dah) PRESETS: the sound, on every page (its list ~1 s);
                                                          * the lists: SELECT (MENU > SELECT LIST), KNOB 1 */
     }
-    if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page; (HA HA HE HU) past the
+    if (!lay && (s = panel_enc(EN_ALGO)) != 0) {   /* ALGORITHM: the selected track, on every page; past the
                                                       * project's last: ADD TRACK? (the dialog) */
         uint32_t was = mx_master ? NTRK : song.sel;
         tl_ms = fm1_ms | 1u;                            /* (Dah) the tracks' list over the panel ~1 s (ui_graph.c) */
@@ -2531,8 +2531,8 @@ static void ui_input(void)
             sel_play(sel_mode(), s);
         } else if (!glo && !ui.home && sel_is_list() && (sel_mode() == SEL_PAGE || cur_page()->graph == GR_FILE ||
                                                          cur_page()->graph == GR_PATTERN)) {   /* (Dah: FILE, PATTERN: their
-                                                         * list SELECT's, whatever MENU > SELECT says) */   /* MENU > SELECT LIST (HA HA HE HU;
-                                                         * 1.5.5's PAGE, #188, turned the pages): down the page's list
+                                                         * list SELECT's, whatever MENU > SELECT says) */   /* MENU > SELECT LIST
+                                                         * (1.5.5's PAGE, #188, turned the pages): down the page's list
                                                          * (sel_list); Dah: a page with no list (ENV, LFO, ARP, SCL ..):
                                                          * the tempo, as on HOME. Not while a layer's button is down or
                                                          * letting go, LFO is held (MOMENTARY) or steps are held */

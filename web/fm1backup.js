@@ -3,8 +3,8 @@
 // Local, complete musical archives. Requests name whitelisted objects, never flash addresses.
 // 8: the FM6 patch bank of 1.0..1.0.2 (listed empty since 1.0.3: a restore of an older archive's bank moves its patches
 // into the user presets restored before it); 9: the user presets' FM6 patches (1.0.3)
-// 10..13 (HA HA HE HU, retired): the PROJECT slots' tracks 5..8 (their FUNX objects); 14..17 their extras (FUNY).
-// 18 (HA HA HE HU): the PROJECTS, their flash as it is (whole sectors, up to 160 KB)
+// 10..13 (retired): the PROJECT slots' tracks 5..8 (their FUNX objects); 14..17 their extras (FUNY).
+// 18: the PROJECTS, their flash as it is (whole sectors, up to 160 KB)
 export const BACKUP_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 18, 32, 33, 34];
 const BACKUP_IDS_Y = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 32, 33, 34];   // the slots' eight tracks
 const BACKUP_IDS_X = BACKUP_IDS_Y.filter((id) => id < 14 || id >= 32);    // eight tracks, before the extras

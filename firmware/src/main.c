@@ -1859,10 +1859,10 @@ static void felucca_init(void)
     undo_depth++;                             /* (no undo copy of the power-on loads) */
     mix_solo = 0;                             /* (Dah: MIXER's SOLO, none) */
     fm6_init();                               /* every track's FM6 patch: the init voice */
-    ps_reset();                               /* (HA HA HE HU: each track on its pattern 1, no other) */
+    ps_reset();                               /* (each track on its pattern 1, no other) */
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
-        trkx_defaults(&trkx[i]);              /* (HA HA HE HU: LFO DRAW's points, CURVE STEP) */
+        trkx_defaults(&trkx[i]);              /* (LFO DRAW's points, CURVE STEP) */
         track_defaults(t);
         set_engine_of(t, TRK_DEF[i][0]);
         apply_preset_to(t, TRK_DEF[i][1]);    /* with its sends */
@@ -1968,7 +1968,7 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
-    autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash (HA HA HE HU: else the
+    autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash (else the
                                                * drone, felucca_demo; the PROJECT slots stay empty) */
     for (ms = 0; ms < FW_SPLASH_MS; ms += 10u) {   /* the splash; the pot followed (MIDI IN plays under it) */
         fm1_delay_ms(10);
@@ -2067,7 +2067,7 @@ static void fm1_main(void)
         ui_input();
         settings_poll();                              /* queued settings save: only while stopped */
         autosave_poll();                              /* (1.2) the music, stopped and idle: project.c */
-        chain_poll();                                 /* (HA HA HE HU) a SONG's next section ready: pstore.c */
+        chain_poll();                                 /* a SONG's next section ready: pstore.c */
         felucca_dbg.stage = 2;
         ui_leds();
         ui_draw();

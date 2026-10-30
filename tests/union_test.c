@@ -75,7 +75,7 @@ static uint64_t useq(const uint32_t *e, uint32_t n, uint32_t pi, uint32_t wait_m
         uh = 0xcbf29ce484222325ull;
         for (k = 0; k < n; k++) {
             uplay(&trk[0], e[k], pi + k, 60, wait_ms);
-            uplay(&trk[1], UE[(k + 3u) % UNE], pi, 55, 10);   /* another part busy alongside (HA HA HE HU: part 2,
+            uplay(&trk[1], UE[(k + 3u) % UNE], pi, 55, 10);   /* another part busy alongside (part 2,
                                                              * PHYS and GRAIN play on parts 1..2 only; bit for bit 1.4's) */
         }
         urun(1000);

@@ -361,7 +361,7 @@ static int autosave_test(void)
     as_run(300000u);
     bad += check("autosave: RESTORE LAST OFF: none restored, none written", ok && !as.writes && as_erases == b0);
     ui_prefs &= (uint8_t)~PREF_RESTORE_OFF;
-    {   /* HA HA HE HU: the project open is the autosave (projfs.c): its payload damaged: ignored; its header: none
+    {   /* the project open is the autosave (projfs.c): its payload damaged: ignored; its header: none
          * there; a record whose bytes check but are no project: ignored */
         pfs_hdr_t h;
         uint32_t id, at, i;
@@ -700,7 +700,7 @@ int main(void)
         }
     }
     chain_config.count = 1;
-    chain_config.row[0] = chain_row_of(ps_num(0), 1);    /* (HA HA HE HU: the pattern track 1 plays, pstore.c) */
+    chain_config.row[0] = chain_row_of(ps_num(0), 1);    /* (the pattern track 1 plays, pstore.c) */
     bad += check("SONG sources use the same step bounds", chain_prepare() == 0 &&
                   !memcmp(&chain.source[0].step[0][0], &trk[0].step[0], sizeof(step_t)));
     seq_stop();

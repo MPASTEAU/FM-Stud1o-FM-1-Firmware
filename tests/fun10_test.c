@@ -145,7 +145,7 @@ static int lfo(void)
                  !motion_param(P_LSYNC) && !motion_param(P_LTRIG) && !motion_param(P_LPOL) && !motion_param(P_SQNT) &&
                  motion_param(P_LN7) && motion_param(P_E0) && PAGES[3].id[0] == P_LSYNC && !strcmp(PAGES[3].title, "LFO 2") &&
                  PAGES[3].fam == FAM_LFO && PAGES[2].graph == GR_LFO && !strcmp(PAGES[4].title, "LFO DRAW") &&
-                 !strcmp(PAGES[5].title, "LFO DEST"));   /* (HA HA HE HU: LFO DRAW between) */
+                 !strcmp(PAGES[5].title, "LFO DEST"));   /* (LFO DRAW between) */
     go_page(GR_LFO);
     ui.page++;                                       /* LFO 2 */
     page_entered();
@@ -493,7 +493,7 @@ static int formats(void)
         c.sum = proj_sum(&c);
         ok = proj_pack(&st, &c) && proj_import(&d, &st, sizeof st) && proj_same(&c, &d) && st.raw[at] == CHAIN_ROWS &&
              st.raw[at + 4u] == 4 && st.raw[at + 5u] == 0 && st.raw[at + 6u] == 1 && st.raw[at + 7u] == 4 && st.raw[at + 8u] == 1 &&
-             st.raw[at + 4u + 5u * 15u + 4u] == 16;   /* (HA HA HE HU: patterns 1..4 are A..D (0..3), silent 0 is "-" (4)) */
+             st.raw[at + 4u + 5u * 15u + 4u] == 16;   /* (patterns 1..4 are A..D (0..3), silent 0 is "-" (4)) */
         c.chain.row[3].slot[2] = 5;                   /* (pattern 5: no letter, "-" in a FUN10) */
         c.sum = proj_sum(&c);
         ok &= proj_pack(&st, &c) && st.raw[at + 4u + 5u * 3u + 2u] == 4;
@@ -633,7 +633,7 @@ static int midi_track_fmt(void)
     memset(song.mch, 0, sizeof song.mch);
     song.g[G_ROUTE] = 0;
     project_capture(&a);
-    ok = proj_pack(&st, &a) && PROJ_MIDI_OFF == PROJ_FM6_OFF - 3u && end <= PROJ_MIDI_OFF && PROJ_FM6_OFF - end == 4u;   /* (HA HA HE HU: 12 of the 16 taken) */
+    ok = proj_pack(&st, &a) && PROJ_MIDI_OFF == PROJ_FM6_OFF - 3u && end <= PROJ_MIDI_OFF && PROJ_FM6_OFF - end == 4u;   /* (12 of the 16 taken) */
     for (i = end; i < PROJ_FM6_OFF; i++)
         ok &= st.raw[i] == 0u;
     ok &= proj_import(&b, &st, sizeof st) && proj_same(&a, &b) && !b.mch[0] && !b.mch[3] && !b.g[G_ROUTE];

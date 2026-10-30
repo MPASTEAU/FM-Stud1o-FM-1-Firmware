@@ -33,7 +33,7 @@ static int sample_slots(void)
     bad += check("16 overlapping zones: the SLICE scan is at most the slot's size", usr_nz[0] == 16u &&
                  slc_usr[0].len && slc_usr[0].len <= 2u * dl);
 #endif
-    /* (HA HA HE HU: USR1, USR2 holds the projects) zone 0 good, zone 1 malformed: nothing of the slot is left (usr_zone[0][0] was copied before the check) */
+    /* (USR1, USR2 holds the projects) zone 0 good, zone 1 malformed: nothing of the slot is left (usr_zone[0][0] was copied before the check) */
     h = (smp_user_hdr_t *)host_samples[0];
     h->magic = SMP_USER_MAGIC; h->version = 1; h->nz = 2; h->data_len = 4096;
     zone_set(&h->zone[0], 0, 4096);

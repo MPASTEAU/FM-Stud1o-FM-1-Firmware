@@ -119,7 +119,7 @@ static int16_t motion_base_value(const track_t *t, uint32_t id)
 static void motion_restore(track_t *t)
 {
     uint32_t k = trk_index(t), id, f = motion_guard();
-    mramp[k].n = 0;                                    /* (HA HA HE HU: no line goes on) */
+    mramp[k].n = 0;                                    /* (no line goes on) */
     for (id = 0; id < P_COUNT; id++)
         if ((motion_active[k][id / 32u] >> (id % 32u)) & 1u) t->p[id] = motion_base[k][id];
     memset(motion_active[k], 0, sizeof motion_active[k]);
@@ -289,7 +289,7 @@ static __attribute__((noinline)) void motion_unlock(track_t *t, uint32_t step, c
     }
     memset(motion_locked[k], 0, sizeof motion_locked[k]);
 }
-/* HA HA HE HU: CURVE RAMP (trkx[].curve): an automation event's value moves in a line to the next event of its parameter
+/* CURVE RAMP (trkx[].curve): an automation event's value moves in a line to the next event of its parameter
  * (the next one in the pass; none: to what the pass starts with, the event on step 1 or the sound's own value, at the
  * loop's end), a block at a time (motion_ramp_block); a lock holds its step all the same. MRAMP_N lines a track at once
  * (more: the newest takes the oldest's place); enum parameters step as always */
@@ -388,7 +388,7 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
         if (e->param & MOTION_LOCK)
             motion_locked[k][id / 32u] |= 1u << (id % 32u);
         else if (trkx[k].curve)
-            motion_ramp_from(t, m, step, id, t->p[id]);   /* (HA HA HE HU: RAMP) */
+            motion_ramp_from(t, m, step, id, t->p[id]);   /* (RAMP) */
     }
 }
 static void motion_snapshot_track(track_t *t, motion_store_t *out)

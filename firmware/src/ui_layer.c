@@ -684,7 +684,7 @@ static void layer_keys(uint32_t keys)
     }
     for (k = 0; k < 27u; k++)
         if ((lys.solo >> k) & 1u)
-            s |= 1u << (trk_bank() + key_place(k));    /* (HA HA HE HU: the bank's tracks) */
+            s |= 1u << (trk_bank() + key_place(k));    /* (the bank's tracks) */
     perf_solo = (uint8_t)(s | mix_solo);                /* (Dah: and MIXER's SOLO, kept) */
 }
 

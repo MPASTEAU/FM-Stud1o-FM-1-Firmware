@@ -12,7 +12,7 @@
  * declicks it); one of the part's own is restarted in place, as before. Extra UNISON
  * voices only start when there is room. */
 static uint32_t vage;                                   /* voice ages: one clock for every part */
-/* HA HA HE HU: LFO DRAW's template k over the 16 points (ui_lfodraw.c N_XSHAPE: SIN TRI SAW RAMP SQR PULSE WOB STEPS) */
+/* LFO DRAW's template k over the 16 points (ui_lfodraw.c N_XSHAPE: SIN TRI SAW RAMP SQR PULSE WOB STEPS) */
 static void ldraw_template(int8_t *d, uint32_t k)
 {
     static const int8_t SIN16[LDRAW_N] = {0, 24, 45, 58, 63, 58, 45, 24, 0, -24, -45, -58, -63, -58, -45, -24};
@@ -59,7 +59,7 @@ static int32_t lfo_wave(track_t *t, uint32_t ph)
         return ph < 0x80000000u ? 32767 : -32767;
     case 4:
         return (int32_t)(t->lfo_rnd >> 16) - 32768;
-    case 5:                                             /* (HA HA HE HU) DRAW: the track's 16 points */
+    case 5:                                             /* DRAW: the track's 16 points */
         return ldraw_at(&trkx[(uint32_t)(t - trk) % NTRK], ph);
     default:
         return osc_sine(ph);
@@ -203,7 +203,7 @@ static uint32_t voice_victim(const track_t *self, int soft, track_t **pp)
             else if (!soft && mode == V_POLY && i != low)
                 c = 3;                                  /* held, not the bass */
             else if (!soft && t == self)
-                c = 4;                                  /* (HA HA HE HU) its own protected voice, restarted in place: with
+                c = 4;                                  /* its own protected voice, restarted in place: with
                                                          * as many parts as voices each other part may hold just its one */
             else
                 continue;
@@ -431,7 +431,7 @@ static void mono_remove(track_t *t, uint32_t note)
     t->nmono = (uint8_t)k;
 }
 
-/* HA HA HE HU: DUCK's triggers (fx.c duck_part): bit k, track k started a note in this block (a DRUM track: a KICK;
+/* DUCK's triggers (fx.c duck_part): bit k, track k started a note in this block (a DRUM track: a KICK;
  * Dah: a SNARE or a CLAP too) */
 static volatile uint8_t duck_hit;
 static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
@@ -565,7 +565,7 @@ static void engine_block(track_t *t)
             v->stage = 0;
             v->env = v->env_out = 0;
         }
-        if (!eng_fits((uint32_t)(t - trk), t->eng_req)) {   /* (HA HA HE HU: never a large engine on a light part) */
+        if (!eng_fits((uint32_t)(t - trk), t->eng_req)) {   /* (never a large engine on a light part) */
             uint32_t j;
             t->eng_req = 0;
             for (j = P_E0; j < P_E0 + 8u; j++)          /* (Dah: ANALOG's own values, not the refused engine's) */

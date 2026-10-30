@@ -67,7 +67,7 @@ insert effect with a dry / wet mix, Discussions #78 #177), then `TYPE` (101, ANA
 P_COUNT and P_E0 from `INFO` keeps working. Projects stay FUN10 (3840 bytes, 111 at byte 66; 16 bytes to spare). See
 "1.5: the INSERT" and "1.5: filter TYPE, ENV SYNC" below.
 
-**HA HA HE HU (this fork: 114 parameters, NENGINES 15, FUN10 as it was):** three track parameters went in before the
+**This fork (114 parameters, NENGINES 15, FUN10 as it was):** three track parameters went in before the
 engine parameters, which moved from 103..110 to 106..113: P_COUNT 114, P_E0 106. `ORDER` (103, FX ORDER: the order
 of DIST (D), the INSERT (I) and the SLICER (S), enum `D I S` `D S I` `I D S` `I S D` `S D I` `S I D`, default `D I S`),
 `DUCK` (104, the sidechain's source: OFF, T1..T4) and `DEPTH` (105, its depth 0..127, default 100). Id 8 (`FX`, ENV
@@ -752,7 +752,7 @@ repeats (1..16); up to 16 sections.
 | --- | --- | --- |
 | 33 SONG | op 4 query; op 5 set, count 0..16, count × (slot T1, slot T2, slot T3, slot T4 (0..4), repeat 1..16); op 6 start; op 7 stop | op (4..7), rc, count, running 0/1, section 0..15, remaining repeats, count × (slot T1..T4, repeat) |
 
-HA HA HE HU: eight tracks (`57 01 8`), so a section is 9 bytes (8 slots, then the repeat byte); with `58 01 1` (after
+eight tracks (`57 01 8`), so a section is 9 bytes (8 slots, then the repeat byte); with `58 01 1` (after
 `45 01 5`) bit 6 of a section's repeat byte is its CUT (the section starts with the reverb and delay tails cut off):
 repeat 1..16, + 64 with CUT, both ways. A set must have exactly `2 + count × (NTRK + 1)` argument bytes; rc as for ops 0..3 (1 = invalid sections, 2 = busy, 3..6 = a
 slot a lane plays is empty; a silent lane needs none, a song of "-" only plays silence). Ops 0..3 keep their meaning: a
@@ -825,7 +825,7 @@ they are in RAM or flash. Then `BACKUP_GET` reads an object in pieces: `id, offs
 (count 1..256, LSB first 7 bit pair) answers `id, rc, offset u32, count lo, count hi` and the data as pack7. Check each object's CRC
 against the list; if it differs the device changed, so start again.
 
-HA HA HE HU (the PROJECTS): `BACKUP_LIST` lists 14 objects: ids 0..9, 18, 32, 33, 34. Id 18 is the projects' flash
+the PROJECTS: `BACKUP_LIST` lists 14 objects: ids 0..9, 18, 32, 33, 34. Id 18 is the projects' flash
 (projfs, USR2 and USR3) as it is, whole 4096-byte sectors up to the last one used (0 bytes: no project; at most
 163840). Its chunks are read from the flash; restored, each chunk is written straight into it (a sector erased when its
 first chunk comes; chunks of exactly 256 bytes), the sectors after the image erased at the commit, then the image's CRC
@@ -834,10 +834,10 @@ and the live music (id 0: the project open is opened again, all its tracks). Ids
 flash) are listed empty; `SMP_BEGIN` / `SMP_ERASE` of slots 1, 2 answer rc 1. Ids 10..17 are retired: a `BACKUP_PUT`
 of them answers rc 1 and the page skips them, so an archive of 21 objects (below) restores without them.
 
-HA HA HE HU, `59 01 32`: SONG ops 4..7 name each track's pattern by number, 1..32, 0 = "-" (silent), in place of the
+`59 01 32`: SONG ops 4..7 name each track's pattern by number, 1..32, 0 = "-" (silent), in place of the
 slots A..D (0..3) and 4 = "-". Ops 0..3 keep their slots: A..D are patterns 1..4.
 
-HA HA HE HU (before the PROJECTS): `BACKUP_LIST` listed 21 objects: ids 10..13 are the PROJECT slots' tracks 5..8 (each slot's FUNX object,
+before the PROJECTS: `BACKUP_LIST` listed 21 objects: ids 10..13 are the PROJECT slots' tracks 5..8 (each slot's FUNX object,
 3840 bytes; length 0 when the slot is empty or has none), ids 14..17 their extras (FUNY: LFO DRAW's points, CURVE),
 restored after their slot: the firmware checks the object's own
 hash, tags it with the slot's record as restored and writes it. An archive of 13 objects (four-track firmware) still
@@ -1135,7 +1135,7 @@ before MIDI IN the first 21, 1.2 the first 23, 1.3 / 1.4 the first 24, 1.5 / 1.5
 | 18 | 18 | SCOPE | 0 | 0 OUT, 1 MIX (1.2) | OUT | 0 DISPLAY |
 | 19 | 19 | STEP PREVIEW | 0 | 0 OFF, 1 ON (1.2) | OFF | 1 CONTROL |
 | 20 | 20 | CHORD ENTRY | 0 | 0 HOLD, 1 ADD (1.2) | HOLD | 1 CONTROL |
-| 21 | 21 | MIDI IN | 0 | 0 CH1-8 (HA HA HE HU: channels 1..8 → tracks 1..8; was CH1-4), 1 SEL, 2 CH5-8, 3 CH9-12, 4 CH13-16 (1.2: the project's `G_ROUTE`, global 14), 5 TRACK (1.5.5) | CH1-8 | 3 MIDI |
+| 21 | 21 | MIDI IN | 0 | 0 CH1-8 (channels 1..8 → tracks 1..8; was CH1-4), 1 SEL, 2 CH5-8, 3 CH9-12, 4 CH13-16 (1.2: the project's `G_ROUTE`, global 14), 5 TRACK (1.5.5) | CH1-8 | 3 MIDI |
 | 22 | 22 | TUNE | 1 | -50..50, unit "ct" (1.2: the project's `G_TUNE`, global 3, cents) | 0 | 2 AUDIO |
 | 23 | 23 | HOME | 0 | 0 SCOPE, 1 TRACKS (1.3), 2 LEVELS (1.5; before: max 1) | SCOPE | 0 DISPLAY |
 | 24 | 24 | HELP | 0 | 0 OFF, 1 ON (1.5) | OFF | 4 SYSTEM |

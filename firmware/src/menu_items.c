@@ -185,7 +185,7 @@ static const menu_flag_t *menu_flag(uint32_t row)
 static const char *const LEDS_ROW_N[LEDS_ROWS] = {"OFF", "DIM LO", "DIM HI", "INV", "INV LO", "INV HI"};
 
 /* MENU > CONTROL > SELECT (ui.c sel_mode): BPM, PAGE (1.5.5, #188), MODW, VEL (1.5.6, #84), append-only */
-static const char *const SELECT_N[SEL_N] = {"PATTERN", "LIST", "MODW", "VEL"};   /* (HA HA HE HU: PAGE became LIST; Dah:
+static const char *const SELECT_N[SEL_N] = {"PATTERN", "LIST", "MODW", "VEL"};   /* (PAGE became LIST; Dah:
                                                         * BPM became PATTERN, SELECT's turn there: ui_input.c, the tempo
                                                         * OCT+ or GLO held + SELECT) */
 

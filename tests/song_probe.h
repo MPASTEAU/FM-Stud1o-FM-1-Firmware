@@ -9,14 +9,14 @@
 #define NTRK_V10 NTRK                              /* (the firmware of before: four tracks) */
 #endif
 #ifdef CHAIN_SILENT
-static chain_row_t probe_row(uint32_t s, uint32_t r)  /* (HA HA HE HU: tracks 5..8 silent, the song of before) */
+static chain_row_t probe_row(uint32_t s, uint32_t r)  /* (tracks 5..8 silent, the song of before) */
 {
     chain_row_t w = chain_row_of(s, r);
     for (uint32_t k = NTRK_V10; k < NTRK; k++)
         w.slot[k] = CHAIN_SILENT;
     return w;
 }
-#define PROBE_ROW(s, r) probe_row((s) + 1u, r)       /* (HA HA HE HU: the slots A, B: patterns 1, 2 (pat_keep)) */
+#define PROBE_ROW(s, r) probe_row((s) + 1u, r)       /* (the slots A, B: patterns 1, 2 (pat_keep)) */
 #define PROBE_START() (pat_park(), song_round = 0)   /* (Dah: to its end, as before)*/
 #define PROBE_SAVE(s) pat_keep((s) + 1u)
 #define PROBE_POLL() chain_poll()                     /* (the main loop readies the next section) */

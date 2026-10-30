@@ -128,7 +128,7 @@ typedef struct {
     motion_store_t motion;
     uint8_t fm6[NTRK][FM6_PACKED];             /* each track's FM6 patch, packed (eng_fm6.c) */
     uint8_t mch[NTRK];                         /* 1.5.5: MIDI IN TRACK's channels, as song.mch (PROJ_MIDI_OFF) */
-    trkx_t x[NTRK];                            /* HA HA HE HU: the tracks' extras (LFO DRAW, CURVE: the FUNY object) */
+    trkx_t x[NTRK];                            /* the tracks' extras (LFO DRAW, CURVE: the FUNY object) */
     char name[PROJ_NAME_LEN];                  /* the project's name: upper-case ASCII 32..126, 0-padded; "" = none */
     uint32_t sum;
 } project_t;
@@ -388,7 +388,7 @@ static void proj_perc(project_t *q)
     q->sum = proj_sum(q);
 }
 
-/* HA HA HE HU: tracks 5..8 of a project stored with four (every format up to FUN10, a FUNX missing or stale): as at
+/* tracks 5..8 of a project stored with four (every format up to FUN10, a FUNX missing or stale): as at
  * power-on (their sounds, no steps: PROJ_DEF_SOUND, project_restore_runtime), silent in every SONG section, on
  * channels 5..8, the init FM6 patch; their motion records none (the caller's store had none) */
 static void proj_x_defaults(project_t *q)
@@ -647,7 +647,7 @@ static void proj_midi_unpack(project_t *q, const uint8_t *b)
         q->g[G_ROUTE] = ROUTE_TRACK;
 }
 
-/* HA HA HE HU: motion records (today's, eight tracks) <-> FUN10's (four: place a byte, track << 6 | step): those of
+/* motion records (today's, eight tracks) <-> FUN10's (four: place a byte, track << 6 | step): those of
  * tracks base..base + 3 (to; their PLAY bits too), or all of a FUN10 as tracks base.. (from, appended to m) */
 static void motion_to_v10(motion_store_v10_t *o, const motion_store_t *m, uint32_t base)
 {
@@ -746,7 +746,7 @@ static uint32_t proj_unpack_trk(proj_trk_t *t, const uint8_t *b, uint32_t np, ui
 
 /* A stable serialized schema: first header retains FUN6's fields; at byte66
  * np, format flags, then four byte-param tracks and nine-byte steps; FUN8: the patches at PROJ_FM6_OFF.
- * HA HA HE HU: this is tracks 1..4 of the project, as Felucca stores it (the parts byte 4, not 0: no GM drum part); tracks
+ * this is tracks 1..4 of the project, as Felucca stores it (the parts byte 4, not 0: no GM drum part); tracks
  * 5..8 are proj_pack_x's */
 static int proj_pack(project_store_t *out, const project_t *q)
 {
@@ -779,7 +779,7 @@ static int proj_pack(project_store_t *out, const project_t *q)
     return 1;
 }
 
-/* HA HA HE HU's tracks 5..8 ("FUNX", one storage object: storage.c OBJ_PROJX0 / OBJ_AUTOX): magic, size, tag (the hash
+/* Tracks 5..8 ("FUNX", one storage object: storage.c OBJ_PROJX0 / OBJ_AUTOX): magic, size, tag (the hash
  * at the end of the FUN10 record it belongs to: a project saved again, renamed or erased leaves a stale X, ignored),
  * np, 3 reserved; the four tracks as FUN10's; the sections' slots of tracks 5..8 (CHAIN_ROWS x 4); their motion
  * records (FUN10's layout, tracks counted from 5); their MIDI IN channels; their FM6 patches; the hash */
@@ -853,7 +853,7 @@ bad:
     q->sum = proj_sum(q);
     return 0;
 }
-/* HA HA HE HU's extras ("FUNY", one storage object: storage.c OBJ_PROJY0 / OBJ_AUTOY): magic, size, tag (the FUN10
+/* The tracks' extras ("FUNY", one storage object: storage.c OBJ_PROJY0 / OBJ_AUTOY): magic, size, tag (the FUN10
  * record's hash, as FUNX), the extras' size (a later firmware's longer ones: their head read), 3 reserved; NTRK trkx_t;
  * zeros; the hash */
 #define PROJY_MAGIC 0x594E5546u               /* "FUNY" */
@@ -929,7 +929,7 @@ static int proj_motion_v9(motion_store_t *m, const uint8_t *b)
     return 1;
 }
 /* a stored FUN10 (st = PROJ_STORE_SIZE), FUN9 (PROJ_STORE_V9: 64 motion records of 4 bytes, no nudges), FUN8
- * (PROJ_STORE_V8: FUN9 with its tail 64 bytes shorter) or FUN7 (PROJ_STORE_V7: no patches, the init one); HA HA HE HU:
+ * (PROJ_STORE_V8: FUN9 with its tail 64 bytes shorter) or FUN7 (PROJ_STORE_V7: no patches, the init one); then:
  * tracks 1..4, tracks 5..8 as proj_x_defaults sets them (proj_unpack_x then) */
 static int proj_unpack(project_t *q, const uint8_t *b, uint32_t st)
 {
@@ -1075,7 +1075,7 @@ static void proj_fetch(uint32_t slot)
 #endif
 
 #ifndef PROJ_FUNX
-#define PROJ_FUNX 0                               /* (HA HA HE HU: FUNX / FUNY written no more: projfs.c) */
+#define PROJ_FUNX 0                               /* (FUNX / FUNY written no more: projfs.c) */
 #endif
 #if FELUCCA_FLASH
 #define PX_OBJ0 OBJ_PROJX0                       /* the FUNX objects (storage.c) */
@@ -1086,18 +1086,18 @@ static void proj_fetch(uint32_t slot)
 #define PX_AUTO 0u
 #define PX_YOF(o) (o)
 #endif
-/* HA HA HE HU: q's tracks 5..8 from the FUNX in storage object obj, when it belongs to the FUN10 record tagged tag
+/* q's tracks 5..8 from the FUNX in storage object obj, when it belongs to the FUN10 record tagged tag
  * (st_buf holds it: no other buffer); 0 = none there (q as it was) */
 static int proj_x_apply(project_t *q, uint32_t obj, uint32_t tag)
 {
-#if FELUCCA_FLASH && PROJ_FUNX                       /* (HA HA HE HU: their flash is the PROJECTS' now, projfs.c) */
+#if FELUCCA_FLASH && PROJ_FUNX                       /* (their flash is the PROJECTS' now, projfs.c) */
     st_hdr_t h;
     int r;
     if (!flash_ok)
         return 0;
     r = st_current(obj, &h) >= 0 && proj_unpack_x(q, st_buf, (int)h.len, tag);   /* (a stale X: the extras' defaults
                                                                                  * too, proj_x_defaults) */
-    if (st_current(PX_YOF(obj), &h) >= 0)             /* (HA HA HE HU: then the extras, st_buf free again) */
+    if (st_current(PX_YOF(obj), &h) >= 0)             /* (then the extras, st_buf free again) */
         (void)proj_unpack_y(q, st_buf, (int)h.len, tag);
     return r;
 #else
@@ -1112,7 +1112,7 @@ static int proj_x_save(const project_t *q, uint32_t obj, uint32_t tag)
     if (!flash_ok)
         return 0;
     proj_wire_gen++;
-    if (!proj_pack_y(proj_wire.raw, q, tag) || st_save(PX_YOF(obj), &proj_wire, PROJY_SIZE))   /* (HA HA HE HU: the extras) */
+    if (!proj_pack_y(proj_wire.raw, q, tag) || st_save(PX_YOF(obj), &proj_wire, PROJY_SIZE))   /* (the extras) */
         return 1;
     if (!proj_pack_x(proj_wire.raw, q, tag))
         return 1;
@@ -1145,7 +1145,7 @@ static void project_capture(project_t *p)
     }
     p->motion = motion;
     memcpy(p->mch, song.mch, sizeof p->mch);
-    memcpy(p->x, trkx, sizeof p->x);                   /* (HA HA HE HU) */
+    memcpy(p->x, trkx, sizeof p->x);
     motion_unguard(f);
     memcpy(p->name, proj_name, str_len(proj_name));
     p->sum = proj_sum(p);
@@ -1240,7 +1240,7 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
     }
     if (!proj_import(&proj_scratch, &proj_slot[slot & 3u], sizeof(project_store_t)))
         return 0;
-    {   /* HA HA HE HU: tracks 5..8 from the slot's FUNX, read again only when the record changed (its tag) */
+    {   /* tracks 5..8 from the slot's FUNX, read again only when the record changed (its tag) */
         static struct {
             uint32_t tag, den[NTRK - NTRK_V10];
             uint16_t len48[NTRK - NTRK_V10];
@@ -1296,7 +1296,7 @@ static int project_rename(uint32_t slot, const char *name)
     }
     memset(p->name, 0, sizeof p->name);
     memcpy(p->name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
-    {   /* (HA HA HE HU: its tracks 5..8 go with it, tied to the renamed record) */
+    {   /* (its tracks 5..8 go with it, tied to the renamed record) */
         uint32_t had = proj_x_apply(p, PX_OBJ0 + (slot & 3u), proj_tag(&proj_slot[slot & 3u]));
         proj_wire_gen++;
         if (!proj_pack(&proj_wire, p)) { ui_message("SAVE FORMAT ERROR"); return 2; }
@@ -1342,7 +1342,7 @@ static int project_erase(uint32_t slot)
         ui_message("ERASE ERROR");
         return 2;
     }
-    /* (HA HA HE HU: its FUNX left as it is, no second erase: its tag no longer matches anything) */
+    /* (its FUNX left as it is, no second erase: its tag no longer matches anything) */
 #endif
     memset(&proj_slot[slot], 0, sizeof proj_slot[slot]);
     if (proj_cur == slot)
@@ -1393,7 +1393,7 @@ static int project_restore_runtime(const project_t *input)
             song.g[i] = (int16_t)clamp(p->g[i], GP[i].min, GP[i].max);
     for (k = 0; k < NTRK; k++)                          /* MIDI IN TRACK's channels (1.5.5; 0, channels 1..4, before) */
         song.mch[k] = (uint8_t)(p->mch[k] < MCH_N ? p->mch[k] : 0u);
-    for (k = 0; k < NTRK; k++) {                        /* (HA HA HE HU) the extras, bounded */
+    for (k = 0; k < NTRK; k++) {                        /* the extras, bounded */
         trkx[k] = p->x[k];
         for (i = 0; i < LDRAW_N; i++)
             trkx[k].draw[i] = (int8_t)clamp(trkx[k].draw[i], -64, 63);
@@ -1454,7 +1454,7 @@ static int project_restore_runtime(const project_t *input)
     return 0;
 }
 
-/* HA HA HE HU: SAVE > FILE's NEW: an empty project, as at power-on: every track's power-on sound with no steps
+/* SAVE > FILE's NEW: an empty project, as at power-on: every track's power-on sound with no steps
  * (PROJ_DEF_SOUND), no automation, no song, the globals' defaults (the tempo kept), no name, from no slot. 1: refused */
 static int project_new(void)
 {
@@ -1561,7 +1561,7 @@ static uint32_t chain_prepare(void)
         return 2;
     if (!chain_valid(&chain_config) || !chain_config.count)
         return 1;
-    chain.config = chain_config;                        /* (HA HA HE HU: each track's patterns, pstore.c: the first two
+    chain.config = chain_config;                        /* (each track's patterns, pstore.c: the first two
                                                          * sections now, each next one while the one before plays) */
     if (chain_from_row >= chain.config.count)
         chain_from_row = 0, chain_from_u = 0;
@@ -1633,7 +1633,7 @@ static struct {
     uint8_t wrote, err;                          /* a write since power-on (last is valid); the last one failed */
 } as __attribute__((section(".pool")));
 
-static int project_save_cur(void);               /* (HA HA HE HU: projfs.c, below) */
+static int project_save_cur(void);               /* (projfs.c, below) */
 #if FELUCCA_FLASH
 static int pfs_read(uint32_t id);
 #endif
@@ -1668,7 +1668,7 @@ static uint32_t autosave_sig(void)
     h = as_mix(h, song.mch, sizeof song.mch);           /* (1.5.5: MIDI IN TRACK's channels, the project's) */
     h = as_mix(h, &motion, sizeof motion);
     h = as_mix(h, &chain_config, sizeof chain_config);
-    h = as_mix(h, trkx, sizeof trkx);                   /* (HA HA HE HU: the extras, the patterns, the tracks) */
+    h = as_mix(h, trkx, sizeof trkx);                   /* (the extras, the patterns, the tracks) */
     h = as_mix(h, ps_heap, ps_used);
     h = as_mix(h, ps_cur, sizeof ps_cur);
     h = as_mix(h, &song.ntrk, 1);
@@ -1711,9 +1711,9 @@ static void autosave_poll(void)
     as.wrote = 1;
     project_capture(&proj_scratch);
     proj_wire_gen++;
-    as.err = project_save_cur() != 0;               /* (HA HA HE HU: the project open, saved in place; none: a new one) */
+    as.err = project_save_cur() != 0;               /* (the project open, saved in place; none: a new one) */
     if (!as.err) {
-        as.saved = as.seen = autosave_sig();           /* (HA HA HE HU: a new project's name given meanwhile: saved too) */
+        as.saved = as.seen = autosave_sig();           /* (a new project's name given meanwhile: saved too) */
         as.writes++;
     }
 #endif
@@ -1727,7 +1727,7 @@ static int autosave_boot(int allowed)
     int rc = 0;
 #if FELUCCA_FLASH
     if (flash_ok && allowed && !(ui_prefs & PREF_RESTORE_OFF) && pfs_cur() && pfs_there(pfs_cur())) {
-        ps_reset();                                     /* (HA HA HE HU: the project open last) */
+        ps_reset();                                     /* (the project open last) */
         if (!pfs_read(pfs_cur())) {
             ui_message("RESTORED");
             rc = 1;
@@ -1742,7 +1742,7 @@ static int autosave_boot(int allowed)
 }
 
 #if FELUCCA_FLASH
-#include "projfs.c"                               /* HA HA HE HU: the PROJECTS, as many as fit (SAVE > FILE) */
+#include "projfs.c"                               /* the PROJECTS, as many as fit (SAVE > FILE) */
 #else
 static uint32_t pfs_count(void) { return 0; }
 static uint32_t pfs_list(uint8_t *ids) { (void)ids; return 0; }

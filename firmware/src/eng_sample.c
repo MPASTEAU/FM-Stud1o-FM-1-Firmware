@@ -43,7 +43,7 @@ static uint32_t pow2_q16(int32_t d16)
  * smp_zone_t layout (off relative to the slot's data at +512) + IMA ADPCM data. */
 #include "../hal/fm1_xip.h"   /* relative: hostsim includes this file too */
 #define SMP_USER_SLOTS 3
-#define SMP_USER_WRITABLE 1                         /* HA HA HE HU: USR3's flash (0xC8000..) holds tracks 5..8 of the
+#define SMP_USER_WRITABLE 1                         /* USR3's flash (0xC8000..) holds tracks 5..8 of the
                                                      * projects (storage.c OBJ_PROJX0..): USR3 is always empty */
 #define SMP_USER_BASE 0xA0000u
 #define SMP_USER_SIZE 0x14000u

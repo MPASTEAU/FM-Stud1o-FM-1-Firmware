@@ -84,7 +84,7 @@ static uint32_t upf_tag(const up_rec_t *r)       /* FNV-1a of the record without
 }
 
 static int upf_fm6(uint32_t k) { return up_used(k) && up_rec(k)->engine == ENGI_FM6; }
-/* slot k may keep a patch: an FM6 sound's, a DRUM sound's DESIGN lanes (HA HA HE HU, eng_drum.c dl_*) */
+/* slot k may keep a patch: an FM6 sound's, a DRUM sound's DESIGN lanes (eng_drum.c dl_*) */
 static int upf_has(uint32_t k) { return upf_fm6(k) || (up_used(k) && up_rec(k)->engine == ENGI_DRUM); }
 
 /* a 128-byte packed record's 7-bit bytes, 8 to 7 bytes (UPF_PK) and back (the voice bank too, fm6_vbank.c) */

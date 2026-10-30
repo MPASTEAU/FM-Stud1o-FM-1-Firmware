@@ -186,7 +186,7 @@ static int cond_song(void)
     t->p[P_SLEN] = 12;
     for (i = 1; i < NTRK; i++)
         track_defaults_steps(&trk[i]);
-    pat_keep(2);                                       /* (HA HA HE HU: the patterns kept as 2, pstore.c) */
+    pat_keep(2);                                       /* (the patterns kept as 2, pstore.c) */
     chain_config.count = 2;
     chain_config.row[0] = (chain_row_t){{2, 2, 2, 2}, 4};
     chain_config.row[1] = (chain_row_t){{2, 2, 2, 2}, 2};
