@@ -650,6 +650,7 @@ static void ka_start(void)
     if (ui.home)                                        /* (Dah: not on HOME: its knobs are the ones assigned) */
         return;
     ka.dst = 0xFFu;
+    ka.pg = ui.page;                                    /* (another page, HOME, a layer, the menu: it stops) */
     ka.st = 1;                                          /* (Dah: the panel says it, ui_graph.c graph_assign) */
     ui.force = 1;
 }
@@ -2398,6 +2399,10 @@ static void ui_input(void)
     for (id = 0; b; id++, b >>= 1)
         if (b & 1u)
             page_tap(panel_btn_of(id));
+    if (ka.st && (ui.home || ui.menu || ui.confirm || ui.layer || name_on() || ui.page != ka.pg)) {
+        ka.st = 0;                                      /* (Dah) ASSIGN left behind: it stops (its frames go) */
+        ui.force = 1;
+    }
     if (oct & 4u && !ui.menu && !ui.confirm && !name_on()) {   /* (Dah) OCT- and OCT+ together: ASSIGN a HOME knob */
         ka_start();
     } else if (ka.st && (oct & 0x33u)) {

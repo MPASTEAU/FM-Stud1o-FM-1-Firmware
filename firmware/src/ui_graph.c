@@ -1445,7 +1445,8 @@ static uint32_t graph_signature(void)
     if (ui.home)
         return h ^ ui.frame / 2u;                    /* scope: every other frame */
     h ^= (uint32_t)pg->graph * 131u + TSEL->eng_req + song.sel * 7777u + ui.page * 1291u;
-    h ^= ka.st * 0x9E37u + ka.src * 131u + ka.dst * 7919u + (uint32_t)ka_blink() * 3u;   /* (Dah: ASSIGN's panel) */
+    h ^= ka.st * 0x9E37u + ka.src * 131u + ka.dst * 7919u + (uint32_t)ka_blink() * 3u +
+         (ka.st >= 3u && ka.dst > 3u ? (fm1_ms / 300u & 1u) * 5u : 0u);   /* (Dah: ASSIGN's panel) */
     h ^= (uint32_t)tl_dy * 40503u + (uint32_t)pp_dy * 2246822519u + (uint32_t)lu_dy * 3266489917u + (uint32_t)lf_dy * 668265263u + (uint32_t)ch_dy * 374761393u;   /* (Dah: a list gliding: each step drawn) */
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
@@ -1618,38 +1619,58 @@ static void panel_alert(uint32_t id, const char *a)
 /* (Dah) ALGORITHM turned: the MASTER and the project's tracks, the selected one in the middle (its colour, its
  * sound's name), gliding to it */
 static void sound_name(const track_t *t, char *b);     /* ui_draw.c */
-/* (Dah) ASSIGN: what it asks, the whole panel; then the four HOME knobs of the sound, the one to turn blinking */
+/* (Dah) ASSIGN, a stepper over the whole panel: 1 SOURCE (a knob turned; its name at the right once taken), 2 OK
+ * (OCT+), 3 the HOME knob (the sound's four as cards, blinking while one is asked; the one turned shows its new
+ * parameter in the accent); at the foot OCT- CANCEL and OCT+ OK, large. A step's badge: the accent (now), the
+ * theme's (done), RAISE (to come) */
+static int32_t ka_step(int32_t y, uint32_t n, const char *name, const char *val, uint32_t st)
+{
+    char d[2] = {(char)('0' + n), 0};
+    uint16_t bc = st == 1u ? T_ACCENT : st == 2u ? T_THEME : T_RAISE;
+    cv_rrect(12, y + 1, 16, 16, 8, bc, T_SURF);
+    cv_text_in(12, y + 1 + CAP_IN(S, 16), 16, &AF_S, d, st ? T_INK : T_DIM, bc);
+    cv_text_on(36, y + CAP_IN(M, 18), &AF_M, name, st ? T_TEXT : T_DIM, T_SURF);
+    if (val)
+        cv_text_r(226, y + CAP_IN(M, 18), &AF_M, val, st == 1u ? T_MID : T_ACCENT, T_SURF);
+    return y + 18;
+}
+static void ka_btn(int32_t x, int32_t y, uint32_t id, const char *s, int hot)
+{
+    int32_t w = kc_w(id) + 6 + text_w(&AF_M, s) + 16;
+    uint16_t f = hot ? T_ACCENT : T_RAISE;
+    if (x < 0)
+        x = -x - w;                                     /* (x < 0: its right edge at -x) */
+    cv_rrect(x, y, w, 24, 6, f, T_SURF);
+    cv_keycap(x + 8, y + (24 - KC_H) / 2, id, hot ? T_INK : T_KEY, hot ? T_ACCENT : T_INK, f);
+    cv_text_on(x + 8 + kc_w(id) + 6, y + CAP_IN(M, 24), &AF_M, s, hot ? T_INK : T_TEXT, f);
+}
 static void graph_assign(void)
 {
-    char t[24];
-    if (ka.st == 1u) {
-        panel_note("ASSIGN A HOME KNOB", "TURN THE KNOB TO TAKE", "[OCT-] LEAVE");
-        return;
+    int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, g = (full - 3 * 18 - 34 - 24) / 6, y = g, k;
+    uint32_t st = ka.st, got = ka.dst < 4u, wait = st >= 3u && !got;
+    const char *src = st == 4u ? "RESET" : track_desc(TSEL, ka.src)->label;
+    y = ka_step(y, 1, "SOURCE", st == 1u ? "TURN A KNOB" : src, st == 1u ? 1u : 2u) + g;
+    y = ka_step(y, 2, "CONFIRM", st == 2u ? "OCT+" : st > 2u ? "OK" : 0, st == 2u ? 1u : st > 2u ? 2u : 0u) + g;
+    {
+        char kd[3] = {'K', (char)('1' + (ka.dst & 3u)), 0};
+        y = ka_step(y, 3, "HOME KNOB", wait ? "TURN K1-K4" : got ? kd : 0, st >= 3u ? 1u : 0u) + g;
     }
-    if (ka.st == 2u) {
-        str_cpy(t, track_desc(TSEL, ka.src)->label, 12);
-        panel_note(t, "[OCT+] OK", "[OCT-] LEAVE");
-        return;
+    for (k = 0; k < 4 && st >= 3u; k++) {               /* the sound's four HOME knobs: what each turns now */
+        uint32_t a = trkx[song.sel % NTRK].home[k], id = a && a <= P_COUNT ? a - 1u : ENGINES[TSEL->eng_req % NENGINES]->knob[k];
+        int32_t x = 8 + k * 57, pk = (uint32_t)k == ka.dst, on = wait && ((fm1_ms / 300u) & 1u);
+        uint16_t fr = pk ? T_ACCENT : on ? T_THEME : T_RAISE;
+        char kn[3] = {'K', (char)('1' + k), 0};
+        if (pk)                                         /* the one picked: what it will turn */
+            id = st == 3u ? ka.src : ENGINES[TSEL->eng_req % NENGINES]->knob[k];
+        cv_rrect(x, y, 53, 34, 5, fr, T_SURF);
+        cv_rrect(x + 2, y + 2, 49, 30, 4, T_RAISE, fr);
+        cv_text_in(x, y + 6 - AF_S_CAP_Y, 53, &AF_S, kn, T_MID, T_RAISE);
+        cv_free_text(x + 5, y + 20 - AF_S_CAP_Y, &AF_S, track_desc(TSEL, id)->label, pk ? T_ACCENT : T_TEXT, T_RAISE, 43);
     }
-    {   /* its four HOME knobs: what each one turns now */
-        int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, y = full / 2 - 4, k, on = ka_blink();
-        str_cpy(t, ka.dst < 4u ? "OK?" : ka.st == 3u ? "ON WHICH KNOB?" : "RESET WHICH KNOB?", sizeof t);
-        GFX_HOOK_ALIGN(0, 0, 240, 0, AL_H, "assign title centred");
-        cv_text_in(0, y - 34, 240, &AF_M, t, T_TEXT, T_SURF);
-        for (k = 0; k < 4; k++) {
-            uint32_t a = trkx[song.sel % NTRK].home[k], id = a && a <= P_COUNT ? a - 1u : ENGINES[TSEL->eng_req % NENGINES]->knob[k];
-            int32_t x = 8 + k * 57, pk = (uint32_t)k == ka.dst;
-            char kn[3] = {'K', (char)('1' + k), 0};
-            if (pk)                                     /* (Dah) the one picked: shown with what it will turn */
-                id = ka.st == 3u ? ka.src : ENGINES[TSEL->eng_req % NENGINES]->knob[k];
-            cv_rrect(x, y, 53, 40, 4, on || pk ? (pk ? T_ACCENT : T_THEME) : T_RAISE, T_SURF);
-            cv_rrect(x + 2, y + 2, 49, 36, 3, T_RAISE, on || pk ? (pk ? T_ACCENT : T_THEME) : T_RAISE);
-            GFX_HOOK_ALIGN(x, y + 2, x + 53, y + 18, AL_H, "assign knob name centred");
-            cv_text_in(x, y + 4 - AF_S_CAP_Y + 2, 53, &AF_S, kn, T_MID, T_RAISE);
-            cv_free_text(x + 4, y + 22 - AF_S_CAP_Y, &AF_S, track_desc(TSEL, id)->label, T_TEXT, T_RAISE, 45);
-        }
-        note_line(y + 52, ka.dst < 4u ? "[OCT+] OK" : "[OCT-] LEAVE", ka.dst < 4u ? T_TEXT : T_DIM);
-    }
+    y += 34 + g;
+    ka_btn(12, y, KC_OCTDN, "CANCEL", 0);
+    if (st == 2u || got)
+        ka_btn(-228, y, KC_OCTUP, "OK", 1);
 }
 /* (Dah) SAVE's tall lists (34 px a row): the frame from the top down to the middle, there the rows go by under it,
  * at the end on down to the foot (as HOME's steps); p the place gliding (cur's, dy back). The view's top, the frame's y

@@ -1684,7 +1684,7 @@ static uint32_t pl_ms, tl_ms;                           /* (.. ALGORITHM turned:
 static int32_t tl_dy, pp_dy, lu_dy, lf_dy, ch_dy;
 /* (Dah) ASSIGN, HOME's four knobs (ui_input.c ka_*; the panel and the cards: ui_graph.c graph_assign, ui_draw.c): st 0
  * off, 1 the source, 2 OK?, 3 the knob, 4 the knob reset */
-static struct { uint8_t st, src, dst, srck; } ka;   /* (srck: the card the source was turned on) */         /* (dst: the HOME knob picked, 0xFF none yet) */
+static struct { uint8_t st, src, dst, srck, pg; } ka;   /* (srck: the card the source was turned on) */         /* (dst: the HOME knob picked, 0xFF none yet) */
 static int ka_blink(void) { return ka.st == 1u && ((fm1_ms / 300u) & 1u); }   /* (the cards: while a source is asked) */   /* (ch_dy: FX > CHAIN's) */      /* (lu_dy, lf_dy: MY PRESETS', FILE's) */                             /* (pp_dy: SAVE > PATTERN's rows gliding) */
 static uint8_t tl_pat;                                  /* (Dah) .. GLO + ALGORITHM: the patterns' list */
 static int tl_on(void) { return tl_ms && (uint32_t)((int32_t)(fm1_ms - tl_ms) + 1) < 1001u && !ui.menu && !ui.confirm; }
