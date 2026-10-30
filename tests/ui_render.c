@@ -1321,7 +1321,7 @@ static void setup(int s)
         break;
     case S_FM6_OP_ENV: eng(ENGI_FM6); fop_op = 0; fop_stg = 1; go_title("OP ENV"); ui.hot_col = 2; ui.hot_t = 30; break;
     case S_FM6_OP_ENV_REL: eng(ENGI_FM6); fop_op = 5; fop_stg = 3; go_title("OP ENV"); break;
-    case S_CONFIRM_PROJ: ui.confirm = CF_OVR_PROJ; ui.confirm_trk = 0; break;
+    case S_CONFIRM_PROJ: ui.confirm = CF_DEL_ARCH; ui.confirm_trk = 0; break;   /* (the PROJECT slots' dialogs: gone) */
     case S_CONFIRM_USER: song.playing = 0; up_store(6, "A VERY LONG SOUND NAME"); ui.confirm = CF_OVR_USER; ui.confirm_trk = 6; break;
     case S_CONFIRM_ERASE: song.playing = 0; up_store(6, "A VERY LONG SOUND NAME"); ui.confirm = CF_ERASE_USER; ui.confirm_trk = 6; break;
     case S_MENU: ui.menu = 1; ui.menu_sel = 0; song.rec = 1; break;
@@ -2012,8 +2012,8 @@ static void align_sweeps(void)
         }
         ui.layer = 0; ui.hot_t = 0; ui_prefs = 0;
         cur_name = st ? "sweep LINE: dialogs" : "sweep FLAT: dialogs";
-        for (i = CF_OVR_PROJ; i <= CF_ERASE_USER; i++)
-            for (k = 0; k < 4u; k++) {
+        for (i = CF_OVR_USER; i <= CF_ERASE_USER; i++)
+            for (k = 0; k < 4u && i != CF_DEL_ROW; k++) {   /* (CF_DEL_ROW: never opened, no text) */
                 ui.confirm = (uint8_t)i; ui.confirm_trk = (uint8_t)k;
                 draw_confirm();
             }

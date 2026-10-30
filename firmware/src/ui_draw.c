@@ -475,7 +475,7 @@ static void head_home(void)
                          (uint32_t)song.rec * 977u + tc * 13u +
                          (ui.msg_t && (song.playing || chain_busy() || !msg_win()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
-                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u + (uint32_t)vcap * 131u +
+                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
                          (ui.home ? 0u : ui.page + 1u) * 3141592653u);
     if (!ui.force && sig == ui.head_sig)
         return;
@@ -499,15 +499,13 @@ static void head_home(void)
         char lv[8], lc[8];
         int32_t w;
         fmt_int(lv, (int32_t)hld.voices);
-        str_cpy(lv + str_len(lv), "/", 2);
-        fmt_int(lv + str_len(lv), vcap);                /* (Dah: the budget the CPU leaves now) */
         fmt_int(lc, (int32_t)hld.cpu);
         str_cpy(lc + str_len(lc), "%", 2);
         w = text_w(&AF_S, lv);
         if (xr - text_w(&AF_S, lc) - 6 - w - (song.rec ? 14 : 0) >= lw) {
             GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
             xr = cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG) - 6;
-            cv_text(xr - w, ty, &AF_S, lv, hld.voices >= vcap ? T_ACCENT : T_MID);
+            cv_text(xr - w, ty, &AF_S, lv, T_MID);   /* (Dah: the voices sounding; no budget but the CPU's) */
             xr -= w + 8;
         }
     }
@@ -885,15 +883,6 @@ static void span_mnot(const card_span_t *sp, int32_t v, char *val)      /* (Dah)
 {
     (void)sp;
     val[0] = (char)('0' + v); val[1] = 0;
-}
-static void span_fxrow(const card_span_t *sp, int32_t v, char *val)     /* (Dah) CHAIN's EFFECT: a row, or ADD */
-{
-    (void)sp;
-    if (v >= 9) {
-        str_cpy(val, "ADD", 4);
-        return;
-    }
-    val[0] = (char)('1' + v); val[1] = '/'; val[2] = '9'; val[3] = 0;
 }
 static const char *const EQ_TN[EQT_N] = {"HP", "LP", "LSH", "HSH", "BELL"};   /* (Dah) the EQ's TYPEs, short */
 static void span_eqb(const card_span_t *sp, int32_t v, char *val)       /* (Dah) the EQ's FILTER: n / 4 */
@@ -1318,8 +1307,6 @@ static uint32_t foot_rename(void)
     uint32_t g = ui.home ? GR_NONE : cur_page()->graph;
     if (g == GR_USER)
         return 1u + (uint32_t)up_used(ui.uslot);
-    if (g == GR_SLOTS)
-        return 1u + (uint32_t)graph_project_used((uint32_t)song.g[G_SLOT] - 1u);
     return 0;
 }
 
@@ -1907,10 +1894,6 @@ static void draw_columns_in(void)
     for (c = 0; c < 4u; c++) {
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
-        if (cur_page()->graph == GR_SLOTS && c == 1u) {   /* PATTERN: ERASE (1.5.5, #199) */
-            draw_act_column(1, "ERASE", graph_project_used((uint32_t)song.g[G_SLOT] - 1u) ? T_THEME : T_DIM, ICON_AUTO);
-            continue;
-        }
         if (cur_page()->graph == GR_PATTERN) {          /* (Dah) PATTERN: the one playing (KNOB 1); COPY NEW DELETE */
             if (!c) {
                 uint8_t nums[PS_NUM];
@@ -2196,25 +2179,12 @@ static void confirm_text(char *a, char *b)
     uint32_t k = ui.confirm_trk;
     b[0] = 0;
     switch (ui.confirm) {
-    case CF_OVR_PROJ:
-        str_cpy(a, "OVERWRITE PATTERN A?", 24);   /* (HA HA HE HU: the slots are the patterns) */
-        a[18] = (char)('A' + (k & 3u));
-        if (!project_name(k & 3u, b) || !b[0])          /* the project's name, else what SONG plays from it */
-            str_cpy(b, "SONG PATTERN CHANGES", 24);
-        break;
-    case CF_DEL_ROW:
-        str_cpy(a, "DELETE SECTION?", 24);
-        break;
     case CF_DEL_PAT:                                 /* (HA HA HE HU) SAVE > PATTERN, REC */
         str_cpy(a, "DELETE PATTERN ", 24);
         fmt_int(a + str_len(a), (int32_t)k);
         str_cpy(a + str_len(a), "?", 4);
         str_cpy(b, "TRACK 1", 24);
         b[6] = (char)('1' + song.sel % NTRK);
-        break;
-    case CF_ADD_FX:                                  /* (Dah) FX > CHAIN: + ADD reached */
-        str_cpy(a, "ADD AN EFFECT?", 24);
-        str_cpy(b, "LAST IN THE CHAIN", 24);
         break;
     case CF_NEW_PAT:                                 /* (Dah) SELECT, GLO + ALGORITHM past the last pattern; SAVE >
                                                       * PATTERN's NEW (k | 0x80: what it starts from asked next) */
@@ -2228,13 +2198,7 @@ static void confirm_text(char *a, char *b)
         a[10] = (char)('1' + k % NTRK);
         str_cpy(b, track_def_name(k % NTRK), 24);
         break;
-    case CF_NEW_PROJ:                                /* (HA HA HE HU) SAVE > FILE's NEW */
-        str_cpy(a, "NEW PROJECT?", 24);
-        str_cpy(b, "UNSAVED CHANGES LOST", 24);
-        break;
-    case CF_OPEN_ARCH:                               /* (HA HA HE HU) SAVE > FILE: REC deletes */
-    case CF_DEL_ARCH:
-    case CF_OVR_ARCH:
+    case CF_DEL_ARCH:                                /* (HA HA HE HU) SAVE > FILE: REC deletes */
         str_cpy(a, "DELETE PROJECT?", 24);
         if (!pfs_name(k, b) || !b[0])
             str_cpy(b, "UNTITLED", 24);
@@ -2263,11 +2227,6 @@ static void confirm_text(char *a, char *b)
         up_slot_label(a + str_len(a), k);
         str_cpy(a + str_len(a), "?", 2);
         up_name(k, b);                               /* the sound stored there */
-        break;
-    case CF_ERASE_PROJ:                              /* 1.5.5 (#199): the project's name under it */
-        str_cpy(a, "ERASE PATTERN A?", 24);
-        a[14] = (char)('A' + (k & 3u));
-        (void)project_name(k & 3u, b);
         break;
     case CF_DEL_TRK:                                 /* (Dah) MIXER, OCT- held */
         str_cpy(a, "DELETE TRACK  ?", 24);

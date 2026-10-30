@@ -399,31 +399,6 @@ static void fx_wave(int32_t x0, int32_t w, int32_t cy, int32_t a, uint16_t col) 
         py = y;
     }
 }
-/* the chain as boxes across at y, h tall (FX's top): its effects in its order (a send lighter: it taps the sound
- * there), then -> OUT */
-static void fx_chain_strip(const track_t *t, int32_t y, int32_t h, int32_t cur, uint16_t c)
-{
-    uint8_t u[FXU_N_ALL];
-    uint32_t n = fx_list(t, u), i;
-    int32_t bw = n ? (PANEL_W - 36 - (int32_t)n * 6) / (int32_t)n : 0, x = PANEL_X0;
-    (void)cur;
-    if (bw > 52)
-        bw = 52;
-    for (i = 0; i < n; i++, x += bw + 6) {
-        uint16_t f = u[i] < FXU_SER ? c : ux_mix(c, T_SURF, 55);
-        cv_rrect(x, y, bw, h, 3, f, T_SURF);
-        cv_text_in(x, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, bw, &AF_S, bw < 50 ? FXU_S[u[i]] : FXU_N[u[i]], T_INK, f);
-        cv_rect(x + bw + 1, y + h / 2, 4, 1, T_MID);   /* the arrow on */
-    }
-    if (n)
-        x -= 6;
-    cv_rect(x, y + h / 2, 10, 1, T_MID);                /* -> OUT: an arrow and the word, no box */
-    cv_line_t(x + 7, y + h / 2 - 3, x + 10, y + h / 2, T_MID, 1);
-    cv_line_t(x + 7, y + h / 2 + 3, x + 10, y + h / 2, T_MID, 1);
-    cv_text_on(x + 13, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "OUT", T_MID, T_SURF);
-    if (!n)
-        cv_text_on(x + 40, y + (h - AF_S_CAP_H) / 2 - AF_S_CAP_Y, &AF_S, "NO EFFECT", T_DIM, T_SURF);
-}
 /* CHAIN: the list, an effect a row (its number, name, what it does), the sound flowing down a line at the left; the
  * row picked outlined; + ADD after them (four at most); the sound out at the right */
 /* CHAIN (Dah): the whole chain at once, filling the panel: the row picked taller (its name, what it does, framed), the
@@ -491,7 +466,7 @@ static void graph_chain(const track_t *t, uint16_t c)
             fx_unit_info(t, u[i], inf);
             cv_text_r(x0 + bw - 6 - in, ty, &AF_S, inf, sel ? T_TEXT : T_MID, sel ? T_SURF : T_RAISE);
         } else {                                        /* + ADD */
-            int32_t k, bx = x0 + in, bw2 = bw - 2 * in;   /* (Dah) a dashed row, as HOME's spare one: what to do, said */
+            int32_t bx = x0 + in, bw2 = bw - 2 * in;   /* (Dah) a dashed row, as HOME's spare one: what to do, said */
             uint16_t dc = sel ? T_TEXT : T_DIM;
             dash_rrect(bx, by, bw2, bh, dc);
             GFX_HOOK_ALIGN(0, by, 0, by + bh, AL_V, "chain add row on its line");
@@ -531,23 +506,6 @@ static void graph_dist(const track_t *t, uint16_t c, int32_t pw)   /* (Dah: pw w
         int32_t p = clamp(fx_peak() * 4 * a / 49152, 0, a);
         if (p > 1)
             cv_rect(cx + p - 2, cy - clamp(dist_curve(t, p * 49152 / a) * a / 49152, -a, a) - 2, 5, 5, T_ACCENT);
-    }
-}
-static void graph_sends(const track_t *t, uint16_t c)
-{
-    static const uint8_t ID[3] = {P_CHOR, P_DLY, P_REV};
-    static const char *const NM[3] = {"CHORUS", "DLY", "REVERB"};
-    int32_t cw = PANEL_W / 3, top = 6, bot = graph_ht - 16, pk = fx_peak(), i;
-    uint32_t hot = ui.hot_t ? page_id(cur_page(), ui.hot_col) : 0xFFu;
-    for (i = 0; i < 3; i++) {
-        int32_t x = PANEL_X0 + i * cw + cw / 2 - 14, v = t->p[ID[i]], h = v * (bot - top) / 127;
-        int32_t lv = clamp(pk * v / 127 * (bot - top) / 16384, 0, h);
-        cv_rrect(x, top, 28, bot - top, 4, T_RAISE, T_SURF);
-        if (h > 2)
-            cv_rrect(x, bot - h, 28, h, 4, ux_mix(c, T_SURF, 45), T_RAISE);
-        if (lv > 1)
-            cv_rect(x + 6, bot - lv, 16, lv, hot == ID[i] ? T_ACCENT : c);   /* the sound going there now */
-        cv_text_in(PANEL_X0 + i * cw, bot + 4, cw, &AF_S, NM[i], v ? T_TEXT : T_MID, T_SURF);
     }
 }
 /* COMP: its curve (in across, out up, -36 .. 0 dB; the threshold marked), the reduction now (a bar falling from the

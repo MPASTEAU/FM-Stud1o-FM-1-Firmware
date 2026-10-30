@@ -104,13 +104,6 @@ static void name_open(uint32_t kind, uint32_t slot)
     } else if (kind == NK_ARCH_SAVE || kind == NK_FILE_RENAME) {   /* (HA HA HE HU) FILE: COPY's name, RENAME */
         str_cpy(nm.ph, kind == NK_ARCH_SAVE ? "COPY" : "PROJECT", sizeof nm.ph);
         project_cur_name(b);
-    } else {
-        str_cpy(nm.ph, "PATTERN A", sizeof nm.ph);
-        nm.ph[8] = (char)('A' + (slot & 3u));
-        if (kind == NK_PROJ_RENAME)
-            project_name(slot, b);
-        else
-            project_cur_name(b);
     }
     str_cpy(nm.s, b, sizeof nm.s);
     nm.len = nm.cur = (uint8_t)str_len(nm.s);
@@ -120,14 +113,13 @@ static void name_open(uint32_t kind, uint32_t slot)
 /* SAVE > USER / PROJECT, EDIT: rename the selected slot */
 static void name_rename(void)
 {
-    int user = cur_page()->graph == GR_USER;
-    uint32_t k = user ? ui.uslot : (uint32_t)song.g[G_SLOT] - 1u;
-    if (!(user ? up_used(k) : project_used(k)))
+    uint32_t k = ui.uslot;                             /* (SAVE > USER's only) */
+    if (!up_used(k))
         ui_message("EMPTY SLOT");
     else if (transport_busy())
         ui_message("STOP TO SAVE");
     else
-        name_open(user ? NK_USER_RENAME : NK_PROJ_RENAME, k);
+        name_open(NK_USER_RENAME, k);
 }
 
 static void nm_commit(void)                            /* the letter being cycled is kept: the cursor past it */
@@ -270,17 +262,11 @@ static void name_ok(void)
     case NK_USER_RENAME:
         up_ui_named(3, nm.slot, b, nm.cat);
         break;
-    case NK_PROJ_SAVE:
-        project_save_as(nm.slot, b);
-        break;
     case NK_ARCH_SAVE:
         (void)project_copy(b[0] ? b : nm.ph);
         break;
     case NK_FILE_RENAME:
         (void)project_rename_cur(b[0] ? b : nm.ph);
-        break;
-    default:
-        project_rename(nm.slot, b);
         break;
     }
     name_close();
@@ -344,7 +330,7 @@ static uint32_t name_leds(void)
 #define NM_CX(i) (12 + 18 * (int32_t)(i))              /* cell i: 18 x 22 at y 18 of the card */
 static void nm_title(char *b)
 {
-    str_cpy(b, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE || nm.kind == NK_ARCH_SAVE ? "SAVE " : "NAME ", 8);
+    str_cpy(b, nm.kind == NK_USER_SAVE || nm.kind == NK_ARCH_SAVE ? "SAVE " : "NAME ", 8);
     if (nm.kind <= NK_USER_RENAME)
         up_slot_label(b + 5, nm.slot);
     else
@@ -444,7 +430,7 @@ static void nm_draw_foot(void)
 {
     khint_t a[3], b[3];
     int ok = !transport_busy();
-    a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_PROJ_SAVE || nm.kind == NK_ARCH_SAVE ? "SAVE" : "RENAME"};
+    a[0] = (khint_t){KC_OCTUP, nm.kind == NK_USER_SAVE || nm.kind == NK_ARCH_SAVE ? "SAVE" : "RENAME"};
     a[1] = (khint_t){KC_OCTDN, "CANCEL"};
     a[2] = (khint_t){KC_K3, nm.kind <= NK_USER_RENAME ? "CATEGORY" : "RANDOM"};   /* (1.2: the category, a random name) */
     b[0] = (khint_t){KC_K1, "MOVE"};

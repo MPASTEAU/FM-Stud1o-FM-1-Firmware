@@ -565,13 +565,6 @@ static const page_t PAGES[] = {
     {"MIXER", FAM_TRK, SC_TRK, GR_TRK, {0, 1, 2, 3}},
 };
 #define NPAGES (sizeof(PAGES) / sizeof(PAGES[0]))
-/* (Dah) the parameter a page's knob c edits: FX's what P_FXK1..4 name, the others their own */
-static uint32_t fx_knob_id(const track_t *t, uint32_t c)
-{
-    static const uint8_t ID[4] = {P_DIST, P_CHOR, P_DLY, P_REV};   /* (the STEP lanes': DST CHO DLY REV) */
-    (void)t;
-    return ID[c & 3u];
-}
 static int eq_page(const page_t *pg) { return pg->fam == FAM_FX && pg->scope == SC_TRACK && pg->id[0] == P_EQLO; }
 static uint8_t eq_ui_band;        /* (Dah) the EQ page: the band picked (ui_graph_eq.c) */
 static uint32_t eq_ui_id(uint32_t c);                   /* (Dah) ui_graph_eq.c: the EQ page's knob c, the band picked's */
@@ -628,7 +621,7 @@ static int pg_unused(const page_t *pg, uint32_t id)
 }
 static uint32_t page_id(const page_t *pg, uint32_t c)
 {
-    uint32_t id = pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : eq_page(pg) ? eq_ui_id(c) : pg->id[c & 3u];
+    uint32_t id = eq_page(pg) ? eq_ui_id(c) : pg->id[c & 3u];
     return pg_unused(pg, id) ? 0xFFu : id;
 }
 
@@ -674,8 +667,6 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         *valp = 0;
         return 0;
     }
-    if (pg->graph == GR_FX)                           /* (Dah) FX: what its knobs drive */
-        id = fx_knob_id(TSEL, slot);
     *valp = &ft->p[id];
     return track_desc(ft, id);
 }

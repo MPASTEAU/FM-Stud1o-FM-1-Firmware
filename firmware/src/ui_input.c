@@ -700,7 +700,6 @@ static uint32_t ka_id_of(uint32_t k)
 }
 static void ka_knob(uint32_t k)
 {
-    char m[24] = "HOME K";
     if (ka.st == 1 || ka.st == 2) {
         uint32_t id = ka_id_of(k);
         if (id == 0xFFu) {
@@ -1469,7 +1468,7 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (!d || !vp || d->max == d->min)
         return;
     v = param_turn(d, *vp, accel(EN_K1 + slot, steps, d->fmt == F_ENUM ? 0 : d->max - d->min));
-    if (pg->fam == FAM_FX && pg->graph != GR_FX && v <= 0 &&
+    if (pg->fam == FAM_FX && v <= 0 &&
         (vp == &fx_tsel()->p[P_SLCR] || vp == &fx_tsel()->p[P_ITYPE] || vp == &fx_tsel()->p[P_DIST] ||
          vp == &fx_tsel()->p[P_DKSRC] || vp == &fx_tsel()->p[P_IMIX] || vp == &fx_tsel()->p[P_CHOR] ||
          vp == &fx_tsel()->p[P_DLY] || vp == &fx_tsel()->p[P_REV])) {                     /* (Dah) an effect's own page: it stays in the chain (CHAIN's
@@ -1492,7 +1491,7 @@ static void edit_param(uint32_t slot, int32_t steps)
  * are dropped once done. Flash writes only while stopped; over the user's data: the dialog */
 static void act_do(void)
 {
-    uint32_t c = act_col(), id, k = (uint32_t)song.g[G_SLOT] - 1u;
+    uint32_t c = act_col();
     if (!c--)
         return;
     if (cur_page()->graph == GR_USER && !act_ready())   /* (Dah) MY PRESETS: what cannot be done (LOAD, DELETE on an
@@ -1574,32 +1573,6 @@ static void act_do(void)
         else if (!project_new_file())
             file_enter();
         return;
-    }
-    if (cur_page()->graph == GR_SLOTS && c == 1u) {     /* PATTERN ERASE (1.5.5, #199): the dialog first */
-        ui.act = 0;
-        if (transport_busy())
-            ui_message("STOP TO ERASE");
-        else if (!project_used(k))
-            ui_message("EMPTY SLOT");
-        else
-            confirm_open(CF_ERASE_PROJ, k);
-        return;
-    }
-    id = page_id(cur_page(), c);
-    if (id != G_LOAD)
-        ui.act = 0;
-    switch (id) {
-    case G_LOAD:
-        project_load(k);
-        break;
-    default:                                              /* G_SAVE: the NAME screen writes it */
-        if (transport_busy())
-            ui_message("STOP TO SAVE");
-        else if (project_used(k))
-            confirm_open(CF_OVR_PROJ, k);
-        else
-            name_open(NK_PROJ_SAVE, k);
-        break;
     }
 }
 
@@ -1753,7 +1726,7 @@ static void presets_turn(int32_t s)
         edit_param(0, s);
     } else if (g == GR_PATTERN || g == GR_FILE) {          /* (Dah) the list (its knobs are the actions) */
         g == GR_PATTERN ? pt_move(s) : file_move(s);
-    } else if (g == GR_USER || g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_SONG) {
+    } else if (g == GR_USER || g == GR_FILE || g == GR_PATTERN || g == GR_SONG) {
         edit_param(0, s);                                 /* KNOB 1's (STEP: STOP TO EDIT while a song plays) */
         ui.hot_col = 0;
         ui.hot_t = 40;
@@ -1796,7 +1769,7 @@ static void chain_open(void)
     }
     u = l[ch_cur];
     for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == FAM_FX && PAGES[i].graph != GR_FX &&
+        if (PAGES[i].fam == FAM_FX &&
             (u == FXU_COMP ? str_eq(PAGES[i].title, "COMP") : !u ? str_eq(PAGES[i].title, "DIST") : PAGES[i].id[0] == ID[u])) {
             ui.page = (uint8_t)i;
             ui.fam_last[FAM_FX] = ui.page;
@@ -1852,34 +1825,6 @@ static void fx_tap(void)
         page_entered();
     } else
         fx_go_chain();
-}
-/* (Dah) SELECT on an effect's page: the effect before or after it in the chain, its page (its list the screen) */
-static void fx_sel_turn(int32_t s)
-{
-    uint8_t u[FXU_N_ALL];
-    uint32_t n, k;
-    if (mx_master && fx_back >= 0) {                    /* (Dah) a send's page, from a track: on along the track's chain */
-        mx_master = 0;
-        if ((uint32_t)fx_back != song.sel)
-            track_select((uint32_t)fx_back);
-        ch_cur = fx_back_row;
-        fx_back = -1;
-    }
-    n = fx_list(fx_tsel(), u);
-    int32_t c = (int32_t)(ch_cur < n ? ch_cur : 0u), d = s > 0 ? 1 : -1;
-    if (!n)
-        return;
-    for (k = (uint32_t)(s > 0 ? s : -s); k; k--) {      /* (Dah: a track's sends too: chain_open puts the MASTER's page
-                                                         * up, a while, FX back to the track) */
-        int32_t j = c + d;
-        if (j < 0 || j >= (int32_t)n)
-            break;
-        c = j;
-    }
-    ch_cur = (uint8_t)c;
-    chain_open();
-    tl_ms = fm1_ms | 1u;
-    tl_pat = 2;
 }
 /* HA HA HE HU: MENU > SELECT LIST: SELECT moves down the list of the page shown (its KNOB 1, as PRESETS does there):
  * FILE's projects, PATTERN's slots, USER's presets, PRESETS' sounds, SONG's sections, STEP's
@@ -1988,7 +1933,7 @@ static int page_tap(uint32_t b)
             name_open(NK_FILE_RENAME, 0);
         return 1;
     }
-    if (b == B_EDIT && !ui.home && (cur_page()->graph == GR_USER || cur_page()->graph == GR_SLOTS)) {
+    if (b == B_EDIT && !ui.home && cur_page()->graph == GR_USER) {
         name_rename();                                  /* SAVE > USER / PROJECT: EDIT renames the slot */
         return 1;
     }
@@ -2309,16 +2254,12 @@ static void ui_input(void)
             uint32_t kind = ui.confirm;
             ui.confirm = 0;
             ui.force = 1;
-            if (kind == CF_OVR_PROJ) {                  /* overwrite: the NAME screen writes it */
-                name_open(NK_PROJ_SAVE, ui.confirm_trk & 3u);
-            } else if (kind == CF_OVR_USER) {
+            if (kind == CF_OVR_USER) {
                 name_open(NK_USER_SAVE, ui.confirm_trk);
             } else if (kind == CF_ERASE_USER) {
                 up_ui(1u, ui.confirm_trk);
             } else if (kind == CF_LOAD_USER) {          /* (Dah) MY PRESETS: LOAD, answered */
                 up_ui(0u, ui.confirm_trk);
-            } else if (kind == CF_NEW_PROJ) {      /* (HA HA HE HU) a new, empty project: the power-on sounds */
-                (void)project_new_file();
             } else if (kind == CF_DEL_PAT) {       /* (HA HA HE HU) SAVE > PATTERN, REC */
                 pt_delete();
             } else if (kind == CF_DEL_TRK) {           /* (Dah) MIXER, OCT- held: the last track gone, its patterns */
@@ -2336,12 +2277,6 @@ static void ui_input(void)
                 ui_message("TRACK DELETED");
             } else if (kind == CF_ADD_TRACK) {     /* (HA HA HE HU) one track more: its power-on sound, no steps */
                 track_add();
-            } else if (kind == CF_ADD_FX) {        /* (Dah) FX > CHAIN: an effect more: which, picked next */
-                fxp_cur = 0;
-                confirm_open(CF_PICK_FX, 0);
-                ui.pg_down = 0;
-                enc_drop();
-                return;
             } else if (kind == CF_PICK_FX) {       /* (Dah) the one picked (SELECT), added last, its page open */
                 fx_chain_add(fx_tsel());
                 chain_open();
@@ -2369,22 +2304,8 @@ static void ui_input(void)
                     tl_ms = fm1_ms | 1u;            /* (its list again, the new one in the middle) */
                     tl_pat = 1;
                 }
-            } else if (kind == CF_OPEN_ARCH) {
-                (void)project_open(ui.confirm_trk);
             } else if (kind == CF_DEL_ARCH) {
                 if (!project_delete(ui.confirm_trk)) file_enter();
-            } else if (kind == CF_OVR_ARCH) {
-                name_open(NK_ARCH_SAVE, 0);
-            } else if (kind == CF_ERASE_PROJ) {
-                (void)project_erase(ui.confirm_trk & 3u);
-            } else if (kind == CF_DEL_ROW) {
-                uint32_t r = ui.confirm_trk;
-                if (!chain_busy() && r < chain_config.count) {
-                    for (; r + 1u < chain_config.count; r++) chain_config.row[r] = chain_config.row[r + 1u];
-                    chain_config.count--;
-                    if (ui.song_row > chain_config.count) ui.song_row = chain_config.count;
-                    ui_message("SECTION DELETED");
-                }
             } else if (kind == CF_CLEAR_PAT) {     /* (Dah) the SEQ layer's CLEAR TRACK, CLEAR PATTERN (every track's) */
                 uint32_t k;
                 for (k = 0; !chain_busy() && k < trk_count(); k++)
@@ -2397,10 +2318,8 @@ static void ui_input(void)
             }                                           /* (Dah: CLEAR T1 SEQUENCE / TRACK, SONG ORDER, the last track
                                                          * off: SAVE > TOOLS', gone) */
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||
-                   (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0)) ||
-                   (ui.confirm == CF_ADD_FX && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_K1) < 0))) {   /* (Dah: SELECT or
-                                                         * KNOB 1 turned back up: NO, as OCT-) */
-            if ((ui.confirm == CF_ADD_FX || ui.confirm == CF_PICK_FX) && ch_cur)   /* (Dah: no effect added: off
+                   (ui.confirm == CF_NEW_PAT && (panel_enc(EN_SELECT) < 0 || panel_enc(EN_ALGO) < 0))) {
+            if (ui.confirm == CF_PICK_FX && ch_cur)   /* (Dah: no effect added: off
                                                          * + ADD, the last effect) */
                 ch_cur--;   /* (Dah: ADD TRACK: ALGO
                                                          * turned back cancels too) */

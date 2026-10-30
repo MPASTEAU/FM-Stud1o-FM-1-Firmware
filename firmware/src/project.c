@@ -1198,16 +1198,6 @@ static void project_cur_name(char *b) { str_cpy(b, proj_name, PROJ_NAME_LEN + 1u
 
 /* slot's name -> b (PROJ_NAME_LEN + 1 bytes); 0 = an empty slot (b ""). Uses proj_scratch */
 static int project_name(uint32_t slot, char *b) { return project_info(slot, b, 0, 0, 0); }
-static uint32_t project_current(void) { return proj_cur; }   /* (HA HA HE HU: SAVE > FILE marks it; PROJ_NO_SLOT none) */
-/* HA HA HE HU: what the four slots hold changes with this (their records' hashes; proj_wire_gen: a save, an X written):
- * ui_graph.c graph_project_used reads them again only then */
-static uint32_t project_slots_key(void)
-{
-    uint32_t k = proj_wire_gen, i;
-    for (i = 0; i < 4u; i++)
-        k = k * 2654435761u ^ proj_tag(&proj_slot[i]);
-    return k;
-}
 /* .. and, len48 not 0, the length of each track's pattern as SONG plays it (song_chain.c chain_tick: the clock track's
  * LEN steps of its DIV, clamped as chain_prepare does) in 1/48 quarter notes (a 4/4 bar: 192; 0 = an empty slot):
  * len48[0..NTRK-1] */

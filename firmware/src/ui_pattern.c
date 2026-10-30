@@ -6,7 +6,6 @@
  * (the dialog). A row: its number, every track's steps in it, a line each. The memory the patterns take (ps_used of
  * PS_HEAP) on the last line. Included by ui_graph.c */
 static uint8_t pt_sel;                                  /* the pattern picked (its number) */
-static int pt_page(uint32_t g) { return g == GR_PATTERN; }
 static void pt_enter(void) { pt_sel = (uint8_t)ps_num(song.sel); }
 static uint32_t pt_list(uint8_t *nums) { return ps_list_all(nums); }
 static uint32_t pt_pick(void)                           /* the pattern picked, one of the track's */
@@ -36,18 +35,6 @@ static void pt_move(int32_t steps)                      /* KNOB 1: up and down t
         ui_message("MEMORY FULL");
     pt_sel = (uint8_t)ps_num(song.sel);
     ui.force = 1;
-}
-static uint32_t pt_steps(uint32_t num)                  /* its steps that strike (notes, hits; not the ties) */
-{
-    uint32_t i, c = 0, n, pos = 10u;
-    const step_t *s = ps_st;
-    if (num == ps_num(song.sel))
-        s = TSEL->step;
-    else if (!ps_exists(song.sel % NTRK, num) || !(n = ps_fetch(song.sel % NTRK, num)) || !ps_steps_get(ps_buf, n, &pos, ps_st))
-        return 0;                                       /* (Dah: the heap's, read as the decoder reads them) */
-    for (i = 0; i < NSTEP; i++)
-        c += s[i].time == ST_NOTE && (s[i].n || s[i].hit);
-    return c;
 }
 static uint32_t pt_mem_pct(void) { return (ps_used * 100u + PS_HEAP - 1u) / PS_HEAP; }
 /* OCT+: the action picked (col 1 OPEN, 2 COPY, 3 NEW; Dah: KNOB 1..3, KNOB 4 DELETE: ui_input.c, the dialog) */

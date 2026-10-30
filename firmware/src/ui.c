@@ -27,7 +27,6 @@ static int project_info(uint32_t slot, char *b, uint16_t *len48, uint32_t *den, 
 static int project_rename(uint32_t slot, const char *name);
 static int project_erase(uint32_t slot);
 static int project_new(void);                    /* (HA HA HE HU: project.c) */
-static uint32_t project_current(void);           /* (HA HA HE HU: project.c, the slot the music is from) */
 static uint32_t pfs_list(uint8_t *ids);           /* (HA HA HE HU: projfs.c, the projects) */
 static int pfs_there(uint32_t id);
 static int pfs_name(uint32_t id, char *b);
@@ -400,7 +399,7 @@ static uint32_t large_kind(void)
     if (ui.home)                                        /* (HOME > TRACKS: its rows need the panel, the cards as on */
         return home_tracks() ? LK_LABEL : LK_TALL;      /* a list page; the rows' names in M: draw_home_tracks) */
     g = cur_page()->graph;
-    return g == GR_SLOTS || g == GR_FILE || g == GR_PATTERN || g == GR_USER || g == GR_SONG || g == GR_ROLL ||
+    return g == GR_FILE || g == GR_PATTERN || g == GR_USER || g == GR_SONG || g == GR_ROLL ||
            g == GR_SLICES || g == GR_EVENTS || (g >= GR_DLANE && g <= GR_DSYN5) ? LK_LABEL : LK_TALL;
 }
 /* the geometry of the page shown: the cards' height, the panel's top and height */
@@ -459,7 +458,7 @@ static uint32_t layer_btn(void);
 static int fx_unit_on(const track_t *t, uint32_t u);    /* ui_graph_fx.c */
 static int page_visible(uint32_t i)
 {
-    if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_TRACK && PAGES[i].graph != GR_FX) {   /* (Dah) an effect's page:
+    if (PAGES[i].fam == FAM_FX && PAGES[i].scope == SC_TRACK) {   /* (Dah) an effect's page:
                                                          * while it is in the chain (CHAIN adds it) */
         uint32_t id = PAGES[i].id[0];
         if (str_eq(PAGES[i].title, "DIST")) return fx_unit_on(fx_tsel(), 0);
@@ -633,8 +632,6 @@ static void page_entered(void)
         pt_enter();                                  /* (HA HA HE HU: on the pattern the track plays) */
     if (pg->graph == GR_FILE)
         file_enter();                               /* (HA HA HE HU: on the project open) */
-    if (pg->graph == GR_SLOTS && project_current() < 4u)
-        song.g[G_SLOT] = (int16_t)(project_current() + 1u);   /* (the pattern on the tracks) */
     ui.fl_del = 0;
     help_start();
     ui.force = 1;
@@ -979,33 +976,6 @@ static void home_tap(void)
     }
 }
 
-/* MENU > CONTROL > SELECT PAGE (1.5.5, Discussion #188): the SELECT knob steps the pages of the family shown, a detent
- * each: right as a tap of the family's button does, left back, round (the pages that show for the track's engine);
- * HOME, MIXER and CLOCK are one round, as HOME's taps go. A family of one page (GLO's SONG) stays */
-static void page_turn(int32_t dir)
-{
-    uint32_t fam = ui.home ? (uint32_t)FAM_TRK : cur_page()->fam, i, m = 0, at = 0;
-    uint8_t ring[NPAGES + 1u];                          /* the round: page indices, 0xFF HOME */
-    if (fam == FAM_TRK)
-        ring[m++] = 0xFFu;
-    for (i = 0; i < NPAGES; i++)
-        if (PAGES[i].fam == fam && page_visible(i)) {
-            if (!ui.home && i == ui.page)
-                at = m;
-            ring[m++] = (uint8_t)i;
-        }
-    if (m < 2u)
-        return;
-    i = ring[(at + (dir > 0 ? 1u : m - 1u)) % m];
-    if (i == 0xFFu) {
-        go_home();
-        return;
-    }
-    ui.page = (uint8_t)i;
-    ui.fam_last[fam] = ui.page;
-    ui.home = 0;
-    page_entered();
-}
 
 /* ------------------------------------------------------- track setup --- */
 static int seq_is_empty(const track_t *t)
@@ -1823,12 +1793,10 @@ static void trk_count_changed(void)
 /* Pages whose purpose is an action (SAVE > USER, PROJECT, EDIT > SLICES): the knobs pick,
  * OCT+ does it, OCT- cancels the picked action or goes HOME (ui_input.c). There OCT- / OCT+ do not
  * shift the octave */
-static int go_id(uint32_t id) { return id == G_LOAD || id == G_SAVE; }
 
 static uint32_t act_cols(void)                   /* the columns that are actions, a bit each; 0 = not such a page */
 {
     const page_t *pg = cur_page();
-    uint32_t c, m = 0;
     if (ui.home)
         return 0;
     if (pg->graph == GR_SONG)
@@ -1837,17 +1805,11 @@ static uint32_t act_cols(void)                   /* the columns that are actions
         return 14u;                              /* LOAD ERASE SAVE */
     if (pg->graph == GR_SLICES)
         return slice_page_ok() ? 12u : 0u;       /* SPLIT JOIN (a SLICE track only) */
-    if (pg->graph == GR_SLOTS)
-        return 14u;                              /* PATTERN: ERASE (1.5.5, #199) LOAD SAVE */
     if (pg->graph == GR_FILE)
         return 15u;                              /* (Dah) FILE: OPEN COPY NEW DELETE (the list: PRESETS, SELECT) */
     if (pg->graph == GR_PATTERN)
         return 14u;                              /* (Dah) PATTERN: KNOB 1 the pattern; COPY NEW DELETE */
-    if (pg->scope == SC_GLOBAL)
-        for (c = 0; c < 4u; c++)
-            if (go_id(page_id(pg, c)))
-                m |= 1u << c;
-    return m;
+    return 0;
 }
 
 /* the action OCT+ does: its column + 1, 0 = none picked yet (SONG has PLAY only) */
@@ -1859,7 +1821,6 @@ static uint32_t act_col(void)
 static const char *act_name(uint32_t c)          /* column c's action (the footer hint) */
 {
     static const char *const UP_GO[3] = {"LOAD", "DELETE", "SAVE"};
-    uint32_t id = page_id(cur_page(), c);
     if (cur_page()->graph == GR_SONG)
         return sg_pend == 1u ? "ADD" : sg_pend ? "DELETE" : "HOLD VIEW";   /* (Dah: OCT+ held, the VIEW; a section pending:
                                                          * OCT+ does it) */
@@ -1871,16 +1832,14 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         static const char *const FL_ACT[4] = {"OPEN", "COPY", "NEW", "DELETE"};
         return cur_page()->graph == GR_PATTERN && !(c & 3u) ? "PATTERN" : FL_ACT[c & 3u];
     }
-    if (cur_page()->graph == GR_SLOTS && (c & 3u) == 1u)
-        return "ERASE";
-    return id == G_LOAD ? "LOAD" : "SAVE";
+    return "SAVE";
 }
 
 /* the picked action would do something now (OCT+ breathes): another pattern, a used slot, stopped for
  * a flash write */
 static int act_ready(void)
 {
-    uint32_t c = act_col(), id;
+    uint32_t c = act_col();
     if (!c--)
         return 0;
     if (cur_page()->graph == GR_SONG)
@@ -1895,10 +1854,5 @@ static int act_ready(void)
         return pt_ready(c);
     if (cur_page()->graph == GR_FILE)                   /* (Dah) OPEN another project, COPY, NEW, DELETE one there */
         return c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
-    if (cur_page()->graph == GR_SLOTS && c == 1u)       /* PATTERN ERASE: a used slot, stopped */
-        return !song.playing && project_used((uint32_t)song.g[G_SLOT] - 1u);
-    id = page_id(cur_page(), c);
-    if (id == G_LOAD)
-        return project_used((uint32_t)song.g[G_SLOT] - 1u);
-    return !song.playing;                               /* (G_SAVE) */
+    return !song.playing;
 }

@@ -424,53 +424,6 @@ static int32_t motion_find(const track_t *t, uint32_t step, uint32_t id)
             return (int32_t)i;
     return -1;
 }
-/* the indices of track k's records in list order (by step, then as they were added: their place in motion.event,
- * which a record keeps when its parameter or value changes): n of them into idx[MOTION_MAX]. 1.5.5 (#199): up to 1.5.1
- * a step's records were by parameter, so turning SEQ > AUTOMATION's KNOB 3 (the parameter) past another record of the
- * step moved the row being edited above or below it, and the selection with it (the "jump") */
-static uint32_t motion_rows(uint32_t k, uint8_t *idx)
-{
-    uint32_t i, j, n = 0;
-    for (i = 0; i < motion.count; i++) {
-        const motion_event_t *e = &motion.event[i];
-        uint32_t key = e->place & 63u;
-        if ((e->place >> 6) != k)
-            continue;
-        for (j = n; j > 0u; j--) {                       /* (insertion, stable: at most MOTION_MAX) */
-            const motion_event_t *o = &motion.event[idx[j - 1u]];
-            if ((uint32_t)(o->place & 63u) <= key)
-                break;
-            idx[j] = idx[j - 1u];
-        }
-        idx[j] = (uint8_t)i;
-        n++;
-    }
-    return n;
-}
-/* record i of track t moves to step / id with value v (its kind kept): 0 ok, 1 invalid or another record is there.
- * What it set sounds until the next step (motion_restore puts back the sound's values, as a delete does) */
-static int motion_move(track_t *t, uint32_t i, uint32_t step, uint32_t id, int16_t v)
-{
-    const param_desc_t *d;
-    int32_t at;
-    uint32_t f;
-    if (i >= motion.count || (motion.event[i].place >> 6) != trk_index(t) || step >= NSTEP || !motion_param(id))
-        return 1;
-    at = motion_find(t, step, id);
-    if (at >= 0 && (uint32_t)at != i)
-        return 1;
-    d = param_desc_of(eng_idx(t->eng_req), id);
-    if (v < d->min || v > d->max || v < -64 || v > 127)
-        return 1;
-    f = motion_guard();
-    if (motion.event[i].place != (trk_index(t) << 6 | step) || MOTION_ID(&motion.event[i]) != id)
-        motion_restore(t);                              /* (a value alone: what sounds stays) */
-    motion.event[i].place = (uint8_t)(trk_index(t) << 6 | step);
-    motion.event[i].param = (uint8_t)((motion.event[i].param & MOTION_LOCK) | id);
-    motion.event[i].value = (int8_t)param_fit(d, v);
-    motion_unguard(f);
-    return 0;
-}
 /* an id whose meaning is the engine's own: EDIT's E1..E8, DIGITAL's operators, DRUM's lane levels */
 static int motion_engine_id(uint32_t id)
 {

@@ -13,13 +13,6 @@
  *   CLOCK     a bar of sixteen steps, the beats taller, SWING's late ones, the step playing
  * On the 100 px scale (graph_ht, GOY) as the other curves; integer only. Included by ui_graph.c */
 
-/* 2^(oct / 256) for |oct| <= 8 octaves, Q16 (linear between octaves: a sketch's accuracy) */
-static int32_t gm_exp2(int32_t oct)
-{
-    int32_t e = oct >> 8, f = oct & 255, b = 65536 + ((f * 45426) >> 8);
-    e = clamp(e, -15, 14);
-    return e >= 0 ? b << e : b >> -e;
-}
 static int32_t gm_y(int32_t db10, int32_t top, int32_t bot)  /* +18 dB at top .. -36 dB at bot (db10: dB x 10) */
 {
     return top + (180 - clamp(db10, -360, 180)) * (bot - top) / 540;

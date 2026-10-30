@@ -477,14 +477,6 @@ static void pattern_del(uint32_t k, uint32_t num)
     }
     ui.force = 1;
 }
-static uint32_t ps_size(uint32_t k, uint32_t num)       /* its bytes in the heap (the one played: as it is now) */
-{
-    int32_t at;
-    if (num == ps_num(k))
-        return ps_encode(&trk[k % NTRK], ps_buf) + 4u;
-    at = ps_find(k % NTRK, num);
-    return at < 0 ? 0u : 4u + ps_rlen((uint32_t)at);
-}
 /* track k's pattern num: there? (the one played always is) */
 static int ps_exists(uint32_t k, uint32_t num) { return num && num <= PS_NUM && (num == ps_num(k) || ps_find(k % NTRK, num) >= 0); }
 /* track k's pattern num into ps_buf (the one played: encoded from the track): its length, 0 none */
