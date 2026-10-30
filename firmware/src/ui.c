@@ -126,7 +126,8 @@ static uint32_t rp_get(uint32_t f)                     /* a field as the MENU st
 {
     uint32_t v = (ui_rec_prefs >> (2u * f)) & 3u;
     v = v == 3u ? 0u : v;
-    return f == RP_LEVEL ? (v == 0u ? 1u : v == 1u ? 0u : 2u) : v;   /* (LEVEL: LOW MID HIGH, MID stored as 0) */
+    return v == 0u ? 1u : v == 1u ? 0u : v;             /* (LEVEL: LOW MID HIGH, MID stored as 0; Dah: CLICK REC and
+                                                         * COUNT-IN ON by default the same way, stored as 0) */
 }
 static void rp_apply(void)                             /* the settings into click.c / seq.c (every frame: ui_input) */
 {
@@ -136,7 +137,7 @@ static void rp_apply(void)                             /* the settings into clic
 }
 static void rp_put(uint32_t f, uint32_t v)
 {
-    uint32_t st = f == RP_LEVEL ? (v == 1u ? 0u : v == 0u ? 1u : 2u) : v % 3u;
+    uint32_t st = v == 1u ? 0u : v == 0u ? 1u : v % 3u;   /* (the default, 1, stored as 0) */
     ui_rec_prefs = (uint8_t)((ui_rec_prefs & ~(3u << (2u * f))) | st << (2u * f));
     rp_apply();
 }

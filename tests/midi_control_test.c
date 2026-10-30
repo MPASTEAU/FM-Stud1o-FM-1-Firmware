@@ -495,7 +495,7 @@ static int follow_test(void)
     bad += check("AUTO SELECT OFF (the default): a note into T2 lights its cushion ~90 ms, says MIDI IN -> T2, T1 stays", ok);
 
     menu_put(MI_MFOLLOW, 1);
-    ok = (ui_rec_prefs & 0x80u) && menu_get(MI_MFOLLOW) == 1u && click_mode == CLICK_OFF;   /* (its own bit) */
+    ok = (ui_rec_prefs & 0x80u) && menu_get(MI_MFOLLOW) == 1u && click_mode == rp_get(RP_CLICK);   /* (its own bit: the click as it was) */
     queued(0x81, 60, 0, 1); queued(0x92, 61, 100, 1); frame();
     ok &= song.sel == 2u && midi_lit(2) && !msg_is("MIDI IN -> T3");
     queued(0x91, 62, 100, 1); frame();
