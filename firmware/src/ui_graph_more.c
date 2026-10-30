@@ -59,9 +59,11 @@ static void gm_bibar(int32_t y, const char *name, int32_t v, uint16_t c)
 }
 static void graph_envdest(const track_t *t, uint16_t c)
 {
-    gm_bibar(graph_ht * 22 / 100, "FLT", t->p[P_ED_FLT], c);
+    if (!pg_unused(cur_page(), P_ED_FLT))             /* (Dah: what the engine reads, params.c ENG_NO_SHP ..) */
+        gm_bibar(graph_ht * 22 / 100, "FLT", t->p[P_ED_FLT], c);
     gm_bibar(graph_ht * 48 / 100, "PIT", t->p[P_ED_PIT], c);
-    gm_bibar(graph_ht * 74 / 100, "SHP", t->p[P_ED_SHP], c);
+    if (!pg_unused(cur_page(), P_ED_SHP))
+        gm_bibar(graph_ht * 74 / 100, "SHP", t->p[P_ED_SHP], c);
     if (t->p[P_ESYNC])
         cv_text_r(PANEL_X0 + PANEL_W, graph_ht - 12, &AF_S, "ENV IN NOTES", T_MID, T_SURF);
 }

@@ -590,23 +590,32 @@ static uint32_t ui_vmode(const track_t *t)
 }
 /* (Dah) a knob that does nothing for the track's engine or its voice mode: shown empty (voice.c read for each):
  *   ENV's four            a DRUM kit, FM6 (env_unused)
- *   LFO DEST PIT FLT SHP  a DRUM kit (its voices read only their amplitude: eng_drum.c drum_render; AMP stays)
+ *   LFO / ENV DEST's      SHP FLT PIT where the engine reads none (ENG_NO_SHP ..: a DRUM kit reads only its
+ *                         amplitude, eng_drum.c drum_render; AMP stays)
  *   GLIDE GLMOD           SLICE (its slices play at their own rate: m.pitch16 - pitch_cur, eng_slice.c; only the sine
  *                         of no material followed the key)
  *   PRIO                  POLY (mono_pick: the mono modes')
  *   ALLOC                 not POLY (voice_alloc), a DRUM kit (a hit takes its lane's voice: which free one, inaudible)
  *   DETUNE                not UNISON (mono_play), SLICE (no pitch from the voice)
  * A DRUM kit's VOICE (VCE GLIDE GLMOD PRIO) and VOICE 3 in MONO / LEGATO (SPREAD: POLY and UNISON's, fx.c) are not shown */
+/* (Dah) the engines (bit: ENGINES[] index) whose voices never read vmod_t's shape, cutoff, pitch: LFO DEST / ENV DEST's
+ * SHP, FLT, PIT shown empty there. SHP: LOFI SAMPLE WHEEL PHYS DRUM SLICE; FLT: WHEEL DRUM; PIT: DRUM (its lanes their
+ * own pitch, eng_drum.c) */
+#define ENG_NO_SHP (1u << 3 | 1u << 4 | 1u << 7 | 1u << 9 | 1u << ENGI_DRUM | (FELUCCA_SLICE ? 1u << 13 : 0u))
+#define ENG_NO_FLT (1u << 7 | 1u << ENGI_DRUM)
+#define ENG_NO_PIT (1u << ENGI_DRUM)
 static int pg_unused(const page_t *pg, uint32_t id)
 {
     const track_t *t = TSEL;
     uint32_t m;
     if (pg->scope != SC_TRACK)
         return 0;
-    if (pg->fam == FAM_ENV)
-        return env_unused(t);
-    if (pg->fam == FAM_LFO)
-        return (id == P_LD_PIT || id == P_LD_FLT || id == P_LD_SHP) && ENGINES[eng_idx(t->eng_req)]->oneshot;
+    m = 1u << eng_idx(t->eng_req);
+    if (pg->fam == FAM_ENV && env_unused(t))
+        return 1;
+    if (pg->fam == FAM_ENV || pg->fam == FAM_LFO)
+        return ((id == P_LD_SHP || id == P_ED_SHP) && (m & ENG_NO_SHP)) || ((id == P_LD_FLT || id == P_ED_FLT) && (m & ENG_NO_FLT)) ||
+               (id == P_LD_PIT && (m & ENG_NO_PIT));
     if (pg->fam != FAM_EDIT)
         return 0;
     m = ui_vmode(t);
