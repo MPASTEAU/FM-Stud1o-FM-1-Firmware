@@ -169,7 +169,8 @@ static int knobs(void)
     ok &= same_but1(t, ref, 3, &want);
     bad += check("  a REST, an empty step: NO NOTE, nothing stored; a TIE takes its CHANCE only", ok);
 
-    pattern(2);                                       /* QUANTIZE ON (the default): NUDGE kept, said */
+    pattern(2);                                       /* QUANTIZE ON (Dah: OFF the default now): NUDGE kept, said */
+    trk[0].p[P_SQNT] = 1;
     go_detail();
     ui.msg_t = 0;
     kt(EN_K3, 2);

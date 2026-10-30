@@ -366,7 +366,7 @@ int main(void)
              proj_import(&proj_scratch, &proj_slot[2], sizeof st) && proj_scratch.t[2].p[P_E0] == 2 &&
              proj_scratch.t[2].p[P_LN3] == 90 && proj_scratch.motion.count == 64u && proj_scratch.motion.event[63].value == 63 &&
              proj_scratch.t[0].p[P_LSYNC] == 0 && proj_scratch.t[0].p[P_LTRIG] == 0 && proj_scratch.t[0].p[P_LPOL] == 0 &&
-             proj_scratch.t[0].p[P_SQNT] == 1;
+             proj_scratch.t[0].p[P_SQNT] == TP[P_SQNT].def;   /* (old projects: no nudges, OFF plays them as ON did) */
         bad += check("a FUN9 project (1.1) restores as FUN10 into slot 3: its 64 records, the lanes, LFO 2 / QUANTIZE defaults", ok);
     }
     memset(&v6, 0, sizeof v6);                           /* FUN6: 69 parameters, steps out of range */

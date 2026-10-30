@@ -285,7 +285,7 @@ static uint32_t pr_slide_px(uint32_t i, int32_t lo, int32_t hi)
     int32_t x, y, x0 = PR_X0 + (int32_t)i * PR_CW;
     for (y = graph_y() + pr_row_y(hi); y <= graph_y() + pr_row_y(lo) + PR_RH; y++)
         for (x = x0 + 11; x <= x0 + 13; x += 2)          /* (x0 + 12 the step line, x0 + 14 the next bars) */
-            n += swap16(host_screen[y * 240 + x]) == T_TEXT;
+            n += pr_is_bar((uint32_t)x, (uint32_t)y) != 0;   /* (Dah: the slide a ramp in the note's colour) */
     return n;
 }
 

@@ -45,9 +45,9 @@ static int lfo(void)
     double worst = 0;
     ui_power_on();
     t = &trk[0];
-    bad += check("LFO 2 defaults: SYNC OFF, TRIG NOTE, POL BI (as before 1.2); QUANTIZE ON",
-                 !TP[P_LSYNC].def && !TP[P_LTRIG].def && !TP[P_LPOL].def && TP[P_SQNT].def == 1 && !t->p[P_LSYNC] &&
-                 !t->p[P_LTRIG] && !t->p[P_LPOL] && t->p[P_SQNT] == 1);
+    bad += check("LFO 2 defaults: SYNC OFF, TRIG NOTE, POL BI (as before 1.2); QUANTIZE OFF (Dah: the steps as played)",
+                 !TP[P_LSYNC].def && !TP[P_LTRIG].def && !TP[P_LPOL].def && TP[P_SQNT].def == 0 && !t->p[P_LSYNC] &&
+                 !t->p[P_LTRIG] && !t->p[P_LPOL] && t->p[P_SQNT] == 0);
     for (i = 0; i < 128u; i += 7u) {                 /* SYNC OFF: RATE's table, the value as before */
         uint32_t ph = 0x12345678u;
         t->p[P_LRATE] = (int16_t)i;
@@ -518,7 +518,7 @@ static int formats(void)
     a.motion.event[9].param |= MOTION_LOCK;
     for (k = 0; k < NTRK_V10; k++) {
         a.t[k].p[P_LSYNC] = a.t[k].p[P_LTRIG] = a.t[k].p[P_LPOL] = 0;
-        a.t[k].p[P_SQNT] = 1;
+        a.t[k].p[P_SQNT] = TP[P_SQNT].def;            /* (Dah: OFF now: no nudges, as ON played them) */
         for (i = 0; i < NSTEP; i++)
             step_set_nudge(&a.t[k].step[i], 0);
     }
@@ -579,7 +579,7 @@ static int formats(void)
         bad += check(i ? "  a retained (longer) slot holding a FUN8: loads" : "  a retained (longer) slot holding a FUN9: loads", ok);
     }
     project_restore_runtime(&b);
-    bad += check("  restored: QUANTIZE ON, LFO 2 off, every step's nudge 0, the 64 records", trk[0].p[P_SQNT] == 1 &&
+    bad += check("  restored: QUANTIZE ON, LFO 2 off, every step's nudge 0, the 64 records", trk[0].p[P_SQNT] == TP[P_SQNT].def &&
                  !trk[0].p[P_LSYNC] && !step_nudge(&trk[0].step[1]) && motion.count == 64u && motion.event[7].value == -40);
 
     /* user presets: a record of 103 round trips; one of 99 (1.1) gets the four at their defaults; a pattern keeps no
@@ -600,7 +600,7 @@ static int formats(void)
         r.np = 99;                                    /* as 1.1 stored it: the engine's 8 after its 91 */
         for (i = 0; i < 8u; i++) up_set_value(&r, 91u + i, (int16_t)(10 + i));
         up_params(&r, v, def);
-        ok &= v[P_LSYNC] == 0 && v[P_LPOL] == 0 && v[P_SQNT] == 1 && v[P_E0] == 10 && v[P_E7] == 17 && v[P_LN7] == t->p[P_LN7];
+        ok &= v[P_LSYNC] == 0 && v[P_LPOL] == 0 && v[P_SQNT] == TP[P_SQNT].def && v[P_E0] == 10 && v[P_E7] == 17 && v[P_LN7] == t->p[P_LN7];
         r.np = 103;                                   /* a 1.2 build before SPREAD: its 95, then the engine's 8 */
         for (i = 0; i < 95u; i++) up_set_value(&r, i, t->p[i]);
         for (i = 0; i < 8u; i++) up_set_value(&r, 95u + i, (int16_t)(20 + i));
