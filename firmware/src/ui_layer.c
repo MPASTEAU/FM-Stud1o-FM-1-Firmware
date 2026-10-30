@@ -1231,8 +1231,8 @@ static void layer_cards(uint32_t l)
             static const char *const RN[4] = {"LEN", "DIV", "QNTZ", "CLEAR"};
             char vb[12];
             draw_column(0, "ROW", RN[lys.sq_row % 4u], "", VAL(0u), (int32_t)lys.sq_row * 333, ICON_NONE);
-            draw_column(1, lys.sq_row < 3u ? RN[lys.sq_row] : "", lys.sq_row < 3u ? seq_val(lys.sq_row, vb) : "", "",
-                        VAL(1u), -1, ICON_NONE);
+            draw_column(1, lys.sq_row < 3u ? RN[lys.sq_row] : "CLEAR", lys.sq_row < 3u ? seq_val(lys.sq_row, vb) : "--", "",
+                        lys.sq_row < 3u ? VAL(1u) : T_ACCENT, -1, ICON_NONE);   /* (CLEAR ALL: KNOB 2 asks it) */
         }
     }
 }
