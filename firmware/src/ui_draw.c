@@ -494,21 +494,23 @@ static void head_home(void)
     else
         page_title(ti);
     lw = 6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 + 4;
-    {   /* (Dah) the load: the voices sounding (a voice icon, "6"), the audio's CPU ("42%"), read every HL_MS; the
+    {   /* (Dah) the load: the voices sounding ("6V"), the audio's CPU ("42%"), read every HL_MS; the
          * accent when the CPU is over 85 %. Not where the page's name leaves no room for it */
         char lv[8], lc[8];
         int32_t w;
         fmt_int(lv, (int32_t)hld.voices);
         fmt_int(lc, (int32_t)hld.cpu);
         str_cpy(lc + str_len(lc), "%", 2);
-        w = text_w(&AF_S, lv);
-        if (xr - text_w(&AF_S, lc) - 6 - w - 14 - (song.rec ? 14 : 0) >= lw) {
+        w = text_w(&AF_S, "88");                        /* (Dah: fixed slots, "88" and "88%" wide, the figures at their
+                                                         * right: nothing moves as they change) */
+        if (xr - text_w(&AF_S, "88%") - 5 - text_w(&AF_S, "V") - 1 - w - (song.rec ? 14 : 0) >= lw) {
             GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-            xr = cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG) - 6;
-            cv_text(xr - w, ty, &AF_S, lv, T_MID);   /* (Dah: the voices sounding, after their icon; no budget but
-                                                         * the CPU's) */
-            cv_icon_mid(xr - w - 14, hh / 2, 12, ICON_VOICE, T_MID, T_BG);
-            xr -= w + 14 + 8;
+            cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG);
+            xr -= text_w(&AF_S, "88%") + 5;
+            xr = cv_text_r(xr, ty, &AF_S, "V", T_DIM, T_BG) - 1;   /* (Dah: the voices sounding, "V" after them as BPM
+                                                         * after the tempo; no budget but the CPU's) */
+            cv_text_r(xr, ty, &AF_S, lv, T_MID, T_BG);
+            xr -= w + 8;
         }
     }
     if (song.rec) {                                     /* REC: a dot, filled the selected track armed, a ring another */
