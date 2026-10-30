@@ -735,13 +735,19 @@ static void layer_knob(uint32_t k, int32_t s)
  * held: PLAY starts and stops there as in every layer (#183: locked, PLAY restarted and never stopped) */
 static int layer_play(void)
 {
-    if (layer_open() != LAYER_GLO || !(fm1_in.buttons & ly_bit(LAYER_GLO)) || chain_busy())
+    if (layer_open() != LAYER_GLO || !(fm1_in.buttons & ly_bit(LAYER_GLO)) || chain.armed)
         return 0;
     if (song.g[G_CLOCK] && song.playing) {
         ui_message("RESTART: CLK IS EXT");
         return 1;
     }
-    transport_req = song.playing ? 3u : 1u;
+    if (chain.running && !chain_seek_req) {             /* (Dah) the song playing: from SONG's GRID (its line) */
+        chain_seek_req = 1;
+        transport_req = 2;
+    } else if (!song.playing && !ui.home && cur_page()->graph == GR_SONG)
+        chain_play_ui();
+    else
+        transport_req = song.playing ? 3u : 1u;
     return 1;
 }
 
