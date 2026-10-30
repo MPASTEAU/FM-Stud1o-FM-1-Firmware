@@ -1329,10 +1329,15 @@ static int32_t song_follow(const song_lay_t *L)
         sgw.nofollow = 0;
         sgw.touch = ui.frame - 1000u;
     }
-    sgw.run = chain.running;
     if (chain_from_row < L->n && !chain_seek_req)      /* (Dah) the GRID: where PLAY starts (the song playing on
                                                          * does not move it; turned, it does) */
         sgw.gu = L->u0[chain_from_row] + chain_from_u;
+    if (!chain.running && !chain_seek_req && sgw.gu && (sgw.run || fresh)) {   /* (Dah) stopped (or the page entered
+                                                         * stopped): the view back on the GRID's line, not the top */
+        sgw.nofollow = 1;
+        sgw.at = song_ux(L, sgw.gu) - SG_W / 2;
+    }
+    sgw.run = chain.running;
     if (fresh) {                                     /* the page (re)entered: the playing row first */
         sgv.off = 0;
         sgv.last = p != 0xFFu;
