@@ -66,6 +66,9 @@
 #                   back, stopping at the next note and at LEN, chords, TIME elsewhere, the DRUM grid untouched,
 #                   the longer note played), a step's VEL as it plays (96 by default, ACC 127, drum hits) and
 #                   SEQ > DETAIL's KNOB 4.
+# LONG PATTERNS (tests/longpat_test.c): LEN up to 256 (pages of 64, pstore.c pg_*): playback order and timing over the
+#                   pages, a 200-step note, page 3 edited then heard, recording across a page's end, page 2's automation,
+#                   projects (PFS 9) saved and opened, a SONG section on a long pattern, LEN shrunk and grown, copies.
 # DETAIL 1.5.1 (tests/detail_test.c, #199): SEQ > DETAIL (STEP -> DETAIL -> AUTOMATION), KNOB 1..4 the cursor step's
 #                   CHANCE RATCH NUDGE VEL walked with PRESETS (NO NOTE on a REST / empty step), the steps' own fields
 #                   (no motion record), EDIT resets, the
@@ -268,6 +271,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "1.5.1 SEQ > DETAIL: a step's CHANCE RATCH NUDGE VEL on KNOB 1..4 (walk, entries, DRUM, chords, playback, marks)" "$OUT/detail_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/seq155_test" tests/seq155_test.c -lm
     run "1.5.5 SEQ: conditions and FILL, SONG, storage, editor" "$OUT/seq155_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/longpat_test" tests/longpat_test.c -lm
+    run "long patterns: LEN up to 256 (pages, the ring, a held note, editing, recording, automation, projects, SONG)" "$OUT/longpat_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm
     run "1.5.5 fixes and UI: PAN +-100, SELECT PAGE, OCT- on the press (1.5.6), PROJECT ERASE, CLEAN INIT" "$OUT/ui155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/v156_test" tests/v156_test.c -lm
