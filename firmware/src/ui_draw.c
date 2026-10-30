@@ -1181,7 +1181,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     card_span.fn = 0;
     fmt_named = 0;                                      /* (params.c: a name, for this card only) */
     card_mot_next = 0;                                  /* (the same: MOTION, this card only) */
-    if (home_bare() || ui.layer == LAYER_SEQ) {         /* (Dah) HOME: knobs (SEQ's layer too, as SAVE's) */
+    if (home_bare() || ui.layer == LAYER_SEQ || ui.layer == LAYER_REC) {         /* (Dah) HOME: knobs (SEQ's layer too, as SAVE's) */
         (void)vc; (void)icon; (void)sp; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
         (void)strip; (void)x; (void)lc; (void)vf; (void)n; (void)named; (void)mot; (void)kind;
         knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot, vc == T_DIM);
@@ -2265,12 +2265,17 @@ static void confirm_text(char *a, char *b)
     case CF_INIT_SOUND:
         str_cpy(a, "INITIALIZE SOUND?", 24);
         break;
-    case CF_CLEAR_PAT:                               /* (Dah) the SEQ layer's CLEAR ALL: the steps and automation */
-        str_cpy(a, "CLEAR PATTERN ", 24);
-        fmt_int(a + str_len(a), (int32_t)k);
-        str_cpy(a + str_len(a), "?", 4);
-        str_cpy(b, "T1 STEPS + AUTOMATION", 24);
-        b[1] = (char)('1' + song.sel % NTRK);
+    case CF_CLEAR_PAT:                               /* (Dah) the SEQ layer's CLEAR TRACK / PATTERN: steps and automation */
+        if (k & 0x80u) {
+            str_cpy(a, "CLEAR PATTERN ", 24);
+            fmt_int(a + str_len(a), (int32_t)(k & 0x7Fu));
+            str_cpy(a + str_len(a), "?", 4);
+            str_cpy(b, "EVERY TRACK'S STEPS", 24);
+        } else {
+            str_cpy(a, "CLEAR TRACK 1?", 24);
+            a[12] = (char)('1' + song.sel % NTRK);
+            str_cpy(b, "ITS STEPS + AUTOMATION", 24);
+        }
         break;
     case CF_CLEAN_SOUND:                             /* 1.5.5 (#190): the basic sound, nothing added */
         str_cpy(a, "CLEAN INIT SOUND?", 24);

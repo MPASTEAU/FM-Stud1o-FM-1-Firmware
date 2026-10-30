@@ -2373,8 +2373,11 @@ static void ui_input(void)
                     if (ui.song_row > chain_config.count) ui.song_row = chain_config.count;
                     ui_message("SECTION DELETED");
                 }
-            } else if (kind == CF_CLEAR_PAT) {     /* (Dah) the SEQ layer's CLEAR ALL */
-                if (!chain_busy()) tl_clear_all(TSEL);
+            } else if (kind == CF_CLEAR_PAT) {     /* (Dah) the SEQ layer's CLEAR TRACK, CLEAR PATTERN (every track's) */
+                uint32_t k;
+                for (k = 0; !chain_busy() && k < trk_count(); k++)
+                    if (k == song.sel || (ui.confirm_trk & 0x80u))
+                        tl_clear_all(&trk[k]);
             } else if (kind == CF_INIT_SOUND) {
                 if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {

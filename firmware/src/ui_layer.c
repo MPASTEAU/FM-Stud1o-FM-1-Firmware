@@ -63,7 +63,7 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_OCTDN, "UNDO"}}},   /* (Dah: the band OCT- alone) */
-    {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
+    {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_OCTDN, "UNDO"}}},   /* (Dah: as SEQ: OCT- alone; KNOB 1 the rows, 2 a value) */
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
@@ -151,9 +151,10 @@ static void layer_arm(uint32_t pressed, uint32_t now)
     uint32_t l;
     if (ui.ly)
         return;
-    if (lys.eat) {                                      /* (the press that closed SEQ: no tap, no layer) */
+    if (lys.eat) {                                      /* (the press that closed SEQ, REC: no tap, no layer) */
+        l = lys.eat;
         lys.eat = 0;
-        if (pressed & ly_bit(LAYER_SEQ))
+        if (pressed & ly_bit(l))
             return;
     }
     for (l = LAYER_FX; l < LAYER_N; l++)
@@ -199,9 +200,12 @@ static void layer_lock_input(uint32_t pressed)
         lys.dt_l = 0;
     if (!ui.lock)
         return;
-    if ((pressed & ly_bit(ui.lock)) && ui.lock == LAYER_SEQ) {   /* (Dah) SEQ held open: its button closes it */
+    if ((pressed & ly_bit(ui.lock)) && (ui.lock == LAYER_SEQ || ui.lock == LAYER_REC)) {   /* (Dah) SEQ, REC held open:
+                                                         * its button closes it */
+        lys.eat = (uint8_t)ui.lock;
+        if (ui.lock == LAYER_REC)
+            ui.rec_t0 |= 2u;                            /* (that press no tap: no arming) */
         layer_let_go(1);
-        lys.eat = 1;
     } else if (pressed & ly_bit(ui.lock))
         ui.lock = 0;
     else if (pressed & ~keep)
@@ -286,7 +290,7 @@ static uint32_t layer_gesture(uint32_t now, uint32_t combo)
         }
         return 0;
     }
-    if (l == LAYER_SEQ && (*t0 & LY_OPEN) && !(*t0 & LY_DEAD) && !combo && !ui.lock) {   /* (Dah) SEQ held open: it
+    if ((l == LAYER_SEQ || l == LAYER_REC) && (*t0 & LY_OPEN) && !(*t0 & LY_DEAD) && !combo && !ui.lock) {   /* (Dah) SEQ held open: it
                                                          * stays when let go (its button again, or another, closes it) */
         ui.lock = (uint8_t)l;
         return 0;
@@ -403,18 +407,18 @@ static void glo_tap(void)
 }
 
 /* (Dah) SEQ: F3 CLEAR ALL (the dialog closes the layer); the other keys nothing. The PRESETS knob: QUANTIZE */
-static void seq_key(uint32_t p)
+static void seq_key(uint32_t p)                         /* (Dah: 0 CLEAR TRACK, 1 CLEAR PATTERN: every track's) */
 {
-    if (p)
+    if (p > 1u)
         return;
     if (chain_busy())
         ui_message("STOP TO EDIT");
     else
-        confirm_open(CF_CLEAR_PAT, ps_num(song.sel));
+        confirm_open(CF_CLEAR_PAT, ps_num(song.sel) | (p ? 0x80u : 0u));
 }
 static void seq_row(int32_t s)                         /* (Dah) KNOB 1: LEN / QUANTIZE / CLEAR ALL */
 {
-    lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 3);
+    lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 4);
     ui.force = 1;
 }
 static void seq_presets(int32_t s)                     /* (Dah) KNOB 2, PRESETS: the row picked's value (LEN DIV QUANTIZE) */
@@ -432,36 +436,11 @@ static void seq_presets(int32_t s)                     /* (Dah) KNOB 2, PRESETS:
         ui.page = pg;
     } else if (lys.sq_row == 2u)
         qz_turn(TSEL, s);
-    else                                                /* (Dah) CLEAR ALL: KNOB 2 turned asks it (the dialog) */
-        seq_key(0);
+    else                                                /* (Dah) CLEAR TRACK / PATTERN: KNOB 2 turned asks it (the dialog) */
+        seq_key(lys.sq_row - 3u);
     ui.force = 1;
 }
 
-/* REC: CLEAR, the selected track's steps and automation (and ARP's latched chord): one undo (SAVE held), no dialog,
- * as SEQ TOOLS' CLEAR (up to 1.1.4 REC held on SEQ asked first). Its own undo copy (not a sound load's) */
-static void rec_clear(void)
-{
-    track_t *t = TSEL;
-    if (chain_busy()) {
-        ui_message("STOP TO EDIT");
-        return;
-    }
-    if (seq_is_empty(t) && !motion_count(t)) {
-        ui_message("NOTHING TO CLEAR");
-        return;
-    }
-    undo.keep = 0;
-    load_begin(t, UNDO_PAT);
-    track_defaults_steps(t);
-    load_end(t);
-    t->nheld = 0;
-    t->arp_phys = 0;
-    ui_message("SEQUENCE CLEARED");
-    if (!lys.loaded)                                    /* (the first one: how to take it back) */
-        str_cpy(ui.msg2, "[SAVE] HOLD TO UNDO", sizeof ui.msg2);
-    lys.loaded = 1;
-    ui.force = 1;
-}
 /* REC's settings, row r (G3 A3 B3, KNOB 1..3): CLICK, COUNT-IN, CLICK LEVEL as MENU > AUDIO steps them (ui.c rp_*) */
 static const uint8_t RL_F[3] = {RP_CLICK, RP_COUNTIN, RP_LEVEL};
 static const char *const RL_LABEL[3] = {"CLICK", "COUNT", "LEVEL"};   /* (COUNT-IN: too wide for a card or a key cell) */
@@ -477,13 +456,35 @@ static void rec_set(uint32_t r, uint32_t v)
     rp_put(RL_F[r], v);
     lys.rp_dirty = 1;
 }
+/* (Dah) REC's panel: the selected track as HOME's row (its mini roll, the step playing), y, h tall */
+static void rec_track_row(int32_t y, int32_t h)
+{
+    track_t *t = TSEL;
+    rk_row_t R;
+    int32_t oy = cv_oy;
+    if (h < 12)
+        return;
+    R.s = seq_steps(t);
+    R.c = song.sel;
+    R.sel = 1;
+    R.mute = t->p[P_MUTE] != 0;
+    R.len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+    R.nc = hv_cols();
+    R.off = 0;
+    R.tc0 = ux.trk[song.sel % NTRK];
+    R.tc = R.mute ? T_DIM : R.tc0;
+    R.bg = ux_mix(T_SURF, R.tc0, 16);
+    R.rh = h > 28 ? 28 : h;
+    rk_view(t, 1, &R.p0, &R.ph);
+    cv_oy = oy + y;
+    rk_paint(&R, -3);
+    cv_oy = oy;
+}
 static void rec_key(uint32_t p)
 {
     uint32_t r = p - 1u, v;
-    if (p == 0u) {
-        rec_clear();
+    if (p == 0u)                                        /* (Dah: no CLEAR here: SEQ's) */
         return;
-    }
     v = r == 1u ? !rp_get(RL_F[r]) : (rp_get(RL_F[r]) + 1u) % 3u;   /* the next value, round (Dah: the countdown ON
                                                          * / OFF) */
     rec_set(r, v);
@@ -733,9 +734,13 @@ static void layer_knob(uint32_t k, int32_t s)
             edit_load(eng_step(TSEL->eng_req, s), 0);
         else if (k == 1u)
             edit_load(NENGINES, s);
-    } else if (l == LAYER_REC) {                        /* CLICK, COUNT-IN, LEVEL (KNOB 4: none) */
-        if (k < 3u)
-            rec_set(k, (uint32_t)clamp((int32_t)rp_get(RL_F[k]) + s, 0, 2));
+    } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the rows, KNOB 2 the row's value (CLEAR: asked) */
+        if (k == 0u) {
+            lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 2);
+            ui.force = 1;
+        } else if (k == 1u)
+            rec_set(lys.sq_row, (uint32_t)clamp((int32_t)rp_get(RL_F[lys.sq_row]) + (s > 0 ? 1 : -1), 0,
+                                                 lys.sq_row == 1u ? 1 : 2));
     } else if (l == LAYER_SEQ && k == 0u) {            /* (Dah) SEQ: KNOB 1 the rows */
         seq_row(s);
     } else if (l == LAYER_SEQ && k == 1u) {            /* (Dah) .. KNOB 2 the row's value */
@@ -853,7 +858,6 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 /* lit = in effect now (held, the value, a track sounding), breathing = can be pressed (*br: dark .. ~60 % and
  * back, ~1.1 s, hal/fm1_input.h fm1_led_breath; was a hard 250 ms blink, #119), dark = nothing there */
 static int glo_sounding(uint32_t t) { return !trk[t].p[P_MUTE] && (!perf_solo || ((perf_solo >> t) & 1u)); }
-static int rec_clearable(void) { return !seq_is_empty(TSEL) || motion_count(TSEL) != 0u; }
 static uint32_t layer_leds(uint32_t *br)
 {
     uint32_t k, m = 0, n = 0, l = ui.layer, held = perf_held | perf_latched, ok = perf_avail();
@@ -885,7 +889,7 @@ static uint32_t layer_leds(uint32_t *br)
         } else if (l == LAYER_REC && !b && p < 4u) {    /* a setting on (LEVEL: the click on) lit, the rest breathe; */
             on = p == 1u ? rp_get(RP_CLICK) != 0u : p == 2u ? rp_get(RP_COUNTIN) != 0u :   /* CLEAR: something to */
                  p == 3u && rp_get(RP_CLICK) != 0u;    /* clear, not while a song plays */
-            can = p ? 1u : !chain_busy() && rec_clearable();
+            can = p != 0u;                              /* (Dah: no CLEAR: SEQ's) */
         }
         m |= on << k;
         n |= (can & !on) << k;
@@ -1113,32 +1117,30 @@ static void layer_seq(void)
 {
     int32_t full = (int32_t)graph_h(), ph, k;
     uint16_t dim = chain_busy() ? T_DIM : T_TEXT;
-    static const char *const RN[4] = {"LEN", "DIV", "QUANTIZE", "CLEAR ALL"};
+    static const char *const RN[5] = {"LEN", "DIV", "QUANTIZE", "CLEAR TRACK", "CLEAR PATTERN"};
     char vb[12];
-    for (k = 0; k < 4; k++) {                           /* (Dah) the rows, as HOME's (KNOB 1; KNOB 2 their value) */
-        int32_t y = 4 + k * 24, sel = lys.sq_row == (uint32_t)k;
-        sq_row(y, 21, sel);
-        GFX_HOOK_ALIGN(0, y, 0, y + 21, AL_V, "seq layer row on its middle");
-        cv_text_on(k == 3 ? 34 : 16, y + CAP_IN(M, 21), &AF_M, RN[k], dim, T_RAISE);
-        if (k == 3) {
-            GFX_HOOK_ALIGN(0, y, 0, y + 21, AL_V, "seq layer row on its middle");
-            cv_icon_in(16, y, 0, 21, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
-            if (sel)                                    /* (Dah: KNOB 2 asks it: its keycap at the right) */
-                cv_keycap(224 - kc_w(KC_K2), y + (21 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
+    for (k = 0; k < 5; k++) {                           /* (Dah) the rows, as HOME's (KNOB 1; KNOB 2 their value / ask) */
+        int32_t y = 3 + k * 21, sel = lys.sq_row == (uint32_t)k;
+        sq_row(y, 19, sel);
+        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "seq layer row on its middle");
+        cv_text_on(k >= 3 ? 34 : 16, y + CAP_IN(S, 19), &AF_S, RN[k], dim, T_RAISE);
+        if (k >= 3) {
+            GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "seq layer row on its middle");
+            cv_icon_in(16, y, 0, 19, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
+            if (sel)                                    /* (KNOB 2 asks it: its keycap at the right) */
+                cv_keycap(224 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
         } else {                                        /* (the value at the right, KNOB 2's keycap before it: picked) */
             const char *v = seq_val((uint32_t)k, vb);
-            int32_t x = 224 - (int32_t)text_w(&AF_M, v);
-            GFX_HOOK_ALIGN(0, y, 0, y + 21, AL_V, "seq layer row on its middle");
-            cv_text_on(x, y + CAP_IN(M, 21), &AF_M, v, k == 2 && !TSEL->p[P_SQNT] ? T_DIM : T_THEME, T_RAISE);
+            int32_t x = 224 - (int32_t)text_w(&AF_S, v);
+            GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "seq layer row on its middle");
+            cv_text_on(x, y + CAP_IN(S, 19), &AF_S, v, k == 2 && !TSEL->p[P_SQNT] ? T_DIM : T_THEME, T_RAISE);
             if (sel)
-                cv_keycap(x - 6 - kc_w(KC_K2), y + (21 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
+                cv_keycap(x - 6 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
         }
     }
-    /* (Dah) under them, apart (no row's): the pattern as it is, small (SAVE > PATTERN's picture) */
-    GFX_HOOK_ALIGN(0, 102, 0, 112, AL_V, "seq current pattern title");
-    cv_text_on(16, 102 - AF_S_CAP_Y, &AF_S, "CURRENT PATTERN", T_MID, T_SURF);
-    ph = full - 116 - 4;
-    pt_mini(ps_num(song.sel), 16, 116, 208, ph > 30 ? 30 : ph, T_SURF);
+    ph = full - 110;                                    /* (Dah) under them, the pattern, small (SAVE > PATTERN's), if room */
+    if (ph >= 18)
+        pt_mini(ps_num(song.sel), 16, 108, 208, ph > 30 ? 30 : ph, T_SURF);
 }
 
 /* REC: a row a key (26 px, 4 apart): the key's cell (its note, icon and name), then CLEAR's track and what it holds,
@@ -1148,37 +1150,21 @@ static void layer_seq(void)
 #define LR_H 26
 static void layer_rec(void)
 {
-    uint32_t r, v;
-    char n[3] = {0, 0, 0}, b[16];
-    for (r = 0; r < 4u; r++) {
-        int32_t y = 4 + (LR_H + 4) * (int32_t)r, x = 6, vx = 6 + LR_KW + 4;
-        uint32_t dim = r == 0u && (chain_busy() || !rec_clearable());
-        uint16_t ink, fill = lc_box(x, y, LR_KW, LR_H, lc_fill(dim ? LS_DIM : LS_OFF, &ink));
-        n[0] = W_NOTE[r];
-        GFX_HOOK_ALIGN(0, y, 0, y + LR_H, AL_V, "rec layer key cell on its middle");
-        cv_text_on(x + 5, y + CAP_IN(S, LR_H), &AF_S, n, fill == T_RAISE || fill == T_SURF ? T_MID : ink, fill);
-        GFX_HOOK_ALIGN(0, y, 0, y + LR_H, AL_V, "rec layer key cell on its middle");
-        cv_icon_in(x + 15, y, 0, LR_H, 12, r ? RL_ICON[r - 1u] : ICON_CLEAR, ink, fill);
-        GFX_HOOK_ALIGN(0, y, 0, y + LR_H, AL_V, "rec layer key cell on its middle");
-        cv_text_r(x + LR_KW - 5, y + CAP_IN(S, LR_H), &AF_S, r ? RL_LABEL[r - 1u] : "CLEAR", ink, fill);
-        if (r == 0u) {                                   /* "T2 SEQUENCE" / "T2 EMPTY" (a song playing: why not) */
-            int32_t w = 234 - vx;
-            b[0] = 'T';
-            b[1] = (char)('1' + song.sel);
-            str_cpy(b + 2, rec_clearable() ? " SEQUENCE" : " EMPTY", sizeof b - 2);
-            if (chain_busy())
-                str_cpy(b, "STOP TO EDIT", sizeof b);
-            fill = lc_box(vx, y, w, LR_H, lc_fill(dim ? LS_DIM : LS_OFF, &ink));
-            GFX_HOOK_ALIGN(vx, y, vx + w, y + LR_H, AL_HV, "rec layer clear cell centred");
-            cv_text_in(vx, y + CAP_IN(S, LR_H), w, &AF_S, b, ink, fill);
-            continue;
-        }
-        for (v = 0; v < 3u; v++, vx += LR_VW + 4) {
-            fill = lc_box(vx, y, LR_VW, LR_H, lc_fill(v == rp_get(RL_F[r - 1u]) ? LS_SEL : LS_OFF, &ink));
-            GFX_HOOK_ALIGN(vx, y, vx + LR_VW, y + LR_H, AL_HV, "rec layer value cell centred");
-            cv_text_in(vx, y + CAP_IN(S, LR_H), LR_VW, &AF_S, rl_name(r - 1u, v), ink, fill);
-        }
+    static const char *const RN[3] = {"CLICK", "COUNT-IN", "LEVEL"};
+    int32_t k;
+    for (k = 0; k < 3; k++) {                           /* (Dah) the rows, as SEQ's (KNOB 1; KNOB 2 their value) */
+        int32_t y = 4 + k * 26, sel = lys.sq_row == (uint32_t)k, x;
+        const char *v = rl_name((uint32_t)k, rp_get(RL_F[k]));
+        sq_row(y, 22, sel);
+        GFX_HOOK_ALIGN(0, y, 0, y + 22, AL_V, "rec layer row on its middle");
+        cv_text_on(16, y + CAP_IN(M, 22), &AF_M, RN[k], T_TEXT, T_RAISE);
+        x = 224 - (int32_t)text_w(&AF_S, v);
+        GFX_HOOK_ALIGN(0, y, 0, y + 22, AL_V, "rec layer row on its middle");
+        cv_text_on(x, y + CAP_IN(S, 22), &AF_S, v, T_THEME, T_RAISE);
+        if (sel)
+            cv_keycap(x - 6 - kc_w(KC_K2), y + (22 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
     }
+    rec_track_row(84, (int32_t)graph_h() - 88);         /* (Dah) the track recorded into, as HOME's row */
 }
 
 static void layer_cards(uint32_t l)
@@ -1214,11 +1200,12 @@ static void layer_cards(uint32_t l)
         }
     } else if (l == LAYER_EDIT) {
         engine_columns();
-    } else if (l == LAYER_REC) {                        /* CLICK COUNT-IN LEVEL, an empty card */
-        for (c = 0; c < 3u; c++) {
-            uint32_t v = rp_get(RL_F[c]);
-            draw_column(c, RL_LABEL[c], rl_name(c, v), "", c < 2u && !v ? T_DIM : VAL(c), (int32_t)v * 500, RL_ICON[c]);
-        }
+    } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the row, KNOB 2 its value, two empty */
+        static const char *const RN[3] = {"CLICK", "COUNT", "LEVEL"};
+        uint32_t rr = lys.sq_row % 3u;
+        draw_column(0, "ROW", RN[rr], "", VAL(0u), (int32_t)rr * 500, ICON_NONE);
+        draw_column(1, RN[rr], rl_name(rr, rp_get(RL_F[rr])), "", VAL(1u), -1, ICON_NONE);
+        draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
         draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
     } else {                                            /* the page's four (SCL: LY_SCL) */
         uint8_t h = ui.home, pg = ui.page;
@@ -1230,9 +1217,9 @@ static void layer_cards(uint32_t l)
         ui.home = h;
         ui.page = pg;
         if (l == LAYER_SEQ) {                           /* (Dah) KNOB 1: the row picked; KNOB 2: its value */
-            static const char *const RN[4] = {"LEN", "DIV", "QNTZ", "CLEAR"};
+            static const char *const RN[5] = {"LEN", "DIV", "QNTZ", "CLR T", "CLR P"};
             char vb[12];
-            draw_column(0, "ROW", RN[lys.sq_row % 4u], "", VAL(0u), (int32_t)lys.sq_row * 333, ICON_NONE);
+            draw_column(0, "ROW", RN[lys.sq_row % 5u], "", VAL(0u), (int32_t)lys.sq_row * 250, ICON_NONE);
             draw_column(1, lys.sq_row < 3u ? RN[lys.sq_row] : "CLEAR", lys.sq_row < 3u ? seq_val(lys.sq_row, vb) : "--", "",
                         lys.sq_row < 3u ? VAL(1u) : T_ACCENT, -1, ICON_NONE);   /* (CLEAR ALL: KNOB 2 asks it) */
         }
@@ -1262,7 +1249,8 @@ static void draw_layer(void)
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
-        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + (uint32_t)rec_clearable() * 5u + song.sel * 977u;
+        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u +
+               (song.playing ? TSEL->seq_idx * 7919u + 1u : 0u);   /* (Dah: its track's row, the step playing) */
     else if (l == LAYER_SEQ)
         sig += (uint32_t)chain_busy() * 3u + song.sel * 977u + (uint32_t)TSEL->p[P_SQNT] * 131u + steps_sig(TSEL) * 7u +
                (uint32_t)TSEL->p[P_SLEN] * 257u + lys.sq_row * 65537u + ps_gen * 3u;   /* (Dah: QUANTIZE, the
