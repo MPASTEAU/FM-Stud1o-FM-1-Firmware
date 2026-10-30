@@ -215,13 +215,13 @@ static void fl_fx_label(uint32_t i, char *tag, char *nm)
 }
 static void confirm_open(uint32_t kind, uint32_t trk);
 /* (Dah) the row picked moved (SELECT, KNOB 1): on + ADD, an effect to add asked (as ADD TRACK); no, back off it */
-static void fl_fx_at(void)
+static int fx_on_add(void)                              /* (Dah) the row picked, + ADD: OCT+ asks which (no dialog) */
 {
     uint8_t u[FXU_N_ALL];
     uint32_t n = fx_list(fx_tsel(), u);
-    if (ch_cur >= n && n < fx_max(fx_tsel()) && !ui.confirm)
-        confirm_open(CF_ADD_FX, 0);
+    return !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] == P_FXORD && ch_cur >= n && n < fx_max(fx_tsel());
 }
+static void fl_fx_at(void) { ui.force = 1; }
 static uint32_t fl_pick_rows(uint32_t *cur)             /* (Dah) ADD's picker: the free effects */
 {
     uint8_t f[FXU_N_ALL];

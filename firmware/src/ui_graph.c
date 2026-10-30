@@ -2002,7 +2002,7 @@ static void fl_fx_label(uint32_t i, char *tag, char *nm);
 static const char *fl_fx_note(uint32_t i);
 #define FL_TOP 34                                      /* the title's band (its name in L, its place in S) */
 static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
-static uint32_t fl_kind(void) { return ui.confirm == CF_NEW_FROM ? FL_NEW : ui.confirm == CF_PICK_FX ? FL_PICK : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
+static uint32_t fl_kind(void) { return ui.confirm == CF_NEW_FROM ? FL_NEW : ui.confirm == CF_PICK_FX ? FL_PICK : ui.confirm == CF_ADD_TRACK ? FL_TRK : ui.confirm == CF_NEW_PAT ? FL_PAT : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
 /* the list: how many rows, the one picked (its index) */
 static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
 {
@@ -2011,6 +2011,8 @@ static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
         n = ps_list_all(nums);
         for (i = *cur = 0; i < n; i++)
             if (nums[i] == ps_num(song.sel)) *cur = i;
+        if (ui.confirm == CF_NEW_PAT)                   /* (Dah: NEW asked: on + NEW) */
+            *cur = n;
         return n + (n < PS_NUM);                        /* (+ NEW after the last) */
     }
     if (kind == FL_NEW) {                               /* (Dah) EMPTY, then the patterns to copy */
@@ -2023,7 +2025,8 @@ static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
     if (kind == FL_PICK)
         return fl_pick_rows(cur);
     if (kind == FL_TRK) {
-        *cur = mx_master ? 0u : song.sel + 1u;          /* (the MASTER first, then the tracks, + ADD TRACK) */
+        *cur = ui.confirm == CF_ADD_TRACK ? 1u + trk_count() : mx_master ? 0u : song.sel + 1u;   /* (the MASTER first,
+                                                         * then the tracks, + ADD TRACK; ADD asked: on it) */
         return 1u + trk_count() + (trk_count() < NTRK);
     }
     *cur = preset_all_pos(&n);
@@ -2187,10 +2190,10 @@ static void draw_list_full(int fresh)
                     fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)(dq < 0 ? -dq : dq), (uint32_t)i == cur);
             }
             y = top0 + fl_h(f) + 1;
-            for (i = c0 + 1; (uint32_t)i < n && y < (kind >= FL_PICK ? 220 : 240); i++) {   /* under it (the picker:
+            for (i = c0 + 1; (uint32_t)i < n && y < (kind >= FL_PICK || ui.confirm ? 220 : 240); i++) {   /* under it (the picker:
                                                          * its keys at the foot) */
                 int32_t dq = i * 256 - fl_pos, h = fl_h(dq);
-                if (kind >= FL_PICK && y + h > 220)
+                if ((kind >= FL_PICK || ui.confirm) && y + h > 220)
                     break;
                 fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)dq, (uint32_t)i == cur);
                 y += h + 1;
@@ -2202,10 +2205,15 @@ static void draw_list_full(int fresh)
             cv_rect(234, ty0, 2, th, T_LINE);
             cv_rect(233, by, 4, bh, T_MID);
         }
-        if (kind >= FL_PICK) {                          /* (its keys, at the foot) */
-            static const khint_t KH[2][2] = {{{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD"}},   /* (OCT- first, as on the panel) */
-                                             {{KC_OCTDN, "CANCEL"}, {KC_OCTUP, "CREATE"}}};
-            cv_key_left(10, 240 - 4 - KC_H, KH[kind - FL_PICK], 2, 3u, T_BG);
+        if (kind >= FL_PICK || ui.confirm == CF_ADD_TRACK || ui.confirm == CF_NEW_PAT) {   /* (its keys, at the foot:
+                                                         * Dah: ADD TRACK, NEW asked here, no dialog) */
+            static const khint_t KH[4][2] = {{{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD"}},   /* (OCT- first, as on the panel) */
+                                             {{KC_OCTDN, "CANCEL"}, {KC_OCTUP, "CREATE"}},
+                                             {{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD TRACK"}},
+                                             {{KC_OCTDN, "NO"}, {KC_OCTUP, "NEW PATTERN"}}};
+            int32_t ky = 240 - 6 - KC_H;
+            cv_rrect(4, ky - 4, 224, KC_H + 8, -6, T_RAISE, T_BG);   /* (a bar: what to do, plain) */
+            cv_key_left(12, ky, KH[ui.confirm == CF_ADD_TRACK ? 2 : ui.confirm == CF_NEW_PAT ? 3 : kind - FL_PICK], 2, 3u, T_RAISE);
         }
         cv_oy = 0;
         cv_blit(0, 120u * half);

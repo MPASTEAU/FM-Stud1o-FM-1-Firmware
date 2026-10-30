@@ -2318,7 +2318,7 @@ static void ui_input(void)
                 fx_chain_add(fx_tsel());
                 chain_open();
                 ui_message("EFFECT ADDED");
-            } else if (kind == CF_NEW_PAT && (ui.confirm_trk & 0x80u)) {   /* (Dah) SAVE > PATTERN's NEW: from? */
+            } else if (kind == CF_NEW_PAT) {           /* (Dah) NEW: from what? (EMPTY or a copy: the selector) */
                 np_cur = 0;
                 confirm_open(CF_NEW_FROM, 0);
                 ui.pg_down = 0;
@@ -2437,6 +2437,10 @@ static void ui_input(void)
     } else if (oct & 0x30u) {                           /* (Dah) the octave, on release (pressed where nothing else
                                                          * takes OCT- / OCT+) */
         song.octave += oct & 0x10u ? (song.octave > -3 ? -1 : 0) : (song.octave < 3 ? 1 : 0);
+    } else if ((oct & 2u) && fx_on_add() && !ui.confirm) {   /* (Dah) CHAIN on + ADD: which effect (the picker) */
+        fxp_cur = 0;
+        oct_up_used = 1;                                /* (its release: no octave) */
+        confirm_open(CF_PICK_FX, 0);
     } else if (act_cols() && (oct & 2u)) {              /* action pages: OCT+ does the picked action, */
         act_do();
     } else if (act_cols() && (oct & 1u)) {              /* OCT- drops it (Dah: no more BACK to HOME) */

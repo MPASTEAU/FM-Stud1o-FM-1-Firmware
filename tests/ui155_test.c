@@ -79,6 +79,8 @@ static int select_page(void)
     turn(EN_SELECT, 2);
     ok &= ui.confirm == CF_NEW_PAT && ps_num(0) == 1u;  /* (Dah: past the last: NEW PATTERN 2? asked) */
     press(B_OCTUP);
+    ok &= ui.confirm == CF_NEW_FROM;                    /* (Dah: then from what: EMPTY first) */
+    press(B_OCTUP);
     ok &= song.g[G_BPM] == b0 && ps_num(0) == 2u && title_is("ENV");
     turn(EN_SELECT, -1);
     ok &= ps_num(0) == 1u;

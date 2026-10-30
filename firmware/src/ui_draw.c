@@ -541,7 +541,8 @@ static void head_home(void)
 }
 /* (Dah) HOME's footer, a band at the screen's foot: the shortcuts left (keycaps: OCT+ held the VIEW, SELECT the
  * pattern), the selected track's preset right (its name alone) */
-static int fx_has_next(void);                           /* (ui_input.c: an effect with a second page) */
+static int fx_has_next(void);
+static int fx_on_add(void);                             /* (ui_graph_fx.c: CHAIN's row picked, + ADD) */                           /* (ui_input.c: an effect with a second page) */
 static void foot_hint(char *a, char *b);
 static uint32_t foot_del(void);
 static uint32_t foot_rename(void);
@@ -619,7 +620,11 @@ static void home_foot(void)
     else
         sound_name(TSEL, pn);
     ln[0] = 0;
-    if (hk < 5u) {
+    if (hk == 1u && fx_on_add()) {                      /* (Dah) CHAIN on + ADD: OCT+ asks which (the picker) */
+        kh[0] = (khint_t){KC_OCTUP, "ADD EFFECT"};
+        n = 1u;
+        ok = 1u;
+    } else if (hk < 5u) {
         kh[0] = KH[hk][0];
         kh[1] = KH[hk][1];
         n = 2u;
@@ -2385,7 +2390,7 @@ static void ui_draw_page(uint32_t counting)
     {   /* (Dah) a list just turned: the whole screen, ~1 s; gone: all of the page again */
         static uint8_t was;
         uint8_t on = (uint8_t)(((tl_on() || pl_on()) && !ui.confirm && !name_on()) || ui.confirm == CF_PICK_FX ||
-                              ui.confirm == CF_NEW_FROM);   /* (Dah:
+                              ui.confirm == CF_NEW_FROM || ui.confirm == CF_ADD_TRACK || ui.confirm == CF_NEW_PAT);   /* (Dah:
                                                          * ADD's picker too) */
         if (was && !on)
             ui.force = 1;
