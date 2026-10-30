@@ -349,9 +349,12 @@ static void graph_roll(const track_t *t, uint16_t c)
             continue;                                 /* a REST, empty, or a TIE after one */
         st = &seq_steps(t)[s];
         col = s == ui.cursor || si == ui.cursor ? T_ACCENT : c;
-        if (s == si)
-            pr_bars(st, x + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, col, (st->flags & SF_ACCENT) != 0u, &y,
-                    step_ratchet(st));
+        if (s == si) {                                /* (Dah) where it plays: its NUDGE as QUANTIZE leaves it, the bar
+                                                         * moved that much of a column (OFF: as played, ON: on the grid) */
+            int32_t nd = seq_nudge(t, st) * w / NUDGE_DIV;
+            pr_bars(st, x + nd + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, col, (st->flags & SF_ACCENT) != 0u,
+                    &y, step_ratchet(st));
+        }
         else                                          /* a TIE: the bars on through the gap before */
             pr_bars(st, x - 1, w, col, (st->flags & SF_ACCENT) != 0u, &y, 1u);
         if ((st->flags & SF_SLIDE) && step_ratchet(st) == 1u &&   /* (a ratcheted step never slides out) */
