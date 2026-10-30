@@ -244,7 +244,8 @@ static uint32_t palette_from_stored(uint32_t v)
     return v < 20u ? UI_PALETTE_MIGRATE[v] : UI_GREY_INDEX;
 }
 static uint32_t palette_to_stored(uint32_t i) { return UI_PAL_TAG + i % NPALETTES; }
-static int palette_stored_ok(uint32_t v) { return v < 20u || (v >= UI_PAL_TAG && v - UI_PAL_TAG < NPALETTES); }
+/* (<= NPALETTES: the id after the last, a retired palette's, is accepted and read as GREY) */
+static int palette_stored_ok(uint32_t v) { return v < 20u || (v >= UI_PAL_TAG && v - UI_PAL_TAG <= NPALETTES); }
 
 static inline uint16_t swap16(uint32_t c) { return (uint16_t)(((c >> 8) & 0xFFu) | ((c & 0xFFu) << 8)); }
 

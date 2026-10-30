@@ -30,10 +30,11 @@ static const char *palette_name(uint32_t v) { return v == NPALETTES ? "CUSTOM" :
 static void palette_apply(void)
 {
 #if defined(FELUCCA_DEMO) && FELUCCA_DEMO
-    if (favorites.factory[15][13] != 'H') {         /* HA HA HE HU's first start: its HAHA palette once (byte 13: free); */
-        favorites.factory[15][13] = 'H';            /* saved with the settings, so a palette picked later stays */
-        settings.palette = NPALETTES - 1u;
-        favorites.factory[15][26] = 1u;             /* .. and HOME's TRACKS, the channel rack (ui.c ui_home_view HV_TRACKS) */
+    if (favorites.factory[15][13] != 'H') {         /* the first start: HOME's TRACKS once, the channel rack (ui.c ui_home_view
+                                                     * HV_TRACKS; byte 13: free; saved with the settings, so a view picked
+                                                     * later stays) */
+        favorites.factory[15][13] = 'H';
+        favorites.factory[15][26] = 1u;
     }
     if (!(DAH_MIG & 4u)) {                          /* (Dah) once: bytes 16, 17 of row 15 are the FX layer's key map
                                                      * (ui_layer.c fx_keys, 14..23): the open project and a mark were kept

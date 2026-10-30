@@ -101,8 +101,8 @@ ok([0, 1, 2, 6].every((id) => target.objs.get(id).every((v, i) => v === objs.fin
   await restoreBackup(to103b.request, newFile);
   ok(to103b.objs.get(9).every((v, i) => v === patches[i]), "backup: a 1.0.3 archive restores id 9");
 }
-{   /* HA HA HE HU: id 18, the projects' flash (whole sectors); an archive of the slots' eight tracks (21 objects) */
-  const pfs = rnd(8192, 18), withP = await captureBackup(device([...objs, [18, pfs]]).request, "HAHA");
+{   /* id 18, the projects' flash (whole sectors); an archive of the slots' eight tracks (21 objects) */
+  const pfs = rnd(8192, 18), withP = await captureBackup(device([...objs, [18, pfs]]).request, "PFS");
   const to = device([]);
   await restoreBackup(to.request, withP);
   const lg = to.log.filter((x) => typeof x === "number");

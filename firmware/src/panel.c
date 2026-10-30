@@ -113,11 +113,7 @@ static void settings_init(void)
     }
     if (settings.magic != SETTINGS_MAGIC || settings.palette >= NPALETTES) {
         settings.magic = SETTINGS_MAGIC;
-#if defined(FELUCCA_DEMO) && FELUCCA_DEMO
-        settings.palette = NPALETTES - 1u;     /* HA HA HE HU: HAHA, the last */
-#else
         settings.palette = UI_GREY_INDEX;      /* GREY (default; named MONO before 1.0.2) */
-#endif
         settings.lowcut = 0;
         settings.zoom = 0;                     /* (retired: the LEDS setting, settings_persist.c) */
     }
