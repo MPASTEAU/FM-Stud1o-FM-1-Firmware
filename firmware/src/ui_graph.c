@@ -2905,12 +2905,16 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
     } else
         cv_rect(-ox, 0, TR_W, rh, bg);                 /* (the others square, as the rest) */
     if (ox < 20) {   /* the number: the selected's on its colour (INK), the others' in their colour on the row */
-        int32_t cx = 5 - ox, cyy = (rh - 13) / 2;
+        int32_t bh = rh < 13 ? rh : 13, cx = 5 - ox, cyy = (rh - bh) / 2;   /* (Dah: GLO's small rows: as tall) */
         uint16_t nc0 = R->mute || R->off ? T_DIM : tc0;
-        if (R->sel)
-            cv_rect(cx, cyy, 13, 13, nc0);
-        GFX_HOOK_ALIGN(cx, cyy, cx + 13, cyy + 13, AL_HV, "rack cushion digit centred");
-        cv_text_in(cx, cyy + CAP_IN(S, 13), 13, &AF_S, d, R->sel ? T_INK : nc0, R->sel ? nc0 : bg);
+        if (bh < 12) {                                 /* (too low for its digit: a band of its colour) */
+            cv_rect(cx + 3, cyy + 1, R->sel ? 9 : 5, bh - 2, nc0);
+        } else {
+            if (R->sel)
+                cv_rect(cx, cyy, 13, bh, nc0);
+            GFX_HOOK_ALIGN(cx, cyy, cx + 13, cyy + bh, AL_HV, "rack cushion digit centred");
+            cv_text_in(cx, cyy + CAP_IN(S, bh), 13, &AF_S, d, R->sel ? T_INK : nc0, R->sel ? nc0 : bg);
+        }
     }
     for (i = 1; i <= p0; i++) {                        /* a TIE at the view's start: carried from a note before it? */
         const step_t *q = &s[(p0 + len - i) % len];

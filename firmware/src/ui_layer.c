@@ -1011,29 +1011,42 @@ static const char *glo_val(uint32_t r, char *b)        /* (Dah) the GLO layer's 
     }
     return b;
 }
-static void layer_glo(void)                             /* (Dah) as SEQ's: the rows, then the keys' two cells */
-{
-    char vb[16], n[3] = {0, 0, 0};
-    int32_t k;
+static void layer_glo(void)                             /* (Dah) as SEQ's: the rows (two columns), under them the */
+{                                                       /* tracks as HOME's rack, their steps playing */
+    char vb[16];
+    int32_t k, n = (int32_t)trk_count(), y0 = 3 * 16 + 4, rh, oy = cv_oy;
     for (k = 0; k < 5; k++) {
-        int32_t y = 3 + k * 21, x;
+        int32_t y = 3 + k / 2 * 16, x = 6 + k % 2 * 115, w = k == 4 ? 228 : 113, sel = lys.sq_row == (uint32_t)k, vx;
         const char *v = glo_val((uint32_t)k, vb);
-        sq_row(y, 19, lys.sq_row == (uint32_t)k);
-        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "glo layer row on its middle");
-        cv_text_on(16, y + CAP_IN(S, 19), &AF_S, GLO_RN[k], T_TEXT, T_RAISE);
-        x = 224 - (int32_t)text_w(&AF_S, v);
-        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "glo layer row on its middle");
-        cv_text_on(x, y + CAP_IN(S, 19), &AF_S, v, T_THEME, T_RAISE);
-        if (lys.sq_row == (uint32_t)k)
-            cv_keycap(x - 6 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
+        cv_rrect(x, y, w, 15, 4, sel ? T_THEME : T_RAISE, T_SURF);
+        if (sel)
+            cv_rrect(x + 2, y + 2, w - 4, 11, 3, T_RAISE, T_THEME);
+        GFX_HOOK_ALIGN(0, y, 0, y + 15, AL_V, "glo layer row on its middle");
+        cv_text_on(x + 7, y + CAP_IN(S, 15), &AF_S, GLO_RN[k], T_TEXT, T_RAISE);
+        vx = x + w - 7 - (int32_t)text_w(&AF_S, v);
+        GFX_HOOK_ALIGN(0, y, 0, y + 15, AL_V, "glo layer row on its middle");
+        cv_text_on(vx, y + CAP_IN(S, 15), &AF_S, v, T_THEME, T_RAISE);
     }
-    if ((int32_t)graph_h() - 112 >= LC_H) {             /* the keys: D4 LEARN, E4 FILL (held), F4 TAP */
-        n[0] = 'D';
-        lcell(LC_X(0), 110, LC_H, n, ICON_MIDI, 0, "LEARN", ui.ml.on ? LS_SEL : LS_OFF, 0);
-        n[0] = 'E';
-        lcell(LC_X(1), 110, LC_H, n, ICON_STEPS, 0, "FILL", seq_fill ? LS_HELD : LS_OFF, 1);
-        n[0] = 'F';
-        lcell(LC_X(2), 110, LC_H, n, ICON_TEMPO, 0, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF, 0);
+    rh = n ? ((int32_t)graph_h() - y0 - 4) / n : 0;
+    rh = rh > 16 ? 16 : rh;
+    for (k = 0; k < n && rh >= 6; k++) {                /* (HOME's rows, a gap under each; the selected framed) */
+        track_t *t = &trk[k];
+        rk_row_t R;
+        R.s = seq_steps(t);
+        R.c = (uint32_t)k;
+        R.sel = k == rk_sel();
+        R.mute = t->p[P_MUTE] != 0;
+        R.len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+        R.nc = hv_cols();
+        R.off = (seq_off >> k) & 1u && !chain.running;
+        R.tc0 = ux.trk[k];
+        R.tc = R.mute || R.off ? T_DIM : R.sel ? R.tc0 : ux_mix(T_SURF, R.tc0, 72);
+        R.bg = R.sel ? ux_mix(T_SURF, R.tc0, 16) : T_RAISE;
+        R.rh = rh - 1;
+        rk_view(t, (int)R.sel, &R.p0, &R.ph);
+        cv_oy = oy + y0 + k * rh;
+        rk_paint(&R, -3);
+        cv_oy = oy;
     }
 }
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
@@ -1257,8 +1270,14 @@ static void draw_layer(void)
             sig = sig * 33u + perf_map[p];
     }
     else if (l == LAYER_GLO)
+    {
+        uint32_t k;
+        for (k = 0; k < trk_count(); k++)               /* (Dah: the tracks under the rows: their steps, playhead) */
+            sig = sig * 31u + steps_sig(&trk[k]) + trk[k].seq_idx * 7u + (uint32_t)trk[k].p[P_MUTE] * 3u;
+        sig += song.sel * 977u + (uint32_t)song.playing;
         sig += (uint32_t)song.g[G_CLOCK] * 5u + ui.ml.on * 7u + seq_fill * 1009u + lys.sq_row * 65537u +
                (uint32_t)song.g[G_BPM] * 131u + (uint32_t)song.g[G_SWING] * 257u + (uint32_t)(song.g[G_TUNE] + 64) * 8191u;
+    }
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
