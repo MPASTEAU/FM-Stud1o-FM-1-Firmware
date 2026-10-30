@@ -405,6 +405,9 @@ static int oct_layers(void)
     key_up(key_at(0, 6)); frames(50);
     ok &= !seq_fill;
     btn_up(B_GLO); frames(400);
+    if (ui.lock) {                                      /* (Dah: held open, it stays: GLO again closes it) */
+        btn_down(B_GLO); frame(); btn_up(B_GLO); frames(400);
+    }
     ok &= song.octave == 0;
     press(B_OCTDN);
     ok &= song.octave == -1;

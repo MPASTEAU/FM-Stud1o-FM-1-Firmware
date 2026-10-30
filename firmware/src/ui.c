@@ -521,7 +521,7 @@ static void ui_message(const char *s) { ui_say(s, ""); }
 /* (Dah) the layer whose "HOLD [X] QUICK" shows (0 none): HOME's look says what it does, whole (ui_draw.c) */
 static uint8_t ly_hint;
 static const char *const LY_LONG[7][2] = {{"", ""}, {"HOLD [FX]", "PERFORMANCE EFFECTS ON THE KEYS"},
-                                          {"HOLD [GLO]", "MUTES, SOLOS, LEVELS, TAP TEMPO"},
+                                          {"HOLD [GLO]", "TEMPO, SWING, TUNE, CLOCK, TAP"},
                                           {"HOLD [SCL]", "ROOT, SCALE AND CHORD ON THE KEYS"},
                                           {"HOLD [EDIT]", "AN ENGINE ON EACH KEY"},
                                           {"HOLD [SEQ]", "THE SEQUENCE TOOLS ON THE KEYS"},

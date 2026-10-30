@@ -675,7 +675,7 @@ static int learn_test(void)
     ok = ui.ml.on && msg_is("MIDI LEARN ON") && ui.layer == LAYER_GLO;
     ok &= ((leds_at(0) | leds_at(250)) >> white(5)) & 1u;          /* (lit: on) */
     btn_up(B_GLO); frame();
-    bad += check("GLO + D4: MIDI LEARN on (the D4 cell / LED lit), the map closes with GLO", ok && ui.ml.on && !ui.layer);
+    bad += check("GLO + D4: MIDI LEARN on (the D4 LED lit), the map closes with GLO", ok && ui.ml.on && !ui.layer);
     queued(0xB0, 20, 99, 1); frame();
     bad += check("  no parameter picked yet: a CC learns nothing, sets nothing", !ml_count() &&
                  !memcmp(before, trk[0].p, sizeof before));
@@ -705,11 +705,9 @@ static int learn_test(void)
     song.g[G_ROUTE] = 0; queued(0xB9, 20, 64, 1);
     bad += check("  ROUT CH1-4: CC20 on channel 10 is ignored as before", trk[0].p[P_E4] == 1);
 
-    /* the standard map: a learned CC no longer reaches it; GLO's knobs pick a track's LEVEL */
-    btn_down(B_GLO); frame();
-    turn(EN_K2, 2);
+    /* the standard map: a learned CC no longer reaches it; MIXER's knobs pick a track's LEVEL (Dah: GLO's no more) */
+    ml_knob(&trk[1], P_LEVEL);
     ok = ui.ml.pick && ui.ml.trk == 1u && ui.ml.id == P_LEVEL;
-    btn_up(B_GLO); frames(300);
     queued(0xB0, 74, 10, 1); frame();
     ok &= ml_entry(74, 1, P_LEVEL) && msg_is("CC74 -> T2 LVL");
     cut = trk[0].p[P_E4];

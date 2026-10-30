@@ -66,6 +66,9 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_OCTDN, "UNDO"}}},   /* (Dah: as SEQ: OCT- alone; KNOB 1 the rows, 2 a value) */
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
+/* (Dah) GLO's menu: its rows' globals (the 5th: MIDI LEARN) */
+static const uint8_t GLO_G[4] = {G_BPM, G_SWING, G_TUNE, G_CLOCK};
+static const char *const GLO_RN[5] = {"TEMPO", "SWING", "TUNE", "CLOCK", "MIDI LEARN"};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: LEN DIV SWING GATE (the length the tools work in; up to 1.1.5 the PATTERN page's) */
@@ -200,7 +203,7 @@ static void layer_lock_input(uint32_t pressed)
         lys.dt_l = 0;
     if (!ui.lock)
         return;
-    if ((pressed & ly_bit(ui.lock)) && ui.lock >= LAYER_SCL) {   /* (Dah) SCL, EDIT, SEQ, REC held open:
+    if ((pressed & ly_bit(ui.lock)) && ui.lock >= LAYER_GLO) {   /* (Dah) GLO, SCL, EDIT, SEQ, REC held open:
                                                          * its button closes it */
         lys.eat = (uint8_t)ui.lock;
         if (ui.lock == LAYER_REC)
@@ -259,9 +262,8 @@ static void layer_opened(uint32_t l)
         if (l == LAYER_SEQ) {
             lys.v[k] = TSEL->p[P_SLEN + k];
             lys.v[4] = TSEL->p[P_SQNT];                 /* (Dah: QUANTIZE too) */
-        } else if (l == LAYER_GLO) {                    /* (HA HA HE HU: the bank's four tracks) */
-            lys.v[k] = trk[trk_bank() + k].p[P_MUTE];
-            lys.v[4u + k] = trk[trk_bank() + k].p[P_LEVEL];
+        } else if (l == LAYER_GLO) {                    /* (Dah) the menu's TEMPO SWING TUNE CLOCK */
+            lys.v[k] = song.g[GLO_G[k]];
         } else {
             lys.v[k] = TSEL->p[P_ROOT + k];
             lys.v[4u + k] = k < 2u ? TSEL->p[P_CHRD + k] : 0;
@@ -290,7 +292,7 @@ static uint32_t layer_gesture(uint32_t now, uint32_t combo)
         }
         return 0;
     }
-    if (l >= LAYER_SCL && (*t0 & LY_OPEN) && !(*t0 & LY_DEAD) && !combo && !ui.lock) {   /* (Dah) SCL EDIT SEQ REC held open: it
+    if (l >= LAYER_GLO && (*t0 & LY_OPEN) && !(*t0 & (LY_DEAD | LY_COMBO)) && !combo && !ui.lock) {   /* (Dah) GLO SCL EDIT SEQ REC held open: it
                                                          * stays when let go (its button again, or another, closes it) */
         ui.lock = (uint8_t)l;
         return 0;
@@ -622,25 +624,16 @@ static uint32_t eqa_sig(void)
 /* a key pressed in layer l (k: 0 = F3 .. 26 = G5) */
 static void layer_key(uint32_t l, uint32_t k)
 {
-    uint32_t p = key_place(k), i;
+    uint32_t p = key_place(k);
     if (l == LAYER_FX) {
         if (!key_black(k) && p < PF_KEYS)
             lys.fxk = (uint8_t)(k + 1u);                /* (PRESETS assigns it while held) */
-    } else if (l == LAYER_GLO) {
+    } else if (l == LAYER_GLO) {                        /* (Dah: the mutes, solos on MIXER; LEARN a row) */
         if (key_black(k)) {
-            if (p < 4u && trk_bank() + p < trk_count())   /* (HA HA HE HU: the selected track's bank of four; Dah:
-                                                         * the project's tracks only) */
-                trk[trk_bank() + p].p[P_MUTE] = (int16_t)!trk[trk_bank() + p].p[P_MUTE];
-        } else if (p < 4u) {
-            if (trk_bank() + p < trk_count())
-                lys.solo |= 1u << k;                        /* (layer_masks: perf_solo while held) */
-        } else if (p == 4u) {
-            for (i = 0; i < NTRK; i++)
-                trk[i].p[P_MUTE] = 0;
         } else if (p == 7u) {
             glo_tap();
         } else if (p == 5u) {
-            ml_toggle();                                /* D4: MIDI LEARN on / off (midi_learn.c) */
+            ml_toggle();                                /* D4: MIDI LEARN on / off (its row too) */
         } else if (p == 6u) {
             lys.fill |= 1u << k;                        /* E4: FILL while held (layer_keys) */
         }
@@ -696,15 +689,20 @@ static void layer_knob(uint32_t k, int32_t s)
         if (k == 3u && !perf_harm_on())
             s = -s;                                     /* DEPTH (100 - perf_k[3]) rises to the right (#40: it fell) */
         perf_k[k] = (int8_t)clamp(perf_k[k] + accel(EN_K1 + k, s, k ? 100 : 200), k ? 0 : -100, 100);   /* (#126) */
-    } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL, recorded as on MIXER (HA HA HE HU: the bank's) */
-        track_t *bt = &trk[trk_bank() + (k & 3u)];
-        int16_t *vp = &bt->p[P_LEVEL];
-        if (trk_bank() + (k & 3u) >= trk_count())       /* (Dah: no hidden track's level) */
-            return;
-        *vp = (int16_t)clamp(*vp + accel(EN_K1 + k, s, TP[P_LEVEL].max - TP[P_LEVEL].min), TP[P_LEVEL].min,
-                             TP[P_LEVEL].max);
-        motion_capture(bt, P_LEVEL, *vp);
-        ml_knob(bt, P_LEVEL);                           /* (MIDI LEARN: Tk LEVEL picked) */
+    } else if (l == LAYER_GLO) {                        /* (Dah) as SEQ: KNOB 1 the rows, KNOB 2 the row's value */
+        if (k == 0u) {
+            lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 4);
+            ui.force = 1;
+        } else if (k == 1u && lys.sq_row == 4u) {
+            ml_toggle();                                /* MIDI LEARN on / off (midi_learn.c) */
+        } else if (k == 1u) {
+            uint32_t g = GLO_G[lys.sq_row % 4u];
+            int32_t d = g == G_BPM ? accel(EN_K2, s, GP[g].max - GP[g].min) : g == G_SWING ? (s > 0 ? 5 : -5) : s > 0 ? 1 : -1;
+            if (g == G_CLOCK && song.playing)
+                ui_message("STOP TO CHANGE");
+            else
+                song.g[g] = (int16_t)clamp(song.g[g] + d, GP[g].min, GP[g].max);
+        }
     } else if (l == LAYER_EDIT) {                       /* ENG, No. */
         if (k == 0u)
             edit_load(eng_step(TSEL->eng_req, s), 0);
@@ -812,12 +810,9 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 ui_message(lys.l == LAYER_REC ? "REC PUT BACK" : "SEQUENCE PUT BACK");
             }
         } else if (lys.l == LAYER_GLO) {
-            for (k = 0; k < 4u; k++) {                  /* (the bank's four) */
-                trk[trk_bank() + k].p[P_MUTE] = lys.v[k];
-                trk[trk_bank() + k].p[P_LEVEL] = lys.v[4u + k];
-            }
-            song.g[G_BPM] = lys.v[8];
-            ui_message("MIX PUT BACK");
+            for (k = 0; k < 4u; k++)
+                song.g[GLO_G[k]] = lys.v[k];
+            ui_message("GLOBAL PUT BACK");
         } else {
             for (k = 0; k < 4u; k++)
                 trk[lys.trk % NTRK].p[P_ROOT + k] = lys.v[k];
@@ -833,7 +828,6 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
 /* --------------------------------------------------------- the LEDs --- */
 /* lit = in effect now (held, the value, a track sounding), breathing = can be pressed (*br: dark .. ~60 % and
  * back, ~1.1 s, hal/fm1_input.h fm1_led_breath; was a hard 250 ms blink, #119), dark = nothing there */
-static int glo_sounding(uint32_t t) { return !trk[t].p[P_MUTE] && (!perf_solo || ((perf_solo >> t) & 1u)); }
 static uint32_t layer_leds(uint32_t *br)
 {
     uint32_t k, m = 0, n = 0, l = ui.layer, held = perf_held | perf_latched, ok = perf_avail();
@@ -845,11 +839,9 @@ static uint32_t layer_leds(uint32_t *br)
             e = perf_key(k);
             can = e < PF_N && ((ok >> e) & 1u);
             on = can && ((held >> e) & 1u);
-        } else if (l == LAYER_GLO) {                    /* sounding lit; SOLO held lit, the others, C4, F4 breathe */
-            uint32_t here = p < 4u && trk_bank() + p < trk_count();   /* (Dah: a track of the project) */
-            on = b ? here && glo_sounding(trk_bank() + p) : (here && ((lys.solo >> k) & 1u)) || (p == 5u && ui.ml.on) ||
-                 (p == 6u && seq_fill);
-            can = !b && (here || p == 4u || p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
+        } else if (l == LAYER_GLO) {                    /* (Dah) FILL (held lit), TAP breathe */
+            on = !b && ((p == 6u && seq_fill) || (p == 5u && ui.ml.on));
+            can = !b && (p == 5u || p == 6u || (p == 7u && !song.g[G_CLOCK]));
         } else if (l == LAYER_SCL) {                    /* the root lit, the scale's notes breathe */
             e = (k + 5u + 12u - root) % 12u;
             on = e == 0u;
@@ -998,25 +990,44 @@ static void layer_fx(void)
               (held >> (PF_M1 + trk_bank() + e)) & 1u ? LS_MUTE : LS_OFF, 0);
     }
 }
-static void layer_glo(void)
+static void sq_row(int32_t y, int32_t h, int sel);
+static const char *glo_val(uint32_t r, char *b)        /* (Dah) the GLO layer's row r's value */
 {
-    uint32_t e;
-    char n[3] = {0, 0, 0};
-    for (e = 0; e < 4u; e++) {                          /* F3 .. B3: SOLO while held (the bank's tracks) */
-        n[0] = W_NOTE[e];
-        lcell(LC_X(e), 4, LC_H, n, trk_icon(trk_bank() + e, 0), 0, "SOLO", (perf_solo >> (trk_bank() + e)) & 1u ? LS_HELD : LS_OFF, 1);
+    const char *u;
+    if (r == 4u)
+        return ui.ml.on ? "ON" : "OFF";
+    param_format(&GP[GLO_G[r]], song.g[GLO_G[r]], b, &u);
+    if (GLO_G[r] == G_TUNE) {                          /* (cents) */
+        char *e = b;
+        while (*e)
+            e++;
+        e[0] = ' ', e[1] = 'C', e[2] = 'T', e[3] = 0;
     }
-    n[0] = 'C';
-    lcell(LC_X(0), 50, LC_H, n, ICON_MUTE, 0, "ALL", LS_OFF, 0);   /* (unmute all) */
-    n[0] = 'D';
-    lcell(LC_X(1), 50, LC_H, n, ICON_MIDI, 0, "LEARN", ui.ml.on ? LS_SEL : LS_OFF, 0);   /* (MIDI LEARN, 1.5) */
-    n[0] = 'E';
-    lcell(LC_X(2), 50, LC_H, n, ICON_STEPS, 0, "FILL", seq_fill ? LS_HELD : LS_OFF, 1);   /* (FILL while held, 1.5.5) */
-    n[0] = 'F';
-    lcell(LC_X(3), 50, LC_H, n, ICON_TEMPO, 0, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF, 0);
-    for (e = 0; e < 4u; e++) {                          /* the black keys 1..4: MUTE, latched (the bank's tracks) */
-        bnote(n, e);
-        lcell(LC_X(e), LM_Y, LM_H, n, ICON_MUTE, trk_icon(trk_bank() + e, 0), 0, trk[trk_bank() + e].p[P_MUTE] ? LS_MUTE : LS_OFF, 0);
+    return b;
+}
+static void layer_glo(void)                             /* (Dah) as SEQ's: the rows, then the keys' two cells */
+{
+    char vb[16], n[3] = {0, 0, 0};
+    int32_t k;
+    for (k = 0; k < 5; k++) {
+        int32_t y = 3 + k * 21, x;
+        const char *v = glo_val((uint32_t)k, vb);
+        sq_row(y, 19, lys.sq_row == (uint32_t)k);
+        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "glo layer row on its middle");
+        cv_text_on(16, y + CAP_IN(S, 19), &AF_S, GLO_RN[k], T_TEXT, T_RAISE);
+        x = 224 - (int32_t)text_w(&AF_S, v);
+        GFX_HOOK_ALIGN(0, y, 0, y + 19, AL_V, "glo layer row on its middle");
+        cv_text_on(x, y + CAP_IN(S, 19), &AF_S, v, T_THEME, T_RAISE);
+        if (lys.sq_row == (uint32_t)k)
+            cv_keycap(x - 6 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
+    }
+    if ((int32_t)graph_h() - 112 >= LC_H) {             /* the keys: D4 LEARN, E4 FILL (held), F4 TAP */
+        n[0] = 'D';
+        lcell(LC_X(0), 110, LC_H, n, ICON_MIDI, 0, "LEARN", ui.ml.on ? LS_SEL : LS_OFF, 0);
+        n[0] = 'E';
+        lcell(LC_X(1), 110, LC_H, n, ICON_STEPS, 0, "FILL", seq_fill ? LS_HELD : LS_OFF, 1);
+        n[0] = 'F';
+        lcell(LC_X(2), 110, LC_H, n, ICON_TEMPO, 0, "TAP", song.g[G_CLOCK] ? LS_DIM : LS_OFF, 0);
     }
 }
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
@@ -1165,9 +1176,7 @@ static void layer_rec(void)
 static void layer_cards(uint32_t l)
 {
     char val[12];
-    const char *unit;
-    uint32_t c;
-    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
+    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC || l == LAYER_GLO))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
                                                          * them to the panel BG (no page left there) */
         lcd_fill(0, Y_LABEL + HOME_CARD_H, 240, Y_GRAPH - Y_LABEL - HOME_CARD_H, T_BG);
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
@@ -1189,13 +1198,13 @@ static void layer_cards(uint32_t l)
             fmt_int(val, 100 - perf_k[3]);
             draw_column(3, "DEPTH", val, "%", VAL(3u), (100 - perf_k[3]) * 10, ICON_MIX);
         }
-    } else if (l == LAYER_GLO) {                        /* T1..T4 LEVEL (the track's icon; muted: dim) */
-        for (c = 0; c < 4u; c++) {                     /* (HA HA HE HU: the bank's four) */
-            uint32_t k = trk_bank() + c;
-            param_format(&TP[P_LEVEL], trk[k].p[P_LEVEL], val, &unit);
-            draw_column(c, "LEVEL", val, unit, glo_sounding(k) ? VAL(c) : T_DIM, RATIO(&TP[P_LEVEL], trk[k].p[P_LEVEL]),
-                        trk_icon(k, 1));
-        }
+    } else if (l == LAYER_GLO) {                        /* (Dah) as SEQ: KNOB 1 the row, KNOB 2 its value */
+        static const char *const RN[5] = {"TEMPO", "SWING", "TUNE", "CLOCK", "LEARN"};
+        uint32_t rr = lys.sq_row % 5u;
+        draw_column(0, "ROW", RN[rr], "", VAL(0u), (int32_t)rr * 250, ICON_NONE);
+        draw_column(1, RN[rr], glo_val(rr, val), "", VAL(1u), -1, ICON_NONE);
+        draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
+        draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
     } else if (l == LAYER_EDIT) {
         engine_columns();
     } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the row, KNOB 2 its value, two empty */
@@ -1242,8 +1251,8 @@ static void draw_layer(void)
             sig = sig * 33u + perf_map[p];
     }
     else if (l == LAYER_GLO)
-        sig += perf_solo * 31u + (uint32_t)song.g[G_CLOCK] * 5u + ui.ml.on * 7u + seq_fill * 1009u +
-               (uint32_t)(trk[0].p[P_MUTE] | trk[1].p[P_MUTE] << 1 | trk[2].p[P_MUTE] << 2 | trk[3].p[P_MUTE] << 3) * 131u;
+        sig += (uint32_t)song.g[G_CLOCK] * 5u + ui.ml.on * 7u + seq_fill * 1009u + lys.sq_row * 65537u +
+               (uint32_t)song.g[G_BPM] * 131u + (uint32_t)song.g[G_SWING] * 257u + (uint32_t)(song.g[G_TUNE] + 64) * 8191u;
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
