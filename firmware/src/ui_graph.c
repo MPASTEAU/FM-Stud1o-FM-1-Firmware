@@ -356,8 +356,13 @@ static void graph_roll(const track_t *t, uint16_t c)
             pr_bars(st, x - 1, w, col, (st->flags & SF_ACCENT) != 0u, &y, 1u);
         if ((st->flags & SF_SLIDE) && step_ratchet(st) == 1u &&   /* (a ratcheted step never slides out) */
             ns->time == ST_NOTE && ns->n && y >= PR_Y0 && y < ybot) {
-            int32_t ny = clamp(pr_row_y(ns->note[0]), PR_Y0, ybot - PR_RH);
-            cv_line(x + w - 2, y + 2, x + w + 2, ny + 2, T_TEXT);   /* the slide into the next note */
+            int32_t ny = clamp(pr_row_y(ns->note[0]), PR_Y0, ybot - PR_RH), x0 = x + w / 2, x1 = x + w + 2, xx, py = y;
+            for (xx = x0; xx <= x1; xx++) {             /* (Dah) the slide as FL draws it: the note's bar bending into
+                                                         * the next one's, a ramp as thick, in its colour */
+                int32_t cy = y + (ny - y) * (xx - x0) / (x1 - x0), lo = cy < py ? cy : py, hi = cy > py ? cy : py;
+                cv_rect(xx, lo + 1, 1, hi - lo + PR_RH - 2, col);
+                py = cy;
+            }
         }
     }
     if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the step playing: its number on the ruler */
