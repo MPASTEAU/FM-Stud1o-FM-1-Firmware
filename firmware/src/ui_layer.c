@@ -102,7 +102,7 @@ static struct {
     uint8_t ntap;
     uint8_t quiet;                     /* #39: a layer closed after it opened: KNOB 1..4 do nothing until quiet_t + */
     uint32_t quiet_t;                  /* LY_QUIET_MS (fm1_ms) */
-    uint8_t dt_l, dt_hint, dtap;       /* #83: the layer of the last tap that opened a page (0 none), its hint said; the
+    uint8_t dt_l, dt_hint, dtap, eat;   /* (Dah: eat: SEQ's press that closed its lock, no new arming) */       /* #83: the layer of the last tap that opened a page (0 none), its hint said; the
                                         * press now armed is that tap's second (a double tap) */
     uint32_t dt_ms;                    /* .. when that tap was let go (fm1_ms) */
     struct { uint8_t home, page, act, seq, fam[FAM_COUNT], rec, go; } nv;   /* .. the page it left (put back by the
@@ -149,6 +149,11 @@ static void layer_arm(uint32_t pressed, uint32_t now)
     uint32_t l;
     if (ui.ly)
         return;
+    if (lys.eat) {                                      /* (the press that closed SEQ: no tap, no layer) */
+        lys.eat = 0;
+        if (pressed & ly_bit(LAYER_SEQ))
+            return;
+    }
     for (l = LAYER_FX; l < LAYER_N; l++)
         if (pressed & ly_bit(l)) {
             ui.ly = (uint8_t)l;
@@ -192,7 +197,10 @@ static void layer_lock_input(uint32_t pressed)
         lys.dt_l = 0;
     if (!ui.lock)
         return;
-    if (pressed & ly_bit(ui.lock))
+    if ((pressed & ly_bit(ui.lock)) && ui.lock == LAYER_SEQ) {   /* (Dah) SEQ held open: its button closes it */
+        layer_let_go(1);
+        lys.eat = 1;
+    } else if (pressed & ly_bit(ui.lock))
         ui.lock = 0;
     else if (pressed & ~keep)
         layer_let_go(1);
@@ -274,6 +282,11 @@ static uint32_t layer_gesture(uint32_t now, uint32_t combo)
             *t0 |= LY_OPEN | (combo ? LY_COMBO : 0u);
             layer_opened(l);
         }
+        return 0;
+    }
+    if (l == LAYER_SEQ && (*t0 & LY_OPEN) && !(*t0 & LY_DEAD) && !combo && !ui.lock) {   /* (Dah) SEQ held open: it
+                                                         * stays when let go (its button again, or another, closes it) */
+        ui.lock = (uint8_t)l;
         return 0;
     }
     l = *t0 & (LY_OPEN | LY_DEAD) || combo ? 0u : l;   /* (a knob turned as it was let go: a combo, no tap) */
@@ -1076,25 +1089,28 @@ static void sq_row(int32_t y, int32_t h, int sel)
 static void layer_seq(void)
 {
     const track_t *t = TSEL;
-    int32_t full = (int32_t)graph_h(), ch = full - 4 - 4 - 30 - 4, q = clamp(t->p[P_SQNT], 0, 4);
+    int32_t full = (int32_t)graph_h(), q = clamp(t->p[P_SQNT], 0, 4), ph;
     uint16_t dim = chain_busy() ? T_DIM : T_TEXT;
-    sq_row(4, ch, lys.sq_row == 0u);
-    GFX_HOOK_ALIGN(0, 4, 0, 30, AL_V, "seq quantize row title on its line");
-    cv_text_on(16, 4 + CAP_IN(M, 26), &AF_M, "QUANTIZE", dim, T_RAISE);
-    GFX_HOOK_ALIGN(0, 4, 0, 30, AL_V, "seq quantize row title on its line");
+    sq_row(4, 30, lys.sq_row == 0u);                    /* (Dah) two rows, as HOME's: QUANTIZE, CLEAR ALL */
+    GFX_HOOK_ALIGN(0, 4, 0, 34, AL_V, "seq quantize row title on its line");
+    cv_text_on(16, 4 + CAP_IN(M, 30), &AF_M, "QUANTIZE", dim, lys.sq_row == 0u ? T_RAISE : T_RAISE);
     {   /* the amount at the right, PRESETS' keycap before it (the row picked) */
         int32_t x = 224 - (int32_t)text_w(&AF_M, N_QNT[q]);
-        GFX_HOOK_ALIGN(0, 4, 0, 30, AL_V, "seq quantize row title on its line");
-        cv_text_on(x, 4 + CAP_IN(M, 26), &AF_M, N_QNT[q], q ? T_THEME : T_DIM, T_RAISE);
+        GFX_HOOK_ALIGN(0, 4, 0, 34, AL_V, "seq quantize row title on its line");
+        cv_text_on(x, 4 + CAP_IN(M, 30), &AF_M, N_QNT[q], q ? T_THEME : T_DIM, T_RAISE);
         if (lys.sq_row == 0u)
-            cv_keycap(x - 6 - kc_w(KC_PRESETS), 4 + (26 - KC_H) / 2, KC_PRESETS, T_KEY, T_INK, T_RAISE);
+            cv_keycap(x - 6 - kc_w(KC_PRESETS), 4 + (30 - KC_H) / 2, KC_PRESETS, T_KEY, T_INK, T_RAISE);
     }
-    pt_mini(ps_num(song.sel), 16, 32, 208, ch - 34, T_RAISE);
-    sq_row(4 + ch + 4, 30, lys.sq_row == 1u);
-    GFX_HOOK_ALIGN(0, ch + 8, 0, ch + 38, AL_V, "seq clear all row on its middle");
-    cv_icon_in(16, ch + 8, 0, 30, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
-    GFX_HOOK_ALIGN(0, ch + 8, 0, ch + 38, AL_V, "seq clear all row on its middle");
-    cv_text_on(34, ch + 8 + CAP_IN(M, 30), &AF_M, "CLEAR ALL", dim, T_RAISE);
+    sq_row(38, 30, lys.sq_row == 1u);
+    GFX_HOOK_ALIGN(0, 38, 0, 68, AL_V, "seq clear all row on its middle");
+    cv_icon_in(16, 38, 0, 30, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
+    GFX_HOOK_ALIGN(0, 38, 0, 68, AL_V, "seq clear all row on its middle");
+    cv_text_on(34, 38 + CAP_IN(M, 30), &AF_M, "CLEAR ALL", dim, T_RAISE);
+    /* (Dah) under them, apart (no row's): the pattern as it is, small (SAVE > PATTERN's picture) */
+    GFX_HOOK_ALIGN(0, 76, 0, 86, AL_V, "seq current pattern title");
+    cv_text_on(16, 76 - AF_S_CAP_Y, &AF_S, "CURRENT PATTERN", T_MID, T_SURF);
+    ph = full - 94 - 6;
+    pt_mini(ps_num(song.sel), 16, 92, 208, ph > 36 ? 36 : ph, T_SURF);
 }
 
 /* REC: a row a key (26 px, 4 apart): the key's cell (its note, icon and name), then CLEAR's track and what it holds,
