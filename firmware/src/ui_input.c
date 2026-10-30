@@ -216,8 +216,20 @@ static uint32_t arp_led(void)
         on |= trk[k].p[P_AMODE] && trk[k].nheld;
     return !on ? 2u : beat_pos < (beat_n ? b / 6u : b / 2u);
 }
-/* (Dah) SCL as ARP: the selected track's CHORD KEYS on (a chord a key): 1 lit, 2 none */
-static uint32_t chord_led(void) { return TSEL->p[P_CHRD] && !drum_track(TSEL) ? 1u : 2u; }
+/* (Dah) SCL as ARP: lit while CHORD KEYS add notes, a track with them on sounding a chord (two voices or more held) */
+static uint32_t chord_led(void)
+{
+    uint32_t k, i, n;
+    for (k = 0; k < NPART; k++) {
+        if (!trk[k].p[P_CHRD] || drum_track(&trk[k]) || trk_vmode(&trk[k]) != V_POLY)
+            continue;
+        for (i = n = 0; i < NVOICE; i++)
+            n += trk[k].v[i].active && trk[k].v[i].gate;
+        if (n >= 2u)
+            return 1u;
+    }
+    return 2u;
+}
 
 /* Discussion #81: the keys of the notes MIDI IN (USB and TRS, routed by ROUT) holds on track t, bit k = key k: as
  * play_leds, where the keys play that note at the octave now, the lowest key that gives it; a note no key plays is
@@ -423,7 +435,7 @@ static void ui_leds(void)
     if ((k = arp_led()) != 2u && (!ui.layer || layer_btn() != B_ARP))
         led_put(nl, panel.btn[B_ARP], FAM_BTN[fam] == B_ARP ? !k : (int)k);   /* (on ARP's page: dark flashes) */
     if (chord_led() != 2u && (!ui.layer || layer_btn() != B_SCL))
-        led_put(nl, panel.btn[B_SCL], 1);              /* (Dah: chords on) */
+        led_put(nl, panel.btn[B_SCL], 1);              /* (Dah: a chord sounding) */
     if (!ui.layer && (perf_latched || perf_k[0] || perf_k[1] || perf_k[2] || perf_k[3]))
         led_put(nl, panel.btn[B_FX], 1);                /* FX LATCH: lit while an effect or a macro is on */
     if (ui.layer)                                       /* the layer's button breathes while its map is up */
