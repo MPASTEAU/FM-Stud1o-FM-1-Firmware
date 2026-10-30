@@ -188,7 +188,7 @@ static void menu_head(void)
  * Drawn in two bands (the canvas holds 124 rows) split in a gap between two rows; while the tabs slide only their
  * strip (24..58) is drawn again */
 static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_SPEAKER, ICON_MIDI, ICON_X_COG};
-#define MT_Y 29                                        /* the tab bar */
+#define MT_Y ((int32_t)card_y() + HOME_CARD_H + 3)       /* the tab bar (Dah: under the knob cards) */
 #define MT_H 24
 #define MT_IW 26                                       /* a cushion with its icon alone (the icon centred in it; 1.2, five
                                                         * tabs: 26, up to 1.1.5 32) */
@@ -198,7 +198,7 @@ static const uint16_t MTAB_ICON[MTAB_COUNT] = {ICON_X_EYE, ICON_X_KNOB, ICON_X_S
 #define MT_GAP 5                                       /* between two tabs, always (the bar centred in MT_X0..MT_X1; 1.2, five
                                                         * tabs: 5, up to 1.1.5 8) */
 #define MT_ONE 64                                      /* mt.pos per tab */
-#define MP_Y 76                                        /* the rows' panel (Dah: under the knob cards, as every page) */
+#define MP_Y (MT_Y + MT_H + 5)                          /* the rows' panel (Dah: under the cards and the tabs) */
 #define MP_PAD 3
 #define MR_X 8                                         /* a row */
 #define MR_W 224
@@ -429,7 +429,13 @@ static void draw_menu(void)
           2246822519u +                                   /* (1.5.5: T1..T4 CHANNEL) */
           (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) + (ui.menu == 3 ? info_sig() * 2654435761u : 0u);
     if (!ui.force && sig == ui.menu_sig) {
-        (void)pos0;                                     /* (Dah: no tab strip any more: the cards say the tab) */
+        if (ui.menu == 1 && mt.pos != pos0) {          /* only the tabs slid: their strip */
+            cv_begin(240, (uint32_t)(MP_Y - MT_Y), T_BG);
+            cv_oy = -MT_Y;
+            menu_tabs();
+            cv_oy = 0;
+            cv_blit(0, (uint32_t)MT_Y);
+        }
         return;
     }
     ui.menu_sig = sig;
@@ -475,7 +481,8 @@ static void draw_menu(void)
         fmt_int(rb, (int32_t)r + 1);
         str_cpy(rb + str_len(rb), "/", 2);
         fmt_int(rb + str_len(rb), (int32_t)n);
-        lcd_fill(0, H_HEAD, 240, card_y() - H_HEAD, T_BG);
+        if (card_y() > (uint32_t)H_HEAD)
+            lcd_fill(0, H_HEAD, 240, card_y() - H_HEAD, T_BG);
         knob_card(0, "TAB", MTAB_NAME[menu_tab()], "", (int32_t)menu_tab() * 1000 / (MTAB_COUNT - 1u), 0, 0);
         knob_card(1, "ROW", rb, "", n > 1u ? (int32_t)r * 1000 / (int32_t)(n - 1u) : 0, 0, 0);
         if (menu_valued(ui.menu_sel)) {
@@ -484,12 +491,14 @@ static void draw_menu(void)
         } else
             knob_card(2, "VALUE", "", "", -1, 0, 1);
         knob_card(3, "", "", "", -1, 0, 0);
-        lcd_fill(0, card_y() + HOME_CARD_H, 240, MP_Y - 2 - card_y() - HOME_CARD_H, T_BG);
+        lcd_fill(0, card_y() + HOME_CARD_H, 240, MT_Y - 1 - card_y() - HOME_CARD_H, T_BG);
     }
     for (pass = 0; pass < 2u; pass++) {
-        int32_t top_y = pass ? (int32_t)split : MP_Y - 2;
+        int32_t top_y = pass ? (int32_t)split : MT_Y - 1;
         cv_begin(240, pass ? 240u - split : split - (uint32_t)top_y, T_BG);
         cv_oy = -top_y;                               /* drawn in screen rows */
+        if (!pass)
+            menu_tabs();                                /* (Dah: under the cards, with their icons) */
         if (!ux.style)                                /* FLAT: the rows' panel */
             cv_rrect(4, MP_Y, 232, mr_y(n) - mr_gap() + MP_PAD - MP_Y, 8, T_SURF, T_BG);
         for (k = 0; k < n; k++)
