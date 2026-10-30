@@ -424,6 +424,8 @@ static void ui_leds(void)
         led_put(nl, panel.btn[B_FX], 1);                /* FX LATCH: lit while an effect or a macro is on */
     if (ui.layer)                                       /* the layer's button breathes while its map is up */
         led_put(nb, panel.btn[layer_btn()], 1);
+    if (ui.menu)                                        /* (Dah) the menu: HOME breathes, as SEQ while its layer is up */
+        led_put(nb, panel.btn[B_HOME], 1);
     led_put(nl, panel.btn[B_REC], song.rec != 0u && ui.layer != LAYER_REC);   /* (its layer: it breathes) */
     k = oct_leds();
     led_put(nl, panel.btn[B_OCTDN], (int)(k & 1u));
@@ -2234,7 +2236,7 @@ static void ui_input(void)
     song.grid = (uint8_t)keys_mode();                 /* (the menu, a dialog: the keys play again; NAME: silent) */
     if (home == BT_TAP && ui.menu) {                    /* HOME (pressed, or held) closes the menu, from ABOUT too; */
         menu_close();                                   /* the release of the hold that opened it is no tap */
-        home = BT_NONE;                                 /* (menu_close went HOME already) */
+        home = BT_NONE;                                 /* (Dah: back where it was opened) */
     } else if (home == BT_HOLD) {                       /* HOME held: open the menu, or leave it */
         if (ui.menu) {
             menu_close();

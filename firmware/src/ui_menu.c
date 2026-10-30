@@ -500,8 +500,7 @@ static void menu_close(void)
 {
     settings_save();                                   /* palette / panel table, if changed */
     ui.menu = 0;
-    ui.force = 1;
-    go_home();
+    ui.force = 1;                                       /* (Dah: back on the page it was opened from, as SEQ's layer) */
 }
 
 /* menu: ALGORITHM steps between the tabs, PRESETS between the rows of one (both wrap; a tab comes back at the row
