@@ -62,7 +62,7 @@ static const layer_t LAYERS[LAYER_N] = {
                                                          * GLO + ALGORITHM the pattern, said) */
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_K1, "ROW"}, {KC_OCTUP, "APPLY"}, {KC_OCTDN, "UNDO"}}},
+    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_K1, "ROW"}, {KC_K2, "VALUE"}, {KC_OCTDN, "UNDO"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
@@ -784,7 +784,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
-    if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row < 2u) {   /* (Dah) SEQ: OCT+ on LEN, DIV: nothing */
+    if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row < 3u) {   /* (Dah) SEQ: OCT+ on LEN, DIV, QUANTIZE: nothing (no
+                                                         * APPLY: the user's choice; QUANTIZE plays as set) */
     } else if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row == 3u) {   /* (Dah) SEQ: OCT+ on CLEAR ALL: its dialog */
         seq_key(0);
         mine &= ~2u;
