@@ -493,14 +493,7 @@ static void graph_chain(const track_t *t, uint16_t c)
         } else {                                        /* + ADD */
             int32_t k, bx = x0 + in, bw2 = bw - 2 * in;   /* (Dah) a dashed row, as HOME's spare one: what to do, said */
             uint16_t dc = sel ? T_TEXT : T_DIM;
-            for (k = 0; k < bw2; k += 4) {
-                cv_rect(bx + k, by, 2, 1, dc);
-                cv_rect(bx + k, by + bh - 1, 2, 1, dc);
-            }
-            for (k = 0; k < bh; k += 4) {
-                cv_rect(bx, by + k, 1, 2, dc);
-                cv_rect(bx + bw2 - 1, by + k, 1, 2, dc);
-            }
+            dash_rrect(bx, by, bw2, bh, dc);
             GFX_HOOK_ALIGN(0, by, 0, by + bh, AL_V, "chain add row on its line");
             cv_free_hint(bx + 8, by + CAP_IN(S, bh), "TURN [K1] TO ADD AN EFFECT", sel ? T_TEXT : T_DIM, T_SURF, bw2 - 12);
         }

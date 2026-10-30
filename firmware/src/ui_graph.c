@@ -3038,6 +3038,29 @@ static void rack_row(uint32_t c)
     cv_blit(3, (uint32_t)y);
     (void)i;
 }
+/* (Dah) a dashed outline, its corners round (an arc of three px each): where one more can be added (HOME's spare row,
+ * CHAIN's + ADD) */
+static void dash_rrect(int32_t bx, int32_t by, int32_t w, int32_t h, uint16_t dc)
+{
+    int32_t k;
+    for (k = 4; k < w - 5; k += 4) {
+        cv_rect(bx + k, by, 2, 1, dc);
+        cv_rect(bx + k, by + h - 1, 2, 1, dc);
+    }
+    for (k = 4; k < h - 5; k += 4) {
+        cv_rect(bx, by + k, 1, 2, dc);
+        cv_rect(bx + w - 1, by + k, 1, 2, dc);
+    }
+    for (k = 0; k < 2; k++) {
+        int32_t yy = k ? by + h - 1 : by, dy = k ? -1 : 1;
+        cv_rect(bx + 2, yy, 1, 1, dc);
+        cv_rect(bx + 1, yy + dy, 1, 1, dc);
+        cv_rect(bx, yy + 2 * dy, 1, 1, dc);
+        cv_rect(bx + w - 3, yy, 1, 1, dc);
+        cv_rect(bx + w - 2, yy + dy, 1, 1, dc);
+        cv_rect(bx + w - 1, yy + 2 * dy, 1, 1, dc);
+    }
+}
 /* (Dah) a row past the project's tracks: the first says how to add one, the others empty (BG) */
 static void rack_spare(uint32_t c)
 {
@@ -3050,10 +3073,9 @@ static void rack_spare(uint32_t c)
     ts.col[c] = sig;
     cv_begin(TR_W, (uint32_t)rh + 1u, T_BG);
     if (c == trk_count()) {
-        cv_rrect(0, 0, TR_W, rh, 3, T_LINE, T_BG);
-        cv_rrect(1, 1, TR_W - 2, rh - 2, 2, T_BG, T_LINE);
+        dash_rrect(0, 0, TR_W, rh, T_DIM);              /* (Dah: dashed, as CHAIN's + ADD) */
         GFX_HOOK_ALIGN(0, 0, 0, rh, AL_V, "rack add row on its line");
-        cv_free_hint(18, CAP_IN(S, rh), "[ALGO] TURN RIGHT: ADD A TRACK", T_DIM, T_BG, TR_W - 24);   /* (Dah: what to do, said) */
+        cv_free_hint(18, CAP_IN(S, rh), "TURN [ALGO] TO ADD A TRACK", T_DIM, T_BG, TR_W - 24);   /* (Dah: what to do, said) */
     }
     cv_blit(3, (uint32_t)y);
 }
