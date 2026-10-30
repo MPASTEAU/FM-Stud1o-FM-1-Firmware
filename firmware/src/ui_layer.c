@@ -270,8 +270,10 @@ static void layer_opened(uint32_t l)
         }
     lys.v[8] = song.g[G_BPM];
     memcpy(lys.mute, drum_mute, sizeof lys.mute);
-    if (l == LAYER_REC)
+    if (l == LAYER_REC) {
         lys.v[0] = ui_rec_prefs;
+        lys.v[1] = ui_leds_inv;                         /* (Dah: its PLAY bit) */
+    }
 }
 
 /* the armed button: 0, or the layer whose button was tapped (let go) */
@@ -449,13 +451,18 @@ static const char *const RL_LABEL[3] = {"CLICK", "COUNT", "LEVEL"};   /* (COUNT-
 static const uint8_t RL_ICON[3] = {ICON_TEMPO, ICON_TIME, ICON_LEVEL};
 static const char *rl_name(uint32_t r, uint32_t v)
 {
-    return (r == 0u ? CLICK_N : r == 1u ? COUNTIN_N : CLKLVL_N)[v % 3u];
+    return r == 3u ? (v ? "ON" : "OFF") : (r == 0u ? CLICK_N : r == 1u ? COUNTIN_N : CLKLVL_N)[v % 3u];
 }
+static uint32_t rl_get(uint32_t r) { return r == 3u ? (ui_leds_inv & REC_PLAY) != 0u : rp_get(RL_F[r]); }   /* (Dah: row 3
+                                                         * PLAY: REC stopped starts the transport) */
 static void rec_set(uint32_t r, uint32_t v)
 {
-    if (v == rp_get(RL_F[r]))
+    if (v == rl_get(r))
         return;
-    rp_put(RL_F[r], v);
+    if (r == 3u)
+        ui_leds_inv = (uint8_t)((ui_leds_inv & ~REC_PLAY) | (v ? REC_PLAY : 0u));
+    else
+        rp_put(RL_F[r], v);
     lys.rp_dirty = 1;
 }
 static void rec_key(uint32_t p)
@@ -710,11 +717,11 @@ static void layer_knob(uint32_t k, int32_t s)
             edit_load(NENGINES, s);
     } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the rows, KNOB 2 the row's value (CLEAR: asked) */
         if (k == 0u) {
-            lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 2);
+            lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 3);
             ui.force = 1;
         } else if (k == 1u)
-            rec_set(lys.sq_row, (uint32_t)clamp((int32_t)rp_get(RL_F[lys.sq_row]) + (s > 0 ? 1 : -1), 0,
-                                                 lys.sq_row == 1u ? 1 : 2));
+            rec_set(lys.sq_row, (uint32_t)clamp((int32_t)rl_get(lys.sq_row) + (s > 0 ? 1 : -1), 0,
+                                                 lys.sq_row == 1u || lys.sq_row == 3u ? 1 : 2));
     } else if (l == LAYER_SEQ && k == 0u) {            /* (Dah) SEQ: KNOB 1 the rows */
         seq_row(s);
     } else if (l == LAYER_SEQ && k == 1u) {            /* (Dah) .. KNOB 2 the row's value */
@@ -806,6 +813,7 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
                 if (lys.l == LAYER_REC) {               /* REC: the settings as it opened */
                     lys.rp_dirty |= (uint8_t)(ui_rec_prefs != (uint8_t)lys.v[0]);
                     ui_rec_prefs = (uint8_t)lys.v[0];
+                    ui_leds_inv = (uint8_t)lys.v[1];
                     rp_apply();
                 } else {
                     for (k = 0; k < 4u; k++)
@@ -1163,11 +1171,11 @@ static void layer_seq(void)
 #define LR_H 26
 static void layer_rec(void)
 {
-    static const char *const RN[3] = {"CLICK", "COUNT-IN", "LEVEL"};
+    static const char *const RN[4] = {"CLICK", "COUNT-IN", "LEVEL", "REC STARTS PLAY"};
     int32_t k;
-    for (k = 0; k < 3; k++) {                           /* (Dah) the rows, as SEQ's (KNOB 1; KNOB 2 their value) */
+    for (k = 0; k < 4; k++) {                           /* (Dah) the rows, as SEQ's (KNOB 1; KNOB 2 their value) */
         int32_t y = 4 + k * 26, sel = lys.sq_row == (uint32_t)k, x;
-        const char *v = rl_name((uint32_t)k, rp_get(RL_F[k]));
+        const char *v = rl_name((uint32_t)k, rl_get((uint32_t)k));
         sq_row(y, 22, sel);
         GFX_HOOK_ALIGN(0, y, 0, y + 22, AL_V, "rec layer row on its middle");
         cv_text_on(16, y + CAP_IN(M, 22), &AF_M, RN[k], T_TEXT, T_RAISE);
@@ -1214,10 +1222,10 @@ static void layer_cards(uint32_t l)
     } else if (l == LAYER_EDIT) {
         engine_columns();
     } else if (l == LAYER_REC) {                        /* (Dah) as SEQ: KNOB 1 the row, KNOB 2 its value, two empty */
-        static const char *const RN[3] = {"CLICK", "COUNT", "LEVEL"};
-        uint32_t rr = lys.sq_row % 3u;
-        draw_column(0, "ROW", RN[rr], "", VAL(0u), (int32_t)rr * 500, ICON_NONE);
-        draw_column(1, RN[rr], rl_name(rr, rp_get(RL_F[rr])), "", VAL(1u), -1, ICON_NONE);
+        static const char *const RN[4] = {"CLICK", "COUNT", "LEVEL", "PLAY"};
+        uint32_t rr = lys.sq_row % 4u;
+        draw_column(0, "ROW", RN[rr], "", VAL(0u), (int32_t)rr * 333, ICON_NONE);
+        draw_column(1, RN[rr], rl_name(rr, rl_get(rr)), "", VAL(1u), -1, ICON_NONE);
         draw_column(2, "", "", "", T_THEME, -1, ICON_NONE);
         draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
     } else {                                            /* the page's four (SCL: LY_SCL) */
@@ -1262,7 +1270,7 @@ static void draw_layer(void)
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
-        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u;
+        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)(ui_leds_inv & REC_PLAY) * 7u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
         sig += (uint32_t)chain_busy() * 3u + song.sel * 977u + (uint32_t)TSEL->p[P_SQNT] * 131u + steps_sig(TSEL) * 7u +
                (uint32_t)TSEL->p[P_SLEN] * 257u + lys.sq_row * 65537u + ps_gen * 3u;   /* (Dah: QUANTIZE, the

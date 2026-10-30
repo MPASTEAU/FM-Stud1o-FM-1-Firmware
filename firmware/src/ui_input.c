@@ -802,8 +802,8 @@ static int rec_tap(void)                                /* 1: the arming changed
                                                          * stopped, at the cursor (CHORD ENTRY ADD: adding) */
         return 1;
     }
-    if ((song.rec & bit) && !song.playing && !seq_counting())
-        transport_req = 1;
+    if ((song.rec & bit) && !song.playing && !seq_counting() && (ui_leds_inv & REC_PLAY))
+        transport_req = 1;                              /* (Dah: REC's PLAY ON only; OFF: armed, PLAY starts it) */
     if (!help_on())
         ;
     else if ((song.rec & bit) && grid_on())

@@ -311,7 +311,7 @@ static void menu_put(uint32_t row, uint32_t v)
         break;
     case MI_LEDS:                                      /* (INV LO / INV HI: INV and its level, ui.c ui_leds_inv) */
         settings_leds = LEDS_MENU[v < LEDS_COUNT ? v : LEDS_COUNT - 1u];
-        ui_leds_inv = (uint8_t)(v < LEDS_COUNT ? 0u : v - (LEDS_COUNT - 1u));
+        ui_leds_inv = (uint8_t)((ui_leds_inv & REC_PLAY) | (v < LEDS_COUNT ? 0u : v - (LEDS_COUNT - 1u)));
         break;
     case MI_CLICK: case MI_CLKLVL: case MI_COUNTIN: rp_put(row - MI_CLICK, v); break;   /* (at once: click.c, seq.c) */
     case MI_TUNE: song.g[G_TUNE] = (int16_t)((int32_t)v + TUNE_MIN); break;
