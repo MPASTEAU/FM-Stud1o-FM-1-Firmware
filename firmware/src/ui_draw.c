@@ -628,7 +628,7 @@ static void home_foot(void)
     } else if (hk < 5u) {
         kh[0] = KH[hk][0];
         kh[1] = KH[hk][1];
-        n = 2u;
+        n = hk ? 2u : 1u;                               /* (Dah: HOME: OCT+'s VIEW alone, no SELECT PAT) */
         ok = 3u;
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
