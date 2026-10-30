@@ -1058,11 +1058,9 @@ static int32_t kc_sin(int32_t a)                        /* a: 1/1024 turn */
     return s * KC_SIN[i / 4];
 }
 static uint8_t knob_bip;                                /* (Dah) the next card's knob from its middle (PAN, WIDTH) */
-static uint8_t knob_icon = ICON_NONE;                   /* (Dah) the next card's middle: this icon (its value "": MENU's TAB) */
 static void knob_card(uint32_t c, const char *label, const char *val, const char *unit, int32_t ratio, int hot, int dim)
 {
     int bip = knob_bip;
-    uint32_t ic = knob_icon;
     char key[48], nm[20];
     int32_t r = KNOB_HOME_R, bx = (COL_W - 2 * r) / 2, by = 1, cx = bx + r, cy = by + r, a1, mr = r - 1, e = HK_END;
     uint16_t tc = dim ? T_DIM : T_THEME;
@@ -1085,10 +1083,8 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     key[n + 3] = (char)('A' + (tc >> 12));
     key[n + 4] = (char)(' ' + (ratio < 0 ? 0 : 1 + ratio * 90 / 1000));
     key[n + 5] = (char)('0' + hot + 2 * bip + 4 * dim);
-    key[n + 6] = (char)(ic == ICON_NONE ? 0 : 1 + ic % 127u);
-    key[n + 7] = 0;
+    key[n + 6] = 0;
     knob_bip = 0;
-    knob_icon = ICON_NONE;
     if (!ui.force && str_eq(key, ui.col[c]))
         return;
     str_cpy(ui.col[c], key, sizeof ui.col[c]);
@@ -1126,10 +1122,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     {
         int32_t vh = vf == &AF_M ? AF_M_CAP_H : AF_S_CAP_H, ty = cy - 2 - vh / 2, ly = by + 2 * r - AF_S_CAP_H - 1;
         int32_t mw = 2 * (r - 4), w = text_w(vf, val), vy = ty - (vf == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y);
-        if (ic != ICON_NONE) {                          /* (an icon in its place) */
-            GFX_HOOK_ALIGN(cx - r, 0, cx + r, 0, AL_H, "knob card icon centred");
-            cv_icon_in(cx - r, cy - 2 - 8, 2 * r, 16, 16, ic, dim ? T_DIM : T_TEXT, T_SURF);
-        } else if (w <= mw) {                           /* the value, in the middle */
+        if (w <= mw) {                           /* the value, in the middle */
             GFX_HOOK_ALIGN(cx - r, ty, cx + r, ty + vh, AL_H, "knob card value centred");
             cv_text_in(cx - r, vy, 2 * r, vf, val, dim ? T_DIM : T_TEXT, T_SURF);   /* (DIM: it does nothing there) */
         } else {                                        /* (Dah) too wide even in S: narrowed into the ring (never
@@ -1143,7 +1136,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
                         cv_px[(uint32_t)(vy + yy) * cv_w + (uint32_t)(x0 + xx)] = swap16(ux_mix(a0, a1, 50));
                 }
         }
-        int32_t lm = ic != ICON_NONE ? 1 : 2;          /* (MENU's TAB: CONTROL, the card's width but a px each side) */
+        int32_t lm = text_w(&AF_S, nm) > COL_W - 4 ? 1 : 2;   /* (a long name, MENU's CONTROL: a px each side) */
         if (text_w(&AF_S, nm) <= COL_W - 2 * lm) {     /* the name under it, in the ring's opening (under its ends:
                                                          * the card's width) */
             uint32_t nl = str_len(label) < 12u ? str_len(label) : 11u;   /* (Dah: the name TEXT, its unit MID) */

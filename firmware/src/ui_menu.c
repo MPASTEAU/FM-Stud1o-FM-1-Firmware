@@ -164,9 +164,7 @@ static void menu_head(void)
         cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_OCTDN, w, 1, T_BG);
         draw_rec_mark(x - 20, T_BG);
     } else {
-        int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8) - 8 - kh_w(KC_HOME, "CLOSE");   /* (menu_dots' left) */
-        GFX_HOOK_ALIGN(0, 0, 0, H_HEAD, AL_V, "header text on its middle");
-        cv_key_hint(x, HALF_UP(H_HEAD - KC_H), KC_HOME, "CLOSE", 1, T_BG);
+        int32_t x = 232 - (12 + (int32_t)(MTAB_COUNT - 1u) * 8) - 8;   /* (menu_dots' left; Dah: no HOME CLOSE) */
         draw_rec_mark(x - 20, T_BG);
         menu_dots();
     }
@@ -383,9 +381,9 @@ static int32_t menu_split(uint32_t first, uint32_t n)
 }
 static void draw_menu(void)
 {
-    static const khint_t KEYS[3][3] = {{{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTDN, "(HOLD) RESET"}},
-                                       {{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTUP, "OPEN"}},
-                                       {{KC_K1, "TAB"}, {KC_K2, "ROW"}, {KC_OCTUP, "CLEAR"}}};
+    static const khint_t KEYS[3][3] = {{{KC_OCTDN, "(HOLD) RESET SETTINGS"}},   /* (Dah: the cards say K1 K2 K3) */
+                                       {{KC_OCTUP, "OPEN"}, {KC_OCTDN, "(HOLD) RESET SETTINGS"}},
+                                       {{KC_OCTUP, "CLEAR"}, {KC_OCTDN, "(HOLD) RESET SETTINGS"}}};
     uint32_t pass, first, n, sig;
     int32_t split;
     if (ui.menu != 1 || (ui_prefs & PREF_ANIM_OFF))
@@ -463,8 +461,13 @@ static void draw_menu(void)
         fmt_int(rb + str_len(rb), (int32_t)n);
         if (card_y() > (uint32_t)H_HEAD)
             lcd_fill(0, H_HEAD, 240, card_y() - H_HEAD, T_BG);
-        knob_icon = (uint8_t)MTAB_ICON[menu_tab()];
-        knob_card(0, MTAB_NAME[menu_tab()], "", "", (int32_t)menu_tab() * 1000 / (MTAB_COUNT - 1u), 0, 0);
+        {   /* (Dah) KNOB 1: the tab's number ("2/5") in the knob, its name under it */
+            char tb[6];
+            fmt_int(tb, (int32_t)menu_tab() + 1);
+            str_cpy(tb + str_len(tb), "/", 2);
+            fmt_int(tb + str_len(tb), (int32_t)MTAB_COUNT);
+            knob_card(0, MTAB_NAME[menu_tab()], tb, "", (int32_t)menu_tab() * 1000 / (MTAB_COUNT - 1u), 0, 0);
+        }
         knob_card(1, "ROW", rb, "", n > 1u ? (int32_t)r * 1000 / (int32_t)(n - 1u) : 0, 0, 0);
         if (menu_valued(ui.menu_sel)) {
             uint32_t vn = menu_n(ui.menu_sel), v = menu_get(ui.menu_sel);
@@ -479,7 +482,10 @@ static void draw_menu(void)
         cv_oy = -top_y;                               /* drawn in screen rows */
         menu_rows(first, n);
         if (pass)
-            cv_key_row(8, 232, MK_Y, KEYS[ui.menu_sel == MI_LCLEAR ? 2 : !menu_valued(ui.menu_sel)], 3, 7u, T_BG);
+            {
+                uint32_t kk = ui.menu_sel == MI_LCLEAR ? 2u : !menu_valued(ui.menu_sel);
+                cv_key_row(8, 232, MK_Y, KEYS[kk], kk ? 2u : 1u, kk ? 3u : 1u, T_BG);
+            }
         cv_oy = 0;
         cv_blit(0, (uint32_t)top_y);
     }
