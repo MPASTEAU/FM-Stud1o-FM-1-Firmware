@@ -158,9 +158,9 @@ static uint32_t trk_vmode(const track_t *t)
 }
 
 /* ------------------------------------------------- the shared voice budget --- */
-/* (Dah) the budget: 16 voices sounding at once over every part (each part its own NVOICE); a CPU overload past it:
- * audio.c's shed */
-#define vcap 16u
+/* (Dah) no budget shared by the parts but the CPU's: each part its own NVOICE, every one of them may sound; a CPU
+ * overload: audio.c's shed fades voices out */
+#define vcap (NPART * NVOICE)
 static uint32_t voices_busy(void)                       /* sounding voices of all parts (not the fading ones) */
 {
     uint32_t p, i, n = 0;

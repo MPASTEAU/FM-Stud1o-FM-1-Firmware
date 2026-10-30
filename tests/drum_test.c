@@ -1707,7 +1707,8 @@ int main(int argc, char **argv)
     kits();
     kit_keys();
     retired();
-    lane_budget();
+    if (vcap < NPART * NVOICE)                          /* (Dah: no budget but the CPU's: nothing to share) */
+        lane_budget();
     lane_levels();
     engine();
     synth();
