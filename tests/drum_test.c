@@ -663,13 +663,18 @@ static void lane_budget(void)
     trk_note_on(&trk[1], 60, 100);
     for (i = 0; i < NELEM(KIT); i++)
         trk_note_on(&trk[0], KIT[i], 110);
+    host_preset(&trk[3], 0, 0);                         /* (Dah: the budget 16: a third part fills it) */
+    trk[3].p[P_VOICE] = V_POLY;
+    trk[3].p[P_SUS] = 127;
+    for (i = 0; voices_busy() < vcap && i < NVOICE; i++)
+        trk_note_on(&trk[3], 36 + i, 100);
     blocks_peak(2);
     owner = drum_kit_of(&trk[0])[DV_TOM].owner;
     kills = voice_kills;
-    bad += voices_busy() != NVOICE || !owner;
+    bad += voices_busy() != vcap || !owner;
     for (i = 0; i < 16u; i++) {
         trk_note_on(&trk[0], TOM[i % NELEM(TOM)], 110);
-        bad += drum_kit_of(&trk[0])[DV_TOM].owner != owner || voices_busy() != NVOICE || voice_kills != kills;
+        bad += drum_kit_of(&trk[0])[DV_TOM].owner != owner || voices_busy() != vcap || voice_kills != kills;
         blocks_peak(1);
         bad += voices_on(&trk[1]) != 2u || voices_on(&trk[0]) != NELEM(KIT);
     }
@@ -684,9 +689,9 @@ static void lane_budget(void)
     bad = trk[0].v[owner - 1u].stage != 4u;
     /* Retrigger before the stolen voice's fade block must acquire room again. */
     trk_note_on(&trk[0], TOM[0], 110);
-    bad += voices_busy() != NVOICE || drum_kit_of(&trk[0])[DV_TOM].owner != owner;
+    bad += voices_busy() != vcap || drum_kit_of(&trk[0])[DV_TOM].owner != owner;
     blocks_peak(2);
-    bad += voices_busy() != NVOICE || !trk[2].v[0].active || trk[2].v[0].note != 72;
+    bad += voices_busy() != vcap || !trk[2].v[0].active || trk[2].v[0].note != 72;
     printf("drum_test: a synth starts over the kit, a stolen drum retriggers before its fade: budget kept: %s\n",
            bad ? "FAIL" : "ok");
     fails += bad != 0;

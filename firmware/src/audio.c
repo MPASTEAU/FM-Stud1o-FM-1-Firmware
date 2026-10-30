@@ -53,22 +53,8 @@ static uint32_t shed_count;
 
 /* end of a half: all = its ticks, TIMER5 nested in it included -> the render alone in us. The deadline sees
  * both; shed after 2 overloaded halves in a row (out of line: keeps the ISR's render loops as they were) */
-/* (Dah) the voices budget (voice.c vcap) from this half's load: as many as fit in 70 % at the cost per voice now */
-static int32_t vcap_q8 = NVOICE << 8;
-static void vcap_update(uint32_t all)
-{
-    uint32_t busy = voices_busy(), c;
-    if (busy < 2u || !all)                              /* (too few to measure a voice's cost: as it was) */
-        return;
-    c = busy * (SHED_TICKS / 85u * 70u) / all;          /* (busy <= 64: in 32 bits) */
-    c = c < NVOICE ? NVOICE : c > NPART * NVOICE ? NPART * NVOICE : c;
-    vcap_q8 += ((int32_t)(c << 8) - vcap_q8) / 64;      /* (smoothed over ~64 halves, ~0.4 s: steady, not each peak;
-                                                         * a sudden overload: the shed, above 85 %) */
-    vcap = (uint8_t)(vcap_q8 >> 8);
-}
 static __attribute__((noinline)) uint32_t shed_check(uint32_t all)
 {
-    vcap_update(all);
     shed_over = (uint8_t)(shed_over << 1 | (all > SHED_TICKS));
     if ((shed_over & 3u) == 3u)
         shed_req = 1;
