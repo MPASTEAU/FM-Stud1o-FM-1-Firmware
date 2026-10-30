@@ -1802,7 +1802,7 @@ static void draw_columns_in(void)
     if (detail_on()) {                                  /* DETAIL (1.5.1, #199): the cursor step's CHANCE RATCH NUDGE VEL;
                                                          * DIM where they do not play (ui_input.c sd_turn) */
         static const char *const SD_LABEL[4] = {"CHANCE", "RATCH", "NUDGE", "VEL"};
-        const step_t *st = &seq_steps(TSEL)[ui.cursor];
+        const step_t *st = ui_st(TSEL, ui.cursor);
         for (c = 0; c < 4u; c++) {
             uint32_t k = SD_KIND[c];
             int32_t v = ev_sval(st, k), r;
@@ -1854,7 +1854,7 @@ static void draw_columns_in(void)
         return;
     }
     if (cur_page()->scope == SC_STEP && drum_track(TSEL)) {   /* the grid: STEP LANE HIT ACC */
-        const step_t *st = &seq_steps(TSEL)[ui.cursor];
+        const step_t *st = ui_st(TSEL, ui.cursor);
         uint32_t b = 1u << ui.lane, on = (step_lanes(st) & b) != 0u, ac = (step_accents(st) & b) != 0u;
         char sn[8], sl[8];
         fmt_int(sn, (int32_t)ui.cursor + 1);
@@ -1868,7 +1868,7 @@ static void draw_columns_in(void)
     }
     if (cur_page()->scope == SC_STEP) {
         static const char *const TIME_N[3] = {"NOTE", "TIE", "REST"};
-        const step_t *st = &seq_steps(TSEL)[ui.cursor];
+        const step_t *st = ui_st(TSEL, ui.cursor);
         char u[8];
         uint32_t cnt = st->n, first = st->note[0], l;
         for (l = NLANE; l-- > 0;)                         /* (lane hits count as their notes) */

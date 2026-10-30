@@ -467,7 +467,7 @@ static int lock_playback(void)
     ok = !motion_set_lock(t, 2, P_REV, 100) && !motion_set_event(t, 4, P_REV, 60) && !motion_set_lock(t, 6, P_REV, 90);
     bad += check("a lock is one of the shared 64 records, bit 7 of its id (MOTION_LOCK)", ok && motion.count == 3u &&
         motion.event[0].param == (P_REV | MOTION_LOCK) && motion.event[1].param == P_REV && motion_lock_count(t) == 2u &&
-        motion_count(t) == 3u && motion_lock_steps(0) == ((1u << 2) | (1u << 6)));
+        motion_count(t) == 3u && motion_lock_steps(0, 0) == ((1u << 2) | (1u << 6)));
     bad += check("lock: its value on its step only, back after it (the sound's own, or the automation held)",
         lock_passes(t, want));
     lock_next(t); lock_next(t); lock_next(t);
@@ -544,7 +544,7 @@ static int lock_edit(void)
     motion_set_lock(t, 3, P_ATK, 9); motion_set_lock(t, 5, P_ATK, 9); motion_set_lock(&trk[1], 3, P_REV, 1);
     bad += check("clear a step's locks: its automation and the other steps' and tracks' stay",
         motion_clear_locks(t, 3) == 1u && motion.count == 3u && motion_lock_count(t) == 1u && motion_lock_count(&trk[1]) == 1u);
-    bad += check("clear every step's locks (NSTEP)", motion_clear_locks(t, NSTEP) == 1u && !motion_lock_count(t) &&
+    bad += check("clear every step's locks (MOTION_ALL)", motion_clear_locks(t, MOTION_ALL) == 1u && !motion_lock_count(t) &&
         motion_count(t) == 1u);
     motion_delete_event(&trk[1], 3, P_REV);
     bad += check("delete an event deletes a lock too (either kind)", !motion_count(&trk[1]));
@@ -656,7 +656,7 @@ static int lock_ui(void)
     bad += check("a step held + [EDIT]: its locks go, the step and the others' locks stay", motion_lock_count(t) == 2u &&
         !motion_lock_get(t, 4, P_E1, &v) && motion_lock_get(t, 0, P_E4, &v) && (t->step[4].hit & 1u) &&
         str_eq(ui.msg, "LOCKS CLEARED"));
-    bad += check("the steps with a lock (the grid marks them): step 1", motion_lock_steps(3) == 1u);
+    bad += check("the steps with a lock (the grid marks them): step 1", motion_lock_steps(3, 0) == 1u);
     t->p[P_DIST] = 20;                                  /* (Dah: FX's DIST page, the DIST in the chain) */
     go_title("DIST");                                    /* the lock's knobs: the sound page shown last */
     open_family(FAM_SEQ);
@@ -690,7 +690,7 @@ static int lock_ui(void)
         motion_lock_get(t, 0, P_ATK, &v) && v == t->p[P_ATK] + 4 && t->step[0].time == ST_NOTE);
     lk_up(kn);
     bad += check("  let go: the note and the lock on step 1, the cursor on", ui.cursor == 1u && t->step[0].n == 1u &&
-        motion_lock_count(t) == 1u && motion_lock_steps(0) == 1u);
+        motion_lock_count(t) == 1u && motion_lock_steps(0, 0) == 1u);
     cursor_set(0);
     press(B_EDIT);
     bad += check("  [EDIT] alone clears the step and its locks", !t->step[0].n && !motion_lock_count(t));

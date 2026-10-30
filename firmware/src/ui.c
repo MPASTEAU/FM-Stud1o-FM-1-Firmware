@@ -665,21 +665,24 @@ static void step_clear(step_t *st)
  * become clean TIEs (a REST or an empty step; it stops at the next step holding notes or hits, a REST's kept ones too,
  * which stays, and at LEN);
  * shorter: its last TIEs become RESTs (step_clear). The steps' locks stay. Returns the length it got */
+static const step_t *ui_st(const track_t *t, uint32_t i);   /* (pstore.c: step i of LEN_MAX, page 0 on the track) */
+static step_t *ed_st(track_t *t, uint32_t i);
 static uint32_t note_len(const track_t *t, uint32_t i)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), n = 1;
-    while (i + n < len && t->step[i + n].time == ST_TIE)
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), n = 1;
+    while (i + n < len && ui_st(t, i + n)->time == ST_TIE)
         n++;
     return n;
 }
 static uint32_t note_set_len(track_t *t, uint32_t i, uint32_t want)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), n = note_len(t, i);
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), n = note_len(t, i);
     for (; n > want && n > 1u; n--)
-        step_clear(&t->step[i + n - 1u]);
-    for (; n < want && i + n < len && !t->step[i + n].n && !t->step[i + n].hit; n++) {
-        step_clear(&t->step[i + n]);
-        t->step[i + n].time = ST_TIE;
+        step_clear(ed_st(t, i + n - 1u));
+    for (; n < want && i + n < len && !ui_st(t, i + n)->n && !ui_st(t, i + n)->hit; n++) {
+        step_t *s = ed_st(t, i + n);
+        step_clear(s);
+        s->time = ST_TIE;
     }
     return n;
 }
@@ -710,7 +713,7 @@ static uint32_t lane_ids(const track_t *t, uint8_t *ids)
         ids[n++] = (uint8_t)(ui.auto_id - 1u);
     for (i = 0; i < motion.count && n < 4u; i++) {
         uint32_t id = MOTION_ID(&motion.event[i]);
-        if ((motion.event[i].place >> 6) != k || (motion.event[i].param & MOTION_LOCK) || id >= P_COUNT)
+        if (MP_TRK(&motion.event[i]) != k || (motion.event[i].param & MOTION_LOCK) || id >= P_COUNT)
             continue;
         for (j = 0; j < n && ids[j] != id; j++)
             ;
@@ -737,8 +740,8 @@ static int16_t lane_value(const track_t *t, uint32_t si, uint32_t id, int *pt)
     }
     for (i = 0; i < motion.count; i++) {
         const motion_event_t *e = &motion.event[i];
-        uint32_t st = e->place & 63u;
-        if ((e->place >> 6) != k || MOTION_ID(e) != id || (e->param & MOTION_LOCK))
+        uint32_t st = MP_STEP(e);
+        if (MP_TRK(e) != k || MOTION_ID(e) != id || (e->param & MOTION_LOCK))
             continue;
         if (st <= si && (!found || st >= best)) best = st, bv = e->value, found = 1;
         if (!lfound || st >= last) last = st, lv = e->value, lfound = 1;
@@ -797,7 +800,7 @@ static void grid_own(step_t *s, uint32_t l)
 /* lane l of step i: on 1, off 0, toggled 2 */
 static void grid_hit(track_t *t, uint32_t i, uint32_t l, uint32_t on)
 {
-    step_t *s = &t->step[i % NSTEP];
+    step_t *s = ed_st(t, i % LEN_MAX);
     uint32_t b = 1u << (l % NLANE);
     if (on == 2u)
         on = !(step_lanes(s) & b);
@@ -821,12 +824,12 @@ static void grid_hit(track_t *t, uint32_t i, uint32_t l, uint32_t on)
 /* the accent of lane l at step i (on 1, off 0, toggled 2); an accent on an empty lane adds the hit */
 static void grid_acc(track_t *t, uint32_t i, uint32_t l, uint32_t on)
 {
-    step_t *s = &t->step[i % NSTEP];
+    step_t *s = ed_st(t, i % LEN_MAX);
     uint32_t b = 1u << (l % NLANE);
     if (on == 2u)
         on = !(step_accents(s) & b);
     if (on)
-        grid_hit(t, i, l, 1);
+        grid_hit(t, i, l, 1);                    /* (the same page: s holds) */
     if (!(step_lanes(s) & b))
         return;
     grid_own(s, l % NLANE);
@@ -1014,12 +1017,15 @@ static uint32_t fnv(uint32_t h, const void *p, uint32_t n)
         h = (h ^ *b++) * 16777619u;
     return h;
 }
-static uint32_t steps_sig(const track_t *t) { return fnv(2166136261u, t->step, sizeof t->step); }
+static uint32_t steps_sig(const track_t *t)      /* (its other pages: their revision) */
+{
+    return fnv(2166136261u ^ pg_rev[trk_index(t) % NTRK] * 0x9E3779B1u, t->step, sizeof t->step);
+}
 static uint32_t motion_sig(const track_t *t)     /* the track's motion only (the sound moves while it plays) */
 {
     uint32_t h = 2166136261u, k = trk_index(t);
     for (uint32_t j = 0; j < motion.count; j++)
-        if ((motion.event[j].place >> 6) == k) h = fnv(h, &motion.event[j], sizeof motion.event[j]);
+        if (MP_TRK(&motion.event[j]) == k) h = fnv(h, &motion.event[j], sizeof motion.event[j]);
     return h ^ ((motion.on >> k) & 1u);
 }
 /* the track's pattern as a song plays it from a slot: the steps, LEN DIV SWING GATE, QUANTIZE, the automation (the
@@ -1106,12 +1112,15 @@ static void load_end(track_t *t)
 
 static int param_kept(uint32_t i);
 
+static void pg_del(uint32_t k, uint32_t num);
+static uint32_t ps_num(uint32_t k);
 static void track_defaults_steps(track_t *t)
 {
     uint32_t i;
     motion_reset(t);
     for (i = 0; i < NSTEP; i++)
         step_clear(&t->step[i]);
+    pg_del(trk_index(t), ps_num(trk_index(t)));     /* (its other pages) */
 }
 
 /* the track's settings, not the sound's: what a sound load (factory or user preset, an engine jump,

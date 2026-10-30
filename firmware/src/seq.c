@@ -482,7 +482,7 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
     step_t *s;
     if (next)
         idx = (idx + 1u) % len;
-    s = &t->step[idx];
+    s = seq_wr(t, idx);
     /* the step's notes play later in this pass (it is the next one, not played early yet, or the one playing whose
      * nudge has not come yet): what sounds now must not play again there (rskip) */
     sounds = next ? t->nd_fired != idx + 1u : t->nd_late != ND_NONE;
@@ -572,7 +572,7 @@ static void rec_hold(track_t *t, uint32_t idx, uint32_t len)
     }
     if (idx == t->rh_start)
         return;                                     /* (recorded ahead into the step now starting) */
-    s = &t->step[idx];
+    s = seq_wr(t, idx);
     t->rh_bak = *s;
     t->rh_last = (uint8_t)idx;
     t->rh_ties++;
@@ -596,7 +596,7 @@ static void rec_release(track_t *t, uint32_t note)
         return;                                     /* not one of them, or others still held */
     if (t->rh_ties && t->seq_idx == t->rh_last &&
         t->seq_pos < step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx) / 2u)
-        t->step[t->rh_last] = t->rh_bak;            /* released early in it: not held into this step */
+        *seq_wr(t, t->rh_last) = t->rh_bak;         /* released early in it: not held into this step */
 }
 
 /* a note into armed track t in the count-in's last eighth: kept for step 1 (cin_flush); once each, 4 per track */
@@ -1001,7 +1001,7 @@ static const step_t *seq_next_step(const track_t *t, uint32_t idx, uint32_t len)
             return 0;
         return &chain.source[b].step[k][0];
     }
-    return &seq_play_steps(t)[(idx + 1u) % len];
+    return seq_at(t, (idx + 1u) % len);
 }
 static __attribute__((noinline)) int seq_same_next(const track_t *t, uint32_t idx, uint32_t len)
 {
@@ -1023,7 +1023,7 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     uint32_t vel = (s->flags & SF_ACCENT) ? 127u : (s->vel ? s->vel : 96u);
     uint32_t slide_in = t->seq_hold && t->seq_n && !(skip & SEQ_REP);
     uint32_t len = t->p[P_SLEN] ? (uint32_t)t->p[P_SLEN] : 1u;
-    uint32_t next_tie = seq_play_steps(t)[(idx + 1u) % len].time == ST_TIE;
+    uint32_t next_tie = seq_at(t, (idx + 1u) % len)->time == ST_TIE;
     uint32_t hits = step_ratchet(s);
     uint8_t nn[4 + NLANE], vv[4 + NLANE];           /* the notes it plays: its notes, then its hits */
     uint32_t m = 0, sk = 0, sl, over;
@@ -1180,6 +1180,7 @@ static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *n
  * at the track's GATE (seq_tick lets it go, stopped too). A SLIDE or TIE after it does not hold it. Nothing is recorded:
  * the step is only read */
 static volatile uint16_t aud_req;
+static step_t aud_far;                              /* (long patterns) the step asked for, from NSTEP on: the UI's copy */
 /* (Dah) PRESETS turned, stopped: the new sound heard, a note on the selected track (pv_req: track + 1) for PV_MS, the
  * last one let go first (a quick turn: each sound a moment, the last one whole); C4 (a DRUM kit: its kick) */
 #define PV_MS 350u
@@ -1209,12 +1210,12 @@ static __attribute__((noinline)) void seq_audition(void)
     track_t *t;
     uint16_t at;
     aud_req = 0;
-    if (song.playing || cin_left || i >= NTRK || idx >= NSTEP)
+    if (song.playing || cin_left || i >= NTRK || idx >= LEN_MAX)
         return;
     t = &trk[i];
     at = t->seq_idx;
     t->seq_idx = (uint16_t)idx;
-    seq_step(t, &t->step[idx], idx, div_samples(2), SEQ_ROLLED);
+    seq_step(t, idx < NSTEP ? &t->step[idx] : &aud_far, idx, div_samples(2), SEQ_ROLLED);
     t->seq_idx = at;
     t->seq_hold = 0;
     t->rat_left = 0;
@@ -1224,7 +1225,7 @@ static __attribute__((noinline)) void seq_audition(void)
  * The step is read again: an edit to fewer parts (or another source in a song) ends the repeats */
 static __attribute__((noinline)) void seq_ratchet(track_t *t, uint32_t period)
 {
-    const step_t *s = &seq_play_steps(t)[t->seq_idx];
+    const step_t *s = seq_at(t, t->seq_idx);
     uint32_t hits = step_ratchet(s);
     if (t->rat_left >= hits) {
         t->rat_left = 0;
@@ -1259,7 +1260,7 @@ static const motion_store_t *chain_motion(const track_t *t)
  * already sounds left out (rskip), then its notes. On its start, or (NUDGE) at its start + its nudge */
 static __attribute__((noinline)) void seq_play(track_t *t, uint32_t idx, uint32_t period)
 {
-    const step_t *s = &seq_play_steps(t)[idx];
+    const step_t *s = seq_at(t, idx);
     const motion_store_t *m = chain_motion(t);
     uint32_t skip = SEQ_ROLLED, i, k;
     if (seq_miss(t, s, idx))
@@ -1297,7 +1298,7 @@ static __attribute__((noinline)) void seq_nd_due(track_t *t, uint32_t period, ui
     if (t->nd_early != ND_NONE && t->seq_pos >= t->nd_early - 1u && t->seq_pos != 0x7FFFFFFFu + n) {
         uint32_t nx = (t->seq_idx + 1u) % len;
         t->nd_early = ND_NONE;
-        t->nd_fired = (uint8_t)(nx + 1u);
+        t->nd_fired = (uint16_t)(nx + 1u);
         seq_play(t, nx, period);
     }
 }
@@ -1312,14 +1313,14 @@ static __attribute__((noinline)) void seq_nd_start(track_t *t, uint32_t period, 
     if (t->nd_fired == t->seq_idx + 1u) {
         ;                                           /* (it played early) */
     } else {                                        /* late by its NUDGE */
-        d = seq_nudge(t, &seq_play_steps(t)[t->seq_idx]);
+        d = seq_nudge(t, seq_at(t, t->seq_idx));
         if (d > 0)
             t->nd_late = (uint32_t)d * period / NUDGE_DIV + 1u;
         else
             seq_play(t, t->seq_idx, period);
     }
     t->nd_fired = 0;
-    if ((!chain.running || nx) && (d = seq_nudge(t, &seq_play_steps(t)[nx])) < 0) {
+    if ((!chain.running || nx) && (d = seq_nudge(t, seq_at(t, nx))) < 0) {
         uint32_t at = step_samples(t, period, t->seq_idx), back = (uint32_t)-d * period / NUDGE_DIV;
         at = (at > back ? at - back : 0u) + 1u;
         t->nd_early = at < t->nd_late ? t->nd_late : at;   /* (never before this step's own late play) */

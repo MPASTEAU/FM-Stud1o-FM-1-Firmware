@@ -202,6 +202,278 @@ static int ps_steps_get(const uint8_t *b, uint32_t n, uint32_t *pos, step_t *st)
     *pos = p + 1u;
     return 1;
 }
+/* ---- (long patterns) the pages after the first: LEN up to LEN_MAX, NPAGE pages of NSTEP. Page 0 is the pattern's
+ * record as always (on the track for the one played); page p (1..NPAGE-1) of pattern num a record of its own, keyed
+ * PS_PG(num, p): its steps (PS_V2's, indices in the page), then its automation (count, then step in the page, id,
+ * value). An empty page: no record. The automation of every page of the pattern played is in the motion store (core.h
+ * MPLACE: the page in place's bits 9..10); its pages' records get it when the pattern is stored away, the project
+ * saved or a song reads them (pg_sync). The UI reads and edits a page through pgc (two pages decoded, written back when
+ * changed), the audio ISR plays it through its ring (song_chain.c pgr, filled by pg_service) ---- */
+#define PS_PG(num, p) ((uint32_t)(num) | (uint32_t)(p) << 6)
+static step_t ps_st[NSTEP];                            /* (Dah) the main loop's: a pattern decoded (ps_decode, ps_info,
+                                                         * ui_pattern.c pt_steps, the pages; none calls
+                                                         * another) */
+static motion_store_t ps_m;
+typedef struct { step_t st[NSTEP]; uint8_t k, num, p, ok, dirty; uint32_t use; } pgc_t;
+static pgc_t pgc[2] __attribute__((section(".pool")));
+static uint32_t pgc_tick;
+static void pg_clear(step_t *st)
+{
+    uint32_t i;
+    for (i = 0; i < NSTEP; i++) {
+        memset(&st[i], 0, sizeof st[i]);
+        st[i].time = ST_REST;
+    }
+}
+/* page p of track k's pattern num -> st (its steps), its automation appended to m (0: none); none stored: empty */
+static void pg_load(uint32_t k, uint32_t num, uint32_t p, step_t *st, motion_store_t *m)
+{
+    int32_t at = ps_find(k, PS_PG(num, p));
+    uint32_t pos = 0, n, c;
+    const uint8_t *b;
+    pg_clear(st);
+    if (at < 0)
+        return;
+    b = ps_heap + at + 4u;
+    n = ps_rlen((uint32_t)at);
+    if (!ps_steps_get(b, n, &pos, st))
+        return;
+    for (c = pos < n ? b[pos++] : 0u; c-- && pos + 3u <= n; pos += 3u)
+        if (m && m->count < MOTION_MAX) {
+            motion_event_t *e = &m->event[m->count++];
+            e->place = MPLACE(k, p * NSTEP + (b[pos] & 63u));
+            e->param = b[pos + 1u];
+            e->value = (int8_t)b[pos + 2u];
+        }
+}
+/* page p (steps st, the motion store's automation of it) of the pattern track k plays into its record; 1 no room */
+static int pg_store(uint32_t k, uint32_t p, const step_t *st)
+{
+    uint32_t i, n = 0, at, pos;
+    int32_t o;
+    ps_buf[0] = PS_V2;
+    pos = 1u + ps_steps_put(st, ps_buf + 1u);
+    at = pos++;
+    for (i = 0; i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        if (MP_TRK(e) != k || (e->place >> 9) != p)
+            continue;
+        ps_buf[pos++] = (uint8_t)(e->place & 63u);
+        ps_buf[pos++] = e->param;
+        ps_buf[pos++] = (uint8_t)e->value;
+        n++;
+    }
+    ps_buf[at] = (uint8_t)n;
+    o = ps_find(k, PS_PG(ps_num(k), p));
+    if (o >= 0 && ps_rlen((uint32_t)o) == pos && !memcmp(ps_heap + o + 4u, ps_buf, pos))
+        return 0;                                       /* (as it is: the heap untouched) */
+    for (i = 0; i < NSTEP && ps_step_empty(&st[i]); i++)
+        ;
+    if (i == NSTEP && !n) {                             /* (empty: no record) */
+        if (o >= 0) {
+            ps_del(k, PS_PG(ps_num(k), p));
+            pg_rev[k]++;
+        }
+        return 0;
+    }
+    pg_rev[k]++;
+    return ps_put(k, PS_PG(ps_num(k), p), ps_buf, pos);
+}
+static void pgc_flush(pgc_t *e)                         /* a page edited, into its record */
+{
+    if (!e->ok || !e->dirty)
+        return;
+    e->dirty = 0;
+    if (e->num != ps_num(e->k) || pg_store(e->k, e->p, e->st))
+        ui_message("MEMORY FULL");                      /* (kept here meanwhile: it plays, it is shown) */
+}
+static void pgc_flush_all(void) { pgc_flush(&pgc[0]); pgc_flush(&pgc[1]); }
+static void pgc_drop(uint32_t k)                        /* track k's (NTRK: every one) pages decoded: read again */
+{
+    uint32_t i;
+    for (i = 0; i < 2u; i++)
+        if (k >= NTRK || pgc[i].k == k)
+            pgc[i].ok = 0;
+}
+/* page p (1..NPAGE-1) of track k's pattern num, decoded (the least used of the two read again; an edit there: dirty) */
+static pgc_t *pgc_peek(uint32_t k, uint32_t num, uint32_t p)   /* .. decoded already, else 0 */
+{
+    uint32_t i;
+    for (i = 0; i < 2u; i++)
+        if (pgc[i].ok && pgc[i].k == k && pgc[i].num == num && pgc[i].p == p)
+            return &pgc[i];
+    return 0;
+}
+static pgc_t *pgc_get(uint32_t k, uint32_t num, uint32_t p)
+{
+    pgc_t *e = pgc_peek(k, num, p);
+    if (!e) {
+        e = !pgc[0].ok ? &pgc[0] : !pgc[1].ok ? &pgc[1] : pgc[0].use <= pgc[1].use ? &pgc[0] : &pgc[1];
+        pgc_flush(e);
+        pg_load(k, num, p, e->st, 0);
+        e->k = (uint8_t)k; e->num = (uint8_t)num; e->p = (uint8_t)p;
+        e->ok = 1; e->dirty = 0;
+    }
+    e->use = ++pgc_tick;
+    return e;
+}
+/* the UI's step i (0..LEN_MAX - 1) of track t's pattern (a song playing: its section's, as seq_steps): page 0 on the
+ * track (or the section's copy), the others decoded. The pointer holds until two other pages are read */
+static const step_t *ui_st(const track_t *t, uint32_t i)
+{
+    uint32_t k = trk_index(t) % NTRK;
+    if (i < NSTEP)
+        return &seq_steps(t)[i];
+    return &pgc_get(k, chain.running ? chain.lane[k] : ps_num(k), (i / NSTEP) % NPAGE)->st[i % NSTEP];
+}
+/* .. to edit (the track's own pattern): written back by the next pg_service (ui_input) */
+static step_t *ed_st(track_t *t, uint32_t i)
+{
+    uint32_t k = trk_index(t) % NTRK;
+    pgc_t *e;
+    if (i < NSTEP)
+        return &t->step[i];
+    e = pgc_get(k, ps_num(k), (i / NSTEP) % NPAGE);
+    e->dirty = 1;
+    return &e->st[i % NSTEP];
+}
+static int pg_mpage(uint32_t k, uint32_t p)             /* track k's automation on page p: any */
+{
+    uint32_t i;
+    for (i = 0; i < motion.count; i++)
+        if (MP_TRK(&motion.event[i]) == k && (motion.event[i].place >> 9) == p)
+            return 1;
+    return 0;
+}
+/* the pattern track k plays: its pages' records as they are (the pages edited written back, each one's automation as
+ * the motion store has it); main loop, before they are read or stored away. 1 = no room */
+static int pg_sync(uint32_t k)
+{
+    uint32_t p;
+    int r = 0;
+    pgc_flush_all();
+    for (p = 1; p < NPAGE; p++) {
+        if (ps_find(k, PS_PG(ps_num(k), p)) < 0 && !pg_mpage(k, p))
+            continue;
+        pg_load(k, ps_num(k), p, ps_st, 0);
+        r |= pg_store(k, p, ps_st);
+    }
+    return r;
+}
+/* the pattern track k plays now (decoded onto it): its pages' automation into the motion store, as room allows */
+static void pg_motion_load(uint32_t k)
+{
+    uint32_t p, i, f;
+    ps_m.count = 0;
+    for (p = 1; p < NPAGE; p++)
+        pg_load(k, ps_num(k), p, ps_st, &ps_m);
+    f = motion_guard();
+    for (i = 0; i < ps_m.count && motion.count < MOTION_MAX; i++)
+        motion.event[motion.count++] = ps_m.event[i];
+    if (ps_m.count)
+        motion.on |= (uint8_t)(1u << k);
+    motion_unguard(f);
+}
+static uint32_t pg_mcount(uint32_t k, uint32_t num)     /* the automation records of pattern num's pages */
+{
+    uint32_t p;
+    ps_m.count = 0;
+    for (p = 1; p < NPAGE; p++)
+        pg_load(k, num, p, ps_st, &ps_m);
+    return ps_m.count;
+}
+static void pg_ring_drop(uint32_t k)                    /* track k's ring: filled again (another pattern) */
+{
+    uint32_t f = motion_guard();
+    memset(pgr[k % NTRK].abs, 0, sizeof pgr[0].abs);
+    pgr[k % NTRK].dirty = 0;
+    motion_unguard(f);
+}
+static void pg_del(uint32_t k, uint32_t num)            /* pattern num's pages gone */
+{
+    uint32_t p;
+    for (p = 1; p < NPAGE; p++)
+        ps_del(k, PS_PG(num, p));
+    pgc_drop(k);
+    pg_rev[k % NTRK]++;
+}
+static int pg_copy(uint32_t k, uint32_t from, uint32_t to)   /* pattern from's pages as pattern to's; 1 no room */
+{
+    uint32_t p;
+    for (p = 1; p < NPAGE; p++) {
+        int32_t at = ps_find(k, PS_PG(from, p));
+        uint32_t n;
+        if (at < 0)
+            continue;
+        n = ps_rlen((uint32_t)at);
+        memcpy(ps_buf, ps_heap + at + 4u, n);
+        if (ps_put(k, PS_PG(to, p), ps_buf, n))
+            return 1;
+    }
+    return 0;
+}
+/* main loop (ui_input, every pass): the pages the audio ISR plays from (song_chain.c pgr). Each track: the steps live
+ * recording wrote into its ring, back into their page; playing a LEN over NSTEP, the steps from the one playing on
+ * (PGR_N of them), those from NSTEP up, from the pattern store (its pattern's pages, or its SONG section's): a slot not
+ * holding its step yet once it is within PGR_N / 2 of the step playing (they all, then), or holding it as it was before
+ * an edit (its page decoded: pgc), takes it */
+static void pg_service(void)
+{
+    uint32_t k;
+    pgc_flush_all();
+    for (k = 0; k < NTRK; k++) {
+        const track_t *t = &trk[k];
+        uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), num = chain.running ? chain.lane[k] : ps_num(k), d, f, cur, fill = 0;
+        while (pgr[k].dirty) {
+            uint32_t j = 0, a;
+            step_t st;
+            while (!((pgr[k].dirty >> j) & 1u))
+                j++;
+            f = motion_guard();
+            a = pgr[k].abs[j];
+            st = pgr[k].st[j];
+            pgr[k].dirty &= (uint16_t)~(1u << j);
+            motion_unguard(f);
+            if (a >= NSTEP && pgr[k].num == ps_num(k) && !chain.running) {
+                pgc_t *e = pgc_get(k, pgr[k].num, a / NSTEP);
+                e->st[a % NSTEP] = st;
+                e->dirty = 1;
+            }
+        }
+        if (len <= NSTEP || !song.playing || k >= trk_count())
+            continue;
+        if (pgr[k].num != num) {
+            pg_ring_drop(k);
+            pgr[k].num = (uint8_t)num;
+        }
+        cur = t->seq_idx;
+        for (d = 0; d < PGR_N; d++) {                   /* (any missing near) */
+            uint32_t a = cur + d;
+            if (a >= len)
+                break;
+            if (a >= NSTEP && pgr[k].abs[a % PGR_N] != a && d < PGR_N / 2u)
+                fill = 1;
+        }
+        for (d = 0; d < PGR_N; d++) {
+            uint32_t a = cur + d, j = a % PGR_N;
+            pgc_t *e;
+            if (a >= len)
+                break;
+            if (a < NSTEP)
+                continue;
+            e = pgr[k].abs[j] == a ? pgc_peek(k, num, a / NSTEP) : fill ? pgc_get(k, num, a / NSTEP) : 0;
+            if (!e || (pgr[k].abs[j] == a && !memcmp(&pgr[k].st[j], &e->st[a % NSTEP], sizeof(step_t))))
+                continue;
+            f = motion_guard();
+            if (!((pgr[k].dirty >> j) & 1u)) {          /* (recorded into meanwhile: back first, next pass) */
+                pgr[k].st[j] = e->st[a % NSTEP];
+                RING_PUBLISH();
+                pgr[k].abs[j] = (uint8_t)a;
+            }
+            motion_unguard(f);
+        }
+    }
+}
 /* track t's pattern (on the track, its records in the motion store) into b: its length */
 static uint32_t ps_encode(const track_t *t, uint8_t *b)
 {
@@ -232,9 +504,6 @@ static uint32_t ps_encode(const track_t *t, uint8_t *b)
     return pos;
 }
 /* b[0..n-1] onto track t (steps, timing, automation); 0 = not a pattern (the track as it was, empty) */
-static step_t ps_st[NSTEP];                            /* (Dah) the main loop's: a pattern decoded (ps_decode, ps_info,
-                                                         * ui_pattern.c pt_steps; none calls another) */
-static motion_store_t ps_m;
 static int ps_decode(track_t *t, const uint8_t *b, uint32_t n)
 {
     int16_t tv[5];
@@ -276,11 +545,16 @@ static int ps_empty(uint32_t k)                         /* (Dah) track k's steps
     for (i = 0; i < NSTEP; i++)
         if (!ps_step_empty(&t->step[i]))
             return 0;
-    return motion_count(t) == 0u;
+    for (i = 1; i < NPAGE; i++)                         /* (its other pages: none) */
+        if (ps_find(k % NTRK, PS_PG(ps_num(k), i)) >= 0)
+            return 0;
+    return motion_count(t) == 0u && t->p[P_SLEN] <= NSTEP;
 }
 static int ps_store(uint32_t k)
 {
     uint32_t n;
+    if (pg_sync(k % NTRK))
+        return 1;
     n = ps_empty(k) ? 0u : ps_encode(&trk[k % NTRK], ps_buf);   /* (Dah) an empty pattern: its record alone, 4
                                                          * bytes (it comes back empty, the timing the track's) */
     return ps_put(k % NTRK, ps_num(k), ps_buf, n);
@@ -321,7 +595,7 @@ static int pattern_go(uint32_t k, uint32_t num)
                                                          * be dropped, and stored again without: refused (MEMORY FULL) */
         const uint8_t *r = ps_heap + at + 4u;
         uint32_t len = ps_rlen((uint32_t)at), pos = 11u + 10u * (len > 10u ? r[10] : 0u);
-        if (pos < len && motion.count - motion_count(&trk[k]) + r[pos] > MOTION_MAX)
+        if (pos < len && motion.count - motion_count(&trk[k]) + r[pos] + pg_mcount(k, num) > MOTION_MAX)
             return 1;
     }
     if (ps_store(k))
@@ -332,6 +606,9 @@ static int pattern_go(uint32_t k, uint32_t num)
     if (at < 0 || !ps_decode(&trk[k], ps_heap + at + 4u, ps_rlen((uint32_t)at)))
         ps_blank(k);
     ps_del(k, num);                                     /* (the one played lives on the track: no stale copy) */
+    pg_motion_load(k);
+    pg_ring_drop(k);
+    pg_rev[k]++;
     ui.force = 1;
     return 0;
 }
@@ -362,7 +639,7 @@ static int pattern_new(uint32_t k, int dup)
         return 1;
     if (dup) {                                          /* (the copy: the same bytes under the new number) */
         uint32_t n = ps_encode(&trk[k % NTRK], ps_buf);
-        if (ps_put(k % NTRK, num, ps_buf, n)) {
+        if (ps_put(k % NTRK, num, ps_buf, n) || pg_copy(k % NTRK, ps_num(k), num)) {
             ps_del(k % NTRK, ps_num(k));                /* (Dah: refused: no stale copy of the one played left) */
             return 1;
         }
@@ -410,10 +687,12 @@ static int pattern_new_all(int dup)
         return 2;
     for (k = 0; dup && k < trk_count(); k++) {          /* (the copies: each track's bytes under the new number) */
         uint32_t n;
+        if (pg_sync(k))
+            return 1;
         if (ps_empty(k))
             continue;
         n = ps_encode(&trk[k], ps_buf);
-        if (ps_put(k, num, ps_buf, n))
+        if (ps_put(k, num, ps_buf, n) || pg_copy(k, ps_num(k), num))
             return 1;
     }
     return pattern_go_all(num) ? 1 : 0;
@@ -456,6 +735,7 @@ static void pattern_del(uint32_t k, uint32_t num)
     uint32_t n, i;
     k %= NTRK;
     ps_del(k, num);
+    pg_del(k, num);
     ps_song_forget(k, num);
     if (num != ps_num(k))
         return;
@@ -467,10 +747,12 @@ static void pattern_del(uint32_t k, uint32_t num)
         ps_cur[k] = nums[i];
         if (at < 0 || !ps_decode(&trk[k], ps_heap + at + 4u, ps_rlen((uint32_t)at)))
             ps_blank(k);
+        pg_motion_load(k);
     } else {
         ps_cur[k] = 1;
         ps_blank(k);
     }
+    pg_ring_drop(k);
     ui.force = 1;
 }
 /* track k's pattern num: there? (the one played always is) */
@@ -534,10 +816,32 @@ static uint32_t ps_info(uint32_t k, uint32_t num, uint8_t *slen)
     if (!n || !ps_decode_to(k, ps_buf, n, ps_st, tm, &q, &ps_m))
         return 0;
     *slen = (uint8_t)clamp(tm[0], 1, NSTEP);
+    if (tm[0] > (int16_t)NSTEP) {                       /* (long: NSTEP cells, each its steps' first note, else a TIE) */
+        uint32_t len = (uint32_t)tm[0], c, i;
+        for (c = 0; c < NSTEP; c++) {
+            step_t pick;
+            memset(&pick, 0, sizeof pick);
+            pick.time = ST_REST;
+            for (i = c * len / NSTEP; i < (c + 1u) * len / NSTEP; i++) {
+                const step_t *st = i < NSTEP ? &ps_st[i] : &pgc_get(k, num, i / NSTEP)->st[i % NSTEP];
+                if (st->time == ST_NOTE && (st->n || st->hit)) {
+                    pick = *st;
+                    break;
+                }
+                if (st->time == ST_TIE && pick.time == ST_REST)
+                    pick = *st;
+            }
+            ps_st[c] = pick;
+        }
+    }
     return len48_of(tm[0], tm[1]);
 }
 static void ps_reset(void)                              /* no pattern but the ones on the tracks, each number 1 */
 {
+    uint32_t f = motion_guard();
+    pgr_drop_all();
+    motion_unguard(f);
+    pgc_drop(NTRK);
     ps_used = 0;
     ps_gen++;
     memset(ps_cur, 0, sizeof ps_cur);
@@ -552,6 +856,8 @@ static void chain_fill(uint32_t r, uint32_t b)
     chain_pattern_t *src = &chain.source[b];
     chain.src_ok[b] = 0;
     memset(&src->motion, 0, sizeof src->motion);
+    for (k = 0; k < trk_count(); k++)
+        (void)pg_sync(k);                               /* (the pages' automation as the tracks have it) */
     for (k = 0; k < NTRK; k++) {
         uint32_t s = k < trk_count() && r < chain.config.count ? chain.config.row[r].slot[k] : CHAIN_SILENT;
         n = s != CHAIN_SILENT && ps_exists(k, s) ? ps_fetch(k, s) : 0u;
@@ -563,6 +869,10 @@ static void chain_fill(uint32_t r, uint32_t b)
             }
             memcpy(src->timing[k], &trk[k].p[P_SLEN], sizeof src->timing[k]);
             src->qnt[k] = (uint8_t)trk[k].p[P_SQNT];
+        } else {
+            uint32_t p;
+            for (p = 1; p < NPAGE; p++)                 /* (its pages' automation; their steps: pg_service) */
+                pg_load(k, s, p, ps_st, &src->motion);
         }
     }
     chain.src_row[b] = (uint8_t)r;

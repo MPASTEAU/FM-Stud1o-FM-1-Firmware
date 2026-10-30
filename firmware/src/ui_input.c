@@ -152,6 +152,17 @@ static uint32_t oct_leds(void)
     return (song.octave < 0 ? 1u : 0u) | (song.octave > 0 ? 2u : 0u);
 }
 
+/* (long patterns) the masks of steps held (locks, NUDGE, DETAIL): bit i is step ed_base() + i, the cursor's page */
+static uint32_t ed_base(void) { return (uint32_t)ui.cursor / NSTEP * NSTEP; }
+static uint64_t ed_keys(uint32_t keys, uint32_t len)   /* the grid's white keys held, on the page shown */
+{
+    uint32_t k, i;
+    uint64_t m = 0;
+    for (k = 0; k < 27u; k++)
+        if (((keys >> k) & 1u) && !key_black(k) && (i = ui.bank * 16u + key_place(k)) < len && i - ed_base() < NSTEP)
+            m |= (uint64_t)1 << (i - ed_base());
+    return m;
+}
 /* the key LEDs on the grid, bit k = key k: the white keys show where the selected lane hits on the page
  * shown (its accents while ACC is held), the step playing inverted (a light walks over them); the black keys
  * the lane selected, ACC while held, the page keys while there is more than one page */
@@ -165,7 +176,7 @@ static uint32_t grid_leds(void)
         uint32_t p = key_place(k), on;
         if (!key_black(k)) {
             uint32_t i = ui.bank * 16u + p;
-            on = i < len && ((acc ? step_accents(&seq_steps(t)[i]) : step_lanes(&seq_steps(t)[i])) & b) != 0u;
+            on = i < len && ((acc ? step_accents(ui_st(t, i)) : step_lanes(ui_st(t, i))) & b) != 0u;
             on ^= (uint32_t)(p == ph);
         } else {
             on = p < NLANE ? p == ui.lane : p == GK_ACC ? acc : len > 16u;
@@ -256,9 +267,9 @@ static uint32_t step_leds(void)
     const step_t *st;
     uint32_t i, k, note, used = 0, m = 0;
     if (ui.home || ui.menu || ui.confirm || !song.seq_mode || cur_page()->graph != GR_ROLL || song.playing ||
-        chain_busy() || ui.cursor >= NSTEP)
+        chain_busy())
         return 0;
-    st = &t->step[ui.cursor];
+    st = ui_st(t, ui.cursor);
     if (!st->n || st->time == ST_REST)
         return 0;
     for (k = 0; k < 27u; k++) {
@@ -808,8 +819,11 @@ static void cursor_move(int32_t c)
     cursor_set(c);
     follow_hold();                                      /* (1.6, #242: the roll stays where the cursor is) */
     if ((ui_prefs2 & (PREF_PREVIEW >> 16)) && !song.playing && !seq_counting() && transport_req != 1u && !chain_busy() &&
-        !ui.home && song.seq_mode && cur_page()->graph == GR_ROLL)
+        !ui.home && song.seq_mode && cur_page()->graph == GR_ROLL) {
+        if (ui.cursor >= NSTEP)                         /* (long patterns: the step, from its page) */
+            aud_far = *ui_st(TSEL, ui.cursor);
         aud_req = (uint16_t)((uint32_t)ui.cursor << 8 | (song.sel + 1u));
+    }
 }
 
 /* the grid's page down (-1) / up (+1): the cursor to the same place on it (at most the last step) */
@@ -854,8 +868,8 @@ static void grid_keys(uint32_t pressed)
                 continue;
             }
             {   /* a hit (an accent) there goes when the key is let go, unless it was held for a lock (lock_keys) */
-                const step_t *st = &TSEL->step[i];
-                uint64_t b = (uint64_t)1 << i;
+                const step_t *st = ui_st(TSEL, i);
+                uint64_t b = i - ed_base() < NSTEP ? (uint64_t)1 << (i - ed_base()) : 0u;
                 uint32_t acc = (uint32_t)black_held(GK_ACC);
                 if (((acc ? step_accents(st) : step_lanes(st)) >> ui.lane) & 1u) {
                     ui.plk_rm |= b;
@@ -888,19 +902,15 @@ static void grid_keys(uint32_t pressed)
 static uint64_t lock_held(void)
 {
     const track_t *t = TSEL;
-    uint32_t k, len = (uint32_t)t->p[P_SLEN], keys = fm1_in.notes & ~kb_layer;
-    uint64_t m = 0;
+    uint32_t len = (uint32_t)t->p[P_SLEN], keys = fm1_in.notes & ~kb_layer;
     if (ui.home || ui.menu || ui.confirm || ui.layer || name_on() || !song.seq_mode || cur_page()->graph != GR_ROLL ||
         !keys || detail_on())                           /* (DETAIL: its knobs are the step's own fields, sd_turn) */
         return 0;
     if (!grid_on())                                     /* the roll: the step being entered */
-        return ui.entry_open && !live_rec_sel() && ui.cursor < len ? (uint64_t)1 << ui.cursor : 0u;
+        return ui.entry_open && !live_rec_sel() && ui.cursor < len ? (uint64_t)1 << (ui.cursor - ed_base()) : 0u;
     if (!grid_write())                                  /* (Dah: the grid not armed: its keys play, none is held) */
         return 0;
-    for (k = 0; k < 27u; k++)
-        if (((keys >> k) & 1u) && !key_black(k) && ui.bank * 16u + key_place(k) < len)
-            m |= (uint64_t)1 << (ui.bank * 16u + key_place(k));
-    return m;
+    return ed_keys(keys, len);
 }
 
 /* each pass, before the grid's keys: a hit pressed on goes once its key is let go (plk_rm, grid_keys) */
@@ -911,9 +921,9 @@ static void lock_keys(void)
     for (i = 0; gone && i < NSTEP; i++)
         if ((gone >> i) & 1u) {
             if ((ui.plk_acc >> i) & 1u)
-                grid_acc(&trk[ui.plk_trk % NTRK], i, ui.plk_lane, 0);
+                grid_acc(&trk[ui.plk_trk % NTRK], ed_base() + i, ui.plk_lane, 0);
             else
-                grid_hit(&trk[ui.plk_trk % NTRK], i, ui.plk_lane, 0);
+                grid_hit(&trk[ui.plk_trk % NTRK], ed_base() + i, ui.plk_lane, 0);
         }
     ui.plk_rm &= ~gone;
 }
@@ -938,9 +948,9 @@ static void lock_turn(uint32_t k, int32_t s, uint64_t held)
         int16_t v;
         if (!((held >> i) & 1u))
             continue;
-        if (!motion_lock_get(t, i, id, &v))
+        if (!motion_lock_get(t, ed_base() + i, id, &v))
             v = motion_base_value(t, id);
-        if (motion_set_lock(t, i, id, (int16_t)param_turn(d, v, s)) == 2)
+        if (motion_set_lock(t, ed_base() + i, id, (int16_t)param_turn(d, v, s)) == 2)
             break;                                      /* (full: ui_notices says so) */
     }
     ui.auto_id = (uint8_t)(id + 1u);                    /* (Dah: STEP's lane shows it now) */
@@ -960,8 +970,8 @@ static int lane_turn(int32_t s)
         return 1;
     }
     d = track_desc(t, id);
-    (void)motion_set_lock(t, ui.cursor % NSTEP, id,
-                          (int16_t)param_turn(d, lane_value(t, ui.cursor % NSTEP, id, &pt), accel(EN_SELECT, s, d->max - d->min)));
+    (void)motion_set_lock(t, ui.cursor, id,
+                          (int16_t)param_turn(d, lane_value(t, ui.cursor, id, &pt), accel(EN_SELECT, s, d->max - d->min)));
     ui.auto_id = (uint8_t)(id + 1u);
     ui.auto_trk = (uint8_t)song.sel;
     return 1;
@@ -972,13 +982,13 @@ static void lock_clear(uint64_t held)
 {
     uint32_t i, n = 0;
     ui.plk_rm &= ~held;
-    if (!(motion_lock_steps(song.sel) & held)) {
+    if (!(motion_lock_steps(song.sel, ed_base()) & held)) {
         ui_message("NO LOCKS");
         return;
     }
     for (i = 0; i < NSTEP; i++)
         if ((held >> i) & 1u)
-            n += motion_clear_locks(TSEL, i);
+            n += motion_clear_locks(TSEL, ed_base() + i);
     ui_message(n ? "LOCKS CLEARED" : "NO LOCKS");
 }
 
@@ -998,8 +1008,9 @@ static void nudge_turn(uint64_t held, int32_t steps)
     ui.plk_rm &= ~held;                                 /* (a grid key held for it: its hit stays) */
     for (i = 0; i < NSTEP; i++)
         if ((held >> i) & 1u) {
-            v = clamp(step_nudge(&TSEL->step[i]) + (steps > 0 ? 1 : -1), -8, 7);
-            step_set_nudge(&TSEL->step[i], v);
+            step_t *st = ed_st(TSEL, ed_base() + i);
+            v = clamp(step_nudge(st) + (steps > 0 ? 1 : -1), -8, 7);
+            step_set_nudge(st, v);
         }
     if (TSEL->p[P_SQNT]) {
         ui_message("QUANTIZE IS ON");
@@ -1016,19 +1027,15 @@ static void nudge_turn(uint64_t held, int32_t steps)
  * keys held pick several steps: each moves by the turn. A step that plays nothing takes none (sd_takes: NO NOTE) */
 static uint64_t sd_held(void)                           /* the grid's step keys held on DETAIL (bit = step), 0 none */
 {
-    uint32_t k, len = (uint32_t)TSEL->p[P_SLEN], keys = fm1_in.notes & ~kb_layer;
-    uint64_t m = 0;
+    uint32_t len = (uint32_t)TSEL->p[P_SLEN], keys = fm1_in.notes & ~kb_layer;
     if (!keys || !detail_on() || !grid_on() || ui.layer || name_on())
         return 0;
-    for (k = 0; k < 27u; k++)
-        if (((keys >> k) & 1u) && !key_black(k) && ui.bank * 16u + key_place(k) < len)
-            m |= (uint64_t)1 << (ui.bank * 16u + key_place(k));
-    return m;
+    return ed_keys(keys, len);
 }
 static uint64_t sd_steps(void)
 {
     uint64_t m = sd_held();
-    return m ? m : (uint64_t)1 << ui.cursor;
+    return m ? m : (uint64_t)1 << (ui.cursor - ed_base());
 }
 static void sd_turn(uint32_t slot, int32_t steps)
 {
@@ -1037,23 +1044,25 @@ static void sd_turn(uint32_t slot, int32_t steps)
     uint64_t m = sd_steps();
     int32_t d = k == EVK_CHANCE ? accel(EN_K1 + slot, steps, 100) : k == EVK_VEL ? accel(EN_K1 + slot, steps, 126) : steps;
     for (i = 0; i < NSTEP; i++)
-        n += ((m >> i) & 1u) && sd_takes(&t->step[i], k);
+        n += ((m >> i) & 1u) && sd_takes(ui_st(t, ed_base() + i), k);
     if (!n) {
         ui_message("NO NOTE");
         return;
     }
     for (i = 0; i < NSTEP; i++) {
         int32_t v;
-        if (!((m >> i) & 1u) || !sd_takes(&t->step[i], k))
+        step_t *st;
+        if (!((m >> i) & 1u) || !sd_takes(ui_st(t, ed_base() + i), k))
             continue;
-        v = ev_sval(&t->step[i], k);
+        st = ed_st(t, ed_base() + i);
+        v = ev_sval(st, k);
         v = k == EVK_CHANCE ? ev_chance_turn(v, steps, d) : k == EVK_RATCH ? clamp(v + d, 1, 4) :
             k == EVK_VEL ? clamp(v + d, 1, 127) : clamp(v + d, -8, 7);
-        ev_sput(&t->step[i], k, v);
+        ev_sput(st, k, v);
     }
     if (k == EVK_NUDGE && t->p[P_SQNT])
         ui_message("QUANTIZE IS ON");                   /* (kept: it plays once QUANTIZE is OFF) */
-    else if (k == EVK_VEL && (t->step[ui.cursor].flags & SF_ACCENT))
+    else if (k == EVK_VEL && (ui_st(t, ui.cursor)->flags & SF_ACCENT))
         ui_message("ACC PLAYS 127");                    /* (kept: it plays once the ACC goes) */
 }
 /* DETAIL's EDIT: the steps' four back to 100 % / x1 / 0 / 96 (their notes stay) */
@@ -1064,20 +1073,20 @@ static void sd_reset(void)
     uint32_t i, k, n = 0;
     for (i = 0; i < NSTEP; i++)
         for (k = 0; k < 4u; k++)
-            n += ((m >> i) & 1u) && ev_sval(&t->step[i], SD_KIND[k]) != ev_sdefv(SD_KIND[k]);
+            n += ((m >> i) & 1u) && ev_sval(ui_st(t, ed_base() + i), SD_KIND[k]) != ev_sdefv(SD_KIND[k]);
     if (!n) {
         ui_message("NOTHING TO RESET");
         return;
     }
     for (i = 0; i < NSTEP; i++)
         for (k = 0; (m >> i) & 1u && k < 4u; k++)
-            ev_sput(&t->step[i], SD_KIND[k], ev_sdefv(SD_KIND[k]));
+            ev_sput(ed_st(t, ed_base() + i), SD_KIND[k], ev_sdefv(SD_KIND[k]));
     ui_message("STEP RESET");
 }
 
 static void step_edit(uint32_t slot, int32_t steps)
 {
-    step_t *st = &TSEL->step[ui.cursor];
+    step_t *st = ed_st(TSEL, ui.cursor);
     uint32_t i;
     if (detail_on()) {                                    /* DETAIL (1.5.1): CHANCE RATCH NUDGE VEL */
         follow_hold();
@@ -1109,9 +1118,9 @@ static void step_edit(uint32_t slot, int32_t steps)
     case 2:                                               /* TIME; a note's LEN (1.5: ui.c note_set_len) */
         if (step_on(st)) {
             uint32_t was = note_len(TSEL, ui.cursor), n;
-            n = note_set_len(TSEL, ui.cursor, (uint32_t)clamp((int32_t)was + steps, 1, NSTEP));
+            n = note_set_len(TSEL, ui.cursor, (uint32_t)clamp((int32_t)was + steps, 1, LEN_MAX));
             if (steps > 0 && n == was)
-                ui_message(ui.cursor + n < (uint32_t)clamp(TSEL->p[P_SLEN], 1, NSTEP) ? "NOTE AHEAD" : "END OF PATTERN");
+                ui_message(ui.cursor + n < (uint32_t)clamp(TSEL->p[P_SLEN], 1, LEN_MAX) ? "NOTE AHEAD" : "END OF PATTERN");
             break;
         }
         st->time = (uint8_t)clamp((int32_t)st->time + (steps > 0 ? 1 : -1), ST_NOTE, ST_REST);
@@ -1208,8 +1217,8 @@ static void home_view_knob(uint32_t slot, int32_t steps)   /* (Dah) HOME's VIEW:
 {
     uint32_t len = 1, n = hv_cols(), i;
     for (i = 0; i < trk_count(); i++)                   /* (MOVE: as far as the longest track) */
-        if ((uint32_t)clamp(trk[i].p[P_SLEN], 1, NSTEP) > len)
-            len = (uint32_t)clamp(trk[i].p[P_SLEN], 1, NSTEP);
+        if ((uint32_t)clamp(trk[i].p[P_SLEN], 1, LEN_MAX) > len)
+            len = (uint32_t)clamp(trk[i].p[P_SLEN], 1, LEN_MAX);
     if (slot == 0u) {
         int32_t a = (int32_t)hv_base(TSEL, 1) + (steps > 0 ? 1 : -1) * (int32_t)(n / 2u > 4u ? n / 2u : 4u);
         hvw.at = (int16_t)clamp(a, 0, len > n ? (int32_t)(len - n) : 0);
@@ -1613,7 +1622,7 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
 static void seq_entry(uint32_t pressed)
 {
     track_t *t = TSEL;
-    step_t *st = &t->step[ui.cursor];
+    step_t *st = ed_st(t, ui.cursor);
     uint32_t k, add = (ui_prefs2 & (PREF_CHORD_ADD >> 16)) != 0u;
     for (k = 0; k < 27u; k++) {
         uint8_t ch[CHORD_MAX];
@@ -1869,7 +1878,7 @@ static int page_tap(uint32_t b)
             lock_clear(held);
             return 1;
         }
-        step_clear(&TSEL->step[ui.cursor]);
+        step_clear(ed_st(TSEL, ui.cursor));
         (void)motion_clear_locks(TSEL, ui.cursor);
         cursor_set(ui.cursor + 1);
         ui_message("STEP CLEARED");
@@ -2013,6 +2022,7 @@ static void ui_input(void)
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0}, qs = 0;
     static uint32_t lock_ms;                            /* BPM LOCK: the last locked SELECT turn (fm1_ms | 1; 0 none) */
+    pg_service();                                       /* (long patterns: the pages edited back, the ISR's ring filled) */
     midi_take();                                        /* (MIDI IN notes: lights, SCREEN WAKE, AUTO SELECT's) */
     midi_pc_poll();                                     /* MIDI Program Change (before fm6_poll: a bank voice) */
     fm6_poll();                                         /* FM6: PTCH turned -> its patch */
@@ -2227,8 +2237,11 @@ static void ui_input(void)
                 panic_req |= (uint8_t)(1u << k);
                 track_reset(k);
                 ps_song_forget(k, 0);
-                for (k = 1; k <= PS_NUM; k++)
+                for (k = 1; k <= PS_NUM; k++) {
                     ps_del(trk_count() - 1u, k);
+                    pg_del(trk_count() - 1u, k);
+                }
+                pg_ring_drop(trk_count() - 1u);
                 ps_cur[trk_count() - 1u] = 0;
                 ps_gen++;
                 song.ntrk = (uint8_t)(trk_count() - 1u);

@@ -1141,11 +1141,11 @@ static void layer_seq(void)
         track_t *t = TSEL;
         rk_row_t R;
         int32_t oy = cv_oy;
-        R.s = seq_steps(t);
+        R.t = t;
         R.c = song.sel;
         R.sel = 1;
         R.mute = t->p[P_MUTE] != 0;
-        R.len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+        R.len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX);
         R.nc = hv_cols();
         R.off = 0;
         R.tc0 = ux.trk[song.sel % NTRK];

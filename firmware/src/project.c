@@ -1144,6 +1144,17 @@ static void project_capture(project_t *p)
         fm6_pack(fm6_patch[i], p->fm6[i]);
     }
     p->motion = motion;
+    {   /* (long patterns: FUN10 holds a page, LEN at most NSTEP and the first page's automation) */
+        uint32_t j, n = 0;
+        for (i = 0; i < NTRK; i++)
+            if (p->t[i].p[P_SLEN] > (int16_t)NSTEP)
+                p->t[i].p[P_SLEN] = NSTEP;
+        for (j = 0; j < motion.count; j++)
+            if (motion.event[j].place < (1u << 9))
+                p->motion.event[n++] = motion.event[j];
+        memset(p->motion.event + n, 0, (MOTION_MAX - n) * sizeof p->motion.event[0]);
+        p->motion.count = (uint8_t)n;
+    }
     memcpy(p->mch, song.mch, sizeof p->mch);
     memcpy(p->x, trkx, sizeof p->x);
     motion_unguard(f);

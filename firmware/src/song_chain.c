@@ -142,6 +142,52 @@ static const step_t *seq_play_steps(const track_t *t)   /* (Dah) the steps the s
 {
     return !chain.running && (seq_off >> ((uint32_t)(t - trk) % NTRK)) & 1u ? chain_silent : seq_steps(t);
 }
+/* (long patterns, LEN over NSTEP) the steps from NSTEP on are not on the track: the audio ISR plays them from a ring of
+ * PGR_N per track, slot i % PGR_N the step i (abs), which the main loop fills ahead of the step playing from the pattern
+ * store (pstore.c pg_service). Not there (the main loop late): a step that plays nothing (pg_late counts them). Live
+ * recording into one marks it (dirty): the main loop puts it back into its page */
+#define PGR_N 16u
+static struct {
+    step_t st[PGR_N];
+    uint8_t abs[PGR_N];                      /* the step slot j holds (NSTEP..LEN_MAX - 1), 0 none */
+    uint16_t dirty;                          /* the slots live recording wrote */
+    uint8_t num;                             /* the pattern they came from */
+} pgr[NTRK];
+static volatile uint32_t pg_late;
+static uint16_t pg_rev[NTRK];                /* +1 at each change of a track's pages (the screens' signatures: ui.c steps_sig) */
+static step_t pg_trash;                      /* (recording into a step not there: lost) */
+static __attribute__((noinline)) const step_t *seq_far(const track_t *t, uint32_t i)
+{
+    uint32_t k = (uint32_t)(t - trk) % NTRK, j = i % PGR_N;
+    if ((!chain.running && ((seq_off >> k) & 1u)) || i >= LEN_MAX)
+        return chain_silent;
+    if (pgr[k].abs[j] != i) {
+        pg_late++;
+        return chain_silent;
+    }
+    return &pgr[k].st[j];
+}
+/* step i (0..LEN - 1) as the sequencer plays it */
+static inline const step_t *seq_at(const track_t *t, uint32_t i) { return i < NSTEP ? &seq_play_steps(t)[i] : seq_far(t, i); }
+/* step i of track t for live recording to write (the audio ISR) */
+static step_t *seq_wr(track_t *t, uint32_t i)
+{
+    uint32_t k = (uint32_t)(t - trk) % NTRK, j = i % PGR_N;
+    if (i < NSTEP)
+        return &t->step[i];
+    if (i >= LEN_MAX || pgr[k].abs[j] != i)
+        return &pg_trash;
+    pgr[k].dirty |= (uint16_t)(1u << j);
+    return &pgr[k].st[j];
+}
+static void pgr_drop_all(void)               /* (the audio ISR: a SONG's section starts, its patterns' steps) */
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++) {
+        memset(pgr[k].abs, 0, sizeof pgr[k].abs);
+        pgr[k].dirty = 0;
+    }
+}
 static void motion_restore(track_t *t);
 static void motion_restore_keep(track_t *t, const motion_store_t *m);
 /* a section starts (chain_start, chain_tick: once a section, not per block; not inlined: off the audio ISR's loop) */
@@ -152,6 +198,7 @@ static __attribute__((noinline)) void chain_apply(void)
     uint32_t b = chain.cur ^ 1u, ok = chain.src_ok[b] && chain.src_row[b] == chain.row;   /* (Dah: the other buffer) */
     chain.cur = (uint8_t)b;
     chain.clk = (uint8_t)chain_clock(r);
+    pgr_drop_all();
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         uint32_t s = ok && i < trk_count() ? r->slot[i] : CHAIN_SILENT;   /* (the buffer not ready: silent) */

@@ -76,7 +76,7 @@ static int sd_takes(const step_t *s, uint32_t k) { return step_on(s) || (k == EV
 /* ---- (Dah) the page: four lanes ---- */
 static uint8_t au_lane;                                 /* the lane picked (KNOB 2), 0..3 */
 static void cursor_move(int32_t c);                     /* (ui_input.c: the roll's cursor) */
-static uint32_t au_len(const track_t *t) { return (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP); }
+static uint32_t au_len(const track_t *t) { return (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX); }
 static uint32_t au_cur(void) { return ui.cursor < au_len(TSEL) ? ui.cursor : au_len(TSEL) - 1u; }
 static uint32_t au_raw(uint32_t k)                       /* HOME's KNOB k's id on the selected track (home_param's) */
 {
@@ -110,8 +110,8 @@ static int32_t au_drawn(const track_t *t, uint32_t si, uint32_t id, int *pt)
         return v;
     for (i = 0; i < motion.count; i++) {
         const motion_event_t *e = &motion.event[i];
-        uint32_t st = e->place & 63u;
-        if ((e->place >> 6) != k || e->param != id || st >= len)
+        uint32_t st = MP_STEP(e);
+        if (MP_TRK(e) != k || e->param != id || st >= len)
             continue;                                   /* (automation only: no MOTION_LOCK) */
         if (st <= si && (!pf || st >= ps)) ps = st, pv = e->value, pf = 1;
         if (st > si && (!nf || st < ns)) ns = st, nv = e->value, nf = 1;

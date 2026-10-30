@@ -454,10 +454,11 @@ static void ed_handle(const uint8_t *f, uint32_t n)   /* f: the bytes between F0
         else if (na > 1u) {
             if (a[1] == 1u) { /* (Dah: PLAY ON / OFF gone: always on, the op taken and ignored) */ }
             else if (a[1] == 2u) { load_begin(t, LOAD_PAT); motion_clear(t); load_end(t); }
+            else if ((a[1] == 3u || a[1] == 5u) && a[2] >= NSTEP) rc = 1;   /* (the editor's steps: the first page's) */
             else if (a[1] == 3u) rc = motion_set_event(t, a[2], a[3], (int16_t)ed_rv(a + 4));
             else if (a[1] == 4u && a[2] < NSTEP && motion_param(a[3])) motion_delete_event(t, a[2], a[3]);
             else if (a[1] == 5u) rc = motion_set_lock(t, a[2], a[3], (int16_t)ed_rv(a + 4));
-            else if (a[1] == 6u && (a[2] < NSTEP || a[2] == 127u)) (void)motion_clear_locks(t, a[2]);
+            else if (a[1] == 6u && (a[2] < NSTEP || a[2] == 127u)) (void)motion_clear_locks(t, a[2] == 127u ? MOTION_ALL : a[2]);
             else rc = 1;
             ui.force = 1;
         }

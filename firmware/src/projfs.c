@@ -15,7 +15,8 @@
 #define PFS_IDS 32u
 #define PFS_PAY 64u                                /* the payload's offset in the first sector */
 #define PFS_MAGIC 0x4A525048u                      /* "HPRJ" */
-#define PFS_VER 8u                                 /* (8: eq_mc with its flags; 7: the MASTER's EQ bands (eq_mc) after its chain; 6: the MASTER's DIST IN; 5: the MASTER's COMP IN OUT too; 4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
+#define PFS_VER 9u                                 /* (9: patterns longer than a page: their pages' records in the
+                                                    * heap, PS_PG; written only by a project holding one, else 8; 8: eq_mc with its flags; 7: the MASTER's EQ bands (eq_mc) after its chain; 6: the MASTER's DIST IN; 5: the MASTER's COMP IN OUT too; 4: the MASTER's chain after the SONG; 3: the extras' size after P_COUNT; 2: P_COUNT after it; 1: 114
                                                     * parameters; before 3 the extras were TRKX_V2 bytes) */
 #define PFS_CUR DAH_CUR                           /* the project open, its id (0 none): kept with the settings (favorites.c) */
 _Static_assert(PFS_BASE + PFS_NSECT * ST_SECTOR <= 0xDC000u, "the projects in USR2 and USR3");
@@ -160,10 +161,20 @@ static void pw_flush(void)
 /* the music as it is: version, globals, the selected track, the SONG; then each of the project's tracks: its sound
  * (parameters as stored, engine, preset), its FM6 patch, its extras, its MIDI IN channel, the number of the pattern it
  * plays and that pattern (pstore.c ps_encode); then the heap's patterns of those tracks */
+static uint32_t pfs_ver_w(void)                         /* the version a save writes: 9 with pages, else 8 (as before) */
+{
+    uint32_t at = 0;
+    while (at + 4u <= ps_used) {
+        if (ps_heap[at + 1u] >> 6)
+            return PFS_VER;
+        at += 4u + ps_rlen(at);
+    }
+    return 8u;
+}
 static void pfs_stream(void)
 {
     uint32_t k, i, nt = trk_count(), at = 0;
-    pw_b(PFS_VER);
+    pw_b(pfs_ver_w());
     pw_b(P_COUNT);
     pw_b(sizeof(trkx_t));
     pw_put(song.g, sizeof song.g);
@@ -177,7 +188,7 @@ static void pfs_stream(void)
         uint8_t fm[FM6_PACKED], n2[2];
         uint32_t n;
         for (i = 0; i < P_COUNT; i++)
-            pw_b((uint32_t)(motion_base_value(t, i) + 64));
+            pw_b((uint32_t)(clamp(motion_base_value(t, i), -64, 127) + 64));   /* (LEN over 127: its pattern holds it) */
         pw_b(t->eng_req);
         pw_b(t->preset);
         fm6_pack(fm6_patch[k], fm);
@@ -217,6 +228,8 @@ static int pfs_write(uint32_t id, const char *name)
     uint32_t len, need, s, i, old, from;
     int32_t at;
     pfs_need();
+    for (i = 0; i < trk_count(); i++)
+        (void)pg_sync(i);                               /* (long patterns: their pages' records as they are) */
     memset(&pw, 0, sizeof pw);                          /* the dry run: its size */
     pw.dry = 1; pw.max = PFS_NSECT * ST_SECTOR; pw.sum = 2166136261u;
     pfs_stream();
@@ -249,7 +262,7 @@ static int pfs_write(uint32_t id, const char *name)
     if (pw.err || pw.pos != len)
         return 1;
     memset(&h, 0, sizeof h);
-    h.magic = PFS_MAGIC; h.ver = PFS_VER; h.id = (uint8_t)id; h.nsect = (uint8_t)need; h.ntrk = (uint8_t)trk_count();
+    h.magic = PFS_MAGIC; h.ver = (uint8_t)pfs_ver_w(); h.id = (uint8_t)id; h.nsect = (uint8_t)need; h.ntrk = (uint8_t)trk_count();
     h.gen = pfs.gmax + 1u; h.len = len; h.sum = pw.sum;
     memcpy(h.name, name, str_len(name) < PROJ_NAME_LEN ? str_len(name) : PROJ_NAME_LEN);
     h.hsum = pfs_fnv(2166136261u, &h, sizeof h - 4u);
@@ -352,14 +365,17 @@ static int pfs_read_in(uint32_t id)
         cur_at[k] = pw.pos;
         cur_n[k] = n;
         if (n > PS_PAT_MAX || !pr_get(ps_buf, n)) return 2;
-        if (k == 0u)
+        if (k == 0u) {
             ps_used = 0;
+            pgc_drop(NTRK);
+            pgr_drop_all();
+        }
     }
     while (!pw.err && pw.pos + 4u <= h.len) {           /* the heap's patterns */
         uint8_t r[4];
         if (!pr_get(r, 4)) return 2;
         n = (uint32_t)r[2] | (uint32_t)r[3] << 8;
-        if (r[0] >= nt || !r[1] || r[1] > PS_NUM || n > PS_PAT_MAX || !pr_get(ps_buf, n) || ps_put(r[0], r[1], ps_buf, n))
+        if (r[0] >= nt || !(r[1] & 63u) || (r[1] & 63u) > PS_NUM || n > PS_PAT_MAX || !pr_get(ps_buf, n) || ps_put(r[0], r[1], ps_buf, n))
             return 2;
     }
     if (pw.err) return 2;
@@ -385,6 +401,7 @@ static int pfs_read_in(uint32_t id)
         if (!pw.err && pr_get(ps_buf, cur_n[k]))
             (void)ps_decode(&trk[k], ps_buf, cur_n[k]);
         ps_del(k, ps_cur[k]);                           /* (the one played lives on the track) */
+        pg_motion_load(k);                              /* (its pages' automation) */
     }
     proj_name_get(proj_name, (const uint8_t *)h.name);
     PFS_CUR = (uint8_t)id;

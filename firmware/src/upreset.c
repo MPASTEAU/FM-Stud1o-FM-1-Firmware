@@ -124,6 +124,7 @@ static int up_grid(const up_rec_t *r) { return r->ver == 3u || r->ver == UP_VER_
 static int16_t up_value(const up_rec_t *r, uint32_t k) { return r->ver >= 4u ? (int16_t)r->packed[k] - 64 : r->p[k]; }
 static void up_set_value(up_rec_t *r, uint32_t k, int16_t v)
 {
+    v = (int16_t)(v < -64 ? -64 : v > 127 ? 127 : v);   /* (a LEN over 127: the byte's most; a sound load keeps LEN) */
     if (r->ver >= 4u) r->packed[k] = (uint8_t)(v + 64); else r->p[k] = v;
 }
 /* Legacy PHYS drums map through decoded parameters, not their disk representation. */

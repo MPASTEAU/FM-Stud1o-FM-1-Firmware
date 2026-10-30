@@ -158,7 +158,7 @@ static struct { uint8_t on, zoom, nofollow; int16_t at; } hvw = {0, 1, 0, -1};
 static uint32_t hv_cols(void) { return 8u << (hvw.zoom & 3u); }
 static uint32_t hv_base(const track_t *t, int sel)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), n = hv_cols(), b;
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), n = hv_cols(), b;
     if (song.playing && !hvw.nofollow)
         b = (t->seq_idx % len) / n * n;
     else if (hvw.at >= 0)
@@ -177,12 +177,12 @@ static int32_t pr_note(const step_t *st, uint32_t j)   /* the step's note j (0..
         return j < st->n ? st->note[j] : -1;
     return (st->hit >> (j - 4u)) & 1u ? DRUM_LANE_NOTE[j - 4u] : -1;
 }
-static uint32_t pr_src(const track_t *t, uint32_t si, uint32_t len)   /* the step whose notes sound at si (NSTEP: none) */
+static uint32_t pr_src(const track_t *t, uint32_t si, uint32_t len)   /* the step whose notes sound at si (LEN_MAX: none) */
 {
     uint32_t k;
-    for (k = 0; k < len && seq_steps(t)[si].time == ST_TIE; k++)
+    for (k = 0; k < len && ui_st(t, si)->time == ST_TIE; k++)
         si = (si + len - 1u) % len;
-    return step_on(&seq_steps(t)[si]) ? si : NSTEP;
+    return step_on(ui_st(t, si)) ? si : LEN_MAX;
 }
 /* the rows lit by keys held on the selected track (bit r: row r from the top) */
 static uint32_t pr_held(void)
@@ -208,8 +208,8 @@ static void pr_follow(const track_t *t)
         return;
     for (i = 0; i < nc && base + i < len; i++) {
         uint32_t s = pr_src(t, base + i, len);
-        for (j = 0; s < NSTEP && j < 4u + NLANE; j++) {
-            int32_t n = pr_note(&seq_steps(t)[s], j);
+        for (j = 0; s < LEN_MAX && j < 4u + NLANE; j++) {
+            int32_t n = pr_note(ui_st(t, s), j);
             if (n < 0)
                 continue;
             lo = n < lo ? n : lo;
@@ -221,7 +221,7 @@ static void pr_follow(const track_t *t)
     if (hi - lo <= PR_ROWS - 1)                     /* all fit: centred, then kept while they fit */
         tgt = !snap && !proll.moving && lo >= cur && hi <= cur + PR_ROWS - 1 ? cur : (lo + hi + 1) / 2 - PR_ROWS / 2;
     else {                                            /* too wide: the cursor's (lowest) note in the middle */
-        const step_t *st = &seq_steps(t)[ui.cursor];
+        const step_t *st = ui_st(t, ui.cursor);
         tgt = (st->n ? st->note[0] : (lo + hi) / 2) - PR_ROWS / 2;
     }
     tgt = clamp(tgt, 0, 128 - PR_ROWS);
@@ -272,7 +272,7 @@ static void pr_bars(const step_t *st, int32_t x, int32_t w, uint16_t c, int acc_
 static void graph_roll(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN], base = prv_base(t), nc = prv_cols(), ncol, mask = scale_mask(t), held = pr_held();
-    uint64_t locks = motion_lock_steps(trk_index(t));
+    uint64_t locks = motion_lock_steps(trk_index(t), base);
     int32_t r, ybot, gw, cw = (int32_t)(195u / nc), full = cv_split ? cv_split_h : (int32_t)cv_h;
     pr_rh = full >= 140 ? 6 : 5;                    /* (Dah: the roll to the panel's foot, its ruler over it) */
     pr_rows = (full - PR_Y0 - 4) / pr_rh;
@@ -330,9 +330,9 @@ static void graph_roll(const track_t *t, uint16_t c)
         int32_t x = prv_x(i);
         if (si == ui.cursor)
             cv_frame(x, PR_Y0 - 2, cw + 1, ybot - PR_Y0 + 4, T_TEXT);
-        if ((locks >> si) & 1u)                       /* a parameter lock: a mark over the step */
+        if ((locks >> i) & 1u)                        /* a parameter lock: a mark over the step */
             cv_rect(x + 1, PR_Y0 - 3, cw - 1, 1, T_ACCENT);
-        if (step_detailed(&seq_steps(t)[si]))         /* 1.5.1: CHANCE / RATCH / NUDGE set: a mark over it (DETAIL) */
+        if (step_detailed(ui_st(t, si)))         /* 1.5.1: CHANCE / RATCH / NUDGE set: a mark over it (DETAIL) */
             cv_rect(x + cw / 2 - 2, 12, cw - 1 < 5 ? cw - 1 : 5, 2, c);
     }
     if (song.playing && t->seq_idx >= base && t->seq_idx < base + ncol) {   /* (Dah) the step playing: its column lit,
@@ -342,12 +342,15 @@ static void graph_roll(const track_t *t, uint16_t c)
     }
     for (i = 0; i < ncol; i++) {                      /* the notes */
         uint32_t si = base + i, s = pr_src(t, si, len), nx = (si + 1u) % len;
-        const step_t *st, *ns = &seq_steps(t)[nx];
+        const step_t *st, *ns;
+        step_t nst;
         int32_t x = prv_x(i), y = -10000, w = prv_x(i + 1u) - x;
         uint16_t col;
-        if (s == NSTEP)
+        if (s == LEN_MAX)
             continue;                                 /* a REST, empty, or a TIE after one */
-        st = &seq_steps(t)[s];
+        nst = *ui_st(t, nx);                          /* (a copy: another page read after it would move it) */
+        ns = &nst;
+        st = ui_st(t, s);
         col = s == ui.cursor || si == ui.cursor ? T_ACCENT : c;
         if (s == si) {                                /* (Dah) where it plays: its NUDGE as QUANTIZE leaves it, the bar
                                                          * moved that much of a column (OFF: as played, ON: on the grid) */
@@ -392,7 +395,7 @@ static void graph_grid(const track_t *t, uint16_t c)
     uint32_t base = (song.playing && !prv.nofollow && t->seq_idx < len ? t->seq_idx / 16u : ui.bank) * 16u;   /* (Dah:
                                                          * playing, the page playing, as HOME follows it) */
     uint32_t ph = song.playing && t->seq_idx < len && t->seq_idx / 16u == base / 16u ? t->seq_idx % 16u : 0xFFu;
-    uint64_t locks = motion_lock_steps(trk_index(t));
+    uint64_t locks = motion_lock_steps(trk_index(t), base);
     int32_t full = cv_split ? cv_split_h : (int32_t)cv_h, y0 = GD_RH + 2, hs;
     (void)c;
     gd_lp = clamp((full - y0 - 2) / (int32_t)NLANE, 14, 20);
@@ -408,9 +411,9 @@ static void graph_grid(const track_t *t, uint16_t c)
         for (i = 0; i < 16u && base + i < len; i++) {
             int32_t x = GD_X0 + (int32_t)i * 12;
             cv_rect(x + 5, i % 4u == 0u ? 8 : 10, 1, i % 4u == 0u ? 3 : 1, i % 4u == 0u ? T_MID : T_GRID);
-            if ((locks >> (base + i)) & 1u)
+            if ((locks >> i) & 1u)
                 cv_rect(x + 1, 12, 8, 1, T_ACCENT);
-            if (step_detailed(&seq_steps(t)[base + i]))
+            if (step_detailed(ui_st(t, base + i)))
                 cv_rect(x + 3, 13, 4, 2, T_THEME);
         }
     }
@@ -431,7 +434,7 @@ static void graph_grid(const track_t *t, uint16_t c)
             cv_icon_in(27, ly, 0, lh, 12, ICON_MUTE, T_DIM, row);
         }
         for (i = 0; i < 16u && base + i < len; i++) {
-            const step_t *st = &seq_steps(t)[base + i];
+            const step_t *st = ui_st(t, base + i);
             uint32_t b = 1u << l;
             int32_t x = GD_X0 + (int32_t)i * 12;
             uint16_t under = row;
@@ -503,7 +506,7 @@ static void graph_detail(const track_t *t, uint16_t c)
     }
     for (i = 0; i < ncol; i++) {
         uint32_t si = base + i;
-        const step_t *st = &seq_steps(t)[si];
+        const step_t *st = ui_st(t, si);
         int32_t x = SD_X0 + (int32_t)i * 12;
         uint16_t hi = si == ui.cursor ? T_ACCENT : c;
         if (si == ui.cursor)
@@ -722,13 +725,13 @@ static uint32_t steps_hash(const track_t *t)
 {
     uint32_t h = 2166136261u, i;
     for (i = 0; i < NSTEP; i++) {
-        const step_t *st = &seq_steps(t)[i];
+        const step_t *st = ui_st(t, i);
         h = (h ^ (st->note[0] + st->n * 128u + st->time * 1024u + st->flags * 4096u + st->note[1] * 65536u)) *
             16777619u;
         h = (h ^ (st->hit | (uint32_t)st->acc << 8 | (uint32_t)st->note[2] << 16 | (uint32_t)st->note[3] << 24)) * 16777619u;
         h = (h ^ (st->vel | (uint32_t)st->probability << 8)) * 16777619u;   /* (1.5.1: DETAIL, the marks) */
     }
-    return h;
+    return h ^ pg_rev[trk_index(t) % NTRK] * 2654435761u;   /* (its other pages) */
 }
 
 static uint32_t str_hash(uint32_t h, const char *s)
@@ -1550,8 +1553,7 @@ static uint32_t graph_signature(void)
         h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u + ui.lane * 104723u + ui.bank * 613u +
              drum_mute[trk_index(t) % NPART] * 2654435761u;
         {                                            /* the parameter locks' marks (the roll, the grid) */
-            uint64_t lk = motion_lock_steps(trk_index(t));
-            h = (h ^ (uint32_t)lk ^ (uint32_t)(lk >> 32) * 2654435761u) * 16777619u;
+            h = (h ^ motion_sig(t)) * 16777619u;
         }
         if (detail_on())                             /* DETAIL: QUANTIZE (NUDGE's DIM), the lane named in the accent */
             h = (h ^ (0xD1u + (uint32_t)t->p[P_SQNT] * 31u + (ui.hot_t ? ui.hot_col + 1u : 0u) * 977u)) * 2654435761u;
@@ -2770,7 +2772,7 @@ static int32_t tr_bx(uint32_t i) { return 24 + (int32_t)i * 11 + (int32_t)(i / 4
  * STEP's); else HOME's VIEW (hv_base) */
 static void rk_view(const track_t *t, int sel, uint32_t *p0, uint32_t *ph)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), nc = hv_cols();
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), nc = hv_cols();
     if (song.playing && !hvw.nofollow) {
         uint32_t si = t->seq_idx % len;
         *p0 = si > nc / 2u ? si - nc / 2u : 0u;
@@ -2803,14 +2805,15 @@ static void rack_meter_at(int32_t x0, int32_t rh, int32_t m, uint16_t bg)
  * step's): what falls outside it is clipped. The state the steps carry (a TIE, a chord's lines) is walked from the
  * view's start whatever is drawn */
 typedef struct {
-    const step_t *s;
+    const track_t *t;                                  /* (its steps: ui_st) */
     uint32_t c, len, p0, ph, nc, sel, mute, off;
     int32_t rh;
     uint16_t tc0, tc, bg;
 } rk_row_t;
 static void rk_paint(const rk_row_t *R, int32_t ox)
 {
-    const step_t *s = R->s, *src = 0;
+    const step_t *src = 0;
+    step_t srcv;
     uint32_t i, carry = 0, len = R->len, p0 = R->p0, nc = R->nc;
     int32_t rh = R->rh, sp = RK_SW / (int32_t)nc, cw, top = 2, sh = rh - 4;
     uint16_t bg = R->bg, tc = R->tc, tc0 = R->tc0;
@@ -2831,11 +2834,13 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
         cv_text_in(cx, cyy + CAP_IN(S, 13), 13, &AF_S, d, R->sel ? T_INK : nc0, R->sel ? nc0 : bg);
     }
     for (i = 1; i <= p0; i++) {                        /* a TIE at the view's start: carried from a note before it? */
-        const step_t *q = &s[(p0 + len - i) % len];
-        if (q->time != ST_TIE) {
-            carry = q->time == ST_NOTE && (q->n || q->hit);
-            if (carry && s[p0 % len].time == ST_TIE)
-                src = q;                                /* (Dah: its notes, every one, carried into the view) */
+        step_t q = *ui_st(R->t, (p0 + len - i) % len);
+        if (q.time != ST_TIE) {
+            carry = q.time == ST_NOTE && (q.n || q.hit);
+            if (carry && ui_st(R->t, p0 % len)->time == ST_TIE) {
+                srcv = q;                               /* (Dah: its notes, every one, carried into the view) */
+                src = &srcv;
+            }
             break;
         }
     }
@@ -2845,7 +2850,7 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
         int roll = !drum_track(&trk[R->c % NTRK]);
         cy[0] = top + sh / 2 - 1;
         for (i = 0; roll && i <= nc; i++) {             /* (i == nc: the chord carried in) */
-            const step_t *q = i < nc ? (p0 + i < len ? &s[p0 + i] : 0) : src;
+            const step_t *q = i < nc ? (p0 + i < len ? ui_st(R->t, p0 + i) : 0) : src;
             for (j = 0; q && j < q->n && j < 4; j++) {
                 lo = q->note[j] < lo ? q->note[j] : lo;
                 hi = q->note[j] > hi ? q->note[j] : hi;
@@ -2857,7 +2862,7 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
             ncy = j;
         }
         for (i = 0; i < nc && p0 + i < len; i++) {
-            const step_t *st = &s[p0 + i];
+            const step_t *st = ui_st(R->t, p0 + i);
             int32_t bx = RK_SX + (int32_t)i * RK_SW / (int32_t)nc - ox;
             uint16_t under = bg;
             cw = RK_SX + (int32_t)(i + 1u) * RK_SW / (int32_t)nc - ox - bx - (sp > 3 ? 2 : 1);   /* (Dah: the steps
@@ -2897,11 +2902,11 @@ static void rack_row(uint32_t c)
     uint32_t i, sig, base;
     int32_t y, m;
     char b[16];
-    R.s = seq_steps(t);
+    R.t = t;
     R.c = c;
     R.sel = (int)c == rk_sel();
     R.mute = t->p[P_MUTE] != 0;
-    R.len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+    R.len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX);
     R.nc = hv_cols();
     R.off = (seq_off >> (c % NTRK)) & 1u && !chain.running;   /* (Dah: on no pattern: its steps dim) */
     R.tc0 = ux.trk[c % NTRK];
@@ -3003,7 +3008,7 @@ static void rack_ruler(void)
 {
     static uint32_t rsig;
     const track_t *t = &trk[rk_sel() >= 0 ? (uint32_t)rk_sel() : 0u];
-    uint32_t p0, ph, i, nc = hv_cols(), len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP), sig, vn;
+    uint32_t p0, ph, i, nc = hv_cols(), len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), sig, vn;
     int32_t x0, x1;
     char b[4];
     rk_view(t, 1, &p0, &ph);

@@ -25,7 +25,10 @@
 #define PROJ_NP_W 114u           /* (Dah) the parameters FUN10 / FUNX store: up to P_DKAMT, the eight engine values */
 #define NTRK_V10 4u              /* the tracks of every stored format up to FUN10 (Felucca's) */
 #define NTRK NPART               /* tracks (the formats and the protocol count these): every track is a part */
-#define NSTEP 64
+#define NSTEP 64                 /* the steps of a page: the track's step[] (its pattern's first page), a stored record's */
+#define LEN_MAX 256              /* (long patterns) LEN up to 4 pages of NSTEP: page 0 on the track, the others in the
+                                  * pattern store (pstore.c PS_PG), played through a ring (pgr) the main loop fills */
+#define NPAGE (LEN_MAX / NSTEP)
 #define HALF_FRAMES 128          /* I2S half buffer: 2.9 ms at 44.1 kHz (a key waits 0..1 half, then plays 1 half later) */
 #ifndef FELUCCA_SLICE
 #define FELUCCA_SLICE 1          /* the SLICE engine (eng_slice.c), engine 13; FELUCCA_SLICE=0 builds without it */
@@ -257,8 +260,13 @@ static void step_set_nudge(step_t *s, int32_t v)
  * value holds until another one changes it. One record per (track, step, id), of either kind */
 #define MOTION_LOCK 0x80u
 #define MOTION_ID(e) ((uint32_t)(e)->param & 0x7Fu)
-/* FUN11: eight tracks, so place is 16 bits, track << 6 | step (the same code, tracks 0..7) */
+/* FUN11: eight tracks, so place is 16 bits, track << 6 | step (the same code, tracks 0..7). Long patterns: the page
+ * (step >> 6, 0..3) in bits 9..10, so page 0's places are as before (and code reading place >> 6 as the track, the
+ * editor's, sees page 0 only) */
 typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
+#define MPLACE(k, s) ((uint16_t)(((uint32_t)(s) >> 6) << 9 | (uint32_t)(k) << 6 | ((uint32_t)(s) & 63u)))
+#define MP_TRK(e) (((uint32_t)(e)->place >> 6) & 7u)
+#define MP_STEP(e) (((uint32_t)(e)->place >> 9) << 6 | ((uint32_t)(e)->place & 63u))
 typedef struct { uint8_t count, on, rsv[2]; motion_event_t event[MOTION_MAX]; } motion_store_t;
 _Static_assert(sizeof(motion_store_t) == 516u, "motion layout (FUN11)");
 typedef struct { uint8_t place, param; int8_t value; } motion_event_v10_t;   /* frozen: FUN10's records */
@@ -330,7 +338,7 @@ typedef struct track {
     /* NUDGE (QUANTIZE OFF, seq.c seq_tick): a step plays at its start + its nudge. Latched as a step starts: */
     uint32_t nd_late;            /* the step playing now plays at this seq_pos + 1 (0: it played) */
     uint32_t nd_early;           /* the next step plays early, at this seq_pos + 1 of this one (0: on its start) */
-    uint8_t nd_fired;            /* that step + 1 once it played early (its start then plays nothing), 0 = none */
+    uint16_t nd_fired;           /* that step + 1 once it played early (its start then plays nothing), 0 = none */
     /* live recording of held notes (seq.c rec_hold): the steps they are held into become TIEs */
     uint8_t rh_n, rh_note[4];    /* recorded notes still held, 0 = none */
     uint8_t rh_start;            /* the step they were recorded into */
