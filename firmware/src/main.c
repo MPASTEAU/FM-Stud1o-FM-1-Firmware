@@ -154,7 +154,7 @@ static void demo_auto(track_t *t, uint32_t id, uint32_t s0, uint32_t s1, int32_t
 static void felucca_demo(void) __attribute__((noinline));   /* (its own, built for size: tools/size_fns.py) */
 static void demo_var(uint32_t k, uint32_t v) __attribute__((noinline));
 #ifndef DAH_DEMO_SONG
-#define DAH_DEMO_SONG 7                         /* (Dah) the power-on song: 7 the showcase, 6 after Zimmer's Time, 5 the dark one, 4 the long chords, 3 the slow one, after Archive, 2 the deep house, 1 the
+#define DAH_DEMO_SONG 8                         /* (Dah) the power-on song: 8 the lo-fi one, 7 the showcase, 6 after Zimmer's Time, 5 the dark one, 4 the long chords, 3 the slow one, after Archive, 2 the deep house, 1 the
                                                  * trip-hop (kept), 0 the FX test */
 #endif
 #if DAH_DEMO_SONG == 1
@@ -1503,6 +1503,225 @@ static void felucca_demo(void)
     chain_defaults(&chain_config);
     chain_config.count = 15;
     for (i = 0; i < 15u; i++) {
+        for (k = 0; k < NTRK; k++)
+            chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
+        chain_config.row[i].repeat = SEC[i][8];
+    }
+}
+#elif DAH_DEMO_SONG == 8
+/* (Dah) the lo-fi one: 84 BPM in 1/16, swung (SWG 38: ~57 %), C major, jazzy (A: Dm9 G13 Cmaj9 Am9, the ii-V-I; B: Fmaj9
+ * Em7-A7 Dm9 G9sus-G13), rootless voicings over the bass's roots; nine sections, eleven times four bars, from the SONG (2:06): the
+ * intro (the piano's filter opening), A, A with the hook, B, A, the break (the EP and the bass, the vinyl), B, A twice, the outro
+ * (the filter closing; the song goes round). Warm: every track a LOW PASS, the reverb a dark ROOM, the delay 1/8D:
+ *   track 1  DRUM DEEP KIT, the lazy kick (the SIDECHAIN's source, gentle)   track 2  DRUM KIT, the snare, the rim, the
+ *   hats (velocities apart, the ghosts on the swung sixteenths)   track 3  ANALOG SUB BASS, round, walking into each root
+ *   track 4  SAMPLE PIANO, the chords, crushed (BITS, DRV, a tape wow on the LFO; CHRD COLOR, VOIC AUTO on the keys; its
+ *   CUT automated)   track 5  FM6 TINE EP, the stabs, the break's chords   track 6  LOFI, the hook (a sine in the wave
+ *   RAM, CRSH, VIB)   track 7  GRAIN FROZEN on the piano, the texture (its POS drifting)   track 8  NOISE DUST, the vinyl */
+static const uint8_t LF_RT[2][4] = {{38, 31, 36, 33}, {29, 28, 38, 31}};   /* the roots: D G C A / F E D G */
+static const uint8_t LF_CH[2][4][4] = {
+    {{53, 57, 60, 64}, {53, 57, 59, 64}, {52, 55, 59, 62}, {55, 59, 60, 64}},   /* Dm9 G13 Cmaj9 Am9 */
+    {{52, 55, 57, 60}, {55, 59, 62, 64}, {53, 57, 60, 64}, {53, 57, 60, 62}}};  /* Fmaj9 Em7 Dm9 G9sus */
+static const uint8_t LF_CH2[2][3] = {{55, 61, 65}, {53, 57, 59}};             /* half bars: A7(b13), G13's shell */
+static const uint8_t LF_HK[2][20][3] = {       /* the hook (A), its answer (B): step, note, length (0: the end) */
+    {{2, 69, 2}, {4, 72, 2}, {6, 76, 4}, {10, 74, 2}, {12, 72, 4}, {18, 71, 2}, {20, 74, 2}, {22, 76, 6}, {28, 74, 2},
+     {30, 71, 2}, {34, 76, 2}, {36, 74, 2}, {38, 71, 6}, {44, 67, 4}, {50, 69, 2}, {52, 72, 2}, {54, 76, 2},
+     {56, 79, 4}, {60, 76, 4}, {0, 0, 0}},
+    {{2, 76, 2}, {4, 79, 4}, {8, 76, 2}, {10, 72, 6}, {18, 71, 2}, {20, 74, 4}, {24, 73, 4}, {28, 69, 4}, {34, 77, 2},
+     {36, 76, 2}, {38, 74, 2}, {40, 72, 4}, {44, 69, 4}, {50, 71, 2}, {52, 74, 2}, {54, 76, 6}, {60, 74, 4}, {0, 0, 0}}};
+static void demo_var(uint32_t k, uint32_t v)
+{
+    static const uint8_t HV[16] = {72, 22, 46, 30, 64, 20, 42, 34, 70, 22, 48, 30, 60, 20, 40, 36};   /* the hats */
+    uint32_t b, i, pr = k == 4u ? v == 3u : (k == 2u || k == 5u || k == 6u) ? v - 1u : (k == 3u && v == 2u);
+    track_t *t = &trk[k];
+    if (k == 5u) {                                                          /* the hook, its answer */
+        for (i = 0; LF_HK[pr][i][2]; i++) {
+            demo_note(&t->step[LF_HK[pr][i][0]], LF_HK[pr][i][1], i % 4u ? 84 : 100);
+            demo_hold(t, LF_HK[pr][i][0], LF_HK[pr][i][2]);
+        }
+        return;
+    }
+    if (k == 7u) {                                                          /* the vinyl, all along */
+        static const uint8_t N[1] = {60};
+        dm_chord(t, 0, 64, N, 1, 80);
+        return;
+    }
+    for (b = 0; b < 4u; b++) {
+        uint32_t s0 = b * 16u, r = LF_RT[pr][b], nb = LF_RT[pr][(b + 1u) & 3u];
+        const uint8_t *c = LF_CH[pr][b];
+        switch (k) {
+        case 0:                                                             /* the kick: 1, the swung "a" of 2, 3+ */
+            demo_hit(t, s0, 1u << 0, 112);
+            demo_hit(t, s0 + 7u, 1u << 0, 70);
+            demo_hit(t, s0 + 10u, 1u << 0, 96);
+            if (v == 2u && (b & 1u))
+                demo_hit(t, s0 + 3u, 1u << 0, 60);
+            break;
+        case 1:                                                             /* the kit */
+            for (i = 0; i < 16u; i++)
+                if (!(i & 1u) || (i & 3u) == 3u)                           /* eighths, the swung ghosts */
+                    demo_hit(t, s0 + i, 1u << 3, HV[i] - (v == 3u ? 10u : 0u) + (b == 3u && i > 11u ? 8u : 0u));
+            if (v == 3u) {                                                  /* the intro, the break: a rim on 3 */
+                demo_hit(t, s0 + 12u, 1u << 6, 70);
+                break;
+            }
+            demo_hit(t, s0 + 4u, 1u << 1, 92);
+            demo_hit(t, s0 + 12u, 1u << 1, 100);
+            demo_hit(t, s0 + 15u, 1u << 6, 34);                             /* a ghost rim */
+            if (v == 2u) {
+                demo_hit(t, s0 + 14u, 1u << 4, 52);                         /* the open hat, a drag */
+                if (b == 3u) { demo_hit(t, s0 + 13u, 1u << 1, 40); demo_hit(t, s0 + 15u, 1u << 1, 54); }
+            }
+            break;
+        case 2:                                                             /* the bass: the root, its fifth, the root
+                                                                             * again, a step into the next */
+            demo_note(&t->step[s0], r, 108); demo_hold(t, s0, 5);
+            demo_note(&t->step[s0 + 6u], r + 7u, 84); demo_hold(t, s0 + 6u, 2);
+            demo_note(&t->step[s0 + 10u], r, 96); demo_hold(t, s0 + 10u, 3);
+            demo_note(&t->step[s0 + 14u], nb + (nb > r ? -1 : 1), 80); demo_hold(t, s0 + 14u, 2);
+            break;
+        case 3:                                                             /* the piano */
+            if (v >= 3u) {                                                  /* intro, outro: held */
+                dm_bar(t, b, c, 4, 104);
+                break;
+            }
+            if (pr && b == 1u) {                                            /* Em7, then A7 */
+                dm_chord(t, s0, 7, c, 4, 82);
+                dm_chord(t, s0 + 10u, 6, LF_CH2[0], 3, 70);
+                break;
+            }
+            dm_chord(t, s0, 7, c, 4, 84);
+            if (pr && b == 3u)
+                dm_chord(t, s0 + 10u, 6, LF_CH2[1], 3, 66);
+            else
+                dm_chord(t, s0 + 10u, 5, c, 4, 62);
+            break;
+        case 4:                                                             /* the EP: shells on the offbeats (1 A, 3 B); 2 held */
+            if (v == 2u) {
+                static const uint8_t K[4][3] = {{64, 67, 69}, {62, 67, 71}, {60, 64, 69}, {57, 60, 62}};   /* F E D G */
+                dm_bar(t, b, K[b], 3, 112);
+                break;
+            }
+            {
+                const uint8_t sh[2] = {(uint8_t)(c[1] + 12u), (uint8_t)(c[3] + 12u)};
+                dm_chord(t, s0 + 6u, 2, sh, 2, 58);
+                dm_chord(t, s0 + 14u, 2, sh, 2, 50);
+            }
+            break;
+        default: {                                                          /* the texture: two tones a bar */
+            const uint8_t two[2] = {c[1], c[3]};
+            dm_chord(t, s0, 16, two, 2, 70);
+            break;
+        }
+        }
+    }
+    if (k == 3u && v == 3u)                                                 /* the intro: the piano's CUT opening */
+        demo_auto(t, P_E4, 0, 56, 30, 100);
+    if (k == 3u && v == 4u)                                                 /* the outro: closing */
+        demo_auto(t, P_E4, 0, 56, 100, 26);
+    if (k == 6u && v == 2u)                                                 /* the texture: its POS drifting */
+        demo_auto(t, P_E1, 0, 56, 30, 90);
+}
+static void felucca_demo(void)
+{
+    static const uint8_t SEC[11][9] = {       /* each track's pattern (0 silent), the repeats */
+        {1, 3, 0, 3, 0, 0, 1, 1, 1},          /* the intro: the piano's filter opening, the kick, the rim, the texture */
+        {1, 1, 1, 1, 0, 0, 1, 1, 1},          /* A */
+        {1, 1, 1, 1, 1, 1, 1, 1, 2},          /* A, the hook */
+        {2, 2, 2, 2, 3, 2, 2, 1, 1},          /* B */
+        {1, 1, 1, 1, 1, 1, 1, 1, 1},          /* A */
+        {0, 3, 2, 0, 2, 0, 2, 1, 1},          /* the break: the EP and the bass, the vinyl */
+        {2, 2, 2, 2, 3, 2, 2, 1, 1},          /* B */
+        {1, 2, 1, 1, 1, 1, 1, 1, 2},          /* A twice */
+        {1, 3, 0, 4, 0, 0, 1, 1, 1},          /* the outro: the filter closing */
+    };
+    static const uint8_t NV[8] = {2, 3, 2, 4, 3, 2, 2, 1};
+    static const uint8_t SND[8][2] = {{ENGI_DRUM, 1}, {ENGI_DRUM, 0}, {0, 7}, {ENGI_SAMPLE, 0}, {ENGI_FM6, 0}, {3, 3},
+                                      {8, 2}, {11, 1}};
+    static const int8_t MIX[8][9] = {         /* LEVEL, PAN, WIDTH, CHORUS, DELAY, REVERB, the DUCK's depth, the
+                                               * COMPRESSOR's, DIST */
+        {104, 0, 0, 0, 0, 8, 0, 40, 0},       /* kick */
+        {127, 6, 0, 0, 0, 30, 0, 50, 0},      /* kit */
+        {98, 0, 0, 0, 0, 0, 40, 50, 6},       /* bass */
+        {108, -8, 60, 0, 0, 56, 26, 30, 0},  /* piano */
+        {104, 20, 40, 40, 30, 60, 30, 0, 0},  /* EP */
+        {92, -14, 0, 20, 56, 50, 0, 30, 0},   /* lofi */
+        {106, 10, 110, 0, 20, 90, 40, 0, 0},  /* texture */
+        {96, 0, 90, 0, 0, 10, 0, 0, 0},       /* vinyl */
+    };
+    static const int8_t EQB[9][4][3] = {      /* the four filters: TYPE (EQT_*), FREQ, SLOPE or GAIN */
+        {{EQT_HP, 4, 0}, {EQT_LS, 18, 6}, {EQT_BELL, 46, -12}, {EQT_LP, 96, 0}},        /* kick: round, no click */
+        {{EQT_HP, 30, 0}, {EQT_BELL, 57, 0}, {EQT_BELL, 85, -2}, {EQT_LP, 102, 0}},    /* kit: dusty */
+        {{EQT_HP, 3, 0}, {EQT_LS, 20, 8}, {EQT_BELL, 57, -10}, {EQT_LP, 80, 0}},        /* bass: round */
+        {{EQT_HP, 26, 0}, {EQT_BELL, 46, -6}, {EQT_BELL, 72, 4}, {EQT_LP, 98, 0}},      /* piano: warm */
+        {{EQT_HP, 40, 0}, {EQT_BELL, 57, -6}, {EQT_BELL, 85, 3}, {EQT_LP, 100, 0}},     /* EP */
+        {{EQT_HP, 46, 0}, {EQT_BELL, 79, 6}, {EQT_BELL, 99, 0}, {EQT_LP, 96, -1}},      /* lofi: soft */
+        {{EQT_HP, 50, 0}, {EQT_BELL, 66, -4}, {EQT_BELL, 99, 0}, {EQT_LP, 96, 0}},      /* texture */
+        {{EQT_HP, 70, 1}, {EQT_BELL, 99, 4}, {EQT_BELL, 85, 0}, {EQT_LP, 110, 0}},      /* vinyl: the crackle only */
+        {{EQT_HP, 4, 0}, {EQT_LS, 22, 2}, {EQT_BELL, 66, -2}, {EQT_LP, 108, 0}},        /* the MASTER: a soft top */
+    };
+    static const int16_t DS[][3] = {          /* track, parameter, value */
+        {0, P_E2, 46}, {0, P_E3, 70},                                       /* the kick: darker, longer */
+        {1, P_E2, 48}, {1, P_E3, 60}, {1, P_SSWING, 8},      /* the kit: dull, a hair more swing */
+        {2, P_VOICE, V_MONO}, {2, P_GLIDE, 12}, {2, P_E4, 34},
+        {3, P_E2, 46}, {3, P_E4, 96}, {3, P_E6, 24}, {3, P_REL, 64},       /* the piano: BITS, CUT, DRV */
+        {3, P_LRATE, 48}, {3, P_LD_PIT, 2}, {3, P_CHRD, CH_COLOR}, {3, P_VOIC, VC_AUTO},
+        {4, P_REL, 66},
+        {5, P_VOICE, V_MONO}, {5, P_GLIDE, 14}, {5, P_E1, 4}, {5, P_E2, 28}, {5, P_E3, 36}, {5, P_E5, 24},
+        {5, P_E7, 72}, {5, P_ATK, 8}, {5, P_REL, 50},
+        {6, P_E0, 0}, {6, P_E3, 90}, {6, P_ATK, 96}, {6, P_REL, 100},
+        {7, P_E1, 40}, {7, P_E2, 100}, {7, P_E5, 92}, {7, P_ATK, 20}, {7, P_REL, 40},
+    };
+    uint32_t i, j, k, v;
+    song.g[G_BPM] = 84;
+    song.g[G_SWING] = 38;
+    song.g[G_RTYPE] = 0; song.g[G_RSIZE] = 76; song.g[G_RDAMP] = 96;
+    song.g[G_DFDBK] = 40; song.g[G_DTIME] = 10; song.g[G_DCOLOR] = 30; song.g[G_DMIX] = 70;   /* (1/8D) */
+    song.g[G_CRATE] = 10; song.g[G_CDEPTH] = 60;
+    song.g[G_MCOMP] = 40; song.g[G_MREL] = 70;
+    song.ntrk = 8;
+    for (i = 0; i < 9u; i++) {
+        eqc_t *c = i < 8u ? &trkx[i].eq : &eq_mc;
+        int16_t *p = i < 8u ? trk[i].p : mtrk.p;
+        if (i < 8u) {
+            track_t *t = &trk[i];
+            const int8_t *m = MIX[i];
+            track_defaults_steps(t);
+            t->p[P_SLEN] = 64;
+            t->p[P_SDIV] = 2;
+            demo_sound(t, SND[i][0], SND[i][1]);
+            t->p[P_ROOT] = 0; t->p[P_SCALE] = 1;                            /* C major */
+            t->p[P_LEVEL] = (uint8_t)m[0]; t->p[P_PAN] = m[1]; t->p[P_SPRD] = m[2];
+            t->p[P_CHOR] = m[3]; t->p[P_DLY] = m[4]; t->p[P_REV] = m[5];
+            if (m[6]) {                                                     /* the SIDECHAIN on the kick */
+                t->p[P_DKSRC] = 1; t->p[P_DKAMT] = m[6]; t->p[P_DKREL] = -8;
+            }
+            trkx[i].rsv0 = (uint8_t)m[7];
+            trkx[i].rsv1 = 60;
+            t->p[P_DIST] = m[8];
+            trkx[i].curve = 1;                                              /* (the automation: RAMP) */
+        }
+        for (j = 0; j < 4u; j++) {
+            c->t[j] = (uint8_t)EQB[i][j][0];
+            p[EQ_FID[j]] = EQB[i][j][1];
+            p[EQ_SID[j]] = EQB[i][j][2];
+        }
+        c->n = 4; c->o = 0xE4; c->f = EQF_NEW | EQF_4 | EQF_IN;
+    }
+    for (i = 0; i < sizeof DS / sizeof DS[0]; i++)
+        trk[DS[i][0]].p[DS[i][1]] = DS[i][2];
+    trkx[3].home[2] = P_E2 + 1;                                             /* (the piano's HOME: its BITS on KNOB 3) */
+    for (k = 0; k < 8u; k++)
+        for (v = 1; v <= NV[k]; v++) {
+            if (v > 1u)
+                (void)pattern_new(k, 0);
+            demo_var(k, v);
+        }
+    for (k = 0; k < 8u; k++)
+        (void)pattern_go(k, 1);
+    chain_defaults(&chain_config);
+    chain_config.count = 9;
+    for (i = 0; i < 9u; i++) {
         for (k = 0; k < NTRK; k++)
             chain_config.row[i].slot[k] = SEC[i][k] ? SEC[i][k] : (uint8_t)CHAIN_SILENT;
         chain_config.row[i].repeat = SEC[i][8];
