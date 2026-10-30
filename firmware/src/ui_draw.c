@@ -475,7 +475,7 @@ static void head_home(void)
                          (uint32_t)song.rec * 977u + tc * 13u +
                          (ui.msg_t && (song.playing || chain_busy() || !msg_win()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
-                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
+                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u + (uint32_t)vcap * 131u +
                          (ui.home ? 0u : ui.page + 1u) * 3141592653u);
     if (!ui.force && sig == ui.head_sig)
         return;
@@ -500,14 +500,14 @@ static void head_home(void)
         int32_t w;
         fmt_int(lv, (int32_t)hld.voices);
         str_cpy(lv + str_len(lv), "/", 2);
-        fmt_int(lv + str_len(lv), NVOICE);
+        fmt_int(lv + str_len(lv), vcap);                /* (Dah: the budget the CPU leaves now) */
         fmt_int(lc, (int32_t)hld.cpu);
         str_cpy(lc + str_len(lc), "%", 2);
         w = text_w(&AF_S, lv);
         if (xr - text_w(&AF_S, lc) - 6 - w - (song.rec ? 14 : 0) >= lw) {
             GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
             xr = cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG) - 6;
-            cv_text(xr - w, ty, &AF_S, lv, hld.voices >= NVOICE ? T_ACCENT : T_MID);
+            cv_text(xr - w, ty, &AF_S, lv, hld.voices >= vcap ? T_ACCENT : T_MID);
             xr -= w + 8;
         }
     }

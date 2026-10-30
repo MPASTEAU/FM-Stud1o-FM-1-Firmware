@@ -158,6 +158,9 @@ static uint32_t trk_vmode(const track_t *t)
 }
 
 /* ------------------------------------------------- the shared voice budget --- */
+/* (Dah) the budget: no fixed count, the CPU's. Each half buffer (audio.c vcap_update) it is set to the voices that
+ * fit in 70 % of a half at the cost the ones sounding take now, never under NVOICE nor over every part's own */
+static volatile uint8_t vcap = NVOICE;
 static uint32_t voices_busy(void)                       /* sounding voices of all parts (not the fading ones) */
 {
     uint32_t p, i, n = 0;
@@ -227,7 +230,7 @@ static int voice_room(track_t *t, int soft)
 {
     track_t *vp = 0;
     uint32_t k;
-    if (voices_busy() < NVOICE)
+    if (voices_busy() < vcap)
         return 1;
     k = voice_victim(t, soft, &vp);
     if (k == NVOICE)
@@ -266,7 +269,7 @@ static voice_t *voice_alloc(track_t *t, uint32_t note)
             return voice_reuse(t, &t->v[i]);
         nfree += !t->v[i].active;
     }
-    if (nfree && voices_busy() >= NVOICE) {
+    if (nfree && voices_busy() >= vcap) {
         track_t *vp = 0;
         uint32_t k = voice_victim(t, 0, &vp);
         if (k < np && vp == t)
@@ -464,7 +467,7 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         voice_start(t, v, note, vel, t->p[P_GLIDE] != 0 && !ENGINES[t->engine]->oneshot);
         if (t->engine == ENGI_DRUM) {                   /* DESIGN's STACK: the lane strikes another with it */
             uint32_t n2 = drum_stack_note(t, note);
-            if (n2 && voices_busy() < NVOICE) {         /* (Dah: the budget full: no stack, it would take the hit
+            if (n2 && voices_busy() < vcap) {         /* (Dah: the budget full: no stack, it would take the hit
                                                          * just started) */
                 v = voice_alloc(t, n2);
                 v->fine = 0;
