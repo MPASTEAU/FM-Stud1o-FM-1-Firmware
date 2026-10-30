@@ -1123,6 +1123,8 @@ static void layer_seq(void)
         if (k == 3) {
             GFX_HOOK_ALIGN(0, y, 0, y + 21, AL_V, "seq layer row on its middle");
             cv_icon_in(16, y, 0, 21, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
+            if (sel)                                    /* (Dah: KNOB 2 asks it: its keycap at the right) */
+                cv_keycap(224 - kc_w(KC_K2), y + (21 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
         } else {                                        /* (the value at the right, KNOB 2's keycap before it: picked) */
             const char *v = seq_val((uint32_t)k, vb);
             int32_t x = 224 - (int32_t)text_w(&AF_M, v);
