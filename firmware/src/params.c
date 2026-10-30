@@ -84,6 +84,12 @@ static const char *const N_IBITS[] = {"1", "2", "3", "4", "5", "6", "7", "8", "9
                                       "16", 0};
 static const char *const N_IRATE[] = {"689", "919", "1.1k", "1.4k", "1.8k", "2.2k", "2.8k", "3.7k", "4.4k", "5.5k",
                                       "7.4k", "8.8k", "11k", "15k", "22k", "44k", 0};
+/* modulation matrix (mod.c): sources, destinations (E1..E8 = P_E0..P_E7: shown with the engine's labels).
+ * Append-only (stored values keep their meaning): S&H SLEW and DEPTH (#132) came after EXPR and E8; VEL and TIME
+ * (1.5.6, #213: at the note) after DEPTH */
+static const char *const N_MSRC[] = {"OFF", "LFO", "ENV", "VEL", "KEY", "RAND", "MODW", "AT", "EXPR", "S&H", "SLEW"};
+static const char *const N_MDST[] = {"OFF", "PITCH", "CUT", "SHP", "AMP", "PAN", "DIST", "CHO", "DLY", "REV", "RATE",
+                                     "VIB", "E1", "E2", "E3", "E4", "E5", "E6", "E7", "E8", "DEPTH", "VEL", "TIME"};
 static const char *const N_ENGNAME[] = {"ANALOG", FELUCCA_FM4 ? "DIGITAL" : "-", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
                                              "DRUM", "NOISE", "FM6",
 #if FELUCCA_SLICE
@@ -147,9 +153,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_SLPAT] = PD("PAT", F_INT, 1, 16, 1),        /* SL_PAT[] */
     [P_SLRATE] = PE("RATE", N_SLDIV, 1),
     [P_SLDEPTH] = PD("DEPTH", F_PCT, 0, 127, 127),
-/* ids 49..60: the modulation matrix's SRC DST AMT x 4 (removed): inert, on no page, read by nothing; stored in
- * projects and presets as before (their ranges clamp an old file's values), so the ids after them keep their place */
-#define MSLOT(k) [P_M##k##SRC] = PD("SRC" #k, F_INT, 0, 10, 0), [P_M##k##DST] = PD("DST" #k, F_INT, 0, 22, 0), \
+#define MSLOT(k) [P_M##k##SRC] = PE("SRC" #k, N_MSRC, 0), [P_M##k##DST] = PE("DST" #k, N_MDST, 0), \
                  [P_M##k##AMT] = PD("AMT" #k, F_BIPCT, -64, 63, 0)
     MSLOT(1), MSLOT(2), MSLOT(3), MSLOT(4),
 #undef MSLOT
@@ -477,7 +481,7 @@ enum { FAM_HOME, FAM_ENV, FAM_LFO, FAM_FX, FAM_SCL, FAM_EDIT, FAM_GLO, FAM_SAVE,
        FAM_COUNT };
 enum { SC_TRACK, SC_GLOBAL, SC_ENGINE, SC_STEP, SC_TRK };   /* SC_TRK: the TRACKS page (ui_input.c tracks_edit) */
 enum { GR_NONE, GR_ADSR, GR_LFO, GR_STEPS, GR_ARP, GR_SCALE, GR_FX, GR_ROLL, GR_SLOTS, GR_USER, GR_TRK,
-       GR_SLCR, GR_SONG, GR_CHORD, GR_SLICES, GR_EVENTS,
+       GR_SLCR, GR_MOD, GR_SONG, GR_CHORD, GR_SLICES, GR_EVENTS,
        GR_FMOP, GR_FMOP2, GR_FMENV, GR_INS, GR_DLANE, GR_DLANE2, GR_DSYN, GR_DSYN2, GR_DSYN3, GR_DSYN4, GR_DSYN5,
        GR_LDRAW, GR_FILE, GR_PATTERN };   /* (GR_PATTERN: a track's patterns, ui_pattern.c) */   /* (HA HA HE HU: LFO DRAW, ui_lfodraw.c; FILE, the projects: projfs.c) */   /* (GR_DLANE..: DRUM's lane
                                  * pages, ui_drumlane.c; GR_DSYN..: a SYN lane's layer set) */   /* (GR_STEPS: SEQ TOOLS' knobs; GR_FMOP..: FM6's operator pages, ui_fm6op.c) */
@@ -497,6 +501,7 @@ static const page_t PAGES[] = {
     {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
     {"LFO DRAW", FAM_LFO, SC_TRACK, GR_LDRAW, {0xFF, 0xFF, 0xFF, 0xFF}},   /* (HA HA HE HU) POINT VALUE SHAPE SMOOTH */
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
+    {"MOD", FAM_LFO, SC_TRACK, GR_MOD, {0xFF, P_M1SRC, P_M1DST, P_M1AMT}},   /* KNOB 1: the slot (mod_ui_slot) */
     /* (Dah) FX: CHAIN first, its effects as a list (KNOB 1 the row, KNOB 2 its type, KNOB 3 moves it; OCT+ its page, or
      * adds one; REC takes it out); then a page each, its own picture live (ui_graph_fx.c). (FX's overview page and its
      * assignable knobs, P_FXK1..4, are gone: the parameters stay, their default the STEP lanes' DST CHO DLY REV) */
@@ -579,6 +584,7 @@ static uint32_t page_id(const page_t *pg, uint32_t c)
 {
     return pg->graph == GR_FX && pg->scope == SC_TRACK ? fx_knob_id(TSEL, c) : eq_page(pg) ? eq_ui_id(c) : pg->id[c & 3u];
 }
+static uint8_t mod_ui_slot;      /* the MOD page: the matrix slot (0..3) KNOB 2..4 edit */
 
 static track_t *fx_tsel(void);                         /* (Dah) ui.c: FX's track, or the MASTER (fx.c mtrk) */
 static uint8_t mx_master;                               /* (ui.c: the MASTER picked) */
@@ -622,6 +628,8 @@ static const param_desc_t *page_desc(const page_t *pg, uint32_t slot, int16_t **
         *valp = 0;
         return 0;
     }
+    if (pg->graph == GR_MOD)                          /* SRC DST AMT of the slot shown */
+        id += 3u * mod_ui_slot;
     if (pg->graph == GR_FX)                           /* (Dah) FX: what its knobs drive */
         id = fx_knob_id(TSEL, slot);
     *valp = &ft->p[id];

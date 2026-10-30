@@ -707,6 +707,38 @@ static void graph_slicer(const track_t *t, uint16_t c, int32_t pw)   /* (Dah: pw
             cv_rect(x, 84, bw, 2, T_ACCENT);
     }
 }
+/* MOD page: the four slots as rows "1 LFO > CUT +50%" (M, a list's rows: the source to x 78, the arrow 84..98, the
+ * destination of up to 5 characters 106..160, the amount from 172), the one KNOB 2..4 edit selected, slots that do
+ * nothing (SRC, DST or AMT at 0) dim */
+static void graph_mod(const track_t *t, uint16_t c)
+{
+    uint32_t k;
+    for (k = 0; k < NMSLOT; k++) {
+        const int16_t *p = &t->p[P_M1SRC + 3u * k];
+        int32_t y = 14 + (int32_t)k * 24, on = p[0] && p[1] && p[2], sel = k == mod_ui_slot, x;
+        uint16_t bg = sel ? T_THEME : T_SURF, col = sel ? T_INK : on ? c : T_DIM;
+        char b[8];
+        const char *unit;
+        if (sel)
+            cv_rrect(6, y, 228, 17, 4, T_THEME, T_SURF);
+        b[0] = (char)('1' + k);
+        b[1] = 0;
+        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
+        cv_text_on(14, y + CAP_IN(M, 17), &AF_M, b, sel ? T_INK : T_MID, bg);
+        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
+        cv_text_on(30, y + CAP_IN(M, 17), &AF_M, N_MSRC[clamp(p[0], 0, MS_N - 1)], col, bg);
+        cv_line(84, y + 8, 98, y + 8, col);              /* an arrow */
+        cv_line(94, y + 4, 98, y + 8, col);
+        cv_line(94, y + 12, 98, y + 8, col);
+        cv_text_on(106, y + CAP_IN(M, 17), &AF_M, mod_dst_name(t, p[1]), col, bg);
+        param_format(&TP[P_M1AMT], p[2], b, &unit);
+        GFX_HOOK_ALIGN(0, y, 0, y + 17, AL_V, "mod row text centred up/down");
+        x = cv_text_on(172, y + CAP_IN(M, 17), &AF_M, b, col, bg) + 2;
+        GFX_HOOK_ALIGN(0, 0, 0, y + CAP_IN(M, 17) + AF_M.asc, AL_B, "mod row unit on its amount's baseline");
+        cv_text_on(x, y + CAP_IN(M, 17) + AF_M.asc - AF_S.asc, &AF_S, unit, sel ? T_INK : T_DIM, bg);   /* (a unit: S) */
+    }
+}
+
 static uint32_t steps_hash(const track_t *t)
 {
     uint32_t h = 2166136261u, i;
@@ -1476,6 +1508,8 @@ static uint32_t graph_signature(void)
             h ^= (ui_prefs & PREF_LARGE) ? 0x2545F491u : 0u;
         }
     }
+    if (pg->graph == GR_MOD)
+        h ^= (mod_ui_slot + 1u) * 40503u;
     if (pg->graph == GR_SLCR && t->p[P_SLCR])        /* the SLICER's step playing */
         h ^= (sl[song.sel].idx + 1u) * 2654435761u;
     if (pg->graph == GR_PATTERN)                     /* (HA HA HE HU) the track's patterns, the one picked, the memory */
@@ -3632,6 +3666,10 @@ lists:
                 graph_insert(t, c, FXV_LW);
                 fxv_split(t, DV_INS, c, "DRY", "WET", 0);
             }
+            break;
+        case GR_MOD:
+            cv_oy = 0;
+            graph_mod(t, c);
             break;
         case GR_SLOTS:
             cv_oy = 0;

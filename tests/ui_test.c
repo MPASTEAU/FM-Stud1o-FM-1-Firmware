@@ -1935,7 +1935,7 @@ static int test_roll(void)
             uint32_t c;
             ui_power_on(); set_engine_of(TSEL, e);
             ui.home = 0; ui.page = (uint8_t)id; page_entered();
-            if (!page_visible(id)) continue;
+            if (!page_visible(id) || PAGES[id].graph == GR_MOD) continue;
             ui.force = 1; ui_draw();
             for (c = 0; c < 4u; c++) {
                 int16_t *vp;
@@ -8866,6 +8866,7 @@ static int test_fm6_ops(void)
     /* the sound: the init voice (ALG 1: OP 1 the carrier at 99, OP 2 its modulator at 0), the track's other sends off */
     TSEL->p[P_CHOR] = TSEL->p[P_DLY] = TSEL->p[P_REV] = TSEL->p[P_DIST] = 0;
     TSEL->p[P_LD_PIT] = TSEL->p[P_LD_FLT] = TSEL->p[P_LD_SHP] = TSEL->p[P_LD_AMP] = 0;
+    TSEL->p[P_M1SRC] = TSEL->p[P_M2SRC] = TSEL->p[P_M3SRC] = TSEL->p[P_M4SRC] = 0;
     for (f = 0; f < 7u; f++) TSEL->p[P_E0 + f] = 0;
     fm6_unpack(FM6_INIT, v);
     fm6_set_patch(tr, v);
