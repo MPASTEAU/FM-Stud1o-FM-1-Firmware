@@ -60,7 +60,7 @@ static const layer_t LAYERS[LAYER_N] = {
     {B_FX, LK_HOLD, FAM_HOME, "[FX] HOLD", {{KC_KEYS, "EFFECTS"}, {KC_K14, "MACROS"}, {0, 0}}},   /* (LET GO: the header's HOLD) */
     {B_GLO, LK_SET, FAM_HOME, "[GLO] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah:
                                                          * GLO + ALGORITHM the pattern, said) */
-    {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
+    {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {0, 0}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {0, 0}}},
     {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah: the band OCT- alone) */
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_OCTDN, "(HOLD) RESET SETTINGS"}}},   /* (Dah: as SEQ: OCT- alone; KNOB 1 the rows, 2 a value) */
@@ -1084,12 +1084,13 @@ static void layer_glo(void)                             /* (Dah) as SEQ's: the r
 static void layer_scl(void)                             /* KNOB 2's scales, 4 x 4, the one now selected */
 {
     uint32_t i, sc = (uint32_t)TSEL->p[P_SCALE];
+    int32_t p = ((int32_t)graph_h() - 4) / 4, h = p - 4;   /* (Dah: the four rows fill the panel to its foot) */
     for (i = 0; i < 16u && i <= (uint32_t)TP[P_SCALE].max; i++) {
-        int32_t x = LC_X(i % 4u), y = 4 + 29 * (int32_t)(i / 4u);
+        int32_t x = LC_X(i % 4u), y = 4 + p * (int32_t)(i / 4u);
         uint16_t ink, fill = lc_fill(i == sc ? LS_SEL : LS_OFF, &ink);
-        fill = lc_box(x, y, LC_W, 25, fill);
-        GFX_HOOK_ALIGN(x, y, x + LC_W, y + 25, AL_HV, "scale cell name centred");
-        cv_text_in(x, y + CAP_IN(S, 25), LC_W, &AF_S, TP[P_SCALE].names[i], ink, fill);
+        fill = lc_box(x, y, LC_W, h, fill);
+        GFX_HOOK_ALIGN(x, y, x + LC_W, y + h, AL_HV, "scale cell name centred");
+        cv_text_in(x, y + CAP_IN(S, h), LC_W, &AF_S, TP[P_SCALE].names[i], ink, fill);
     }
 }
 /* 1.4.1: the engine's quick actions (black keys 1..n) in a row of n cells under the engines, 18 px high, 4 px apart

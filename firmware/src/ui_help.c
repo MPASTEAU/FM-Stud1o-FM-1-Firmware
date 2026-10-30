@@ -69,7 +69,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 #define H_GRID "[REC]STEPS[K2]LANE[SEQ]RATCH"
 /* a layer's (LAYER_*): what its footer row (LAYERS[].foot) does not say */
 static const char *const HELP_LAYER[LAYER_N] = {
-    "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "", "[KEYS]ROOT[K1-4]ROOT SCL CHORD",
+    "", "[KEYS]BLACK: MUTES[FX]2 TAPS: LOCK", "", "",
     "", "", "",                                         /* (Dah: GLO, EDIT: none, the panel takes the room) */
 };
 
