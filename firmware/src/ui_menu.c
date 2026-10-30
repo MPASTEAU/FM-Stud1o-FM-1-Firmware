@@ -308,7 +308,7 @@ static void menu_row(uint32_t k, uint32_t row)
     else if (k && row - 1u != ui.menu_sel)             /* a rule from the row above (none beside the selected one) */
         cv_rect(MR_X + 6, y - 1, MR_W - 12, 1, ux.style ? T_RULE : T_LINE);
     GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "menu row name centred up/down");
-    cv_text_on(MR_LX, vy, &AF_M, MI_NAME[row], fg, bg);
+    cv_text_on(MR_LX, vy, &AF_M, menu_label(row), fg, bg);
     if (row == MI_LCLEAR) {                            /* LEARN CLEAR (1.5): how many CCs are learned, "NONE" */
         char b[8] = "NONE";
         if (ml_count()) {
@@ -425,7 +425,8 @@ static void draw_menu(void)
           ui_prefs2 * 524287u + ui_idle * 1048573u +      /* (1.2: ANIM IDLE's value redraws its row) */
           ui_home_view * 7340033u +    /* (1.3: HOME) */
           (uint32_t)(song.g[G_TUNE] + 64) * 8191u + (uint32_t)song.g[G_ROUTE] * 27449u +   /* (1.2: the project's rows) */
-          (song.mch[0] | (uint32_t)song.mch[1] << 8 | (uint32_t)song.mch[2] << 16 | (uint32_t)song.mch[3] << 24) *
+          (song.mch[0] | (uint32_t)song.mch[1] << 8 | (uint32_t)song.mch[2] << 16 | (uint32_t)song.mch[3] << 24 |
+           (uint32_t)song.mch[song.sel % NTRK] << 5) *
           2246822519u +                                   /* (1.5.5: T1..T4 CHANNEL) */
           (ui.menu == 2 ? ui.menu_scroll * 48611u : 0u) + (ui.menu == 3 ? info_sig() * 2654435761u : 0u);
     if (!ui.force && sig == ui.menu_sig) {

@@ -44,7 +44,8 @@ static const uint8_t ED_MENU[][2] = {
 #define ED_MENU_N NELEM(ED_MENU)
 /* (Dah) a row's tab for the editor: CLICK, CLICK LEVEL, COUNT-IN, TUNE are off the MENU (menu_items.c MTAB_OFF: REC's and
  * GLO's held menus), still AUDIO's here as they were */
-#define ED_TAB(row) (MI_TAB[row] < MTAB_COUNT ? MI_TAB[row] : MTAB_AUDIO)
+#define ED_TAB(row) (MI_TAB[row] < MTAB_COUNT ? MI_TAB[row] : MI_TCH(row) ? MTAB_MIDI : MTAB_AUDIO)   /* (Dah: T1..T4 CHANNEL
+                                                         * the editor's, in MIDI) */
 
 /* rc as UI_SET: 0 applied and saved, 3 applied in RAM only (no flash, a failed write), 4 queued until STOP */
 static uint32_t ed_menu_save(void)
