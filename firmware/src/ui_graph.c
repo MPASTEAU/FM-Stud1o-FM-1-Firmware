@@ -1993,7 +1993,8 @@ static void pt_mini(uint32_t num, int32_t x0, int32_t y0, int32_t w, int32_t h, 
 /* (Dah) a list just turned (SELECT / GLO + ALGORITHM the patterns, PRESETS the sounds, ALGORITHM the tracks), the
  * whole screen ~1 s: its name and place on top, the one picked in the middle, large and framed, the others smaller and
  * fainter the further they are (a fisheye). Drawn in two halves (the canvas holds 142 rows) */
-enum { FL_PAT, FL_SND, FL_TRK, FL_FX, FL_PICK };
+enum { FL_PAT, FL_SND, FL_TRK, FL_FX, FL_PICK, FL_NEW };
+static uint8_t np_cur;                                  /* (Dah) SAVE > PATTERN's NEW: the row picked (0 EMPTY) */
 static uint32_t fl_pick_rows(uint32_t *cur);            /* (ui_graph_fx.c: ADD's picker, the free effects) */
 static void fl_pick_label(uint32_t i, char *tag, char *nm);
 static uint32_t fl_fx_rows(uint32_t *cur);              /* (ui_graph_fx.c: CHAIN's effects) */
@@ -2001,7 +2002,7 @@ static void fl_fx_label(uint32_t i, char *tag, char *nm);
 static const char *fl_fx_note(uint32_t i);
 #define FL_TOP 34                                      /* the title's band (its name in L, its place in S) */
 static const uint8_t FL_H[5] = {44, 30, 24, 20, 18};   /* a row's height by its distance from the one picked */
-static uint32_t fl_kind(void) { return ui.confirm == CF_PICK_FX ? FL_PICK : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
+static uint32_t fl_kind(void) { return ui.confirm == CF_NEW_FROM ? FL_NEW : ui.confirm == CF_PICK_FX ? FL_PICK : tl_on() ? (tl_pat == 2u ? FL_FX : tl_pat ? FL_PAT : FL_TRK) : FL_SND; }
 /* the list: how many rows, the one picked (its index) */
 static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
 {
@@ -2011,6 +2012,11 @@ static uint32_t fl_count(uint32_t kind, uint32_t *cur, uint8_t *nums)
         for (i = *cur = 0; i < n; i++)
             if (nums[i] == ps_num(song.sel)) *cur = i;
         return n + (n < PS_NUM);                        /* (+ NEW after the last) */
+    }
+    if (kind == FL_NEW) {                               /* (Dah) EMPTY, then the patterns to copy */
+        n = ps_list_all(nums);
+        *cur = np_cur <= n ? np_cur : 0u;
+        return n + 1u;
     }
     if (kind == FL_FX)
         return fl_fx_rows(cur);
@@ -2030,6 +2036,15 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
     uint16_t ink = dq < 384u ? T_TEXT : dq < 640u ? T_MID : T_DIM, tc = T_MID, bg = T_BG;
     int32_t ty = y + (f == &AF_M ? CAP_IN(M, h) : CAP_IN(S, h)), nx = 52;
     (void)sel;                                          /* (Dah: the frame stays in the middle, draw_list_full) */
+    if (kind == FL_NEW && !i) {                         /* (Dah) the first row: an empty one */
+        GFX_HOOK_ALIGN(0, y, 0, y + h, AL_V, "full list row on its middle");
+        cv_text_on(14, ty, f, "EMPTY", sel ? T_THEME : ink, bg);
+        return;
+    }
+    if (kind == FL_NEW) {                               /* .. then the patterns: their rows as FL_PAT's */
+        kind = FL_PAT;
+        i--;
+    }
     if (kind == FL_PAT) {
         uint8_t tmp[PS_NUM];
         (void)n;
@@ -2136,7 +2151,7 @@ static void draw_list_full(int fresh)
         int32_t h0 = fl_h(f), h1 = fl_h(256 - f);
         top0 = mid - f * ((h0 + h1) / 2 + 1) / 256 - h0 / 2;
     }
-    str_cpy(t, kind == FL_PAT ? "Pattern" : kind == FL_TRK ? "Track" : kind == FL_FX ? "Effect" :
+    str_cpy(t, kind == FL_NEW ? "Start with" : kind == FL_PAT ? "Pattern" : kind == FL_TRK ? "Track" : kind == FL_FX ? "Effect" :
                kind == FL_PICK ? "Add effect" : "Preset", sizeof t);
     if (kind != FL_PICK) {                              /* (its place after it: "1/N", small) */
         fmt_int(pl, (int32_t)cur + 1);
@@ -2172,10 +2187,10 @@ static void draw_list_full(int fresh)
                     fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)(dq < 0 ? -dq : dq), (uint32_t)i == cur);
             }
             y = top0 + fl_h(f) + 1;
-            for (i = c0 + 1; (uint32_t)i < n && y < (kind == FL_PICK ? 220 : 240); i++) {   /* under it (the picker:
+            for (i = c0 + 1; (uint32_t)i < n && y < (kind >= FL_PICK ? 220 : 240); i++) {   /* under it (the picker:
                                                          * its keys at the foot) */
                 int32_t dq = i * 256 - fl_pos, h = fl_h(dq);
-                if (kind == FL_PICK && y + h > 220)
+                if (kind >= FL_PICK && y + h > 220)
                     break;
                 fl_row(kind, (uint32_t)i, n, nums, y, h, (uint32_t)dq, (uint32_t)i == cur);
                 y += h + 1;
@@ -2187,9 +2202,10 @@ static void draw_list_full(int fresh)
             cv_rect(234, ty0, 2, th, T_LINE);
             cv_rect(233, by, 4, bh, T_MID);
         }
-        if (kind == FL_PICK) {                          /* (its keys, at the foot) */
-            static const khint_t KH[2] = {{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD"}};   /* (OCT- first, as on the panel) */
-            cv_key_left(10, 240 - 4 - KC_H, KH, 2, 3u, T_BG);
+        if (kind >= FL_PICK) {                          /* (its keys, at the foot) */
+            static const khint_t KH[2][2] = {{{KC_OCTDN, "NO"}, {KC_OCTUP, "ADD"}},   /* (OCT- first, as on the panel) */
+                                             {{KC_OCTDN, "CANCEL"}, {KC_OCTUP, "CREATE"}}};
+            cv_key_left(10, 240 - 4 - KC_H, KH[kind - FL_PICK], 2, 3u, T_BG);
         }
         cv_oy = 0;
         cv_blit(0, 120u * half);

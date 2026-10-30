@@ -204,8 +204,12 @@ static int project_erase_ui(void)
     press(B_OCTUP);
     ok &= ps_num(0) == 2u && ps_num(1) == 2u && ps_exists(0, 1) && trk[0].step[0].n == 1u && trk[0].step[0].note[0] == 60u;
     turn(EN_K3, 1);
+    press(B_OCTUP);                                     /* (Dah: NEW asks, then what it starts with: EMPTY first) */
+    ok &= ui.confirm == CF_NEW_PAT;
     press(B_OCTUP);
-    ok &= ps_num(0) == 3u && ps_num(1) == 3u && trk[0].step[0].time != ST_NOTE && ps_exists(0, 2);
+    ok &= ui.confirm == CF_NEW_FROM && np_cur == 0u;
+    press(B_OCTUP);
+    ok &= !ui.confirm && ps_num(0) == 3u && ps_num(1) == 3u && trk[0].step[0].time != ST_NOTE && ps_exists(0, 2);
     turn(EN_K1, -1);                                    /* (KNOB 1: the one before, every track on it at once) */
     ok &= ps_num(0) == 2u && ps_num(1) == 2u && trk[0].step[0].note[0] == 60u;
     turn(EN_K1, 1);

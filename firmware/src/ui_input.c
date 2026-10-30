@@ -1538,6 +1538,10 @@ static void act_do(void)
             ui_message("STOP TO EDIT");
         else if (c == 3u)
             confirm_open(CF_DEL_PAT, ps_num(song.sel));
+        else if (c == 2u && !ps_free_all())             /* (Dah) NEW: asked, then what it starts from (CF_NEW_FROM) */
+            ui_message("32 PATTERNS AT MOST");
+        else if (c == 2u)
+            confirm_open(CF_NEW_PAT, ps_free_all() | 0x80u);
         else if (c)
             pt_do(c + 1u);
         return;
@@ -2278,6 +2282,14 @@ static void ui_input(void)
                 ui.force = 1;
             }
         }
+        if (ui.confirm == CF_NEW_FROM) {                /* (Dah) NEW's start: SELECT (or KNOB 1) the row */
+            int32_t st = panel_enc(EN_SELECT) + panel_enc(EN_K1);
+            uint8_t nums[PS_NUM];
+            if (st) {
+                np_cur = (uint8_t)clamp((int32_t)np_cur + st, 0, (int32_t)ps_list_all(nums));
+                ui.force = 1;
+            }
+        }
         if (oct & 2u) {
             uint32_t kind = ui.confirm;
             ui.confirm = 0;
@@ -2306,6 +2318,21 @@ static void ui_input(void)
                 fx_chain_add(fx_tsel());
                 chain_open();
                 ui_message("EFFECT ADDED");
+            } else if (kind == CF_NEW_PAT && (ui.confirm_trk & 0x80u)) {   /* (Dah) SAVE > PATTERN's NEW: from? */
+                np_cur = 0;
+                confirm_open(CF_NEW_FROM, 0);
+                ui.pg_down = 0;
+                enc_drop();
+                return;
+            } else if (kind == CF_NEW_FROM) {      /* (Dah) EMPTY: a new one; a pattern: it, then its copy */
+                uint8_t nums[PS_NUM];
+                uint32_t n = ps_list_all(nums);
+                if (chain_busy())
+                    ui_message("STOP TO EDIT");
+                else if (np_cur && np_cur <= n && nums[np_cur - 1u] != ps_num(song.sel) && pattern_go_all(nums[np_cur - 1u]))
+                    ui_message("MEMORY FULL");
+                else
+                    pt_do(np_cur ? 2u : 3u);
             } else if (kind == CF_NEW_PAT) {       /* (Dah) a new, empty pattern, every track on it */
                 int r = pattern_new_all(0);
                 if (r)

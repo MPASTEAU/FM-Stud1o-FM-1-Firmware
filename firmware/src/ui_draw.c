@@ -969,7 +969,7 @@ static uint32_t span_face(uint32_t c, const card_span_t *sp, const char *label)
 #define LG_UY 73                                        /* the unit's line (S capitals rows 76..84) */
 #define LG_GY 92                                        /* the gauge, 3 px */
 static void draw_column_tall(uint32_t c, const char *label, const char *val, const char *unit, uint16_t vc, int32_t ratio,
-                             uint32_t icon, int hot, int mot, int32_t kid, const card_span_t *sp)
+                             uint32_t icon, int hot, int mot, const card_span_t *sp)
 {
     uint16_t lc = hot ? T_ACCENT : mot ? T_THEME : T_MID;
     const aafont_t *lf = &AF_M, *vf = &AF_L;
@@ -1010,11 +1010,7 @@ static void draw_column_tall(uint32_t c, const char *label, const char *val, con
             cv_text_in(0, ly, COL_W, lf, label, lc, T_SURF);
         }
     }
-    if (kid >= 0) {                                     /* "[OCT+]": the keycap, centred */
-        GFX_HOOK_ALIGN(0, LG_VB, COL_W, LG_VB + AF_L_CAP_H, AL_HV, "large card keycap centred");
-        cv_keycap(HALF_UP(COL_W - kc_w((uint32_t)kid)), LG_VB + HALF_UP(AF_L_CAP_H - KC_H), (uint32_t)kid,
-                  vc == T_ACCENT || vc == T_DIM ? vc : T_KEY, T_INK, T_SURF);
-    } else if (val[0]) {
+    if (val[0]) {
         uint32_t f = tall_face(val), fs = sp->fn ? span_face(c, sp, label) : 0u;
         int why;
         if (fs > f)
@@ -1135,12 +1131,7 @@ static void knob_card(uint32_t c, const char *label, const char *val, const char
     {
         int32_t vh = vf == &AF_M ? AF_M_CAP_H : AF_S_CAP_H, ty = cy - 2 - vh / 2, ly = by + 2 * r - AF_S_CAP_H - 1;
         int32_t mw = 2 * (r - 4), w = text_w(vf, val), vy = ty - (vf == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y);
-        uint32_t kl;
-        int32_t kid = kc_tag(val, &kl);
-        if (kid >= 0 && !val[kl]) {                     /* (a key, "[OCT+]": its keycap in the middle) */
-            int32_t kw = kc_w((uint32_t)kid);
-            cv_keycap(cx - kw / 2, cy - 2 - KC_H / 2, (uint32_t)kid, hot ? T_ACCENT : T_KEY, T_INK, T_SURF);
-        } else if (w <= mw) {                           /* the value, in the middle */
+        if (w <= mw) {                           /* the value, in the middle */
             GFX_HOOK_ALIGN(cx - r, ty, cx + r, ty + vh, AL_H, "knob card value centred");
             cv_text_in(cx - r, vy, 2 * r, vf, val, dim ? T_DIM : T_TEXT, T_SURF);   /* (DIM: it does nothing there) */
         } else {                                        /* (Dah) too wide even in S: narrowed into the ring (never
@@ -1179,14 +1170,13 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     uint16_t lc = hot ? T_ACCENT : T_MID;
     int32_t x, lx = 5, uw, room = COL_W - 8;
     const aafont_t *vf = &AF_M;
-    uint32_t n, kn;
-    int32_t kid = kc_tag(val, &kn);
+    uint32_t n;
     card_span_t sp = card_span;                         /* (#251: what the knob shows, this card only) */
     card_span.fn = 0;
     fmt_named = 0;                                      /* (params.c: a name, for this card only) */
     card_mot_next = 0;                                  /* (the same: MOTION, this card only) */
     if (home_bare()) {                                  /* (Dah) HOME: knobs */
-        (void)vc; (void)icon; (void)sp; (void)kn; (void)kid; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
+        (void)vc; (void)icon; (void)sp; (void)lx; (void)uw; (void)room; (void)sig; (void)snap;
         (void)strip; (void)x; (void)lc; (void)vf; (void)n; (void)named; (void)mot; (void)kind;
         knob_card(c, label, val, str_eq(unit, label) ? "" : unit, ratio, hot, vc == T_DIM);
         return;
@@ -1239,12 +1229,12 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
         ov[i] = 0;
         ui.roll[c].sig = sig;
         if (!str_eq(ov, val))
-            roll_note(c, ov, val, snap || named || vf != &AF_M || kid >= 0 || kind == LK_TALL);
+            roll_note(c, ov, val, snap || named || vf != &AF_M || kind == LK_TALL);
         else if (snap)
             ui.roll[c].from[0] = 0;
         str_cpy(ui.col[c], key, sizeof ui.col[c]);
         if (kind == LK_TALL) {
-            draw_column_tall(c, label, val, unit, vc, ratio, icon, hot, mot, kid, &sp);
+            draw_column_tall(c, label, val, unit, vc, ratio, icon, hot, mot, &sp);
             return;
         }
         cv_begin(COL_W, COL_H, T_BG);
@@ -1279,9 +1269,7 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
             } else
                 cv_text_fit(lx, ly, lf, label, lc, T_SURF, COL_W - 2 - lx);
         }
-        if (kid >= 0)                                   /* "[OCT+]": the keycap (accent: it would act; DIM: it would not) */
-            x = cv_keycap(5, 20, (uint32_t)kid, vc == T_ACCENT || vc == T_DIM ? vc : T_KEY, T_INK, T_SURF);
-        else if (vf == &AF_M) {
+        if (vf == &AF_M) {
             if (!ui.roll[c].from[0] && val[0])
                 GFX_HOOK_ALIGN(0, ROLL_Y, COL_W, ROLL_Y + ROLL_H, AL_V, "card value in its roll window");
             x = roll_text(c, 5, 17, val, vc);
@@ -1301,44 +1289,12 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     cv_blit((uint32_t)CARD_X(c), Y_LABEL + (strip ? ROLL_Y : 0));
 }
 
-/* an action's column (act_cols): picked, the OCT+ keycap (accent while it would do something); else "--" */
-/* (Dah) HOME's look: an action's card, no knob: its name in the middle; the one picked filled (THEME; OCT+ would not
- * act: outlined DIM), OCT+'s keycap under its name */
-static void act_card(uint32_t c, const char *label, int picked, int ready)
-{
-    char key[24];
-    uint16_t bg = picked && ready ? T_THEME : T_SURF, ink = picked ? (ready ? T_INK : T_DIM) : T_TEXT;
-    int32_t ny = picked ? 7 : HALF_UP(HOME_CARD_H - AF_M_CAP_H);
-    const aafont_t *f = text_w(&AF_M, label) <= COL_W - 6 ? &AF_M : &AF_S;
-    str_cpy(key, "#", 2);
-    str_cpy(key + 1, label, 16);
-    key[str_len(key) + 2] = 0;
-    key[str_len(key) + 1] = (char)('0' + ready);
-    key[str_len(key)] = (char)('0' + picked);
-    if (!ui.force && str_eq(key, ui.col[c]))
-        return;
-    str_cpy(ui.col[c], key, sizeof ui.col[c]);
-    ui.roll[c].from[0] = 0;
-    cv_begin(COL_W, HOME_CARD_H, T_BG);
-    cv_rrect(0, 0, COL_W, HOME_CARD_H, 4, bg, T_BG);
-    if (picked && !ready)
-        cv_frame(0, 0, COL_W, HOME_CARD_H, T_DIM);
-    if (f == &AF_S)
-        ny += (AF_M_CAP_H - AF_S_CAP_H) / 2;
-    GFX_HOOK_ALIGN(0, 0, COL_W, 0, AL_H, "action card name centred");
-    cv_text_in(0, ny - (f == &AF_M ? AF_M_CAP_Y : AF_S_CAP_Y), COL_W, f, label, ink, bg);
-    if (picked) {
-        int32_t kw = kc_w(KC_OCTUP);
-        cv_keycap((COL_W - kw) / 2, HOME_CARD_H - KC_H - 5, KC_OCTUP, ready ? T_INK : T_DIM, ready ? T_THEME : T_SURF, bg);
-    }
-    cv_blit((uint32_t)CARD_X(c), card_y());
-}
+/* an action's column (act_cols): "--", the accent's when picked (OCT+ would act; DIM: it would not); the dialog
+ * asks, no keycap on the card */
 static void draw_act_column(uint32_t c, const char *label, uint16_t vc, uint32_t icon)   /* icon: ICON_AUTO = by label */
 {
     int picked = act_col() == c + 1u;
-    (void)act_card;                                     /* (Dah: the knobs kept, the user's choice) */
-    draw_column(c, label, picked && cur_page()->graph != GR_USER ? "[OCT+]" : "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc,
-                -1, icon);                              /* (Dah: MY PRESETS: no OCT+ keycap, the footer says it) */
+    draw_column(c, label, "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc, -1, icon);
 }
 
 /* action pages: the footer's first row says what OCT+ and OCT- do ("OCT+ LOAD   OCT- BACK") */
@@ -1388,56 +1344,6 @@ static void draw_foot(void)
     draw_foot_in();
     ux_untint();
 }
-/* (Dah) the piano roll's footer row 1: the automation lane, not the steps (the roll shows them) */
-static int lane_shown(const track_t *t)
-{
-    return !ui.home && !ui.menu && cur_page()->graph == GR_ROLL && !drum_track(t) && !detail_on();
-}
-/* the lane: the parameter's short name at the left, under each of the page's steps a bar of its value (a point, its
- * lock or event, bright; held from the one before, dim), the cursor's step framed; none yet: how to make one */
-static void draw_lane(const track_t *t)
-{
-    uint32_t i, id = lane_id(t), len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
-    const param_desc_t *d;
-    if (id == 0xFFu) {
-        khint_t kh = {KC_OCTUP, "HOLD VIEW"};          /* (Dah: as SONG's, the same keycap row) */
-        cv_key_row(8, 232, 2, &kh, 1, 3u, T_BG);
-        return;
-    }
-    {   /* (Dah) the track's automated parameters, a lane each (4 at most), tiny: the one SELECT edits (its name at the
-         * left) in the colour, the others MID */
-        uint8_t ids[4];
-        uint32_t r, nl = lane_ids(t, ids);
-        int32_t ramp = trkx[trk_index(t) % NTRK].curve != 0u, lh = 16 / (int32_t)nl;
-        cv_text_fit(4, 4, &AF_S, track_desc(t, id)->label, T_THEME, T_BG, 28);
-        for (r = 0; r < nl; r++) {
-            uint32_t pid = ids[r];
-            int32_t px = -1, py = 0, y0 = 1 + (int32_t)r * lh, a = lh - 1;
-            uint16_t col = pid == id ? T_THEME : T_MID;
-            d = track_desc(t, pid);
-            for (i = 0; i < 16u && base + i < len; i++) {
-                int pt;
-                int32_t v = lane_value(t, base + i, pid, &pt), x = 35 + (int32_t)i * 12 + 6;
-                int32_t y = d->max > d->min ? y0 + a - (v - d->min) * a / (d->max - d->min) : y0 + a;
-                if (px >= 0) {
-                    if (ramp && pt)
-                        cv_line(px, py, x, y, col);
-                    else {
-                        cv_line(px, py, x, py, col);
-                        if (y != py)
-                            cv_line(x, py, x, y, col);
-                    }
-                }
-                if (pt)
-                    cv_rect(x - 1, y, 2, 1, T_ACCENT);  /* a point */
-                px = x;
-                py = y;
-            }
-        }
-        if (song.seq_mode && ui.cursor >= base && ui.cursor < base + 16u)
-            cv_rect(35 + (int32_t)(ui.cursor - base) * 12 + 2, 17, 9, 1, T_TEXT);   /* the step SELECT edits */
-    }
-}
 static void draw_foot_in(void)
 {
     char s[48], pn[16], ti[20], ln[24];
@@ -1462,93 +1368,26 @@ static void draw_foot_in(void)
         sig = str_hash(0x9E3779B9u, s) + ph * 97u + (song.seq_mode ? ui.cursor : 0xFFu) * 3001u + steps_hash(t) +
               (ui.home ? 0u : page_icon(pg)) * 7121u +
               ui.bank * 7u + (uint32_t)t->p[P_SLEN] * 13u;
-        if (lane_shown(t)) {                          /* (Dah) STEP's automation lane: its parameter and values */
-            uint32_t i, id = lane_id(t);
-            int pt;
-            sig += id * 50331653u;
-            uint8_t ids[4];
-            uint32_t nl = lane_ids(t, ids);
-            for (i = 0; i < nl * 16u; i++)              /* (the lanes shown) */
-                sig = sig * 31u + (uint32_t)(lane_value(t, ui.bank * 16u + i % 16u, ids[i / 16u], &pt) + 128) * 2u +
-                      (uint32_t)pt + ids[i / 16u] * 7u;
-        }
     }
-    if (act_cols()) {                                  /* the hint, and whether OCT+ would act */
-        char ha[16], hb[16];
-        foot_hint(ha, hb);
-        sig += str_hash(str_hash(act_ready() ? 7u : 3u, ha), hb) + foot_rename() * 7717u + foot_del() * 31u;
-    }
-    if (grid_on())
-        sig += 0x51EDu + (uint32_t)black_held(GK_ACC) * 977u + grid_write() * 131u;
     help = ui.help_t && !ui.ml.on ? help_page() : 0;   /* 1.5, HELP ON: the page's hint for ~2 s after it was entered
                                                        * (not while MIDI LEARN shows its line) */
     if (help)
         sig = str_hash(sig + 0x4E1Bu, help);
-    if (ui.ml.on && !act_cols()) {                        /* MIDI LEARN (midi_learn.c): what is picked, its CC */
+    if (ui.ml.on) {                                     /* MIDI LEARN (midi_learn.c): what is picked, its CC */
         ml_line(ln);
         sig += str_hash(0x1EA2u, ln);
     }
-    sig += (uint32_t)foot_free() * 0x2545F491u;
     if (!ui.force && sig == ui.foot_sig)
         return;
     ui.foot_sig = sig;
     cv_begin(240, H_FOOT, T_BG);
-    if (foot_free()) {
-        /* (Dah: row 1 is the panel's: nothing here, only row 2 blitted) */
-    } else if (help) {                                /* row 1: the hint in place of the steps or the OCT+ / OCT- hint */
+    if (help) {                                       /* row 1: the hint in place of the steps or the OCT+ / OCT- hint */
         help_row(help, 2);
-    } else if (act_cols()) {                          /* row 1: the OCT+ / OCT- hint in place of the steps */
-        char ha[16], hb[16];
-        khint_t kh[3];
-        uint32_t rn = foot_rename(), dl = foot_del();
-        foot_hint(ha, hb);                            /* "OCT+ LOAD", "OCT- BACK": keycaps and their words */
-        uint32_t nk = hb[0] ? 2u : 1u, ok;            /* (Dah: OCT- shown only when it cancels) */
-        /* (Dah) OCT- before OCT+ (as on the panel), packed at the left; what else after them */
-        ok = act_ready() ? 1u : 0u;
-        if (nk == 2u) {
-            kh[0] = (khint_t){KC_OCTDN, hb + 5};
-            kh[1] = (khint_t){KC_OCTUP, ha + 5};
-            ok = 1u | ok << 1;
-        } else
-            kh[0] = (khint_t){KC_OCTUP, ha + 5};
-        if (cur_page()->graph == GR_SONG && sg_pend) {   /* (Dah) SONG, a section pending: OCT+ does it, OCT- not */
-            kh[0] = (khint_t){KC_OCTDN, "CANCEL"};
-            kh[1] = (khint_t){KC_OCTUP, ha + 5};
-            cv_key_left(8, 2, kh, 2u, 3u, T_BG);
-        } else if (cur_page()->graph == GR_SONG) {    /* (Dah) SONG: OCT+ held the VIEW, REC adds, OCT- held deletes */
-            kh[0] = (khint_t){KC_OCTUP, ha + 5};
-            kh[1] = (khint_t){KC_OCTDN, "ADD"};             /* (Dah: OCT- held adds, REC deletes) */
-            kh[2] = (khint_t){KC_REC, "DEL"};
-            cv_key_row(8, 232, 2, kh, 3u, 1u | 2u | (dl == 2u ? 4u : 0u), T_BG);
-        } else if (dl) {                              /* (Dah) FILE, PATTERN: "REC DELETE" after them */
-            kh[nk] = (khint_t){KC_REC, "DELETE"};
-            cv_key_left(8, 2, kh, nk + 1u, ok | (dl == 2u ? 1u : 0u) << nk, T_BG);
-        } else if (rn) {                              /* USER / PROJECT: "EDIT NAME" after them */
-            kh[nk] = (khint_t){KC_EDIT, "NAME"};
-            cv_key_left(8, 2, kh, nk + 1u, ok | (rn == 2u ? 1u : 0u) << nk, T_BG);
-        } else {
-            cv_key_left(8, 2, kh, nk, ok, T_BG);
-        }
     } else if (ui.ml.on) {                               /* row 1: MIDI LEARN's line, OCT+ DONE at the right */
         khint_t kh = {KC_OCTUP, "DONE"};
         int32_t kw = kh_w(KC_OCTUP, "DONE");
         cv_free_text(8, 2, &AF_S, ln, T_ACCENT, T_BG, 232 - kw - 8 - 8);
         cv_key_row(232 - kw, 232, 2, &kh, 1, 1u, T_BG);
-    } else if (grid_on() && !detail_on()) {          /* row 1: the page, and what the keys do (DETAIL: the steps) */
-        char b[16];
-        uint32_t len = (uint32_t)t->p[P_SLEN];
-        str_cpy(b, "PAGE ", sizeof b);
-        fmt_int(b + 5, (int32_t)ui.bank + 1);
-        str_cpy(b + str_len(b), "/", 4);
-        fmt_int(b + str_len(b), (int32_t)((len + 15u) / 16u));
-        cv_text(8, 2, &AF_S, b, T_THEME);
-        if (black_held(GK_ACC))
-            cv_text_r(232, 2, &AF_S, "ACCENT", T_ACCENT, T_BG);
-        else
-            cv_key_hint(232 - kh_w(KC_KEYS, grid_write() ? "STEPS" : "PLAY"), 2, KC_KEYS, grid_write() ? "STEPS" : "PLAY", 1,
-                        T_BG);                        /* the keys are the steps (Dah: armed; else they play) */
-    } else if (lane_shown(t)) {
-        draw_lane(t);
     }                                                 /* (Dah: no step strip elsewhere: the pages show the steps) */
     {   /* row 2: engine icon + name, sound, page title at the right with its icon before it (MIXER, SONG,
          * AUTOMATION); icons: their ink on the names' capitals */
@@ -1576,10 +1415,7 @@ static void draw_foot_in(void)
         }
         cv_text_r(r, 19, &AF_S, ti, ui.home ? T_MID : ux.fam[pg->fam % 12u], T_BG);   /* (the page: its family's colour) */
     }
-    if (foot_free())
-        cv_blit_from(0, Y_FOOT, FOOT_GAIN);           /* (row 2 only: the panel above reaches down to it) */
-    else
-        cv_blit(0, Y_FOOT);
+    cv_blit(0, Y_FOOT);                               /* (only MENU > LARGE's tall pages: no panel reaches here) */
 }
 /* the EDIT layer's cards (ui_layer.c): ENG (the engine), No. (its sounds: KNOB 2's list), two empty cards (Dah: FAV gone) */
 static void engine_columns(void)
@@ -2397,11 +2233,12 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "ADD AN EFFECT?", 24);
         str_cpy(b, "LAST IN THE CHAIN", 24);
         break;
-    case CF_NEW_PAT:                                 /* (Dah) SELECT, GLO + ALGORITHM past the last pattern */
+    case CF_NEW_PAT:                                 /* (Dah) SELECT, GLO + ALGORITHM past the last pattern; SAVE >
+                                                      * PATTERN's NEW (k | 0x80: what it starts from asked next) */
         str_cpy(a, "NEW PATTERN ", 24);
-        fmt_int(a + str_len(a), (int32_t)k);
+        fmt_int(a + str_len(a), (int32_t)(k & 0x7Fu));
         str_cpy(a + str_len(a), "?", 4);
-        str_cpy(b, "EMPTY, EVERY TRACK", 24);
+        str_cpy(b, k & 0x80u ? "EVERY TRACK" : "EMPTY, EVERY TRACK", 24);
         break;
     case CF_ADD_TRACK:                               /* (HA HA HE HU) ALGORITHM past the last track */
         str_cpy(a, "ADD TRACK 1?", 24);
@@ -2547,7 +2384,8 @@ static void ui_draw_page(uint32_t counting)
     }
     {   /* (Dah) a list just turned: the whole screen, ~1 s; gone: all of the page again */
         static uint8_t was;
-        uint8_t on = (uint8_t)(((tl_on() || pl_on()) && !ui.confirm && !name_on()) || ui.confirm == CF_PICK_FX);   /* (Dah:
+        uint8_t on = (uint8_t)(((tl_on() || pl_on()) && !ui.confirm && !name_on()) || ui.confirm == CF_PICK_FX ||
+                              ui.confirm == CF_NEW_FROM);   /* (Dah:
                                                          * ADD's picker too) */
         if (was && !on)
             ui.force = 1;
