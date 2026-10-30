@@ -612,7 +612,8 @@ static void home_foot(void)
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}, {KC_SELECT, "PAT"}},     /* an effect's page (FX: back) */
                                      {{KC_FX, "NEXT"}, {KC_SELECT, "PAT"}},      /* .. with a second page */
-                                     {{KC_ALGO, "TRACK"}, {KC_SELECT, "PAT"}}};  /* (Dah) MIXER: SELECT the pattern too */
+                                     {{KC_OCTDN, "(HOLD) DEL"}, {KC_SELECT, "PAT"}}};   /* (Dah) MIXER: SELECT the pattern
+                                                         * too; OCT- held deletes the (last) track */
     uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
                   cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
@@ -2285,6 +2286,11 @@ static void confirm_text(char *a, char *b)
         str_cpy(a, "ERASE PATTERN A?", 24);
         a[14] = (char)('A' + (k & 3u));
         (void)project_name(k & 3u, b);
+        break;
+    case CF_DEL_TRK:                                 /* (Dah) MIXER, OCT- held */
+        str_cpy(a, "DELETE TRACK  ?", 24);
+        a[13] = (char)('1' + k % NTRK);
+        str_cpy(b, "ITS PATTERNS TOO", 24);
         break;
     case CF_LOAD_USER:                               /* (Dah) the track's sound replaced */
         str_cpy(a, "LOAD ", 24);

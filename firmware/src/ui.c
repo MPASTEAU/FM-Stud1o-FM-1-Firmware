@@ -235,7 +235,7 @@ static struct {
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
        CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_PAT, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
-       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_LOAD_USER, CF_NEW_FROM };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
+       CF_NEW_PROJ, CF_OPEN_ARCH, CF_DEL_ARCH, CF_OVR_ARCH, CF_ADD_TRACK, CF_DEL_PAT, CF_NEW_PAT, CF_ADD_FX, CF_PICK_FX, CF_LOAD_USER, CF_DEL_TRK, CF_NEW_FROM };   /* (+ a track) */   /* (HA HA HE HU: SAVE > FILE's NEW OPEN DELETE SAVE) */
                                   /* ui.confirm: TOOLS' clears; SAVE over a used slot;
                                    * USER ERASE; PROJECT ERASE (1.5.5, #199); CLEAN INIT (1.5.5, #190) */
 
