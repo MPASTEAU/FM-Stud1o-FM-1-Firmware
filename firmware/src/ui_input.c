@@ -1873,7 +1873,7 @@ static void fx_sel_turn(int32_t s)
 static int sel_is_list(void)                           /* (Dah) the page shown has a list SELECT moves down */
 {
     uint32_t g = cur_page()->graph;
-    return g == GR_TRK || g == GR_FILE || g == GR_PATTERN;   /* (Dah: MIXER, its strips and the MASTER; FILE, PATTERN,
+    return g == GR_FILE || g == GR_PATTERN;            /* (Dah: MIXER: SELECT the pattern, ALGORITHM the track) */   /* (Dah: MIXER, its strips and the MASTER; FILE, PATTERN,
                                                      * whose knobs are the actions; where SELECT did what KNOB 1 does,
                                                      * the tempo again) */
 }
@@ -2208,8 +2208,9 @@ static void ui_input(void)
             pattern_turn_ui(s);
             combo = 1;
         }
-        if (ui.ly == LAYER_SEQ && (s = panel_enc(EN_SELECT)) != 0) {   /* (Dah) SEQ + SELECT: its row */
-            seq_row(s);
+        if (ui.ly == LAYER_SEQ && (s = panel_enc(EN_SELECT)) != 0) {   /* (Dah) SEQ + SELECT: the pattern, as
+                                                         * everywhere (its selector) */
+            pattern_turn_ui(s);
             combo = 1;
         }
         if (glo && (sel = panel_enc(EN_SELECT)) != 0)   /* GLO + SELECT: the tempo, a combo (OCT- puts it back) */
@@ -2583,10 +2584,6 @@ static void ui_input(void)
                                                          * letting go, LFO is held (MOMENTARY) or steps are held */
             for (k = (uint32_t)(s > 0 ? s : -s); k && !lay && !kq && !mom_down() && !lock_held(); k--)
                 sel_list(s > 0 ? 1 : -1);
-        } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] != P_FXORD) {
-            fx_sel_turn(s);                             /* (Dah) an effect's page: SELECT the next / previous effect */
-        } else if (!glo && !lay && !ui.home && cur_page()->fam == FAM_FX && cur_page()->id[0] == P_FXORD) {
-            fl_fx_move(s > 0 ? 1 : -1);                 /* (Dah) FX > CHAIN: SELECT the effect too, in the list */
         } else if (!glo && !lay) {                      /* (Dah) SELECT: the pattern, every track's, on any page without
                                                          * a list (its list ~1 s); the tempo: GLO + SELECT */
             pattern_turn_ui(s);

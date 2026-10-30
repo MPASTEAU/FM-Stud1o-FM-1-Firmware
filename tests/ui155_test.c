@@ -389,9 +389,14 @@ static int oct_layers(void)
     go_page(GR_ROLL); frame();
     song.octave = 0;
     btn_down(B_SEQ); frame();
+    btn_down(B_OCTUP); frame(); btn_up(B_OCTUP); frame();   /* (Dah: open; its first row LEN: OCT+ nothing) */
+    lys.sq_row = 1;                                     /* (Dah: the QUANTIZE row, KNOB 1's) */
     btn_down(B_OCTUP); frame(); btn_up(B_OCTUP); frame();   /* (Dah) SEQ: OCT+ APPLY (QUANTIZE ON, nothing nudged) */
     ok = str_eq(ui.msg, "NOTHING TO QUANTIZE") && song.octave == 0;
     btn_up(B_SEQ); frames(400);
+    if (ui.lock) {                                      /* (Dah: held open, it stays: SEQ again closes it) */
+        btn_down(B_SEQ); frame(); btn_up(B_SEQ); frames(400);
+    }
     bad += check("OCT+ in the SEQ layer: QUANTIZE's APPLY; no octave", ok);
 
     btn_down(B_GLO); frames(100);

@@ -62,14 +62,17 @@ static const layer_t LAYERS[LAYER_N] = {
                                                          * GLO + ALGORITHM the pattern, said) */
     {B_SCL, LK_SET, FAM_SCL, "[SCL] SET", {{KC_KEYS, "ROOT"}, {KC_OCTDN, "UNDO"}, {KC_SCL, "DONE"}}},
     {B_EDIT, LK_SET, FAM_HOME, "[EDIT] SET", {{KC_KEYS, "ENGINE"}, {KC_OCTDN, "UNDO"}, {KC_EDIT, "DONE"}}},
-    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_SELECT, "ROW"}, {KC_OCTUP, "APPLY"}, {KC_OCTDN, "UNDO"}}},
+    {B_SEQ, LK_SET, FAM_SEQ, "[SEQ] SET", {{KC_K1, "ROW"}, {KC_OCTUP, "APPLY"}, {KC_OCTDN, "UNDO"}}},
     {B_REC, LK_SET, FAM_HOME, "[REC] SET", {{KC_KEYS, "RECORDING"}, {KC_OCTDN, "UNDO"}, {KC_REC, "DONE"}}},
 };
 static const uint8_t LY_KC[LAYER_N] = {0, KC_FX, KC_GLO, KC_SCL, KC_EDIT, KC_SEQ, KC_REC};
 /* SCL's knobs: the key and its chord (cur_page() while the layer edits or draws them: page_over) */
 static const page_t LY_SCL = {"SCL", FAM_SCL, SC_TRACK, GR_SCALE, {P_ROOT, P_SCALE, P_CHRD, P_VOIC}};
 /* SEQ TOOLS' knobs: LEN DIV SWING GATE (the length the tools work in; up to 1.1.5 the PATTERN page's) */
-static const page_t LY_SEQ = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, P_SDIV, P_SSWING, P_SGATE}};
+static const page_t LY_SEQ = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {0xFF, P_SDIV, P_SSWING, P_SGATE}};   /* (Dah: KNOB 1
+                                                         * the rows, LEN the first one's) */
+static const page_t LY_SEQ_LEN = {"PATTERN", FAM_SEQ, SC_TRACK, GR_STEPS, {P_SLEN, 0xFF, 0xFF, 0xFF}};   /* (Dah: the
+                                                         * LEN row's, PRESETS) */
 static const page_t *ly_page(uint32_t l) { return l == LAYER_SCL ? &LY_SCL : l == LAYER_SEQ ? &LY_SEQ : 0; }
 #define LY_OPEN 2u                     /* ui.ly_t0: the map opened (no tap any more) */
 #define LY_COMBO 4u                    /* .. by a combo */
@@ -80,7 +83,7 @@ typedef char ly_init_fits[LY_CLEAN < 16u ? 1 : -1];   /* (a white key: F3 .. G5)
 #define layer_seen (favorites.factory[15][31])   /* bit l: layer l opened once (a byte no engine uses) */
 static const khint_t FX_LATCH_FOOT[3] = {{KC_KEYS, "ON / OFF"}, {KC_K14, "MACROS"}, {KC_OCTDN, "ALL OFF"}};
 static const khint_t FX_KEY_FOOT[3] = {{KC_PRESETS, "ASSIGN"}, {KC_EDIT, "DEFAULT"}, {KC_K14, "MACROS"}};   /* (a key held) */
-static const khint_t SEQ_CLR_FOOT[3] = {{KC_SELECT, "ROW"}, {KC_OCTUP, "CLEAR"}, {KC_OCTDN, "UNDO"}};   /* (CLEAR ALL picked) */
+static const khint_t SEQ_CLR_FOOT[3] = {{KC_K1, "ROW"}, {KC_OCTUP, "CLEAR"}, {KC_OCTDN, "UNDO"}};   /* (CLEAR ALL picked) */
 static const khint_t GLO_LOCK_FOOT[3] = {{KC_OCTDN, "UNDO"}, {KC_GLO, "DONE"}, {0, 0}};   /* (locked: PLAY plays, #183) */
 /* the FX layer's key map (perform.c perf_map_of / perf_map_put: 16 x 5 bits; all 0, every older setting: the default
  * map) in 10 bytes no engine uses, kept with the settings */
@@ -410,17 +413,25 @@ static void seq_key(uint32_t p)
     else
         confirm_open(CF_CLEAR_PAT, ps_num(song.sel));
 }
-static void seq_row(int32_t s)                         /* (Dah) SELECT: QUANTIZE / CLEAR ALL */
+static void seq_row(int32_t s)                         /* (Dah) KNOB 1: LEN / QUANTIZE / CLEAR ALL */
 {
-    lys.sq_row = s > 0;
+    lys.sq_row = (uint8_t)clamp((int32_t)lys.sq_row + (s > 0 ? 1 : -1), 0, 2);
     ui.force = 1;
 }
-static void seq_presets(int32_t s)
+static void seq_presets(int32_t s)                     /* (Dah) PRESETS: the row picked's value (LEN, QUANTIZE) */
 {
-    lys.sq_row = 0;
     if (chain_busy())
         ui_message("STOP TO EDIT");
-    else
+    else if (lys.sq_row == 0u) {
+        uint8_t h = ui.home, pg = ui.page;
+        ui.home = 0;
+        ui.page = (uint8_t)page_first(FAM_SEQ);
+        page_over = &LY_SEQ_LEN;
+        edit_param(0, s);
+        page_over = 0;
+        ui.home = h;
+        ui.page = pg;
+    } else if (lys.sq_row == 1u)
         qz_turn(TSEL, s);
     ui.force = 1;
 }
@@ -724,6 +735,8 @@ static void layer_knob(uint32_t k, int32_t s)
     } else if (l == LAYER_REC) {                        /* CLICK, COUNT-IN, LEVEL (KNOB 4: none) */
         if (k < 3u)
             rec_set(k, (uint32_t)clamp((int32_t)rp_get(RL_F[k]) + s, 0, 2));
+    } else if (l == LAYER_SEQ && k == 0u) {            /* (Dah) SEQ: KNOB 1 the rows */
+        seq_row(s);
     } else if (l) {                                     /* the page's knobs, wherever the page is */
         uint8_t h = ui.home, pg = ui.page;
         ui.home = 0;
@@ -769,7 +782,8 @@ static uint32_t layer_oct(uint32_t pressed, uint32_t oct)
     if (layer_set_open())
         lys.oct |= (uint8_t)(((pressed >> dn) & 1u) | ((pressed >> up) & 1u) << 1);
     mine = oct & lys.oct;
-    if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row) {   /* (Dah) SEQ: OCT+ on CLEAR ALL: its dialog */
+    if ((mine & 2u) && lys.l == LAYER_SEQ && !lys.sq_row) {   /* (Dah) SEQ: OCT+ on LEN: nothing */
+    } else if ((mine & 2u) && lys.l == LAYER_SEQ && lys.sq_row == 2u) {   /* (Dah) SEQ: OCT+ on CLEAR ALL: its dialog */
         seq_key(0);
         mine &= ~2u;
     } else if ((mine & 2u) && lys.l == LAYER_SEQ) {     /* (Dah) SEQ: OCT+ APPLY, QUANTIZE written */
@@ -1089,28 +1103,32 @@ static void sq_row(int32_t y, int32_t h, int sel)
 static void layer_seq(void)
 {
     const track_t *t = TSEL;
-    int32_t full = (int32_t)graph_h(), q = clamp(t->p[P_SQNT], 0, 4), ph;
+    int32_t full = (int32_t)graph_h(), q = clamp(t->p[P_SQNT], 0, 4), ph, k;
     uint16_t dim = chain_busy() ? T_DIM : T_TEXT;
-    sq_row(4, 30, lys.sq_row == 0u);                    /* (Dah) two rows, as HOME's: QUANTIZE, CLEAR ALL */
-    GFX_HOOK_ALIGN(0, 4, 0, 34, AL_V, "seq quantize row title on its line");
-    cv_text_on(16, 4 + CAP_IN(M, 30), &AF_M, "QUANTIZE", dim, lys.sq_row == 0u ? T_RAISE : T_RAISE);
-    {   /* the amount at the right, PRESETS' keycap before it (the row picked) */
-        int32_t x = 224 - (int32_t)text_w(&AF_M, N_QNT[q]);
-        GFX_HOOK_ALIGN(0, 4, 0, 34, AL_V, "seq quantize row title on its line");
-        cv_text_on(x, 4 + CAP_IN(M, 30), &AF_M, N_QNT[q], q ? T_THEME : T_DIM, T_RAISE);
-        if (lys.sq_row == 0u)
-            cv_keycap(x - 6 - kc_w(KC_PRESETS), 4 + (30 - KC_H) / 2, KC_PRESETS, T_KEY, T_INK, T_RAISE);
+    char len[8];
+    fmt_int(len, t->p[P_SLEN]);
+    for (k = 0; k < 3; k++) {                           /* (Dah) three rows, as HOME's (KNOB 1): LEN, QUANTIZE, CLEAR ALL */
+        int32_t y = 4 + k * 30, sel = lys.sq_row == (uint32_t)k;
+        sq_row(y, 26, sel);
+        GFX_HOOK_ALIGN(0, y, 0, y + 26, AL_V, "seq layer row on its middle");
+        cv_text_on(k == 2 ? 34 : 16, y + CAP_IN(M, 26), &AF_M, k == 0 ? "LEN" : k == 1 ? "QUANTIZE" : "CLEAR ALL", dim, T_RAISE);
+        if (k == 2) {
+            GFX_HOOK_ALIGN(0, y, 0, y + 26, AL_V, "seq layer row on its middle");
+            cv_icon_in(16, y, 0, 26, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
+        } else {                                        /* (the value at the right, PRESETS' keycap before it: picked) */
+            const char *v = k == 0 ? len : N_QNT[q];
+            int32_t x = 224 - (int32_t)text_w(&AF_M, v);
+            GFX_HOOK_ALIGN(0, y, 0, y + 26, AL_V, "seq layer row on its middle");
+            cv_text_on(x, y + CAP_IN(M, 26), &AF_M, v, k == 1 && !q ? T_DIM : T_THEME, T_RAISE);
+            if (sel)
+                cv_keycap(x - 6 - kc_w(KC_PRESETS), y + (26 - KC_H) / 2, KC_PRESETS, T_KEY, T_INK, T_RAISE);
+        }
     }
-    sq_row(38, 30, lys.sq_row == 1u);
-    GFX_HOOK_ALIGN(0, 38, 0, 68, AL_V, "seq clear all row on its middle");
-    cv_icon_in(16, 38, 0, 30, 12, ICON_CLEAR, chain_busy() ? T_DIM : T_MID, T_RAISE);
-    GFX_HOOK_ALIGN(0, 38, 0, 68, AL_V, "seq clear all row on its middle");
-    cv_text_on(34, 38 + CAP_IN(M, 30), &AF_M, "CLEAR ALL", dim, T_RAISE);
     /* (Dah) under them, apart (no row's): the pattern as it is, small (SAVE > PATTERN's picture) */
-    GFX_HOOK_ALIGN(0, 76, 0, 86, AL_V, "seq current pattern title");
-    cv_text_on(16, 76 - AF_S_CAP_Y, &AF_S, "CURRENT PATTERN", T_MID, T_SURF);
-    ph = full - 94 - 6;
-    pt_mini(ps_num(song.sel), 16, 92, 208, ph > 36 ? 36 : ph, T_SURF);
+    GFX_HOOK_ALIGN(0, 96, 0, 106, AL_V, "seq current pattern title");
+    cv_text_on(16, 96 - AF_S_CAP_Y, &AF_S, "CURRENT PATTERN", T_MID, T_SURF);
+    ph = full - 112 - 6;
+    pt_mini(ps_num(song.sel), 16, 112, 208, ph > 32 ? 32 : ph, T_SURF);
 }
 
 /* REC: a row a key (26 px, 4 apart): the key's cell (its note, icon and name), then CLEAR's track and what it holds,
@@ -1201,6 +1219,10 @@ static void layer_cards(uint32_t l)
         page_over = 0;
         ui.home = h;
         ui.page = pg;
+        if (l == LAYER_SEQ) {                           /* (Dah) KNOB 1: the row picked */
+            static const char *const RN[3] = {"LEN", "QNTZ", "CLEAR"};
+            draw_column(0, "ROW", RN[lys.sq_row % 3u], "", VAL(0u), (int32_t)lys.sq_row * 500, ICON_NONE);
+        }
     }
 }
 
@@ -1258,7 +1280,7 @@ static void draw_layer(void)
         cv_begin(240, H_FOOT, T_BG);
         const khint_t *ft = l == LAYER_FX && fx_key_held() ? FX_KEY_FOOT : l == LAYER_FX && perf_latch_on ? FX_LATCH_FOOT :
                             l == LAYER_GLO && ui.lock == LAYER_GLO ? GLO_LOCK_FOOT :
-                            l == LAYER_SEQ && lys.sq_row ? SEQ_CLR_FOOT :
+                            l == LAYER_SEQ && lys.sq_row == 2u ? SEQ_CLR_FOOT :
                             LAYERS[l].foot;
         int h = help_on() && help_row(HELP_LAYER[l], 21);   /* 1.5, HELP ON: a
                                                          * second row, what this one does not say */

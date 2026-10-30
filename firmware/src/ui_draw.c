@@ -610,9 +610,9 @@ static void home_foot(void)
     khint_t kh[3];
     static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_SELECT, "PAT"}},   /* HOME (OCT+ held: the VIEW) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
-                                     {{KC_FX, "CHAIN"}, {KC_SELECT, "FX"}},      /* an effect's page (FX: back) */
-                                     {{KC_FX, "NEXT"}, {KC_SELECT, "FX"}},       /* .. with a second page */
-                                     {{KC_SELECT, "TRACK"}, {KC_HOME, "HOME"}}}; /* (Dah) MIXER */
+                                     {{KC_FX, "CHAIN"}, {KC_SELECT, "PAT"}},     /* an effect's page (FX: back) */
+                                     {{KC_FX, "NEXT"}, {KC_SELECT, "PAT"}},      /* .. with a second page */
+                                     {{KC_ALGO, "TRACK"}, {KC_SELECT, "PAT"}}};  /* (Dah) MIXER: SELECT the pattern too */
     uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
                   cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
