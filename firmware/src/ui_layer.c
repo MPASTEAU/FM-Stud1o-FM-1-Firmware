@@ -456,30 +456,6 @@ static void rec_set(uint32_t r, uint32_t v)
     rp_put(RL_F[r], v);
     lys.rp_dirty = 1;
 }
-/* (Dah) REC's panel: the selected track as HOME's row (its mini roll, the step playing), y, h tall */
-static void rec_track_row(int32_t y, int32_t h)
-{
-    track_t *t = TSEL;
-    rk_row_t R;
-    int32_t oy = cv_oy;
-    if (h < 12)
-        return;
-    R.s = seq_steps(t);
-    R.c = song.sel;
-    R.sel = 1;
-    R.mute = t->p[P_MUTE] != 0;
-    R.len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
-    R.nc = hv_cols();
-    R.off = 0;
-    R.tc0 = ux.trk[song.sel % NTRK];
-    R.tc = R.mute ? T_DIM : R.tc0;
-    R.bg = ux_mix(T_SURF, R.tc0, 16);
-    R.rh = h > 28 ? 28 : h;
-    rk_view(t, 1, &R.p0, &R.ph);
-    cv_oy = oy + y;
-    rk_paint(&R, -3);
-    cv_oy = oy;
-}
 static void rec_key(uint32_t p)
 {
     uint32_t r = p - 1u, v;
@@ -1138,8 +1114,28 @@ static void layer_seq(void)
                 cv_keycap(x - 6 - kc_w(KC_K2), y + (19 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
         }
     }
-    ph = full - 110;                                    /* (Dah) under them, the pattern, small (SAVE > PATTERN's), if room */
-    if (ph >= 18)
+    ph = full - 110;                                    /* (Dah) under them, what a CLEAR would empty: the track as HOME's
+                                                         * row (CLEAR TRACK), the pattern as SAVE's (CLEAR PATTERN) */
+    if (ph >= 14 && lys.sq_row == 3u) {
+        track_t *t = TSEL;
+        rk_row_t R;
+        int32_t oy = cv_oy;
+        R.s = seq_steps(t);
+        R.c = song.sel;
+        R.sel = 1;
+        R.mute = t->p[P_MUTE] != 0;
+        R.len = (uint32_t)clamp(t->p[P_SLEN], 1, NSTEP);
+        R.nc = hv_cols();
+        R.off = 0;
+        R.tc0 = ux.trk[song.sel % NTRK];
+        R.tc = R.mute ? T_DIM : R.tc0;
+        R.bg = ux_mix(T_SURF, R.tc0, 16);
+        R.rh = ph > 26 ? 26 : ph;
+        rk_view(t, 1, &R.p0, &R.ph);
+        cv_oy = oy + 108;
+        rk_paint(&R, -3);
+        cv_oy = oy;
+    } else if (ph >= 14 && lys.sq_row == 4u)
         pt_mini(ps_num(song.sel), 16, 108, 208, ph > 30 ? 30 : ph, T_SURF);
 }
 
@@ -1164,7 +1160,6 @@ static void layer_rec(void)
         if (sel)
             cv_keycap(x - 6 - kc_w(KC_K2), y + (22 - KC_H) / 2, KC_K2, T_KEY, T_INK, T_RAISE);
     }
-    rec_track_row(84, (int32_t)graph_h() - 88);         /* (Dah) the track recorded into, as HOME's row */
 }
 
 static void layer_cards(uint32_t l)
@@ -1172,6 +1167,9 @@ static void layer_cards(uint32_t l)
     char val[12];
     const char *unit;
     uint32_t c;
+    if (ui.force && (l == LAYER_SEQ || l == LAYER_REC))   /* (Dah) their knobs 40 px, not the cards' 44: the rows under
+                                                         * them to the panel BG (no page left there) */
+        lcd_fill(0, Y_LABEL + HOME_CARD_H, 240, Y_GRAPH - Y_LABEL - HOME_CARD_H, T_BG);
     if (l == LAYER_FX) {                                /* FILTER CRUSH THROW DEPTH */
         int32_t m = perf_k[0];
         fmt_int(val, m < 0 ? -m : m);
@@ -1249,8 +1247,7 @@ static void draw_layer(void)
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
-        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u +
-               (song.playing ? TSEL->seq_idx * 7919u + 1u : 0u);   /* (Dah: its track's row, the step playing) */
+        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u;
     else if (l == LAYER_SEQ)
         sig += (uint32_t)chain_busy() * 3u + song.sel * 977u + (uint32_t)TSEL->p[P_SQNT] * 131u + steps_sig(TSEL) * 7u +
                (uint32_t)TSEL->p[P_SLEN] * 257u + lys.sq_row * 65537u + ps_gen * 3u;   /* (Dah: QUANTIZE, the
@@ -1258,6 +1255,7 @@ static void draw_layer(void)
     else
         sig += snd_id() * 31u + (uint32_t)chain_busy() * 3u + up_gen * 101u +
                eqa_sig() * 2654435761u;
+    sig += graph_h() * 40503u;                          /* (Dah: the panel taller once HELP's row goes: drawn again) */
     if (ui.force || sig != ui.layer_sig) {
         ui.layer_sig = sig;
         cv_begin(240, graph_h(), T_BG);                  /* (Dah: the panel's height, the page's under it hidden) */
