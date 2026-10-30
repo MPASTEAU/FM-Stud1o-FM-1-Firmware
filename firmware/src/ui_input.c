@@ -276,7 +276,7 @@ static uint32_t step_leds(void)
  * dark; 0: the keys held and the notes playing, over the idle glow */
 static int keys_own(void)
 {
-    return (name_on() && !ui.menu) || ui.layer || grid_on()
+    return (name_on() && !ui.menu) || ui.layer || grid_write()
 #if FELUCCA_SLICE
            || (!ui.menu && !name_on() && slice_page_on())
 #endif
@@ -347,7 +347,8 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     uint32_t c;
     if (br)
         *br = 0;
-    c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds(br) : grid_on() ? grid_leds() :
+    c = name_on() && !ui.menu ? name_leds() : ui.layer ? layer_leds(br) : grid_write() ? grid_leds() :   /* (Dah: the grid
+                                                         * armed only: not armed its keys play, lit as they play) */
                  song_keys_on() ? song_leds() :         /* (Dah: SONG: the patterns only, no notes played) */
                  (fm1_in.notes & ~kb_layer) | play_leds() | step_leds();
 #if FELUCCA_SLICE
@@ -418,7 +419,7 @@ static void ui_leds(void)
                                                         /* (Dah: the VIEW open, OCT+ held: it glows; SONG: then only) */
     led_put(nb, panel.btn[B_OCTDN], (k & OCT_BREATH_DN) != 0u);
     c = key_leds(&br);
-    g = !keys_map ? 0u : grid_on() && !ui.layer && !name_on() ? 0x7FFFFFFu : 0u;   /* (Dah: the DRUM grid glows as any
+    g = !keys_map ? 0u : grid_write() && !ui.layer && !name_on() ? 0x7FFFFFFu : 0u;   /* (Dah: the DRUM grid glows as any
                                                          * page, no map of what does what: it misled) */
     if (song_keys_on()) {                               /* (Dah) SONG: the white keys the cell's track's patterns: its
                                                          * own lit, the others it has breathing */
