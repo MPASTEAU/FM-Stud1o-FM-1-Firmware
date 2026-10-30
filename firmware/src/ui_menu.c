@@ -475,7 +475,7 @@ static void draw_menu(void)
         fmt_int(rb, (int32_t)r + 1);
         str_cpy(rb + str_len(rb), "/", 2);
         fmt_int(rb + str_len(rb), (int32_t)n);
-        lcd_fill(0, H_HEAD, 240, Y_LABEL - H_HEAD, T_BG);
+        lcd_fill(0, H_HEAD, 240, card_y() - H_HEAD, T_BG);
         knob_card(0, "TAB", MTAB_NAME[menu_tab()], "", (int32_t)menu_tab() * 1000 / (MTAB_COUNT - 1u), 0, 0);
         knob_card(1, "ROW", rb, "", n > 1u ? (int32_t)r * 1000 / (int32_t)(n - 1u) : 0, 0, 0);
         if (menu_valued(ui.menu_sel)) {
@@ -484,7 +484,7 @@ static void draw_menu(void)
         } else
             knob_card(2, "VALUE", "", "", -1, 0, 1);
         knob_card(3, "", "", "", -1, 0, 0);
-        lcd_fill(0, Y_LABEL + HOME_CARD_H, 240, MP_Y - Y_LABEL - HOME_CARD_H, T_BG);
+        lcd_fill(0, card_y() + HOME_CARD_H, 240, MP_Y - 2 - card_y() - HOME_CARD_H, T_BG);
     }
     for (pass = 0; pass < 2u; pass++) {
         int32_t top_y = pass ? (int32_t)split : MP_Y - 2;
