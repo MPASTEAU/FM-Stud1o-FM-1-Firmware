@@ -1199,10 +1199,9 @@ static uint32_t sg_muldiv(uint32_t a, uint32_t b, uint32_t c)
     while (b && a > 0xFFFFFFFFu / b) { a >>= 1; c >>= 1; }
     return c ? a * b / c : 0u;
 }
-/* HA HA HE HU: track k's pattern s as SONG draws it (pstore.c ps_info): its length (1/48 quarters), its picture, its
- * cells; 0 = none there. Read again when a pattern changed (the heap, a track's steps or timing) */
-static struct { uint32_t gen; uint8_t ok[NTRK][33], nc[NTRK][33]; uint16_t len[NTRK][33]; uint32_t den[NTRK][33]; } sgc
-    __attribute__((section(".pool")));
+/* HA HA HE HU: track k's pattern s as SONG draws it (pstore.c ps_info): its length (1/48 quarters), its LEN; 0 = none
+ * there. Read again when a pattern changed (the heap, a track's steps or timing) */
+static struct { uint32_t gen; uint8_t ok[NTRK][33], sl[NTRK][33]; uint16_t len[NTRK][33]; } sgc __attribute__((section(".pool")));
 static uint32_t sg_gen(void)
 {
     uint32_t k, h = ps_gen * 2654435761u + trk_count();
@@ -1212,12 +1211,11 @@ static uint32_t sg_gen(void)
                                                          * section: their own, not that, or every picture read again) */
     return h;
 }
-static int sg_pat(uint32_t k, uint32_t s, uint32_t *len, uint32_t *den, uint32_t *nc)
+static int sg_pat(uint32_t k, uint32_t s, uint32_t *len)
 {
     uint32_t g = sg_gen();
-    uint8_t c;
     k %= NTRK;
-    *len = *den = *nc = 0;
+    *len = 0;
     if (!s || s > 32u || !ps_exists(k, s))
         return 0;
     if (g != sgc.gen) {
@@ -1225,19 +1223,75 @@ static int sg_pat(uint32_t k, uint32_t s, uint32_t *len, uint32_t *den, uint32_t
         sgc.gen = g;
     }
     if (!sgc.ok[k][s]) {
-        sgc.len[k][s] = (uint16_t)ps_info(k, s, &sgc.den[k][s], &c);
-        sgc.nc[k][s] = c;
+        sgc.len[k][s] = (uint16_t)ps_info(k, s, &sgc.sl[k][s]);
         sgc.ok[k][s] = 1;
     }
     *len = sgc.len[k][s];
-    *den = sgc.den[k][s];
-    *nc = sgc.nc[k][s];
     return 1;
+}
+/* (Dah) the patterns' pictures, as HOME's rack: a byte a step, its kind (bits 6..7: SGP_REST, SGP_TIE carrying the
+ * note before, SGP_NOTE, SGP_ACC) and its rows (bits 0..5: a melodic track's notes at their height between the
+ * pattern's lowest and highest, 6 rows; a kit's hits in 3 bands: kick tom, snare clap rim cowbell, the hats).
+ * SG_NPIC of them kept, the least used replaced; decoded again (pstore.c ps_info) only when a pattern changed
+ * (sgc.gen, after sg_pat) */
+enum { SGP_REST, SGP_TIE = 0x40, SGP_NOTE = 0x80, SGP_ACC = 0xC0 };
+#define SG_NPIC 24
+static struct { uint32_t gen, tick; struct { uint32_t use; uint8_t k, s, drum, sl, p[NSTEP]; } e[SG_NPIC]; } sgp
+    __attribute__((section(".pool")));
+static const uint8_t *sg_pic(uint32_t k, uint32_t s, uint32_t *sl)
+{
+    static const uint8_t BAND[NLANE] = {1, 2, 2, 4, 4, 1, 2, 2};   /* (eng_drum.c DRUM_LANE_NOTE's lanes) */
+    uint32_t i, j, b = 0, lo = 127, hi = 0, cur = 0;
+    uint8_t drum = (uint8_t)drum_track(&trk[k % NTRK]), *p;
+    if (sgp.gen != sgc.gen) {
+        for (i = 0; i < SG_NPIC; i++)
+            sgp.e[i].use = sgp.e[i].s = 0;
+        sgp.gen = sgc.gen;
+    }
+    for (i = 0; i < SG_NPIC; i++) {
+        if (sgp.e[i].s == s && sgp.e[i].k == k && sgp.e[i].drum == drum) {
+            sgp.e[i].use = ++sgp.tick;
+            *sl = sgp.e[i].sl;
+            return sgp.e[i].p;
+        }
+        b = sgp.e[i].use < sgp.e[b].use ? i : b;
+    }
+    if (!ps_info(k, s, &sgp.e[b].sl))
+        return (const uint8_t *)(uintptr_t)(sgp.e[b].s = 0);
+    sgp.e[b].k = (uint8_t)k;
+    sgp.e[b].s = (uint8_t)s;
+    sgp.e[b].drum = drum;
+    sgp.e[b].use = ++sgp.tick;
+    *sl = sgp.e[b].sl;
+    p = sgp.e[b].p;
+    for (i = 0; i < *sl; i++)                          /* the notes' range */
+        for (j = 0; ps_st[i].time == ST_NOTE && j < ps_st[i].n && j < 4u; j++) {
+            lo = ps_st[i].note[j] < lo ? ps_st[i].note[j] : lo;
+            hi = ps_st[i].note[j] > hi ? ps_st[i].note[j] : hi;
+        }
+    for (i = 0; i < 2u * *sl; i++) {                   /* (twice round: a TIE at the start carries the end's note) */
+        const step_t *t = &ps_st[i % *sl];
+        uint32_t m = 0;
+        if (t->time == ST_NOTE && (t->n || t->hit) && step_chance(t)) {
+            if (drum || !t->n)
+                for (j = 0; j < NLANE; j++)
+                    m |= t->hit >> j & 1u ? (uint32_t)BAND[j] << (drum ? 0 : 1) : 0u;
+            for (j = 0; !drum && j < t->n && j < 4u; j++)
+                m |= 1u << (hi > lo ? ((t->note[j] - lo) * 5u + (hi - lo) / 2u) / (hi - lo) : 2u);
+            cur = m ? m : 2u;
+            m = cur | ((t->flags & SF_ACCENT) || (t->acc & t->hit) ? SGP_ACC : SGP_NOTE);
+        } else if (t->time == ST_TIE && cur)
+            m = cur | SGP_TIE;
+        else
+            cur = 0;
+        p[i % *sl] = (uint8_t)m;
+    }
+    return p;
 }
 static uint32_t song_unit(const chain_row_t *r)        /* one pass of a section: its clock track's (1/48 quarters) */
 {
-    uint32_t k = chain_clock(r), len, den, nc;
-    return sg_pat(k, r->slot[k], &len, &den, &nc) && len ? len : SG_BARU;
+    uint32_t k = chain_clock(r), len;
+    return sg_pat(k, r->slot[k], &len) && len ? len : SG_BARU;
 }
 static void song_layout(song_lay_t *L)
 {
@@ -3251,33 +3305,36 @@ static int32_t sg_letter(int32_t x, int32_t x1, int32_t y, uint32_t s, uint16_t 
     return w;
 }
 /* the picture of slot s's track k over sections i .. j - 1 (columns x0 .. x1 on screen), but for the letters'
- * columns (skip0 .. skip1, skip2 .. skip3) */
+ * columns (skip0 .. skip1, skip2 .. skip3): its steps (sg_pic) as HOME's rack draws them, the pattern again each
+ * pass; a column more steps than one: theirs at once (every row, the loudest kind) */
 static void sg_picture(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i, uint32_t j, uint32_t s, int32_t x0,
                        int32_t x1, const sg_fill_t *F, const int32_t *skip)
 {
-    int32_t y = SG_LY(k), yb = y + SG_PAD + SG_PH, x;
-    uint32_t q, plen, n, den;
-    (void)sg_pat(k, s, &plen, &den, &n);
-    if (!plen || !n)
+    int32_t y = SG_LY(k), yb = y + SG_PAD + SG_PH, x, nh = SG_PH >= 10 ? 2 : 1;
+    uint32_t q, plen, sl;
+    const uint8_t *pic;
+    int drum = drum_track(&trk[k % NTRK]);
+    (void)sg_pat(k, s, &plen);
+    if (!plen || !(pic = sg_pic(k % NTRK, s, &sl)) || !sl)
         return;
     for (q = i; q < j; q++) {
         int32_t sx = SG_X0 + L->x[q] - off, wt = L->x[q + 1u] - L->x[q] - SG_GAP, a, b;
         uint32_t reps = CHAIN_REP(chain_config.row[q]) ? CHAIN_REP(chain_config.row[q]) : 1u, unit = song_unit(&chain_config.row[q]);
-        uint32_t tot = reps * unit, pc = 0xFFFFFFFFu, pl = 0xFFFFFFFFu, pp = 0xFFFFFFFFu, gaps, notch;
+        uint32_t tot = reps * unit, pc = 0xFFFFFFFFu, pp = 0xFFFFFFFFu, gaps, notch;
         if (wt < 1)
             continue;
         a = sx > x0 ? sx : x0;
         b = q + 1u == j ? sx + wt : sx + wt + SG_GAP;  /* (inside a run: on to the next section) */
         b = b < x1 ? b : x1;
-        gaps = sg_muldiv((uint32_t)wt, plen, tot * n) >= 3u;   /* a cell 3 px or more: a gap between two */
+        gaps = sg_muldiv((uint32_t)wt, plen, tot * sl) >= 3u;   /* a step 3 px or more: a gap between two */
         notch = reps > 1u && (uint32_t)wt / reps >= 4u;        /* the passes far enough apart: a notch between */
         for (x = sx; x < b; x++) {
             uint32_t r = (uint32_t)(x - sx), u = sg_muldiv(r < (uint32_t)wt ? r : (uint32_t)wt - 1u, tot, (uint32_t)wt);
-            uint32_t pos = u % plen, cell = pos * n / plen, pass = u / unit, h;
-            int edge = cell != pc || u / plen != pl, cut = notch && pass != pp && x > sx;
-            uint16_t fill, bar;
-            pc = cell;
-            pl = u / plen;
+            uint32_t u1 = sg_muldiv(r < (uint32_t)wt ? r + 1u : (uint32_t)wt, tot, (uint32_t)wt), pass = u / unit;
+            uint32_t st = u / plen * sl + u % plen * sl / plen, ns = u1 > u ? (u1 - u) * sl / plen : 0u, v = 0, m, l;
+            int edge = st != pc, cut = notch && pass != pp && x > sx;
+            uint16_t fill, bar, col;
+            pc = st;
             pp = pass;
             if (x < a || (x >= skip[0] && x < skip[1]) || (x >= skip[2] && x < skip[3]))
                 continue;
@@ -3287,13 +3344,26 @@ static void sg_picture(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i,
                 cv_rect(x, y + SG_PAD, 1, SG_PH, T_SURF);
                 continue;
             }
-            if (gaps && edge && x > sx)
+            for (l = 0, ns = ns ? (ns < sl ? ns : sl) : 1u; l < ns; l++) {   /* (wide: the steps under the column) */
+                m = pic[(st + l) % sl];
+                v = ((v & 0xC0u) > (m & 0xC0u) ? v & 0xC0u : m & 0xC0u) | ((v | m) & 0x3Fu);
+            }
+            if (gaps && edge && x > sx && (v & 0xC0u) != SGP_TIE)   /* (a TIE goes on through the gap) */
                 continue;
-            h = (den >> (2u * cell)) & 3u;
-            if (h)
-                cv_rect(x, yb - (int32_t)(h * SG_PH / 3u), 1, (int32_t)(h * SG_PH / 3u), bar);
-            else
+            if (!(v & 0xC0u)) {
                 cv_rect(x, yb - 1, 1, 1, ux_mix(fill, bar, 30));
+                continue;
+            }
+            col = (v & 0xC0u) == SGP_ACC ? (fill == T_THEME ? T_INK : T_TEXT) : fill == T_THEME ? ux_mix(T_THEME, T_INK, 70) : T_THEME;
+            col = (v & 0xC0u) == SGP_TIE ? ux_mix(fill, col, 55) : col;
+            for (l = 0; l < 6u; l++)
+                if (v >> l & 1u) {
+                    if (drum)                          /* a kit: its bands, a third of the height each */
+                        cv_rect(x, yb - (int32_t)(l + 1u) * SG_PH / 3 + (l < 2u), 1,
+                                (int32_t)(l + 1u) * SG_PH / 3 - (int32_t)l * SG_PH / 3 - (l < 2u), col);
+                    else
+                        cv_rect(x, yb - nh - (int32_t)l * (SG_PH - nh) / 5, 1, nh, col);
+                }
         }
     }
 }
@@ -3304,8 +3374,8 @@ static void sg_block(const song_lay_t *L, int32_t off, uint32_t k, uint32_t i, u
 {
     int32_t hi = SG_X0 + SG_W, y = SG_LY(k), bx = SG_X0 + L->x[i] - off, bw = L->x[j] - L->x[i] - SG_GAP, lx, w;
     int32_t x0 = bx > SG_X0 ? bx : SG_X0, x1 = bx + bw < hi ? bx + bw : hi, skip[4] = {0, 0, 0, 0};
-    uint32_t ql, qd, qn;
-    int saved = sg_pat(k, s, &ql, &qd, &qn), cur = c >= i && c < j;
+    uint32_t ql;
+    int saved = sg_pat(k, s, &ql), cur = c >= i && c < j;
     sg_fill_t F = {0, 0, 0, 0, 0};
     uint32_t p = chain.running && chain.row >= i && chain.row < j ? chain.row : 0xFFu;
     if (x1 <= x0)
@@ -3474,8 +3544,8 @@ static void graph_song(void)
         if (sp >= SG_X0 && sp < hi - 1) {              /* the playhead, across the lanes (INK on the cell selected) */
             for (k = 0; k < trk_count(); k++) {
                 uint32_t s = c < L.n ? chain_config.row[c].slot[k] : CHAIN_SILENT;
-                uint32_t ql, qd, qn;
-                int on = k == lane && s != CHAIN_SILENT && sg_pat(k, s, &ql, &qd, &qn) && sp >= SG_X0 + L.x[c] - off &&
+                uint32_t ql;
+                int on = k == lane && s != CHAIN_SILENT && sg_pat(k, s, &ql) && sp >= SG_X0 + L.x[c] - off &&
                          sp + 2 <= SG_X0 + L.x[c + 1u] - off - SG_GAP;
                 cv_rect(sp, SG_LY(k), 2, SG_LH + (k + 1u < trk_count() ? SG_LG : 0), on ? T_INK : T_ACCENT);
             }

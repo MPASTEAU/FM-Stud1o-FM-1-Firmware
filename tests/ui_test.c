@@ -8609,9 +8609,8 @@ static int test_song_lanes_drawn(void)
     return bad;
 }
 
-/* SONG's pictures (project.c proj_density, ui_graph.c sg_picture): a slot's picture is that track's steps there (a
- * cell a step at LEN 16: rest 0, tie 1, note or hit 2, accent 3; at LEN 32 two steps a cell, their mean rounded up),
- * the other tracks' their own; drawn in its lane as bars that high (THEME on RAISE, INK in the cell selected), REPS
+/* SONG's pictures (ui_graph.c sg_pic, sg_picture): a slot's picture is that track's steps there, as HOME's rack (a
+ * byte a step: rest, a TIE carrying the note before, note, accent; the notes' rows), the other tracks' their own; REPS
  * passes notched; a slot saved again is read again. (The panel's text in its bands: tests/ui_render.c song_bands) */
 static uint32_t sg_bar(int32_t x, int32_t k)          /* lane k's bar height at column x (THEME or INK pixels) */
 {
@@ -8621,13 +8620,17 @@ static uint32_t sg_bar(int32_t x, int32_t k)          /* lane k's bar height at 
         n += sg_px(x, y) == T_THEME || sg_px(x, y) == T_INK;
     return n;
 }
-static uint32_t sg_den(uint32_t k) { uint32_t l, d, n; return sg_pat(k, 2, &l, &d, &n) ? d : 0u; }   /* (track k's pattern 2) */
-static uint32_t sg_nc(uint32_t k) { uint32_t l, d, n; return sg_pat(k, 2, &l, &d, &n) ? n : 0u; }
+static const uint8_t *sg_p2(uint32_t k, uint32_t *sl)   /* (track k's pattern 2) */
+{
+    uint32_t l;
+    return sg_pat(k, 2, &l) ? sg_pic(k, 2, sl) : 0;
+}
 static int test_song_pictures(void)
 {
     song_lay_t L;
     int bad = 0, ok;
-    uint32_t i, d, want, lv[16] = {0};
+    uint32_t i, d, sl = 0;
+    const uint8_t *p;
     int32_t sx, wt;
     ui_power_on();
     sgw.zoom = 192;                                  /* (Dah: zoomed in, a bar over the view: the cells wide) */
@@ -8650,52 +8653,20 @@ static int test_song_pictures(void)
     ui.song_row = 0; ui.song_trk = 0;
     ui_prefs |= PREF_ANIM_OFF;
     go_page(GR_SONG); frames(100);
-    lv[5] = 3; lv[6] = 1; lv[8] = 2; lv[12] = 2;
-    for (want = 0, i = 0; i < 16u; i++) want |= lv[i] << (2u * i);
-    ok = sg_nc(2) == 16u && sg_den(2) == want && sg_den(0) == 2u && !sg_den(1) && !sg_den(3);
-    bad += check("SONG pictures: a slot's picture is that track's steps (rest 0, tie 1, note / hit 2, accent 3), "
-                 "the others their own", ok);
-    song_layout(&L);
-    sx = SG_X0 + L.x[0]; wt = L.x[1] - L.x[0] - SG_GAP;
-    ok = 1;
-    for (i = 4; i < 16u; i++) {                      /* (cells 0..3 hold the letter) */
-        int32_t x = sx + (int32_t)((2u * i + 1u) * (uint32_t)wt / 32u);
-        ok &= sg_bar(x, 2) == lv[i] * SG_PH / 3u && sg_px(x, SG_LY(2) + SG_LH - 1) == T_RAISE;
-    }
-    bad += check("SONG pictures: drawn in the lane, a bar a cell as high as its level (THEME on RAISE)", ok);
-    ui.song_trk = 2; frames(100);                     /* the cell selected: INK bars on THEME */
-    ok = 1;
-    for (i = 4; i < 16u; i++) {
-        int32_t x = sx + (int32_t)((2u * i + 1u) * (uint32_t)wt / 32u), y;
-        uint32_t n = 0;
-        for (y = SG_LY(2) + SG_PAD; y < SG_LY(2) + SG_PAD + SG_PH; y++) n += sg_px(x, y) == T_INK;
-        ok &= n == lv[i] * SG_PH / 3u && sg_px(x, SG_LY(2) + SG_LH - 1) == T_THEME;
-    }
-    bad += check("SONG pictures: in the cell selected INK bars on THEME", ok);
+    p = sg_p2(2, &sl);
+    ok = p && sl == 16u && (p[5] & 0xC0u) == SGP_ACC && (p[6] & 0xC0u) == SGP_TIE && (p[6] & 0x3Fu) == (p[5] & 0x3Fu) &&
+         (p[8] & 0xC0u) == SGP_NOTE && (p[8] & 0x3Fu) > (p[5] & 0x3Fu) && (p[12] & 0xC0u) == SGP_NOTE && !p[14] && !p[0];
+    p = sg_p2(0, &sl);
+    ok &= p && (p[0] & 0xC0u) == SGP_NOTE && !p[1] && !sg_p2(1, &sl);
+    bad += check("SONG pictures: a slot's picture is that track's steps (an accent, its tie at its rows, a note higher, "
+                 "a hit; CHANCE 0 none), the others their own", ok);
     chain_config.row[0].repeat = 2;                  /* x2: the pattern twice, a notch between */
-    sgw.zoom = 96;                                   /* (Dah: the two in the view) */
+    sgw.zoom = 96;
     ui.song_trk = 0; frames(100);
     song_layout(&L);
     sx = SG_X0 + L.x[0]; wt = L.x[1] - L.x[0] - SG_GAP;
-    ok = sg_bar(sx + wt / 2 + (int32_t)(5u * (uint32_t)wt / 32u + (uint32_t)wt / 64u), 2) == SG_PH &&
-         sg_px(sx + wt / 2, SG_LY(2) + SG_PAD + 1) == T_SURF && sg_px(sx + wt / 2, SG_LY(2)) == T_RAISE;
-    bad += check("SONG pictures: REPS 2 draws the pattern twice, notched between (the block whole)", ok);
-    trk[2].p[P_SLEN] = 32;                           /* LEN 32: two steps a cell, the mean rounded up */
-    memset(trk[2].step, 0, sizeof trk[2].step);
-    for (d = 0; d < NSTEP; d++) trk[2].step[d].time = ST_REST;
-    trk[2].step[0].time = trk[2].step[1].time = ST_NOTE; trk[2].step[0].n = trk[2].step[1].n = 1;   /* 2+2: 2 */
-    trk[2].step[2].time = ST_NOTE; trk[2].step[2].n = 1;                                             /* 2+0: 1 */
-    trk[2].step[4].time = ST_NOTE; trk[2].step[4].n = 1; trk[2].step[4].flags = SF_ACCENT;         /* 3+0: 2 */
-    trk[2].step[6].time = ST_NOTE; trk[2].step[6].hit = 2; trk[2].step[6].acc = 2;                 /* 3+1: 2 */
-    trk[2].step[7].time = ST_TIE;
-    pat_keep(2);
-    fm1_ms += 1000u; frames(100);
-    bad += check("SONG pictures: LEN 32, two steps a cell (their mean rounded up); saved again: read again",
-                 sg_nc(2) == 16u && sg_den(2) == (2u | 1u << 2 | 2u << 4 | 2u << 6));
-    trk[2].p[P_SLEN] = 5;
-    pat_keep(2);
-    fm1_ms += 1000u; frames(100);
-    bad += check("SONG pictures: LEN 5, a cell a step", sg_nc(2) == 5u && sg_den(2) == (2u | 2u << 2 | 2u << 4 | 3u << 8));
+    bad += check("SONG pictures: REPS 2 draws the pattern twice, notched between (the block whole)",
+                 sg_px(sx + wt / 2, SG_LY(2) + SG_PAD + 1) == T_SURF && sg_px(sx + wt / 2, SG_LY(2)) == T_RAISE);
     ui_prefs &= ~PREF_ANIM_OFF;
     chain_defaults(&chain_config);
     ui.song_row = ui.song_trk = 0;

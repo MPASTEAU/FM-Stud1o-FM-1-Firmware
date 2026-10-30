@@ -533,35 +533,19 @@ static int ps_decode_to(uint32_t k, const uint8_t *b, uint32_t n, step_t *st, in
         m->on |= (uint8_t)(1u << k);
     return 1;
 }
-/* SONG's picture of track k's pattern num: its length (1/48 quarters, 0 none), its cells' levels (2 bits each: rest 0,
- * tie 1, note / hit 2, accent 3, a cell's mean rounded up), its cells (min(LEN, 16)) */
+/* SONG's picture of track k's pattern num: its length (1/48 quarters, 0 none), its LEN (*slen); its steps left
+ * decoded in ps_st (ui_graph.c sg_pic draws them) */
 static uint32_t len48_of(int32_t len, int32_t div);
-static uint32_t ps_info(uint32_t k, uint32_t num, uint32_t *den, uint8_t *ncell)
+static uint32_t ps_info(uint32_t k, uint32_t num, uint8_t *slen)
 {
     int16_t tm[4];
     uint8_t q;
-    uint32_t n = ps_exists(k, num) ? ps_fetch(k, num) : 0u, len, nc, c, i, d = 0;
-    *den = 0;
-    *ncell = 0;
+    uint32_t n = ps_exists(k, num) ? ps_fetch(k, num) : 0u;
+    *slen = 0;
     ps_m.count = 0;
     if (!n || !ps_decode_to(k, ps_buf, n, ps_st, tm, &q, &ps_m))
         return 0;
-    len = (uint32_t)clamp(tm[0], 1, NSTEP);
-    nc = len < 16u ? len : 16u;
-    for (c = 0; c < nc; c++) {
-        uint32_t i0 = c * len / nc, i1 = (c + 1u) * len / nc, w = 0;
-        for (i = i0; i < i1; i++) {
-            const step_t *s = &ps_st[i];
-            if (s->time == ST_TIE)
-                w += 1u;
-            else if (s->time == ST_NOTE && (s->n || s->hit) && step_chance(s))
-                w += (s->flags & SF_ACCENT) || s->acc ? 3u : 2u;
-        }
-        w = (w + (i1 - i0) - 1u) / (i1 - i0);
-        d |= (w < 3u ? w : 3u) << (2u * c);
-    }
-    *den = d;
-    *ncell = (uint8_t)nc;
+    *slen = (uint8_t)clamp(tm[0], 1, NSTEP);
     return len48_of(tm[0], tm[1]);
 }
 static void ps_reset(void)                              /* no pattern but the ones on the tracks, each number 1 */
