@@ -1625,7 +1625,7 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
 
 /* SEQ step entry = step recording (1.2, Discussion #133: only with the track armed and the transport stopped), acid
  * style: the keys pressed together (POLY: up to 4 notes, MONO: the last one) become the cursor step; releasing all
- * keys moves on one step (wrapping inside LEN). With CHRD on a key writes what it sounds, as live recording does:
+ * keys leaves the cursor there (Dah: no moving on). With CHRD on a key writes what it sounds, as live recording does:
  * POLY its chord, MONO the chord's root. MENU > CONTROL > CHORD ENTRY ADD (1.2, #155): each key adds its notes to
  * the cursor step or takes them out (step_toggle), one after another with one hand, and letting go moves nothing: the
  * cursor moves by KNOB 1 (STEP) or PRESETS only, as it always could (EDIT still clears the step and moves on) */
@@ -1668,12 +1668,8 @@ static void seq_entry(uint32_t pressed)
         }
         last_note = (uint8_t)note;
     }
-    if (ui.entry_open && !(fm1_in.notes & ~kb_layer)) {
-        if (add)
-            ui.entry_open = 0;                          /* (ADD: the cursor stays) */
-        else
-            cursor_set(ui.cursor + 1);
-    }
+    if (ui.entry_open && !(fm1_in.notes & ~kb_layer))
+        ui.entry_open = 0;                              /* (Dah: the cursor stays, as ADD: KNOB 1 moves it) */
 }
 
 /* Discussions #92 / #94: the PRESETS knob by page (the menu, a dialog, NAME and the layers: ui_input before this).

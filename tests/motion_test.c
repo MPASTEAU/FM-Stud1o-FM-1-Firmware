@@ -689,7 +689,7 @@ static int lock_ui(void)
     bad += check("the roll, armed (step recording): a note key held (the entry) is the step held; KNOB 3 locks ATK, TIME untouched", ok &&
         motion_lock_get(t, 0, P_ATK, &v) && v == t->p[P_ATK] + 4 && t->step[0].time == ST_NOTE);
     lk_up(kn);
-    bad += check("  let go: the note and the lock on step 1, the cursor on", ui.cursor == 1u && t->step[0].n == 1u &&
+    bad += check("  let go: the note and the lock on step 1, the cursor stays (Dah)", ui.cursor == 0u && t->step[0].n == 1u &&
         motion_lock_count(t) == 1u && motion_lock_steps(0, 0) == 1u);
     cursor_set(0);
     press(B_EDIT);
