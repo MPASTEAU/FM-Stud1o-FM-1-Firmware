@@ -1606,14 +1606,23 @@ static uint32_t oct_taps(uint32_t pressed, int here)
 }
 
 /* MENU > CONTROL > CHORD ENTRY ADD (1.2, #155: chords with one hand): a key's notes go into the cursor step beside what
- * is there (up to 4); MONO keeps one note (another key replaces it). A TIE or REST step becomes a note step. A note there
- * already stays (Dah: recording never takes a note out, the key records it again; EDIT and the knobs edit) */
+ * is there (up to 4); MONO keeps one note (another key replaces it). A TIE or REST step becomes a note step. (Dah) A
+ * single note there already goes out (the step a REST when none is left): step recording's way to take one out; live
+ * recording never takes a note out */
 static void step_add(const track_t *t, step_t *st, const uint8_t *ch, uint32_t n)
 {
     uint32_t i, j;
     if (st_kind(st) != ST_NOTE) {
         st->n = 0;
         st->time = ST_NOTE;
+    }
+    for (j = 0; n == 1u && j < st->n && st->note[j] != ch[0]; j++)
+        ;
+    if (n == 1u && j < st->n) {                        /* (Dah) a single note there already: out (a chord key adds only) */
+        st_del(st, j);
+        if (!st->n)
+            st->time = ST_REST;
+        return;
     }
     if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* MONO / LEG / UNI: one note */
         st->note[0] = ch[0];

@@ -521,11 +521,12 @@ static int rec_keeps(void)
         press(B_REC);
         ok &= song.rec == 1u && !song.playing;
         tap_k(k);
-        ok &= has_note(&t->step[3], note) && t->step[3].n == 1u;
+        ok &= add ? !t->step[3].n && st_kind(&t->step[3]) == ST_REST    /* (Dah) ADD: a single note there goes out */
+                  : has_note(&t->step[3], note) && t->step[3].n == 1u;   /* HOLD: the keys are the step */
         tap_k(k);
         ok &= has_note(&t->step[3], note) && t->step[3].n == 1u;
     }
-    bad += check("REC on STEP (stopped, ADD and HOLD): a key whose note is on the step keeps it, twice", ok);
+    bad += check("REC on STEP (stopped): ADD, a single note there goes out and comes back; HOLD keeps it", ok);
     ui_power_on();
     t = TSEL;
     t->p[P_VOICE] = V_POLY;
