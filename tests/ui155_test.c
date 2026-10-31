@@ -688,9 +688,36 @@ static int song_grid(void)
     return bad;
 }
 
+/* (Dah) SAVE held 0.7 s: the project open saved over itself (no project open here: the NAME page, FILE's COPY, a new
+ * one); its release opens no SAVE page; playing: STOP FIRST */
+static int save_hold(void)
+{
+    int bad = 0, ok;
+    uint32_t pg;
+    ui_power_on();
+    go_home();
+    frame();
+    hold(B_SAVE);
+    ok = name_on() && nm.kind == NK_ARCH_SAVE && ui.home;
+    press(B_OCTDN);                                     /* (NAME cancelled) */
+    ok &= !name_on() && ui.home;
+    go_page(GR_ROLL);
+    pg = ui.page;
+    song.playing = 1;
+    btn_down(B_SAVE); frames(750);
+    ok &= msg_is("STOP FIRST") && !name_on();
+    btn_up(B_SAVE); frame();
+    ok &= ui.page == pg && !ui.home;
+    song.playing = 0;
+    press(B_SAVE);
+    ok &= cur_page()->fam == FAM_SAVE;                  /* (a tap: the SAVE pages as before) */
+    bad += check("SAVE held: the project open saved (none: the NAME page, a new one; playing: STOP FIRST), no page", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows() + song_grid();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows() + song_grid() + save_hold();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

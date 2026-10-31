@@ -34,6 +34,8 @@ static uint32_t pfs_pct(uint32_t id);
 static uint32_t pfs_mem_pct(void);
 static uint32_t pfs_cur(void);
 static int project_open(uint32_t id);
+static int project_save_cur(void);
+static int pfs_busy(void);
 static int project_new_file(void);
 static int project_copy(const char *name);
 static int project_rename_cur(const char *name);

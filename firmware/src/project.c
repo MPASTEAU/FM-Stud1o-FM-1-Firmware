@@ -1789,6 +1789,7 @@ static uint32_t pfs_pct(uint32_t id) { (void)id; return 0; }
 static uint32_t pfs_mem_pct(void) { return 0; }
 static uint32_t pfs_cur(void) { return 0; }
 static int project_save_cur(void) { return 1; }
+static int pfs_busy(void) { return transport_busy() || chain_busy() ? (ui_message("STOP FIRST"), 1) : 0; }
 static int project_open(uint32_t id) { (void)id; ui_message("NO FLASH"); return 1; }
 static int project_new_file(void) { chain_defaults(&chain_config); ps_reset(); song.ntrk = 1; song.sel = 0; return project_new(); }
 static int project_copy(const char *name) { (void)name; return 1; }

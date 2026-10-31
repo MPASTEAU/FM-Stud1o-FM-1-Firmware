@@ -1843,6 +1843,25 @@ static void sel_list(int32_t s)
         presets_turn(s);
 }
 
+/* (Dah) SAVE held: the project open saved over itself, no dialog (as FILE's OPEN and NEW save it first): "SAVED" and its
+ * name; none open yet (new music): FILE's COPY, the NAME page, saved as a new project. Stopped only (STOP FIRST: a flash
+ * write silences the audio) */
+static void save_quick(void)
+{
+    char m[24] = "SAVED ";
+    if (pfs_busy())
+        return;
+    if (!pfs_there(pfs_cur())) {
+        name_open(NK_ARCH_SAVE, 0);
+        return;
+    }
+    if (project_save_cur()) {
+        ui_message("SAVE ERROR");
+        return;
+    }
+    (void)pfs_name(pfs_cur(), m + 6);
+    ui_message(m);
+}
 /* HOME / REC / SAVE: tap on release, hold 0.7 s fires once. t0 = press time | 1,
  * bit 1 = fired (or swallowed: then the release is no tap either) */
 enum { BT_NONE, BT_TAP, BT_HOLD };
@@ -2216,6 +2235,8 @@ static void ui_input(void)
         name_input(notes, oct);
         return;
     }
+    if (save == BT_HOLD && !name_on())                  /* (Dah) SAVE held: the project open saved (save_quick) */
+        save_quick();
     if (save == BT_TAP && !ui.confirm)                  /* SAVE acts on release (a hold: nothing) */
         open_family(FAM_SAVE);
     if (ui.confirm) {                                   /* OCT- cancels, OCT+ does it; nothing else reacts */
