@@ -4,16 +4,18 @@
 
   gen_splash_image.py OUT.h [IMAGE]
 
-IMAGE (default assets/splash.webp) is fitted into SPLASH_SIZE x SPLASH_SIZE (aspect kept, centred on black; nearest
+IMAGE (default assets/splash.webp) is fitted into SPLASH_SIZE x SPLASH_SIZE (aspect kept, centred; nearest
 neighbour when it is scaled up by a whole factor, Lanczos otherwise) and quantized to 16 colours (SPLASH_PAL, RGB565 byte-swapped as the
 canvas stores pixels (src/gfx.c: the panel takes RGB565 big-endian): SPLASH_W, SPLASH_H, SPLASH_PAL[16], SPLASH_RLE[] (Dah: runs, a byte each: the colour high, the length - 1 low). No image:
-SPLASH_W 0 (ui_draw.c draw_splash draws none).
+SPLASH_W 0 (ui_draw.c draw_splash draws none). Colour 0 is see-through: where the image is (its alpha under half), the
+screen's BG shows (draw_splash leaves it); the edges it keeps are mixed over ICE's BG (EDGE_BG).
 """
 import sys
 from pathlib import Path
 
 SPLASH_SIZE = 144                       # (Dah: the fruit larger)
 KEEP = [(248, 140, 96), (190, 96, 62)]   # (Dah) gen_logo.py's leaves, ICE's ACCENT and its vein
+EDGE_BG = (8, 16, 24)                    # (ICE's BG: the antialiased edges mixed over it)
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -33,27 +35,35 @@ def main():
         print(f"splash: no {src.name}, none")
         return
     from PIL import Image
-    im = Image.open(src).convert("RGB")
+    im = Image.open(src).convert("RGBA")
     w, h = im.size
     k = min(SPLASH_SIZE / w, SPLASH_SIZE / h)
     nw, nh = max(1, round(w * k)), max(1, round(h * k))
     exact = k >= 1 and k == int(k)
     im = im.resize((nw, nh), Image.NEAREST if exact else Image.LANCZOS)
-    canvas = Image.new("RGB", (SPLASH_SIZE, SPLASH_SIZE))
-    canvas.paste(im, ((SPLASH_SIZE - nw) // 2, (SPLASH_SIZE - nh) // 2))
-    q = canvas.quantize(colors=16, method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)   # (Dah: 4 bits a pixel)
-    keep = [c for c in KEEP if any(abs(px[0] - c[0]) + abs(px[1] - c[1]) + abs(px[2] - c[2]) < 40
-                                   for px in canvas.getdata())]
-    if keep:                            # (Dah) a small area's colours MEDIANCUT drops (the logo's leaves): kept
-        q = canvas.quantize(colors=16 - len(keep), method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
-        pal = q.getpalette()[:3 * (16 - len(keep))]
-        for c in keep:
-            pal += list(c)
-        pi = Image.new("P", (1, 1))
-        pi.putpalette(pal + [0] * (768 - len(pal)))
-        q = canvas.quantize(palette=pi, dither=Image.Dither.NONE)
+    rgba = Image.new("RGBA", (SPLASH_SIZE, SPLASH_SIZE), (0, 0, 0, 0))
+    rgba.paste(im, ((SPLASH_SIZE - nw) // 2, (SPLASH_SIZE - nh) // 2))
+    see = [a < 128 for a in rgba.getchannel("A").getdata()]   # (colour 0: the screen's BG shows)
+    canvas = Image.new("RGBA", (SPLASH_SIZE, SPLASH_SIZE), EDGE_BG + (255,))
+    canvas.alpha_composite(rgba)
+    canvas = canvas.convert("RGB")
+    solid = [px for px, s_ in zip(canvas.getdata(), see) if not s_] or [EDGE_BG]
+    keep = [c for c in KEEP if any(abs(px[0] - c[0]) + abs(px[1] - c[1]) + abs(px[2] - c[2]) < 40 for px in solid)]
+    body = Image.new("RGB", (len(solid), 1))       # (the colours of what shows: 15, the leaves' kept)
+    body.putdata(solid)
+    q = body.quantize(colors=15 - len(keep), method=Image.Quantize.MEDIANCUT, dither=Image.Dither.NONE)
+    pal = q.getpalette()[:3 * (15 - len(keep))]   # (Dah) a small area's colours MEDIANCUT drops (the logo's leaves): kept
+    for c in keep:
+        pal += list(c)
+    pi = Image.new("P", (1, 1))
+    pi.putpalette(pal + pal[:3] * (256 - len(pal) // 3))   # (15 colours: each pixel its nearest of them)
+    q = canvas.quantize(palette=pi, dither=Image.Dither.NONE)
+    q.putdata([0 if s_ else v + 1 for v, s_ in zip(q.getdata(), see)])   # (colour 0 only where see-through)
+    q.putpalette(list(EDGE_BG) + pal + [0] * (768 - 3 - len(pal)))
     pal = q.getpalette()[:48] + [0] * 48
     pal = [rgb565_swapped(pal[3 * i], pal[3 * i + 1], pal[3 * i + 2]) for i in range(16)]
+    pal = [pal[0]] + [v ^ 0x0100 if v == pal[0] else v for v in pal[1:]]   # (ui_draw.c draw_splash: colour 0's value
+                                                                            # is see-through: no other may equal it)
     ix = list(q.getdata())
     pk, i = [], 0                       # (Dah) runs: colour << 4 | length - 1 (1 .. 16), row after row
     while i < len(ix):

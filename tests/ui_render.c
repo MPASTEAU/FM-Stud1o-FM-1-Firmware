@@ -626,8 +626,9 @@ static void mono_check(void)
         uint16_t c = swap16(host_screen[i]);
         int32_t d = (int32_t)((c >> 5) & 63u) - (int32_t)(c >> 11) * 2;
         if (strstr(cur_name, "splash") && i % 240u - (240u - SPLASH_W) / 2u < SPLASH_W &&
-            i / 240u - (uint32_t)SPL_PY < SPLASH_H)
-            continue;                                   /* (the splash's picture keeps its colours) */
+            i / 240u - (uint32_t)SPL_PY < SPLASH_H &&
+            splash_ix((i / 240u - (uint32_t)SPL_PY) * SPLASH_W + i % 240u - (240u - SPLASH_W) / 2u))
+            continue;                                   /* (the splash's picture keeps its colours; round it the BG) */
         if ((c >> 11) != (c & 31u) || (bw ? d < -2 || d > 2 : d != 0)) {
             if (!mono_bad) fprintf(rep, "%s %s: pixel %u,%u = %04x off %s\n", bw ? "MONO" : "GREY", cur_name, i % 240u, i / 240u, c,
                                    bw ? "neutral" : "gray");
@@ -1665,7 +1666,8 @@ static void draw(int s)
             uint32_t x, y, px0 = (240u - SPLASH_W) / 2u, bad = 0;
             for (y = 0; y < SPLASH_H; y++)
                 for (x = 0; x < SPLASH_W; x++)
-                    bad += host_screen[(uint32_t)(SPL_PY + y) * 240u + px0 + x] != SPLASH_PAL[splash_ix(y * SPLASH_W + x)];
+                    bad += host_screen[(uint32_t)(SPL_PY + y) * 240u + px0 + x] !=
+                           (splash_ix(y * SPLASH_W + x) ? SPLASH_PAL[splash_ix(y * SPLASH_W + x)] : host_screen[0]);   /* (0: the BG) */
             if (bad) {
                 if (rep) fprintf(rep, "FIND %-26s the splash picture off in %u pixels\n", cur_name, (unsigned)bad);
                 nfind++;

@@ -1,16 +1,16 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""FM Studio's logo: a blueberry (after FL Studio's fruit), drawn at 4x then reduced, in ICE's colours (the default
-palette: BG, TEXT, THEME, ACCENT); gen_logo.py OUT (assets/splash.webp)"""
-import math, sys
+"""FM Studio's logo: a blueberry (after FL Studio's fruit), drawn at 4x then reduced, in ICE's colours (TEXT, THEME,
+ACCENT): the fruit alone, no glow, no rim, no background (transparent: the splash shows the screen's BG there,
+tools/gen_splash_image.py; the pages their own).
+  gen_logo.py [OUT]   OUT (default assets/splash.webp, with its alpha), and the pages' icon (a 64 x 64 PNG):
+                      web/editor.html's and web/emu/index.html's <link rel="icon"> data URI"""
+import base64, io, math, re, sys
+from pathlib import Path
 from PIL import Image, ImageDraw, ImageFilter
-S = 2048; out = sys.argv[1]
-im = Image.new("RGB", (S, S), (8, 16, 24))   # (ICE's BG, T_BG: no square round it)
-d = ImageDraw.Draw(im)
-# soft glow behind
-glow = Image.new("RGB", (S, S), (8, 16, 24)); g = ImageDraw.Draw(glow)
-g.ellipse((420, 520, 1630, 1730), fill=(40, 120, 170)); glow = glow.filter(ImageFilter.GaussianBlur(160))
-im = Image.blend(im, glow, 0.45); d = ImageDraw.Draw(im)
+ROOT = Path(__file__).resolve().parent.parent
+S = 2048; out = Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "assets" / "splash.webp"
+im = Image.new("RGBA", (S, S), (0, 0, 0, 0))   # (nothing round it)
 # the berry: radial gradient
 cx, cy, R = 1024, 1150, 560
 berry = Image.new("RGB", (S, S)); bm = Image.new("L", (S, S), 0)
@@ -26,14 +26,13 @@ for y in range(cy - R, cy + R):
         else:
             k = (t - 0.5) / 0.5; col = tuple(int(b[i] + (c[i] - b[i]) * k) for i in range(3))
         px[x, y] = col
-im.paste(berry, (0, 0), bm); d = ImageDraw.Draw(im)
-# bloom (the berry's dusty sheen): a pale rim on the left
-rim = Image.new("L", (S, S), 0); ImageDraw.Draw(rim).ellipse((cx - R, cy - R, cx + R, cy + R), outline=255, width=26)
-rim = rim.filter(ImageFilter.GaussianBlur(18))
-im.paste((170, 220, 240), (0, 0), Image.eval(rim, lambda v: v * 3 // 10))
-# highlight
+im.paste(berry, (0, 0), bm)
+# highlight (inside the berry only)
 hl = Image.new("L", (S, S), 0); ImageDraw.Draw(hl).ellipse((cx - 330, cy - 400, cx - 120, cy - 250), fill=255)
-hl = hl.filter(ImageFilter.GaussianBlur(30)); im.paste((236, 246, 250), (0, 0), Image.eval(hl, lambda v: v * 8 // 10))
+hl = hl.filter(ImageFilter.GaussianBlur(30))
+hl = Image.eval(hl, lambda v: v * 8 // 10)
+hl = Image.composite(hl, Image.new("L", (S, S), 0), bm)
+im.paste((236, 246, 250, 255), (0, 0), hl)
 d = ImageDraw.Draw(im)
 # the crown: a five-pointed calyx at the top
 ccx, ccy, r0, r1 = cx + 40, cy - R + 70, 70, 175
@@ -55,5 +54,14 @@ def leaf(x0, y0, x1, y1, w, col, vein):
 d.line((ccx + 10, ccy - 40, ccx + 70, ccy - 210), fill=(200, 108, 72), width=34)   # (ICE's ACCENT)
 leaf(ccx + 70, ccy - 200, ccx + 390, ccy - 330, 95, (248, 140, 96), (190, 96, 62))
 leaf(ccx + 60, ccy - 205, ccx - 200, ccy - 380, 80, (248, 140, 96), (190, 96, 62))
-im = im.resize((512, 512), Image.LANCZOS)
-im.save(out)
+small = im.resize((512, 512), Image.LANCZOS)
+small.save(out, quality=90, alpha_quality=100, method=6)
+ico = io.BytesIO()
+im.resize((64, 64), Image.LANCZOS).save(ico, "PNG", optimize=True)
+uri = "data:image/png;base64," + base64.b64encode(ico.getvalue()).decode()
+for page in (ROOT / "web" / "editor.html", ROOT / "web" / "emu" / "index.html"):
+    text = page.read_text()
+    new = re.sub(r'(<link rel="icon" type="image/png" href=")data:image/png;base64,[A-Za-z0-9+/=]*(")', lambda m: m.group(1) + uri + m.group(2), text, count=1)
+    if new != text:
+        page.write_text(new)
+print(f"logo: {out} 512 x 512 (transparent round the fruit), the pages' icon 64 x 64 ({len(ico.getvalue())} B)")

@@ -2087,8 +2087,8 @@ static void draw_columns_in(void)
 
 
 /* The power-on splash (main.c fm1_main, web/emu felucca_web.c): on BG, the picture (build/gen/ui_splash.h,
- * tools/gen_splash_image.py: SPLASH_W x SPLASH_H) centred near the top, under it centred the name (FW_NAME) and the
- * version in AF_M, then "based on Felucca" in AF_S (MID): the firmware this one is built on, as its licence asks. The
+ * tools/gen_splash_image.py: SPLASH_W x SPLASH_H, the fruit alone, its colour 0 see-through) centred near the top,
+ * under it centred the name (FW_NAME) and the version in AF_M, then "based on Felucca" in AF_S (MID): the firmware this one is built on, as its licence asks. The
  * screen is more than the canvas (CV_MAX, 240 x 124): drawn as two canvases of SPL_STRIP rows, each with the part of
  * the picture and the lines that fall in it. In the saved palette (settings_init before it) */
 #include "ui_splash.h"
@@ -2125,7 +2125,7 @@ static void draw_splash(void)
                 }
                 if (left)
                     left--;
-                if (r >= 0)
+                if (r >= 0 && SPLASH_PAL[col] != SPLASH_PAL[0])   /* (colour 0: see-through, the BG shows) */
                     cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PAL[col];
             }
         }
