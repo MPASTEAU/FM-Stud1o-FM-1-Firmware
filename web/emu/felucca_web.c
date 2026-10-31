@@ -73,9 +73,14 @@ static uint32_t web_cost_ticks, web_cpu_cal = 4000u, web_peak_ticks, web_overrun
 static uint32_t fm1_ticks(void) { return web_ticks + (web_in_isr ? web_cost_ticks : 0u); }
 /* a block's estimated cost on the device (see the top: WEB_US_*) */
 static uint32_t web_bits(uint32_t m) { uint32_t n = 0; for (; m; m &= m - 1u) n++; return n; }
+#ifndef WEB_COST
+#define WEB_COST 1                       /* 0: no cost (tests/skip_test.c: no overload shedding to tell builds apart) */
+#endif
 static void web_cost_add(uint32_t n)
 {
     uint32_t ips = 0, us = WEB_US_EV, i;
+    if (!WEB_COST)
+        return;
     for (i = 0; i < trk_count(); i++) {
         const track_t *t = &trk[i];
 #if FELUCCA_CPU2

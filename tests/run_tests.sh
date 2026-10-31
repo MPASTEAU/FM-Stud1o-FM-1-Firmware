@@ -356,6 +356,16 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "persistence: deferred settings, retry and failed-save rollback" "$OUT/persistence_test"
     run "demo projects: the lo-fi and the showcase songs saved as projects, restored as backup object 18, opened, played as the demo" \
         python3 tools/fm1_demo_projects.py --build --songs 8,7 --img "$OUT/demo_projects_test.img"
+    for song in 8 5; do                                 # the at-rest skips (fx.c FX_SKIP) against always running
+        for v in 0 1; do
+            $CC -O1 -w -DDAH_DEMO_SONG=$song -DFX_SKIP=$v -DWEB_COST=0 -Ibuild/gen -Ifirmware/src -o "$OUT/skip$v" \
+                tests/skip_test.c -lm
+        done
+        for rt in 0 1 2; do
+            run "at-rest skips (song $song, reverb $rt): play, stop, play mid-tail, mute, 30 s at rest: as always running" \
+                sh -c "\"$OUT/skip0\" \"$OUT/skip0.raw\" $rt && \"$OUT/skip1\" \"$OUT/skip1.raw\" $rt && cmp \"$OUT/skip0.raw\" \"$OUT/skip1.raw\""
+        done
+    done
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/backup_test" tests/backup_test.c -lm
     run "full backup: CRC before writes, stale runtime, USB reset / timeout, malformed objects, older projects" "$OUT/backup_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6bank_test" tests/fm6bank_test.c -lm

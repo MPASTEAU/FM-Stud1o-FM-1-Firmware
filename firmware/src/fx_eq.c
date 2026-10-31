@@ -312,7 +312,7 @@ static void eq_run(eq_t *s, const track_t *t, int32_t *b, uint32_t n)
     s->on = 1;
     for (i = 1, z = 0; i < n && !z; i++)
         z = b[i] - b[0];                                /* (z 0: the block one value, b[0]) */
-    if (!z && s->fix && b[0] == s->din) {               /* (that block again: what it gave, the states as they are; */
+    if (FX_SKIP && !z && s->fix && b[0] == s->din) {               /* (that block again: what it gave, the states as they are; */
         for (i = 0; i < n; i++)                         /* at 0 in, their rounding may hold them off 0) */
             b[i] = s->dc;
         return;

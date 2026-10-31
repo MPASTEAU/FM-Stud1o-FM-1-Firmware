@@ -2,6 +2,10 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Effects: per-track DIST and INSERT (1.5), then sends into three
  * shared buses (chorus, tempo delay, reverb). Mono buses, stereo dry mix. */
+#ifndef FX_SKIP
+#define FX_SKIP 1                /* the buses, the EQs and master_out skipped at rest (each exactly what running gives);
+                                  * 0: always run (tests/skip_test.c: the same output, sample for sample) */
+#endif
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 fits from 41 BPM, 1/4D from 61, 1/2 from 81 */
 #define CHO_LEN 2048u
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
@@ -510,7 +514,7 @@ static __attribute__((noinline)) void rev_hall(const int32_t *rev_in, int32_t *o
     (void)n;
     if (hl.sz != song.g[G_RSIZE] + 1)
         hall_gains(song.g[G_RSIZE]);
-    if (hl.q >= HL_QUIET && !(xp | hp | mp | sp) && hall_still(rev_in))
+    if (FX_SKIP && hl.q >= HL_QUIET && !(xp | hp | mp | sp) && hall_still(rev_in))
         return;                                         /* (silent: what it would give, nothing) */
     hl.nz = 0;
     for (i = 0; i < HL_NC; i++) {
@@ -692,7 +696,7 @@ static void fx_cd(const int32_t *cho_in, const int32_t *dly_in, int32_t *wet, ui
         int32_t a = 0, z = 0;
         for (i = 0; i < n; i++)
             a |= cho_in[i];
-        if (!a && fx.cho_q >= CHO_LEN) {
+        if (FX_SKIP && !a && fx.cho_q >= CHO_LEN) {
             fx.cho_ph += cinc * n;
             fx.cho_w += n;
             for (i = 0; i < n; i++)
@@ -718,7 +722,7 @@ static void fx_cd(const int32_t *cho_in, const int32_t *dly_in, int32_t *wet, ui
         for (i = 0, a = 0; i < n; i++)
             a |= dly_in[i];
         z = mulq15(fx.dly_c - fx.dly_lp, col);
-        if (!a && fx.dly_q >= DLY_LEN && !z && clamp(mulq15(fx.dly_lp, fb), -32768, 32767) == fx.dly_c) {
+        if (FX_SKIP && !a && fx.dly_q >= DLY_LEN && !z && clamp(mulq15(fx.dly_lp, fb), -32768, 32767) == fx.dly_c) {
             z = mulq15(fx.dly_c << 1, dmix);            /* (its line all dly_c, its low-pass held there: dly_c again, */
             for (i = 0; i < n; i++)                     /* the same out; the rounding may hold it off 0) */
                 wet[i] += z;
@@ -1603,7 +1607,7 @@ static void mix_block(int32_t *out, uint32_t n)
         perf_master(out, n);
         return;
     }
-    if (out_still(n, mg)) {                             /* (the output's states at rest: 0 out) */
+    if (FX_SKIP && out_still(n, mg)) {                             /* (the output's states at rest: 0 out) */
         for (i = 0; i < 2u * n; i++)
             out[i] = 0;
         return;
