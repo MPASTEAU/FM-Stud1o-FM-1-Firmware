@@ -493,9 +493,72 @@ static int menus_alike(void)
     return bad;
 }
 
+/* (Dah) REC never takes a note out: step recording (armed, stopped; CHORD ENTRY ADD and HOLD) and live recording
+ * (armed, playing) of a key whose note is on the step already: it stays (recorded again), the step a note step */
+static int has_note(const step_t *st, uint32_t note)
+{
+    uint32_t j;
+    for (j = 0; j < st->n && st->note[j] != note; j++)
+        ;
+    return st_kind(st) == ST_NOTE && j < st->n;
+}
+static int rec_keeps(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t add, i, k = 7, note, held = 0;
+    track_t *t;
+    for (add = 0; add < 2u; add++) {
+        ui_power_on();
+        menu_put(MI_CHADD, add);
+        t = TSEL;
+        t->p[P_VOICE] = V_POLY;
+        track_defaults_steps(t);
+        note = kb_map(t, k);
+        t->step[3] = (step_t){{(uint8_t)note}, 1, ST_NOTE, 0, 100};
+        go_page(GR_ROLL);
+        cursor_set(3);
+        frame();
+        press(B_REC);
+        ok &= song.rec == 1u && !song.playing;
+        tap_k(k);
+        ok &= has_note(&t->step[3], note) && t->step[3].n == 1u;
+        tap_k(k);
+        ok &= has_note(&t->step[3], note) && t->step[3].n == 1u;
+    }
+    bad += check("REC on STEP (stopped, ADD and HOLD): a key whose note is on the step keeps it, twice", ok);
+    ui_power_on();
+    t = TSEL;
+    t->p[P_VOICE] = V_POLY;
+    t->p[P_SLEN] = 16;
+    track_defaults_steps(t);
+    t->p[P_SLEN] = 16;
+    note = kb_map(t, k);
+    for (i = 0; i < 16u; i++)
+        t->step[i] = (step_t){{(uint8_t)note}, 1, ST_NOTE, 0, 100};
+    go_page(GR_ROLL);
+    frame();
+    song.rec = 1u << song.sel;
+    transport_req = 1;
+    for (i = 0; i < 500u; i++) {                        /* (8 s: four loops, the key struck again and again) */
+        blocks(6);
+        if (i % 5u == 0u) { key_down(k); held = 1; }
+        else if (held && i % 5u == 2u) { key_up(k); held = 0; }
+        frame();
+    }
+    if (held) key_up(k);
+    transport_req = 2;
+    blocks(8); frame();
+    song.rec = 0;
+    ok = !song.playing;
+    for (i = 0; i < 16u; i++)
+        ok &= has_note(&t->step[i], note);
+    bad += check("REC playing: the same note struck over the steps that hold it: every step keeps it", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

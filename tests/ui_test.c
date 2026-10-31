@@ -4426,21 +4426,19 @@ static int test_step_preview_chord_entry(void)
     ok &= t->step[3].n == 4u && t->step[3].note[3] == kb_map(t, 16) && ui.cursor == 3u;   /* (a 5th: no room) */
     bad += check("#155 ADD: keys one after another build the cursor step's chord (up to 4), the cursor stays", ok);
     tap_k(11);
-    ok = t->step[3].n == 3u && t->step[3].note[0] == kb_map(t, 7) && t->step[3].note[1] == kb_map(t, 14) &&
-         t->step[3].note[2] == kb_map(t, 16) && ui.cursor == 3u;
-    tap_k(18);
-    ok &= t->step[3].n == 4u && t->step[3].note[3] == kb_map(t, 18);
-    bad += check("#155 ADD: a key whose note is there takes it out (the others keep their order); then there is room", ok);
+    ok = t->step[3].n == 4u && t->step[3].note[0] == kb_map(t, 7) && t->step[3].note[1] == kb_map(t, 11) &&
+         t->step[3].note[2] == kb_map(t, 14) && t->step[3].note[3] == kb_map(t, 16) && ui.cursor == 3u;
+    bad += check("#155 ADD (Dah): a key whose note is there keeps it (recording never takes a note out)", ok);
     turn(EN_K1, 2);
     tap_k(9);
     ok = ui.cursor == 5u && t->step[5].n == 2u && t->step[5].note[0] == 50u && t->step[5].note[1] == kb_map(t, 9) &&
          t->step[3].n == 4u && !t->step[4].n;
     tap_k(9);
-    ok &= t->step[5].n == 1u && t->step[5].note[0] == 50u && t->step[5].time == ST_NOTE;
+    ok &= t->step[5].n == 2u && t->step[5].note[0] == 50u && t->step[5].note[1] == kb_map(t, 9) && t->step[5].time == ST_NOTE;
     turn(EN_K1, -1);
     tap_k(9); tap_k(9);
-    ok &= ui.cursor == 4u && !t->step[4].n && t->step[4].time == ST_REST;
-    bad += check("#155 ADD: KNOB 1 moves on; a written step gets notes beside its own; the last one out leaves a REST", ok);
+    ok &= ui.cursor == 4u && t->step[4].n == 1u && t->step[4].note[0] == kb_map(t, 9) && t->step[4].time == ST_NOTE;
+    bad += check("#155 ADD: KNOB 1 moves on; a written step gets notes beside its own; a key twice: its note once", ok);
     t->step[6].time = ST_TIE;
     turn(EN_K1, 2);
     tap_k(7);

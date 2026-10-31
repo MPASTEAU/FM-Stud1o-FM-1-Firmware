@@ -1572,28 +1572,14 @@ static uint32_t oct_taps(uint32_t pressed, int here)
 }
 
 /* MENU > CONTROL > CHORD ENTRY ADD (1.2, #155: chords with one hand): a key's notes go into the cursor step beside what
- * is there (up to 4), or out of it when its note is there already (a key that adds a chord takes all of it out); MONO
- * keeps one note (another key replaces it). A TIE or REST step becomes a note step; one with no note left a REST, as
- * EDIT leaves it */
-static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_t n)
+ * is there (up to 4); MONO keeps one note (another key replaces it). A TIE or REST step becomes a note step. A note there
+ * already stays (Dah: recording never takes a note out, the key records it again; EDIT and the knobs edit) */
+static void step_add(const track_t *t, step_t *st, const uint8_t *ch, uint32_t n)
 {
     uint32_t i, j;
     if (st_kind(st) != ST_NOTE) {
         st->n = 0;
         st->time = ST_NOTE;
-    }
-    for (j = 0; j < st->n && st->note[j] != ch[0]; j++)
-        ;
-    if (j < st->n) {                                   /* there: its notes out */
-        for (i = 0; i < n; i++)
-            for (j = 0; j < st->n; j++)
-                if (st->note[j] == ch[i]) {
-                    st_del(st, j);                     /* (overlaps: the others going on as they did) */
-                    break;
-                }
-        if (!st->n)
-            st->time = ST_REST;
-        return;
     }
     if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* MONO / LEG / UNI: one note */
         st->note[0] = ch[0];
@@ -1606,6 +1592,8 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
             ;
         if (j == st->n)
             st->note[st->n++] = ch[i];
+        else                                           /* (there, going on from the step before: it starts here) */
+            st_set_cont(st, st_cont(st) & ~(1u << j));
     }
 }
 
@@ -1613,7 +1601,7 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
  * style: the keys pressed together (POLY: up to 4 notes, MONO: the last one) become the cursor step; releasing all
  * keys leaves the cursor there (Dah: no moving on). With CHRD on a key writes what it sounds, as live recording does:
  * POLY its chord, MONO the chord's root. MENU > CONTROL > CHORD ENTRY ADD (1.2, #155): each key adds its notes to
- * the cursor step or takes them out (step_toggle), one after another with one hand, and letting go moves nothing: the
+ * the cursor step (step_add: a note there stays), one after another with one hand, and letting go moves nothing: the
  * cursor moves by KNOB 1 (STEP) or PRESETS only, as it always could (EDIT still clears the step and moves on) */
 static void seq_entry(uint32_t pressed)
 {
@@ -1640,7 +1628,7 @@ static void seq_entry(uint32_t pressed)
         }
         n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root) */
         if (add)
-            step_toggle(t, st, ch, n);
+            step_add(t, st, ch, n);
         else if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* (drums: hits stack as a chord) */
             st->note[0] = ch[0];
             st->n = 1;
