@@ -63,6 +63,7 @@ static void fresh(void)
     lim_env = LIM_T; dc_l = dc_r = dce_l = dce_r = 0;
     memset(&clk, 0, sizeof clk);
     click_req = 0; click_mode = CLICK_OFF; click_lvl = 1; cin_bars = 0;
+    loop_cue = 0; rec_replace = 0;                     /* (Dah: REC's LOOP CUE, tested on its own: cue_test) */
     fx_usb_fixed = 0;
     mi_r = mi_w = 0; midi_in_overflow = 0; midi_beat_samples = 0;
     fm1_in.notes = kb_prev = 0;
@@ -499,11 +500,43 @@ static void ext_clock(void)
     check("external clock: PLAY on the FM-1 starts as before (as a Start), never a count-in", song.playing && !seq_counting());
 }
 
+/* (Dah) REC's LOOP CUE: armed and playing, the selected track's pattern (LEN 16, 1/16: four beats) sounds three blips
+ * going down on its last three beats (steps 5, 9, 13), each in the block its step starts, then a higher ping on its step 1
+ * again (the loop); never on PLAY's step 1; nothing disarmed or with it OFF */
+static void cue_test(void)
+{
+    static const uint32_t ST[4] = {4, 8, 12, 0};
+    uint32_t k, ok = 1, b, from = 0;
+    fresh(); grid_track(); loop_cue = 1; song.rec = 1u; transport_req = 1;
+    run(2u * 16u * 5512u / CTL + 40u);
+    clicks(0);
+    for (k = 0; k < 4u; k++) {
+        b = step_block(from, ST[k]);
+        if (k == 3u)
+            b = step_block(step_block(0, 15), 0);   /* (step 1 again: the loop) */
+        ok &= k < nc && c_at[k] / CTL == b;
+        from = b;
+    }
+    ok &= nc >= 4u && c_hz[0] > c_hz[1] && c_hz[1] > c_hz[2] && c_hz[3] > 2.0 * c_hz[0] && c_at[0] / CTL > 100u;
+    printf("  cue: %u sounds, at %u %u %u %u, %.0f %.0f %.0f %.0f Hz\n", nc, c_at[0], c_at[1], c_at[2], c_at[3], c_hz[0], c_hz[1],
+           c_hz[2], c_hz[3]);
+    check("REC LOOP CUE: blips on steps 5 9 13 going down (1100 880 660 Hz), the ping (2640 Hz) on step 1 looped, none on PLAY's", ok);
+    fresh(); grid_track(); loop_cue = 1; song.rec = 0; transport_req = 1;
+    run(16u * 5512u / CTL + 40u);
+    clicks(0);
+    ok = !nc;
+    fresh(); grid_track(); loop_cue = 0; song.rec = 1u; transport_req = 1;
+    run(16u * 5512u / CTL + 40u);
+    clicks(0);
+    check("  not armed, or LOOP CUE OFF: silent", ok && !nc);
+}
+
 int main(void)
 {
     setvbuf(stdout, NULL, _IONBF, 0);
     timing();
     sound();
+    cue_test();
     modes();
     usb_clean();
     scope();

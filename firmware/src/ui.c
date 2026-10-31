@@ -114,7 +114,11 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
  * this byte no engine uses holds the level: 1 LO, 2 HI; 0 (every older setting) or another value = INV as before.
  * Saved with the settings; read only while LEDS is INV (menu_items.c leds_row) */
 #define ui_leds_inv (favorites.factory[15][25])
-#define LEDS_INV_LV (ui_leds_inv & 0x7Fu)            /* (its bit 7: REC's PLAY, rec_play) */
+#define LEDS_INV_LV (ui_leds_inv & 0x1Fu)            /* (its bits 5..7: REC's) */
+#define REC_NOCUE 0x40u                                 /* (Dah) REC's layer > LOOP CUE OFF (seq.c seq_enter; 0: ON) */
+#define REC_REPLACE 0x20u                               /* (Dah) REC's layer > REC MODE REPLACE (seq.c rec_note; 0:
+                                                         * OVERDUB) */
+#define REC_BITS 0xE0u
 #define REC_PLAY 0x80u                                  /* (Dah) REC's layer > PLAY ON: arming REC stopped starts the
                                                          * transport (OFF, the default: armed, it waits for PLAY) */
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && LEDS_INV_LV - 1u < 2u ? LEDS_INV_LV : 0u; }
@@ -134,6 +138,8 @@ static void rp_apply(void)                             /* the settings into clic
     click_mode = (uint8_t)rp_get(RP_CLICK);
     click_lvl = (uint8_t)rp_get(RP_LEVEL);
     cin_bars = (uint8_t)rp_get(RP_COUNTIN);
+    loop_cue = !(ui_leds_inv & REC_NOCUE);
+    rec_replace = (ui_leds_inv & REC_REPLACE) != 0u;
 }
 static void rp_put(uint32_t f, uint32_t v)
 {

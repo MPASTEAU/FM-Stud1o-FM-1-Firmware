@@ -338,6 +338,57 @@ static int t_mono(void)
                  !st_cont(ui_st(t, 8)));
 }
 
+/* (Dah) REC MODE REPLACE: recording on through three passes of the pattern: pass 1 plays A, pass 2 plays B (its first note
+ * wipes the take: A gone, every page), pass 3 plays nothing (B stays); OVERDUB keeps both. On a DRUM track the same with
+ * two lanes. len: the pattern (128: A on page 1, its record gone too); a, b: their steps */
+static uint32_t rp_len, rp_a, rp_b, rp_na, rp_nb;
+static void rp_keys(uint32_t at)
+{
+    if (at_in(at, rp_a)) input_on(rt, rp_na, 100);
+    if (at_in(at, rp_a + 1u)) input_off(rt, rp_na);
+    if (at_in(at, rp_len + rp_b)) input_on(rt, rp_nb, 100);
+    if (at_in(at, rp_len + rp_b + 1u)) input_off(rt, rp_nb);
+}
+static int rp_has(const track_t *t, uint32_t i, uint32_t x)
+{
+    const step_t *s = ui_st(t, i);
+    uint32_t k;
+    if (drum_track(t))
+        return st_kind(s) == ST_NOTE && ((s->hit >> drum_lane(x)) & 1u);
+    for (k = 0; k < s->n && k < 4u; k++)
+        if (s->note[k] == x)
+            return st_kind(s) == ST_NOTE;
+    return 0;
+}
+static int t_replace(uint32_t len, uint32_t a, uint32_t b, int drum, int replace)
+{
+    track_t *t = setup(len);
+    char what[128];
+    int ok;
+    if (drum) {
+        set_engine_of(t, ENGI_DRUM);
+        t->engine = t->eng_req;
+    }
+    rt = t; rp_len = len; rp_a = a; rp_b = b;
+    rp_na = drum ? DRUM_LANE_NOTE[0] : NA; rp_nb = drum ? DRUM_LANE_NOTE[1] : NB;
+    rec_replace = (uint8_t)replace;
+    play();
+    ev_start(t);
+    run(t, CTL, 0);
+    song.rec = 1;
+    blk_hook = rp_keys;
+    run(t, 3u * len * S, 1024u);                     /* (three passes: A, B, none) */
+    blk_hook = 0;
+    song.rec = 0;
+    stop(t);
+    pg_service();
+    rec_replace = 0;
+    ok = rp_has(t, b, rp_nb) && (replace ? !rp_has(t, a, rp_na) : rp_has(t, a, rp_na));
+    snprintf(what, sizeof what, "REC MODE %s%s (LEN %u): pass 1 A on %u, pass 2 B on %u, pass 3 none: %s", replace ? "REPLACE" : "OVERDUB",
+             drum ? " on DRUM" : "", len, a + 1u, b + 1u, replace ? "B alone" : "A and B");
+    return check(what, ok);
+}
+
 int main(void)
 {
     int bad = 0;
@@ -349,6 +400,11 @@ int main(void)
     bad += t_project(16, 0);
     bad += t_project(128, 60);
     bad += t_mono();
+    bad += t_replace(16, 2, 6, 0, 1);
+    bad += t_replace(16, 2, 6, 0, 0);
+    bad += t_replace(128, 100, 5, 0, 1);
+    bad += t_replace(128, 100, 5, 0, 0);
+    bad += t_replace(16, 2, 6, 1, 1);
     if (bad)
         printf("OVERLAP TEST FAILED (%d)\n", bad);
     else

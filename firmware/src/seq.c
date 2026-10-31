@@ -536,7 +536,8 @@ static void st_canon(step_t *s, const uint8_t *q, uint32_t qn)
  * go bit k, it has been held into a step since (back to its own: the whole loop, it ends); cm bit k, rec_hold carried it
  * on into the step playing (let go before its middle: taken out again); pv / pvn the notes the pattern sounds at the
  * step playing (as its steps say, chance and gate aside: seq_enter), what a TIE there carries on */
-static struct { uint8_t st[4], go, cm, pv[4], pvn, poly; } rp[NTRK];
+static struct { uint8_t st[4], go, cm, pv[4], pvn, poly, pass, took; } rp[NTRK];   /* (Dah) pass: the loops since PLAY;
+                                                     * took: the pass REPLACE last wiped for */
 static void rh_drop(track_t *t, uint32_t k)        /* hold k ends */
 {
     uint32_t i = trk_index(t) % NTRK, j, lo = (1u << k) - 1u;
@@ -675,6 +676,24 @@ static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note
  * of the last one puts that step back (rec_release), so a short note stays one step.
  * MONO / LEGATO / UNISON: a note recorded into another step ends the hold before. POLY (overlaps, rec_poly): each note
  * its own hold, beside the others: a note pressed while another is held starts beside it, the first going on */
+/* (Dah) REC MODE REPLACE: a note played in a pass after the one the last went into: the take again, every note, TIE and
+ * hit of the pattern gone first (the track's steps, the ring's; its pages: pg_service, rec_wipe_req) */
+static volatile uint8_t rec_wipe_req;               /* bit per track (main loop: its pages' records) */
+static __attribute__((noinline)) void rec_wipe(track_t *t)
+{
+    uint32_t k = trk_index(t) % NTRK, j;
+    for (j = 0; j < NSTEP; j++) {
+        memset(&t->step[j], 0, sizeof t->step[j]);
+        t->step[j].time = ST_REST;
+    }
+    for (j = 0; j < PGR_N; j++)
+        if (pgr[k].abs[j]) {
+            memset(&pgr[k].st[j], 0, sizeof pgr[k].st[j]);
+            pgr[k].st[j].time = ST_REST;
+            pgr[k].dirty |= (uint16_t)(1u << j);
+        }
+    rec_wipe_req |= (uint8_t)(1u << k);
+}
 static void rec_note(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u, idx = t->seq_idx % len, k;
@@ -684,6 +703,12 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
     step_t *s;
     if (next)
         idx = (idx + 1u) % len;
+    {   /* (Dah) REPLACE: the first note of a new pass (one played just before its step 1: that pass) */
+        uint32_t i = trk_index(t) % NTRK, p = (uint8_t)(rp[i].pass + (next && !idx));
+        if (rec_replace && p != rp[i].took)
+            rec_wipe(t);
+        rp[i].took = (uint8_t)p;
+    }
     s = seq_wr(t, idx);
     /* the step's notes play later in this pass (it is the next one, not played early yet, or the one playing whose
      * nudge has not come yet): what sounds now must not play again there (rskip) */
@@ -1608,8 +1633,22 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
 {
     uint32_t i = trk_index(t) % NTRK;
     uint8_t q[4];
-    if (!t->seq_idx)
+    if (!t->seq_idx) {
         t->cond_loop = (uint8_t)(top || t->cond_loop + 1u >= COND_LOOPS ? 0u : t->cond_loop + 1u);
+        rp[i].pass = (uint8_t)(top ? 0u : rp[i].pass + 1u);   /* (Dah: REC MODE REPLACE's passes) */
+        if (top)
+            rp[i].took = 0;
+    }
+    if (loop_cue && i == song.sel && ((song.rec >> i) & 1u) && !chain.running) {   /* (Dah) REC's LOOP CUE: the last
+                                                     * three beats of the selected track's pattern a blip each, going
+                                                     * down, its step 1 again a ping (sound only, at CLICK LEVEL) */
+        uint32_t q = click_beat_len() / div_samples((uint32_t)t->p[P_SDIV]), r = len - t->seq_idx;
+        q = q ? q : 1u;
+        if (!t->seq_idx)
+            click_req = top ? click_req : 6u;
+        else if (!(r % q) && r / q <= 3u)
+            click_req = (uint8_t)(6u - r / q);
+    }
     if (top)
         rp[i].pvn = 0;                              /* (PLAY: nothing before step 1) */
     rec_hold(t, t->seq_idx, len);

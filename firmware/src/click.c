@@ -13,11 +13,15 @@ enum { CLICK_OFF, CLICK_REC, CLICK_ON };
 static volatile uint8_t click_mode;         /* CLICK_*: when the beats click while the transport runs */
 static volatile uint8_t click_lvl = 1;      /* 0 LOW 1 MID 2 HIGH */
 static volatile uint8_t cin_bars;           /* COUNT-IN: 0 off, 1 or 2 bars */
-static volatile uint8_t click_req;          /* seq.c: 1 a beat, 2 the bar's first; the next block starts it */
+static volatile uint8_t click_req;          /* seq.c: 1 a beat, 2 the bar's first, (Dah) 3..5 REC's LOOP CUE's three
+                                             * blips going down, 6 its ping (the loop's start); the next block starts it */
+static volatile uint8_t loop_cue = 1, rec_replace;   /* (Dah) REC's layer: LOOP CUE ON, REC MODE REPLACE (ui.c rp_apply) */
 /* the magic circle (s, c: a sine and its quadrature) at k = 2 sin(pi f / FS), Q15; env Q15, decaying 1/256 a sample */
 #define CLICK_K_DOWN 8195                    /* 1760 Hz */
 #define CLICK_K_BEAT 6154                    /* 1320 Hz */
 #define CLICK_AMP 16384                      /* the circle's amplitude */
+static const uint16_t CLICK_K[7] = {0, CLICK_K_BEAT, CLICK_K_DOWN, 5133, 4107, 3081, 12295};   /* (Dah: the cue's 1100
+                                                                     * 880 660 Hz, its ping 2640 Hz) */
 static const uint16_t CLICK_GAIN[3] = {1024, 2048, 4096};   /* LOW MID HIGH, Q12: the downbeat's peak -18 / -12 / -6 dB
                                                              * of a full-scale mix (Q15) at MASTER's top */
 static struct { int32_t s, c, k, env, g; } clk;
@@ -28,10 +32,10 @@ static __attribute__((noinline)) void click_render(int32_t *out, uint32_t n)
     uint32_t i;
     int32_t s, c, k, env, g;
     if (click_req) {
-        uint32_t down = click_req == 2u;
+        uint32_t down = click_req == 2u || click_req == 6u;
         clk.s = 0;                                  /* (from 0: no step at the start) */
         clk.c = CLICK_AMP;
-        clk.k = down ? CLICK_K_DOWN : CLICK_K_BEAT;
+        clk.k = CLICK_K[click_req % 7u];
         clk.env = 32767;
         clk.g = CLICK_GAIN[click_lvl % 3u] >> (down ? 0 : 1);   /* Q12: the downbeat x1, a beat x0.5 (-6 dB) */
         click_req = 0;

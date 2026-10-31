@@ -486,7 +486,7 @@ static int menus_alike(void)
     turn(EN_K1, 5);
     ok &= lys.sq_row == 2u;                             /* (a step a turn, as the MENU's) */
     for (i = 0; i < 5u; i++) turn(EN_K1, 1);
-    ok &= lys.sq_row == 3u;                             /* (the last: it stops) */
+    ok &= lys.sq_row == 5u;                             /* (the last, REC MODE: it stops) */
     press(B_LFO);
     ok &= !ui.layer;
     bad += check("  REC's list: KNOB 1 the row (gliding), stops at the last; another button closes it", ok);
@@ -618,9 +618,32 @@ static int del_track_hold(void)
     return bad;
 }
 
+/* (Dah) REC's held menu: LOOP CUE (ON by default) and REC MODE (OVERDUB by default, REPLACE), bits 6 and 5 of the byte
+ * MENU > LEDS's INV level is in (kept by LEDS), into seq.c (loop_cue, rec_replace) every frame */
+static int rec_rows(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    frame();
+    ok = ly_rows(LAYER_REC) == 6u && rl_get(4) == 1u && rl_get(5) == 0u && loop_cue && !rec_replace &&
+         str_eq(rl_name(5, 0), "OVERDUB") && str_eq(rl_name(5, 1), "REPLACE") && str_eq(REC_RL[4], "LOOP CUE");
+    rec_set(4, 0);
+    rec_set(5, 1);
+    frame();
+    ok &= rl_get(4) == 0u && rl_get(5) == 1u && !loop_cue && rec_replace;
+    menu_put(MI_LEDS, LEDS_ROWS - 1u);                  /* (LEDS INV HI: its level beside them) */
+    menu_put(MI_LEDS, 0);
+    frame();
+    ok &= rl_get(4) == 0u && rl_get(5) == 1u;
+    bad += check("REC layer: LOOP CUE ON, REC MODE OVERDUB by default; OFF / REPLACE set, kept through MENU > LEDS", ok);
+    ui_leds_inv &= (uint8_t)~REC_BITS;
+    frame();
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

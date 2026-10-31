@@ -378,7 +378,7 @@ static void glo_tap(void)
     }
 }
 
-static uint32_t ly_rows(uint32_t l) { return l == LAYER_REC ? 4u : 5u; }   /* (Dah) GLO SEQ REC: their lists' rows */
+static uint32_t ly_rows(uint32_t l) { return l == LAYER_REC ? 6u : 5u; }   /* (Dah) GLO SEQ REC: their lists' rows */
 /* (Dah) SEQ: F3 CLEAR ALL (the dialog closes the layer); the other keys nothing. The PRESETS knob: QUANTIZE */
 static void seq_key(uint32_t p)                         /* (Dah: 0 CLEAR TRACK, 1 CLEAR PATTERN: every track's) */
 {
@@ -418,18 +418,21 @@ static void seq_presets(int32_t s)                     /* (Dah) KNOB 2, PRESETS:
 
 /* REC's settings, row r (G3 A3 B3, KNOB 1..3): CLICK, COUNT-IN, CLICK LEVEL as MENU > AUDIO steps them (ui.c rp_*) */
 static const uint8_t RL_F[3] = {RP_CLICK, RP_COUNTIN, RP_LEVEL};
+/* (Dah) rows 3..5, a bit of ui.c ui_leds_inv each: PLAY (REC stopped starts the transport), LOOP CUE (its bit says OFF),
+ * REC MODE OVERDUB / REPLACE */
+static const uint8_t RL_BIT[3] = {REC_PLAY, REC_NOCUE, REC_REPLACE};
 static const char *rl_name(uint32_t r, uint32_t v)
 {
-    return r == 3u ? (v ? "ON" : "OFF") : (r == 0u ? CLICK_N : r == 1u ? COUNTIN_N : CLKLVL_N)[v % 3u];
+    return r == 5u ? (v ? "REPLACE" : "OVERDUB") : r >= 3u ? (v ? "ON" : "OFF") :
+           (r == 0u ? CLICK_N : r == 1u ? COUNTIN_N : CLKLVL_N)[v % 3u];
 }
-static uint32_t rl_get(uint32_t r) { return r == 3u ? (ui_leds_inv & REC_PLAY) != 0u : rp_get(RL_F[r]); }   /* (Dah: row 3
-                                                         * PLAY: REC stopped starts the transport) */
+static uint32_t rl_get(uint32_t r) { return r >= 3u ? ((ui_leds_inv & RL_BIT[r - 3u]) != 0u) ^ (r == 4u) : rp_get(RL_F[r]); }
 static void rec_set(uint32_t r, uint32_t v)
 {
     if (v == rl_get(r))
         return;
-    if (r == 3u)
-        ui_leds_inv = (uint8_t)((ui_leds_inv & ~REC_PLAY) | (v ? REC_PLAY : 0u));
+    if (r >= 3u)
+        ui_leds_inv ^= RL_BIT[r - 3u];
     else
         rp_put(RL_F[r], v);
     lys.rp_dirty = 1;
@@ -680,7 +683,7 @@ static void layer_knob(uint32_t k, int32_t s)
             seq_row(s);
         } else if (k == 1u)
             rec_set(lys.sq_row, (uint32_t)clamp((int32_t)rl_get(lys.sq_row) + (s > 0 ? 1 : -1), 0,
-                                                 lys.sq_row == 1u || lys.sq_row == 3u ? 1 : 2));
+                                                 lys.sq_row == 1u || lys.sq_row >= 3u ? 1 : 2));
     } else if (l == LAYER_SEQ && k == 0u) {            /* (Dah) SEQ: KNOB 1 the rows */
         seq_row(s);
     } else if (l == LAYER_SEQ && k == 1u) {            /* (Dah) .. KNOB 2 the row's value */
@@ -742,7 +745,7 @@ static void layer_reset(uint32_t l)
             ml_toggle();
     } else if (l == LAYER_REC) {
         ui_rec_prefs &= 0xC0u;                          /* (the three fields 0: their defaults; bits 6, 7 the MENU's) */
-        ui_leds_inv &= (uint8_t)~REC_PLAY;
+        ui_leds_inv &= (uint8_t)~REC_BITS;
         rp_apply();
         lys.rp_dirty = 1;
     } else if (chain_busy()) {
@@ -1046,7 +1049,7 @@ static void layer_edit(void)                            /* the engines from F3, 
 typedef struct { const char *label, *val; uint16_t vc; uint8_t icon, sw; } lrow_t;
 static const char *const GLO_RL[5] = {"TEMPO", "SWING", "TUNE", "CLOCK", "MIDI LEARN"};
 static const char *const SEQ_RL[5] = {"LEN", "DIV", "QUANTIZE", "CLEAR TRACK", "CLEAR PATTERN"};
-static const char *const REC_RL[4] = {"CLICK", "COUNT-IN", "LEVEL", "REC STARTS PLAY"};
+static const char *const REC_RL[6] = {"CLICK", "COUNT-IN", "LEVEL", "REC STARTS PLAY", "LOOP CUE", "REC MODE"};
 static const char *seq_val(uint32_t r, char *b)        /* (Dah) the SEQ layer's row r's value: LEN, DIV, QUANTIZE */
 {
     const char *u;
@@ -1057,7 +1060,7 @@ static const char *seq_val(uint32_t r, char *b)        /* (Dah) the SEQ layer's 
 }
 static const char *ly_lab(uint32_t k)
 {
-    return ui.layer == LAYER_GLO ? GLO_RL[k % 5u] : ui.layer == LAYER_REC ? REC_RL[k % 4u] : SEQ_RL[k % 5u];
+    return ui.layer == LAYER_GLO ? GLO_RL[k % 5u] : ui.layer == LAYER_REC ? REC_RL[k % 6u] : SEQ_RL[k % 5u];
 }
 /* row k of the layer's list, its value in b; the value's place (1000: its top), -1 none */
 static int32_t ly_row(uint32_t k, lrow_t *r, char *b)
@@ -1076,9 +1079,9 @@ static int32_t ly_row(uint32_t k, lrow_t *r, char *b)
             ratio = g->max > g->min ? (song.g[GLO_G[k]] - g->min) * 1000 / (g->max - g->min) : 0;
         }
     } else if (ui.layer == LAYER_REC) {
-        uint32_t v = rl_get(k), n = k == 1u || k == 3u ? 2u : 3u;
+        uint32_t v = rl_get(k), n = k == 1u || k >= 3u ? 2u : 3u;
         r->val = rl_name(k, v);
-        if (n == 2u)
+        if (n == 2u && k != 5u)                         /* (REC MODE: its word) */
             r->sw = (uint8_t)(1u + (v != 0u));
         ratio = (int32_t)(v * 1000u / (n - 1u));
     } else if (k >= 3u) {                               /* (SEQ) CLEAR TRACK / PATTERN: KNOB 2 asks it (the dialog) */
@@ -1274,7 +1277,7 @@ static void draw_layer(void)
     else if (l == LAYER_SCL)
         sig += (uint32_t)TSEL->p[P_SCALE] * 31u;
     else if (l == LAYER_REC)
-        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)(ui_leds_inv & REC_PLAY) * 7u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u +
+        sig += (uint32_t)ui_rec_prefs * 31u + (uint32_t)(ui_leds_inv & REC_BITS) * 7u + (uint32_t)chain_busy() * 3u + steps_sig(TSEL) * 5u + song.sel * 977u +
                lys.sq_row * 65537u;
     else if (l == LAYER_SEQ)
         sig += (uint32_t)chain_busy() * 3u + song.sel * 977u + (uint32_t)TSEL->p[P_SQNT] * 131u + steps_sig(TSEL) * 7u +

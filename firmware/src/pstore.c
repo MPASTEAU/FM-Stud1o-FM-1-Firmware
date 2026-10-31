@@ -433,7 +433,13 @@ static int pg_copy(uint32_t k, uint32_t from, uint32_t to)   /* pattern from's p
  * an edit (its page decoded: pgc), takes it */
 static void pg_service(void)
 {
-    uint32_t k;
+    uint32_t k, f = motion_guard(), w = rec_wipe_req;
+    rec_wipe_req = 0;
+    motion_unguard(f);
+    for (k = 0; w >> k; k++)                            /* (Dah) REC MODE REPLACE: a new take, the pages' records gone
+                                                         * (the ring's steps, wiped and recorded into, come back below) */
+        if ((w >> k) & 1u)
+            pg_del(k, ps_num(k));
     pgc_flush_all();
     for (k = 0; k < NTRK; k++) {
         const track_t *t = &trk[k];
