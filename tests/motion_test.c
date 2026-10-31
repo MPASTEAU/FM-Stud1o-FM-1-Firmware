@@ -653,10 +653,9 @@ static int lock_ui(void)
     lk_down(k4);
     press(B_EDIT);
     lk_up(k4);
-    bad += check("a step held + [EDIT]: its locks go, the step and the others' locks stay", motion_lock_count(t) == 2u &&
-        !motion_lock_get(t, 4, P_E1, &v) && motion_lock_get(t, 0, P_E4, &v) && (t->step[4].hit & 1u) &&
-        str_eq(ui.msg, "LOCKS CLEARED"));
-    bad += check("the steps with a lock (the grid marks them): step 1", motion_lock_steps(3, 0) == 1u);
+    bad += check("a step held + [EDIT] (Dah: EDIT never deletes on SEQ): the locks and the step stay", motion_lock_count(t) == 4u &&
+        motion_lock_get(t, 4, P_E1, &v) && motion_lock_get(t, 0, P_E4, &v));
+    bad += check("the steps with a lock (the grid marks them): steps 1 and 5", motion_lock_steps(3, 0) == 0x11u);
     t->p[P_DIST] = 20;                                  /* (Dah: FX's DIST page, the DIST in the chain) */
     go_title("DIST");                                    /* the lock's knobs: the sound page shown last */
     open_family(FAM_SEQ);
@@ -666,7 +665,7 @@ static int lock_ui(void)
     bad += check("  step 5 gets a DRIVE lock", motion_lock_get(t, 4, P_DIST, &v) && v == t->p[P_DIST] + 5);
     go_page(GR_EVENTS);
     frame();
-    bad += check("AUTOMATION: EVENT 0, LOCK 3", motion_count(t) - motion_lock_count(t) == 0u && motion_lock_count(t) == 3u);
+    bad += check("AUTOMATION: EVENT 0, LOCK 5", motion_count(t) - motion_lock_count(t) == 0u && motion_lock_count(t) == 5u);
     /* the roll: the step being entered is the one held */
     ui_power_on();
     t = &trk[0];
@@ -693,10 +692,10 @@ static int lock_ui(void)
         motion_lock_count(t) == 1u && motion_lock_steps(0, 0) == 1u);
     cursor_set(0);
     press(B_EDIT);
-    bad += check("  [EDIT] alone clears the step and its locks", !t->step[0].n && !motion_lock_count(t));
+    bad += check("  [EDIT] alone (Dah): the step and its lock stay", t->step[0].n == 1u && motion_lock_count(t) == 1u);
     song.playing = 1; chain.running = 1;
     lk_down(kn); turn(EN_K3, 1); lk_up(kn);
-    bad += check("  a song playing: STOP TO EDIT, no lock", !motion_lock_count(t));
+    bad += check("  a song playing: STOP TO EDIT, no lock added", motion_lock_count(t) == 1u);
     song.playing = 0; chain.running = 0; song.rec = 0;
     return bad;
 }
@@ -727,12 +726,12 @@ static int lock_hand(void)
     lk_down(k4);
     press(B_EDIT);
     lk_up(k4);
-    bad += check("  a step held + [EDIT] clears it", !motion_lock_count(t) && str_eq(ui.msg, "LOCKS CLEARED"));
+    bad += check("  a step held + [EDIT] (Dah): the lock stays", motion_lock_count(t) == 1u);
     frames(2000);
     lk_down(k4);
     press(B_EDIT);                                       /* (no lock there now) */
     lk_up(k4);
-    bad += check("  [EDIT] on a step without locks: NO LOCKS", !motion_lock_count(t) && str_eq(ui.msg, "NO LOCKS"));
+    bad += check("  again: still there", motion_lock_count(t) == 1u);
     return bad;
 }
 /* (Dah) SEQ > AUTOMATION (ui_events.c): HOME's four knobs as lanes; KNOB 2 the lane, KNOB 3 its event at the cursor,

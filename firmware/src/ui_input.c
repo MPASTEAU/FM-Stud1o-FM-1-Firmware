@@ -977,21 +977,6 @@ static int lane_turn(int32_t s)
     return 1;
 }
 
-/* [EDIT] with the steps `held` held: their locks go */
-static void lock_clear(uint64_t held)
-{
-    uint32_t i, n = 0;
-    ui.plk_rm &= ~held;
-    if (!(motion_lock_steps(song.sel, ed_base()) & held)) {
-        ui_message("NO LOCKS");
-        return;
-    }
-    for (i = 0; i < NSTEP; i++)
-        if ((held >> i) & 1u)
-            n += motion_clear_locks(TSEL, ed_base() + i);
-    ui_message(n ? "LOCKS CLEARED" : "NO LOCKS");
-}
-
 /* NUDGE (1.2, #162; core.h step_nudge): the steps `held` move by one sixteenth of a step (-8..+7) a detent: SEQ > STEP
  * with steps held (as for a lock: the grid's step keys, the roll's step being entered) and the PRESETS knob; let go,
  * PRESETS moves the cursor again (MENU > STEP PREVIEW: it sounds). SEQ > DETAIL's KNOB 3 is the other way. They play
@@ -1875,19 +1860,6 @@ static int page_tap(uint32_t b)
             ui_message("STOP TO EDIT");
         else
             sd_reset();
-        return 1;
-    }
-    if (b == B_EDIT && song.seq_mode && !ui.home && cur_page()->graph == GR_ROLL) {   /* STEP: EDIT clears the step */
-        uint64_t held = lock_held();
-        if (chain_busy()) { ui_message("STOP TO EDIT"); return 1; }
-        if (held) {                                     /* a step held: its locks (the step stays) */
-            lock_clear(held);
-            return 1;
-        }
-        step_clear(ed_st(TSEL, ui.cursor));
-        (void)motion_clear_locks(TSEL, ui.cursor);
-        cursor_set(ui.cursor + 1);
-        ui_message("STEP CLEARED");
         return 1;
     }
     if (b == B_EDIT && !ui.home && cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION: as STEP's, EDIT clears the
