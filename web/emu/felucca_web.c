@@ -42,27 +42,64 @@ static uint8_t nor[0x100000];            /* the SPI NOR (erased: 0xFF) */
 /* ------------------------------------------------------------ the clock --- */
 #define FM1_TICKS_PER_US 24u             /* TIMER4: 24 MHz */
 static uint32_t web_ticks;
-/* The device's CPU, estimated (dev kit): each block the audio ISR renders costs the host's instructions per sample of
- * the idle mix (tests/cpu_baseline.txt mix/idle) plus each part's (fx.c part_cost: its sounding voices x ENG_VCOST, its
- * DIST / INSERT / sends), at web_cpu_cal thousandths of a percent of real time per 100 instructions per sample (1700:
- * the 1.7 % the host tests use, from the PHYS measurements on the device). Inside the ISR TIMER4 runs on by that cost,
- * so the firmware's own meter (song.cpu_q8: MENU > INFO), its peak (felucca_dbg.max_us) and its overload shedding
- * (audio.c shed_check, above 85 %) see the device's load; outside it the clock is the audio's, as before. One core
- * (the device's default: MENU > SYSTEM > 2ND CORE OFF). An estimate: recalibrate against the device's console cpu_pct. */
-#define WEB_IDLE_IPS 286u
+/* The device's CPU, estimated (dev kit): each block the audio ISR renders costs what the device's console `prof`
+ * measured (fx.c PRF_*: the 8 demo projects, one core, us per 32-sample block, WEB_US_*) for what ran in it: the
+ * events, each part at rest or running (its mix, DIST, INSERT, COMPRESSOR, SPREAD, each EQ band doing something), the
+ * buses not at rest (fx_cd, hall_still), the MASTER's chain (its EQ bands on both channels unless held: eq_t fix, its
+ * DIST, its COMPRESSOR), master_out unless still; plus the voices: each part's sounding voices x ENG_VCOST (the host's
+ * instructions per sample), at web_cpu_cal thousandths of a percent of real time per 100 instructions per sample
+ * (4000: the demos' renders on the device, `prof` r1..r8; the host tests' 1.7 % was PHYS's alone). Inside the ISR TIMER4 runs on by
+ * that cost, so the firmware's own meter (song.cpu_q8: MENU > INFO), its peak (felucca_dbg.max_us) and its overload
+ * shedding (audio.c shed_check, above 85 %) see the device's load; outside it the clock is the audio's, as before. One
+ * core (MENU > SYSTEM > 2ND CORE OFF, the device's default; ON takes about half the parts' share off). An estimate:
+ * recalibrate against the device's console `prof` and cpu_pct. */
+#define WEB_US_EV 30u                    /* the events, the FX layer, at rest (us x 1 a block) */
+#define WEB_US_EVT 6u                    /* .. more for each part running */
+#define WEB_US_REST 3u                   /* a part with nothing sounding (its LFO, the SLICER's clock) */
+#define WEB_US_MIX 4u                    /* a part running: its level, pan, sends */
+#define WEB_US_DIST 7u
+#define WEB_US_INS 12u
+#define WEB_US_COMP 5u
+#define WEB_US_SPRD 20u                  /* SPREAD: its side through the chain, the wider mix */
+#define WEB_US_EQB 9u                    /* an EQ band doing something, one channel */
+#define WEB_US_REV 45u                   /* the reverb not at rest */
+#define WEB_US_CHO 8u
+#define WEB_US_DLY 10u
+#define WEB_US_MCOMP 8u
+#define WEB_US_OUT 33u                   /* master_out (DC, limiter, soft clip), USB, the click; still: WEB_US_OUTS */
+#define WEB_US_OUTS 9u
 static uint8_t web_in_isr;
-static uint32_t web_cost_ticks, web_cpu_cal = 1700u, web_peak_ticks, web_overruns;
+static uint32_t web_cost_ticks, web_cpu_cal = 4000u, web_peak_ticks, web_overruns;
 static uint32_t fm1_ticks(void) { return web_ticks + (web_in_isr ? web_cost_ticks : 0u); }
+/* a block's estimated cost on the device (see the top: WEB_US_*) */
+static uint32_t web_bits(uint32_t m) { uint32_t n = 0; for (; m; m &= m - 1u) n++; return n; }
 static void web_cost_add(uint32_t n)
 {
-    uint32_t ips = WEB_IDLE_IPS, i;
+    uint32_t ips = 0, us = WEB_US_EV, i;
+    for (i = 0; i < trk_count(); i++) {
+        const track_t *t = &trk[i];
 #if FELUCCA_CPU2
-    for (i = 0; i < NPART; i++)
-        ips += part_cost[i];
+        uint32_t v = part_cost[i] > 60u ? part_cost[i] - 60u : 0u;   /* (its voices: fx.c's 60 the chain's guess) */
+        uint32_t run = v || (t->tail && (t->p[P_DIST] | t->p[P_ITYPE]));   /* (fx.c mix_part: voices, or a tail) */
+        ips += v;
 #else
-    (void)i;
+        uint32_t run = t->tail && (t->p[P_DIST] | t->p[P_ITYPE]);   /* (no voice count here: the tails only) */
 #endif
-    web_cost_ticks += (uint32_t)((uint64_t)ips * n * web_cpu_cal * 24000000u / (44100ull * 10000000ull));
+        if (!run) {
+            us += WEB_US_REST;
+            continue;
+        }
+        us += WEB_US_EVT + WEB_US_MIX + web_bits(eq_units(t)) * WEB_US_EQB + (t->p[P_DIST] ? WEB_US_DIST : 0u) +
+              (t->ins_run ? WEB_US_INS : 0u) + (trkx[i].rsv0 ? WEB_US_COMP : 0u) + (T_SPREAD(t) ? WEB_US_SPRD : 0u);
+    }
+    us += (song.g[G_RTYPE] == 2 ? hl.side : 1u) ? WEB_US_REV : 0u;
+    us += (fx.cho_q < CHO_LEN ? WEB_US_CHO : 0u) + (fx.dly_q < DLY_LEN ? WEB_US_DLY : 0u);
+    if (mst_on())
+        us += (eq_m[0].fix ? 0u : 2u * web_bits(eq_units(&mtrk)) * WEB_US_EQB) + (mtrk.p[P_DIST] ? 2u * WEB_US_DIST : 0u) +
+              (song.g[G_MCOMP] > 0 ? WEB_US_MCOMP : 0u);
+    us += out_still(n, fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12) ? WEB_US_OUTS : WEB_US_OUT;
+    web_cost_ticks += us * n / CTL * FM1_TICKS_PER_US +
+                      (uint32_t)((uint64_t)ips * n * web_cpu_cal * 24000000u / (44100ull * 10000000ull));
 }
 #define mix_block(o, n) (mix_block(o, n), web_cost_add(n))   /* (audio.c's audio_block: each block's cost) */
 
