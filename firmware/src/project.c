@@ -1427,6 +1427,7 @@ static int project_restore_runtime(const project_t *input)
         }
         if (!(trkx[k].eq.f & EQF_4))                    /* (Dah) its EQ stored before four filters: as four */
             eq_adopt(t->p, s->p, &trkx[k].eq);
+        tone_adopt(t->p, &trkx[k].eq);                  /* (Dah) .. and its four filters as BASS and TREBLE */
         t->preset = (uint8_t)(ENGINES[e]->npresets ? (s->preset >= PROJ_DEF_KEEP ? 0u : s->preset) % ENGINES[e]->npresets : 0u);
         memcpy(t->step, s->step, sizeof t->step);
         proj_steps(t->step);

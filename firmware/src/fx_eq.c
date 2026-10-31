@@ -33,6 +33,9 @@ enum { EQK_HP6, EQK_HP12, EQK_HP24, EQK_LP6, EQK_LP12, EQK_LP24, EQK_LS, EQK_HS,
 #define EQF_NEW 1u                                      /* (eqc_t f: filters, not the EQ before them) */
 #define EQF_IN 2u                                       /* .. in the chain */
 #define EQF_4 4u                                        /* .. always four (before: a count, 0..4, of slots in o) */
+#define EQF_TONE 8u                                     /* (a track's) its BASS and TREBLE, from its four filters (tone_adopt) */
+#define TONE_LO 24                                      /* BASS's and TREBLE's corners at first: 100 Hz, 5 kHz */
+#define TONE_HI 103
 static const uint8_t EQ_FID[EQ_NB] = {P_EQLO, P_EQHI, P_EQ1F, P_EQ2F};   /* each slot's FREQ */
 static const uint8_t EQ_SID[EQ_NB] = {P_EQ3G, P_EQ3F, P_EQ1G, P_EQ2G};   /* .. its GAIN, a cut's SLOPE (< 0 6, 0 12,
                                                          * > 0 24 dB) */
@@ -55,6 +58,7 @@ static uint32_t eq_slot(const eqc_t *c, uint32_t k) { return (c->o >> (2u * (k &
 static uint32_t eq_type(const eqc_t *c, uint32_t k) { uint32_t y = c->t[eq_slot(c, k)]; return y < EQT_N ? y : EQT_BELL; }
 static uint32_t eq_slope(int32_t v) { return v < 0 ? 0u : v > 0 ? 2u : 1u; }   /* 6 12 24 dB */
 /* t's four filters, filter k in slot k (none set yet: four BELLs) */
+static int eq_trk(const track_t *t) { return t >= trk && t < trk + NTRK; }
 static void eq_get(const track_t *t, eqc_t *c)
 {
     *c = *eq_cfg(t);
@@ -62,6 +66,11 @@ static void eq_get(const track_t *t, eqc_t *c)
         c->t[0] = c->t[1] = c->t[2] = c->t[3] = EQT_BELL;
     c->n = EQ_NB;
     c->o = 0 | 1u << 2 | 2u << 4 | 3u << 6;
+    if (eq_trk(t)) {                                    /* (Dah) a track's: BASS and TREBLE, two shelves (tone_run) */
+        c->n = 2;
+        c->t[0] = EQT_LS;
+        c->t[1] = EQT_HS;
+    }
 }
 /* c's four filters (the slots in used kept, the others flat BELLs: p's FREQ EQ_FLAT, GAIN 0) */
 static void eq_four(int16_t *p, eqc_t *c, uint32_t used)
@@ -216,19 +225,7 @@ static inline int32_t eq_mq(int32_t v, uint32_t am, int32_t ng) { return ((eq_m1
 /* one stage over the block, its state and coefficients held in registers: c 0 a one-pole (lp: its low output, else
  * x minus it), 1 an SVF's high or low output (lp), 2 a shelf or bell, x + m1 bp + m2 lp (hs: then times mg). The
  * bands run one after the other over the whole block, each sample through them in the same order as before: the
- * same values bit for bit. A loop for each output (EQ_SVF: no test in it) */
-#define EQ_SVF(out)                                                                                 \
-    for (i = 0; i < n; i++) {                                                                       \
-        int32_t x = b[i], h;                                                                        \
-        FM1_OPAQUE(dq);                     /* (else its product grows to 64 x 64 bits) */            \
-        h = eq_m16(x - (eq_m16(s1, kh) << 1) - eq_m16(s1, g) - s2, dq);                             \
-        int32_t v = eq_m16(h, g), bp = v + s1, l;                                                   \
-        s1 = bp + v;                                                                                \
-        v = eq_m16(bp, g);                                                                          \
-        l = v + s2;                                                                                 \
-        s2 = l + v;                                                                                 \
-        b[i] = out;                                                                                 \
-    }
+ * same values bit for bit */
 static __attribute__((noinline)) void eq_pass(eq_t *s, uint32_t f, uint32_t k, uint32_t c, uint32_t kh, uint32_t lp,
                                               int32_t *b, uint32_t n)
 {
@@ -236,22 +233,32 @@ static __attribute__((noinline)) void eq_pass(eq_t *s, uint32_t f, uint32_t k, u
     uint32_t g = s->g[f], dq = s->dq[f], i, a1 = (uint32_t)(m1 < 0 ? -m1 : m1), a2 = (uint32_t)(m2 < 0 ? -m2 : m2);
     uint32_t ag = (uint32_t)s->mg[k];
     int32_t n1 = m1 < 0 ? -1 : 0, n2 = m2 < 0 ? -1 : 0;
-    if (!c) {
-        for (i = 0; i < n; i++) {
-            int32_t x = b[i], v = eq_m16(x - s1, g), l = v + s1;
+    for (i = 0; i < n; i++) {
+        int32_t x = b[i], h, v, bp, l;
+        if (!c) {                                       /* (a one-pole) */
+            v = eq_m16(x - s1, g);
+            l = v + s1;
             s1 = l + v;
             b[i] = lp ? l : x - l;
+            continue;
         }
-    } else if (c == 1u && lp)
-        EQ_SVF(l)
-    else if (c == 1u)
-        EQ_SVF(h)
-    else if (c == 3u)
-        EQ_SVF(eq_m16(x + eq_mq(bp, a1, n1) + eq_mq(l, a2, n2), ag) << 4)
-    else if (m2)
-        EQ_SVF(x + eq_mq(bp, a1, n1) + eq_mq(l, a2, n2))
-    else
-        EQ_SVF(x + eq_mq(bp, a1, n1))                   /* (a bell: m2 0, its product 0) */
+        FM1_OPAQUE(dq);                                 /* (else its product grows to 64 x 64 bits) */
+        h = eq_m16(x - (eq_m16(s1, kh) << 1) - eq_m16(s1, g) - s2, dq);
+        v = eq_m16(h, g);
+        bp = v + s1;
+        s1 = bp + v;
+        v = eq_m16(bp, g);
+        l = v + s2;
+        s2 = l + v;
+        if (c == 1u)
+            x = lp ? l : h;
+        else {
+            x += eq_mq(bp, a1, n1) + eq_mq(l, a2, n2);
+            if (c == 3u)
+                x = eq_m16(x, ag) << 4;
+        }
+        b[i] = x;
+    }
     s->s1[f] = s1;
     s->s2[f] = s2;
 }
@@ -342,9 +349,81 @@ static void eq_run(eq_t *s, const track_t *t, int32_t *b, uint32_t n)
     } else
         s->fix = 0;
 }
+/* (Dah) a track's EQ: BASS and TREBLE, a one-pole shelf each (the 6 dB cut's trapezoidal one-pole: x + (A - 1) lp,
+ * x + (A - 1) (x - lp)), GAIN -15 .. +15 dB (slot 0's GAINA, 1's GAINB), its corner FREQ (FREQA, FREQB); a band at
+ * 0 dB nothing, both: the EQ out of the chain (eq_units). A few instructions a sample (the four filters it replaces:
+ * ~30 a filter). State in eq[]'s first two stages; a band starting: from rest */
+static uint32_t tone_a(int32_t fidx)                    /* the one-pole's g / (1 + g), Q16 */
+{
+    uint32_t g = EQ_G[clamp(fidx, 0, EQ_TOP)];
+    return (g << 15) / ((65536u + g) >> 1);
+}
 static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t n)
 {
-    eq_run(&eq[(uint32_t)(t - trk) % NTRK], t, b, n);
+    eq_t *s = &eq[(uint32_t)(t - trk) % NTRK];
+    int32_t vl = t->p[EQ_SID[0]], vh = t->p[EQ_SID[1]], sl = s->s1[0], sh = s->s1[1];
+    int32_t kl = eq_gain_q12(vl) - 4096, kh = eq_gain_q12(vh) - 4096;
+    uint32_t al = tone_a(t->p[EQ_FID[0]]), ah = tone_a(t->p[EQ_FID[1]]), i;
+    uint32_t ml = (uint32_t)(kl < 0 ? -kl : kl), mh = (uint32_t)(kh < 0 ? -kh : kh);
+    int32_t nl = kl < 0 ? -1 : 0, nh = kh < 0 ? -1 : 0;
+    if (!vl && !vh) {
+        if (s->on)
+            memset(s, 0, sizeof *s);                    /* (flat: from rest next time) */
+        return;
+    }
+    s->on = 1;
+    for (i = 0; i < n; i++) {                           /* (a band at 0 dB: k 0, its product 0; its state runs on) */
+        int32_t x = clamp(b[i], -3000000, 3000000), l = eq_m16(x - sl, al) + sl, h = eq_m16(x - sh, ah) + sh;
+        sl = l + (l - sl);
+        sh = h + (h - sh);
+        b[i] = x + eq_mq(l, ml, nl) + eq_mq(x - h, mh, nh);
+    }
+    s->s1[0] = sl;
+    s->s1[1] = sh;
+}
+/* a track's four filters (as stored before) as BASS and TREBLE: the lowest band with a GAIN (a shelf, a bell; a cut:
+ * -15 dB there) BASS, the highest TREBLE, the ones between dropped; one band alone: below 1 kHz BASS, else TREBLE.
+ * Flat: the corners TONE_LO, TONE_HI. Once (EQF_TONE): a project, a song as loaded (project.c, main.c) */
+static void tone_adopt(int16_t *p, eqc_t *c)
+{
+    int32_t f[EQ_NB], v[EQ_NB], lo = -1, hi = -1;
+    uint32_t k, j;
+    if (c->f & EQF_TONE)
+        return;
+    for (k = 0, j = 0; k < EQ_NB; k++) {
+        uint32_t y = (c->f & EQF_4) && c->t[k] < EQT_N ? c->t[k] : EQT_BELL;
+        int32_t fr = p[EQ_FID[k]], g = y <= EQT_LP ? (y ? fr < EQ_TOP : fr > 0) * -64 : p[EQ_SID[k]];   /* (a cut: -15 dB) */
+        if (!g)
+            continue;
+        f[j] = fr;
+        v[j++] = g;
+    }
+    for (k = 0; k < j; k++) {
+        if (lo < 0 || f[k] < f[lo])
+            lo = (int32_t)k;
+        if (hi < 0 || f[k] > f[hi])
+            hi = (int32_t)k;
+    }
+    if (lo == hi && lo >= 0) {                          /* (one band: by its frequency) */
+        if (f[lo] < 71)
+            hi = -1;
+        else
+            lo = -1;
+    }
+    for (k = 0; k < EQ_NB; k++) {
+        p[EQ_FID[k]] = EQ_FLAT[k];
+        p[EQ_SID[k]] = 0;
+    }
+    p[EQ_FID[0]] = (int16_t)(lo >= 0 ? f[lo] : TONE_LO);
+    p[EQ_SID[0]] = (int16_t)(lo >= 0 ? v[lo] : 0);
+    p[EQ_FID[1]] = (int16_t)(hi >= 0 ? f[hi] : TONE_HI);
+    p[EQ_SID[1]] = (int16_t)(hi >= 0 ? v[hi] : 0);
+    c->t[0] = EQT_LS;
+    c->t[1] = EQT_HS;
+    c->t[2] = c->t[3] = EQT_BELL;
+    c->n = EQ_NB;
+    c->o = 0 | 1u << 2 | 2u << 4 | 3u << 6;
+    c->f = (uint8_t)(EQF_NEW | EQF_4 | EQF_TONE | (lo >= 0 || hi >= 0 ? EQF_IN : 0u));
 }
 
 /* the EQ page's spectrum: the watched track's output after its chain (fx.c mix_part / mix_spread), its last EQ_RN

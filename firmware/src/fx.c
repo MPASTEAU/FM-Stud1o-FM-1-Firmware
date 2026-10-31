@@ -483,7 +483,7 @@ static inline void hall_end_lp(const int16_t *b, int16_t *y, uint32_t n, int32_t
  * gives 0 and writes 0, so only the indices and the drift move on (the same state, bit for bit, as running it),
  * hl.side 0 (rev_side was 0 already). 1: so (the block skipped) */
 #define HL_QUIET ((743u + HL_NC) / HL_NC + 1u)
-static __attribute__((noinline)) int hall_still(const int32_t *rev_in)
+static int hall_still(const int32_t *rev_in)
 {
     uint32_t i, k, d;
     int32_t a = 0;
@@ -681,7 +681,7 @@ static void fx_buses_cut(void)
         fx.dly_q = 0;
     }
 }
-/* the CHORUS and DELAY buses: wet = their block (the second core's while this one runs the reverb: mix_block) */
+/* the CHORUS and DELAY buses: wet = their block */
 static void fx_cd(const int32_t *cho_in, const int32_t *dly_in, int32_t *wet, uint32_t n)
 {
     uint32_t i, dl = delay_samples();
@@ -1464,8 +1464,6 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
 #define C1_SPLIT() mix_split()
 #endif
 static uint32_t c1_blocks;                              /* blocks the second core took parts of (console) */
-static uint8_t c1_boot;                                 /* main.c, at power-on: 0 OFF, 1 started, 2 not (a failed boot
-                                                         * before), 3 it did not answer (console) */
 
 /* a part's block into the sums of sm; with C1_TICKS (the device: TIMER4, either core reads it) its cost is what it
  * took, the whole of it (render, chain, mix), for the next split; else ENG_VCOST's estimate (mix_part) */
@@ -1493,7 +1491,6 @@ static void c1_parts(uint32_t arg)                      /* arg: the parts (bit k
 }
 
 static void c1_mst(uint32_t n) { mst_chain(1, mix_r, n); }   /* the MASTER chain's right channel */
-static void c1_cd(uint32_t n) { fx_cd(send_c, send_d, mx[1].b, n); }   /* the CHORUS and DELAY buses */
 
 /* which parts go to the second core: the split of the last block's costs that leaves the busier core the least; none
  * when that saves less than handing them over costs (C1_HAND). Once a half (every fourth block: the costs move
@@ -1534,8 +1531,8 @@ static uint32_t mix_split(void)
 }
 #endif
 
-/* the mix and the returns the same value all through the block, each DC blocker settled on it (it gives 0), the low
- * cuts, BASS+ and the limiter at rest (their steps' remainders hold with 0 in): master_out would give 0 and stay as it
+/* the mix and the returns the same value all through the block, each DC blocker settled on it (it gives 0), the
+ * limiter at rest (the steps' remainders hold with 0 in), no LOWCUT nor BASS+: master_out would give 0 and stay as it
  * is. 1: so */
 static __attribute__((noinline)) int out_still(uint32_t n, int32_t mg)
 {
@@ -1543,7 +1540,7 @@ static __attribute__((noinline)) int out_still(uint32_t n, int32_t mg)
     int32_t l = mix_l[0] + wet[0], r = mix_r[0] + wet[0], a = lim_env - LIM_T;
     a |= dc_l - ((((l >> 2) * mg) >> 10) << 6) | (dc_r - ((((r >> 2) * mg) >> 10) << 6));
     if (fx_lowcut)
-        a |= lc_l1 | lc_l2 | lc_r1 | lc_r2 | sb_lp1 | sb_lp2 | sb_lp3 | sb_lp4 | sb_env | sb_h1 | sb_h2 | sb_hl;
+        return 0;                                       /* (LOWCUT, BASS+: their states not checked, run) */
     for (i = 1; i < n && !a; i++)
         a = (mix_l[i] + wet[i] - l) | (mix_r[i] + wet[i] - r);
     return !a;
@@ -1593,21 +1590,7 @@ static void mix_block(int32_t *out, uint32_t n)
     duck_hit = 0;                                       /* (this block's DUCK triggers taken) */
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
-#if FELUCCA_CPU2
-    if (C1_ON()) {                                      /* (CHORUS and DELAY on the second core meanwhile: the sums */
-        uint32_t c1;                                    /* add up the same) */
-        fx_buses_cut();
-        c1 = C1_RUN(c1_cd, n);
-        for (i = 0; i < n; i++)
-            wet[i] = 0;
-        fx_rev(send_r, wet, n);
-        if (!c1 || C1_WAIT())
-            c1_cd(n);                                   /* (none, or it stopped answering: here) */
-        for (i = 0; i < n; i++)
-            wet[i] += mx[1].b[i];
-    } else
-#endif
-        fx_buses(send_c, send_d, send_r, wet, n);
+    fx_buses(send_c, send_d, send_r, wet, n);
     if (hl.side)
         rev_side_mix(mix_l, mix_r, n);                  /* HALL: stereo */
     PRF_LAP(PRF_BUS);

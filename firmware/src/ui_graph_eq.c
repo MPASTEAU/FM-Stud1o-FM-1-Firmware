@@ -54,6 +54,18 @@ static int32_t eq_kind_db(uint32_t kd, int32_t fidx, int32_t v, int32_t fi)
     default: return eq_q2db(a, (w * a2) >> 16, a, w);   /* a bell: (s^2 + A^2 s + 1) / (s^2 + s + 1) */
     }
 }
+/* (Dah) a track's BASS (k 0) or TREBLE (1): the one-pole shelf's |H|^2 (fx_eq.c track_eq), dB x 8, at frequency index
+ * fi: (A + s) / (1 + s), (1 + A s) / (1 + s), s = j w, w = tan(pi f / FS) / tan(pi fc / FS) */
+static int32_t tone_db(const track_t *t, uint32_t k, int32_t fi)
+{
+    int32_t v = t->p[EQ_SID[k]];
+    int64_t w = (int64_t)(((EQ_G[clamp(fi, 0, 127)] << 14) / EQ_G[clamp(t->p[EQ_FID[k]], 0, EQ_TOP)]) << 2);
+    int64_t a = (int64_t)eq_gain_q12(v) << 4;           /* (A, Q16) */
+    if (!v)
+        return 0;
+    w = w < 64 ? 64 : w > (64 << 16) ? (64 << 16) : w;
+    return k ? eq_q2db(65536, (a * w) >> 16, 65536, w) : eq_q2db(a, w, 65536, w);
+}
 /* the whole EQ at frequency index fi, dB x 8 (only band `one`, < EQ_NB) */
 static int32_t eq_curve_db(const track_t *t, int32_t fi, uint32_t one)
 {
@@ -61,6 +73,8 @@ static int32_t eq_curve_db(const track_t *t, int32_t fi, uint32_t one)
     uint8_t kd[EQ_NB], bk[EQ_NB], st[EQ_NB];
     uint32_t nb, k;
     int32_t db = 0;
+    if (eq_trk(t))
+        return (one >= EQ_NB || one == 0u ? tone_db(t, 0, fi) : 0) + (one >= EQ_NB || one == 1u ? tone_db(t, 1, fi) : 0);
     eq_get(t, &c);
     nb = eq_plan(t, &c, kd, bk, st);
     for (k = 0; k < nb; k++)
@@ -221,7 +235,9 @@ static void graph_eq(const track_t *t, uint16_t c)
 static eqc_t *eq_own(track_t *t)
 {
     eqc_t *e = eq_cfg(t);
-    if (!(e->f & EQF_4))
+    if (eq_trk(t))
+        tone_adopt(t->p, e);                            /* (Dah: a track's BASS and TREBLE) */
+    else if (!(e->f & EQF_4))
         eq_four(t->p, e, 0);
     return e;
 }
@@ -239,7 +255,9 @@ static int eq_knob(uint32_t slot, int32_t steps)
     uint32_t k = eq_pick(e), j = eq_slot(e, k), y = eq_type(e, k);
     int32_t d = steps > 0 ? 1 : -1, v = t->p[EQ_SID[j]];
     if (slot == 0u)
-        eq_ui_band = (uint8_t)clamp((int32_t)k + d, 0, EQ_NB - 1);
+        eq_ui_band = (uint8_t)clamp((int32_t)k + d, 0, eq_trk(t) ? 1 : EQ_NB - 1);
+    else if (slot == 1u && eq_trk(t))
+        return 1;                                       /* (Dah: a track's: BASS a low shelf, TREBLE a high one) */
     else if (slot == 1u) {
         uint32_t ny = (uint32_t)clamp((int32_t)y + d, 0, EQT_N - 1);
         if (ny == y)

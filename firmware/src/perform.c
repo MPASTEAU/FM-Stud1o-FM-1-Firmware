@@ -372,13 +372,16 @@ static __attribute__((noinline)) int perf_begin(uint32_t n)
     return 1;
 }
 
+static __attribute__((noinline)) int32_t perf_mtgt(uint32_t k)   /* its gain's way: 0 muted, else 32768 */
+{
+    return ((pf.act >> (PF_M1 + k)) & 1u) || trk[k % NTRK].p[P_MUTE] || (perf_solo && !((perf_solo >> k) & 1u)) ? 0 : 32768;
+}
 /* a track muted by its black key (or SOLO, or Dah: its MUTE): its signal ramps to 0 and back (fx.c mix_part, after the
  * SLICER; at 0, SOLO's and MUTE's: off, trk_off) */
 static __attribute__((noinline)) void perf_mute(uint32_t k, int32_t *b, uint32_t n)
 {
     uint32_t i;
-    int32_t g = pf.mg[k], t = ((pf.act >> (PF_M1 + k)) & 1u) || trk[k % NTRK].p[P_MUTE] ||
-              (perf_solo && !((perf_solo >> k) & 1u)) ? 0 : 32768;
+    int32_t g = pf.mg[k], t = perf_mtgt(k);
     for (i = 0; i < n; i++) {
         g += clamp(t - g, -SL_SLOPE, SL_SLOPE);
         b[i] = mulq16(b[i], (uint32_t)g << 1);
@@ -389,8 +392,7 @@ static __attribute__((noinline)) void perf_mute(uint32_t k, int32_t *b, uint32_t
 static __attribute__((noinline)) void perf_mute_sd(uint32_t k, int32_t *b, int32_t *sd, uint32_t n)
 {
     uint32_t i;
-    int32_t g = pf.mg[k], t = ((pf.act >> (PF_M1 + k)) & 1u) || trk[k % NTRK].p[P_MUTE] ||
-              (perf_solo && !((perf_solo >> k) & 1u)) ? 0 : 32768;
+    int32_t g = pf.mg[k], t = perf_mtgt(k);
     for (i = 0; i < n; i++) {
         g += clamp(t - g, -SL_SLOPE, SL_SLOPE);
         b[i] = mulq16(b[i], (uint32_t)g << 1);

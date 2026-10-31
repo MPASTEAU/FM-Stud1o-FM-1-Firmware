@@ -1872,9 +1872,12 @@ static void felucca_init(void)
     }
 #if FELUCCA_DEMO
     felucca_demo();
-    for (i = 0; i < NTRK; i++)                /* (Dah: its EQs as LOW CUT, HIGH CUT and bells: as bands, fx_eq.c) */
+    for (i = 0; i < NTRK; i++) {              /* (Dah: its EQs as LOW CUT, HIGH CUT and bells: as bands, fx_eq.c;
+                                               * a track's then as BASS and TREBLE) */
         if (!(trkx[i].eq.f & EQF_4))
             eq_adopt(trk[i].p, trk[i].p, &trkx[i].eq);
+        tone_adopt(trk[i].p, &trkx[i].eq);
+    }
     if (!(eq_mc.f & EQF_4))
         eq_adopt(mtrk.p, mtrk.p, &eq_mc);
 #endif
@@ -1944,14 +1947,13 @@ static void fm1_main(void)
     master_boot();
     kb_boot_hold = 1;                         /* #137: no notes from the keys before the UI (seq.c keyboard_block) */
 #if FELUCCA_CPU2
-    c1_boot = bootguard.failed ? 2u : 0u;
     if (!bootguard.failed && (ui_prefs2 & (PREF_CPU2_ON >> 16))) {
         /* the second core (hal/fm1_cpu1.h; fx.c mix_block hands it parts), at power-on, before the audio and
          * the timers (started later it never reaches its entry). It starts in the chip's ROM: the PC limits open
          * meanwhile. MENU > 2ND CORE OFF (the default), a crash in the last boot's first 30 s, or no answer: it is
          * never started, one core, as 1.6 */
         fm1_guard_pc_open();
-        c1_boot = fm1_cpu1_start() && fm1_cpu1_start() ? 3u : 1u;   /* (no answer: once more; console status) */
+        fm1_cpu1_start();
         fm1_guard_enable(FM1_GUARD_PC);
     }
 #endif

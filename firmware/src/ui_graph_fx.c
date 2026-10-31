@@ -164,9 +164,16 @@ static void fx_unit_set(track_t *t, uint32_t u, int on)   /* an effect in (its d
     case 2:
         t->p[P_SLCR] = (int16_t)(on ? 1 : 0);
         break;
-    case 3:                                             /* (in or out: four flat BELLs) */
+    case 3:                                             /* (in or out: four flat BELLs; Dah: a track's, BASS and TREBLE flat) */
         memset(eq_cfg(t), 0, sizeof(eqc_t));
-        eq_four(t->p, eq_cfg(t), 0);
+        if (fx_mst(t))
+            eq_four(t->p, eq_cfg(t), 0);
+        else {
+            int32_t k;
+            for (k = 0; k < (int32_t)EQ_NB; k++)
+                t->p[EQ_SID[k]] = 0;
+            tone_adopt(t->p, eq_cfg(t));
+        }
         eq_cfg(t)->f |= on ? EQF_IN : 0u;
         eq_ui_band = 0;
         break;

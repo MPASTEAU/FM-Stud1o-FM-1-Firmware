@@ -441,7 +441,7 @@ static void test_stored(void)
          * asks, ADD a BELL, REC takes one out (one stays) */
         static eq_t es;
         static int32_t eb[64];
-        track_t *t = &trk[0];
+        track_t *t = &mtrk;                             /* (Dah: four filters, the MASTER's; a track's: BASS, TREBLE below) */
         eqc_t *c = eq_cfg(t);
         int16_t raw[P_COUNT];
         uint32_t p, neq = 0, y, q, fi;
@@ -513,29 +513,75 @@ static void test_stored(void)
                   eq_type(c, 3) == EQT_LS && t->p[P_EQHI] == 90 && t->p[P_EQ2G] == 20 && t->p[P_EQ3G] == 0 &&
                   t->p[P_EQLO] == EQ_FLAT[0] && eq_units(t) == 10u;
         }
-        {   /* the page: four filters, KNOB 1 1..4; TYPE, SLOPE; REC nothing */
+        {   /* (Dah) a track's: BASS and TREBLE, the one-pole shelves; their sound as their curve says (a sine, +-1 dB);
+             * the page: KNOB 1 BASS / TREBLE, TYPE fixed; four filters stored as BASS and TREBLE */
+            track_t *u = &trk[0];
+            eqc_t *uc = eq_cfg(u);
+            uint32_t b, r;
+            memset(uc, 0, sizeof *uc);
+            for (r = 0; r < EQ_NB; r++)
+                u->p[EQ_SID[r]] = 0;
+            tone_adopt(u->p, uc);
+            ok &= (uc->f & EQF_TONE) && !eq_units(u) && u->p[EQ_FID[0]] == TONE_LO && u->p[EQ_FID[1]] == TONE_HI;
+            for (b = 0; b < 2u; b++)
+                for (ty = 0; ty < 2; ty++) {
+                    u->p[EQ_SID[0]] = u->p[EQ_SID[1]] = 0;
+                    u->p[EQ_SID[b]] = (int16_t)(ty ? -40 : 50);
+                    for (q = 0; q < 3u; q++) {
+                        static const uint8_t FI[3] = {10, 60, 112};
+                        double e_in = 0, e_out = 0, hz, db;
+                        uint32_t n, i;
+                        fi = FI[q];
+                        hz = CUTOFF_HZ[fi];
+                        memset(&eq[0], 0, sizeof eq[0]);
+                        for (n = 0; n < 600u; n++) {
+                            for (i = 0; i < 64u; i++)
+                                eb[i] = (int32_t)(1000000.0 * sin(6.283185307 * hz * (double)(n * 64u + i) / FS));
+                            for (i = 0; n >= 300u && i < 64u; i++) e_in += (double)eb[i] * eb[i];
+                            track_eq(u, eb, 64);
+                            for (i = 0; n >= 300u && i < 64u; i++) e_out += (double)eb[i] * eb[i];
+                        }
+                        db = 10.0 * log10(e_out / e_in);
+                        if (fabs(db - eq_curve_db(u, (int32_t)fi, EQ_NB) / 8.0) > 1.0) {
+                            printf("insert: %s (%d) at %.0f Hz: %.1f dB, the curve %.1f\n", b ? "TREBLE" : "BASS", u->p[EQ_SID[b]],
+                                   hz, db, eq_curve_db(u, (int32_t)fi, EQ_NB) / 8.0);
+                            ok = 0;
+                        }
+                    }
+                }
+            ok &= eq_units(u) == 2u;
             go_title("EQ");
-            fx_unit_set(t, 3, 1);
-            ok &= fx_unit_on(t, 3) && !eq_units(t) && eq_type(c, 3) == EQT_BELL;
             eq_ui_band = 0;
-            edit_param(0, 1); edit_param(0, 1); edit_param(0, 1); edit_param(0, 1);
-            ok &= eq_ui_band == 3u && !ui.confirm && page_id(cur_page(), 2) == P_EQ2F && page_id(cur_page(), 3) == P_EQ2G;
-            edit_param(0, -1); edit_param(0, -1);
+            edit_param(0, 1); edit_param(0, 1);
             ok &= eq_ui_band == 1u && page_id(cur_page(), 2) == P_EQHI && page_id(cur_page(), 3) == P_EQ3F;
-            edit_param(1, -1);                          /* BELL -> HIGH SHELF */
-            ok &= eq_type(c, 1) == EQT_HS;
-            edit_param(1, -1); edit_param(1, -1); edit_param(1, -1);   /* -> HP: a 12 dB slope */
-            edit_param(3, 1);
-            ok &= eq_type(c, 1) == EQT_HP && t->p[P_EQ3F] == 1 && eq_units(t) == 2u;
-            eq_ui_band = 0;
-            edit_param(1, -1); edit_param(1, -1); edit_param(1, -1); edit_param(1, -1);
-            edit_param(3, 1);                           /* (a second 24 dB: no stage left) */
-            ok &= eq_type(c, 0) == EQT_HP && t->p[P_EQ3G] == 0;
+            edit_param(1, -1);                          /* (TYPE: a shelf, fixed) */
+            ok &= eq_type(uc, 1) == EQT_HS;
+            edit_param(0, -1);
+            ok &= eq_ui_band == 0u && page_id(cur_page(), 2) == P_EQLO && page_id(cur_page(), 3) == P_EQ3G;
+            {   /* stored as four filters: HP 30, a bell at 2 kHz +20, a high shelf at 8 kHz -10: BASS -15 dB at 30
+                 * (the cut), TREBLE -10 at 8 kHz (the highest), the bell between dropped */
+                static const eqc_t E4 = {4, 0 | 1 << 2 | 2 << 4 | 3 << 6, {EQT_HP, EQT_BELL, EQT_HS, EQT_BELL}, EQF_NEW | EQF_IN | EQF_4};
+                *uc = E4;
+                u->p[P_EQLO] = 30; u->p[P_EQ3G] = 0; u->p[P_EQHI] = 85; u->p[P_EQ3F] = 20;
+                u->p[P_EQ1F] = 113; u->p[P_EQ1G] = -10; u->p[P_EQ2F] = 90; u->p[P_EQ2G] = 0;
+                tone_adopt(u->p, uc);
+                ok &= (uc->f & EQF_TONE) && u->p[P_EQLO] == 30 && u->p[P_EQ3G] == -64 && u->p[P_EQHI] == 113 &&
+                      u->p[P_EQ3F] == -10 && !u->p[P_EQ1G] && !u->p[P_EQ2G] && eq_units(u) == 3u;
+                *uc = E4;                               /* (one bell alone at 2 kHz: TREBLE) */
+                uc->t[0] = EQT_BELL;
+                u->p[P_EQLO] = 85; u->p[P_EQ3G] = 12; u->p[P_EQ1G] = 0; u->p[P_EQ3F] = 0;
+                tone_adopt(u->p, uc);
+                ok &= u->p[P_EQ3G] == 0 && u->p[P_EQHI] == 85 && u->p[P_EQ3F] == 12 && u->p[P_EQLO] == TONE_LO;
+            }
+            memset(uc, 0, sizeof *uc);
+            for (r = 0; r < EQ_NB; r++)
+                u->p[EQ_SID[r]] = 0;
+            memset(&eq[0], 0, sizeof eq[0]);
         }
         memset(c, 0, sizeof *c);
         t->p[P_EQLO] = 0; t->p[P_EQHI] = 118; t->p[P_EQ1F] = 40; t->p[P_EQ1G] = 0; t->p[P_EQ2F] = 90; t->p[P_EQ2G] = 0;
         t->p[P_EQ3G] = t->p[P_EQ3F] = 0;
-        ck("EQ (Dah): one page; each TYPE as its curve; five stages at most; four filters, flat BELLs at first; stored EQs as four; TYPE, SLOPE", ok);
+        ck("EQ (Dah): one page; the MASTER's: each TYPE as its curve, five stages at most, four filters, flat BELLs at first, stored EQs as four; a track's: BASS and TREBLE as their curves, its page, four filters as BASS and TREBLE", ok);
     }
 }
 

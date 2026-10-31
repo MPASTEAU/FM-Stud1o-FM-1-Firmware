@@ -911,6 +911,11 @@ static void span_eqb(const card_span_t *sp, int32_t v, char *val)       /* (Dah)
     (void)sp;
     val[0] = (char)('1' + v); val[1] = '/'; val[2] = '4'; val[3] = 0;
 }
+static void span_eqb2(const card_span_t *sp, int32_t v, char *val)      /* (Dah) a track's: BASS, TREBLE */
+{
+    (void)sp;
+    str_cpy(val, v ? "TREBLE" : "BASS", 8);
+}
 static void span_eqt(const card_span_t *sp, int32_t v, char *val)       /* (Dah) .. its TYPE */
 {
     (void)sp;
@@ -1979,7 +1984,10 @@ static void draw_columns_in(void)
             int32_t fv;
             eq_get(ft, &e);
             k = eq_pick(&e); j = eq_slot(&e, k); y = eq_type(&e, k);
-            if (c == 0u) {
+            if (c == 0u && eq_trk(ft)) {                /* (Dah: a track's: BASS, TREBLE) */
+                card_span_by(span_eqb2, 0, 0, 1, 0);
+                draw_column(0, "BAND", k ? "TREBLE" : "BASS", "", VAL(0u), (int32_t)k * 1000, ICON_AUTO);
+            } else if (c == 0u) {
                 char pl[6] = {(char)('1' + k), '/', '4', 0};
                 card_span_by(span_eqb, 0, 0, 3, 0);
                 draw_column(0, "FILTER", pl, "", VAL(0u), (int32_t)k * 1000 / 3, ICON_AUTO);
