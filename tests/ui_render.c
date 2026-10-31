@@ -1526,7 +1526,6 @@ static void setup(int s)
         motion_set_lock(TSEL, 2, P_REV, 100); motion_set_lock(TSEL, 6, P_E4, 20); motion_set_lock(TSEL, 6, P_ATK, 90);
         motion_set_lock(TSEL, 9, P_E5, 110); motion_set_lock(TSEL, 13, P_REV, 80);
         if (s == S_ROLL_LOCK_HELD) {
-            ui.plk_src = 0;
             ui.entry_open = 1;
             fm1_in.notes = 1u << 10;
             ui.hot_col = 0; ui.hot_t = 30;
@@ -1605,11 +1604,7 @@ static void setup(int s)
         motion_set_lock(TSEL, 2, P_E1, 90); motion_set_lock(TSEL, 4, P_REV, 100); motion_set_lock(TSEL, 4, P_DLY, 70);
         motion_set_lock(TSEL, 8, P_E2, 30); motion_set_lock(TSEL, 15, P_E1, 40);
         if (s == S_DRUM_LOCK_HELD) {
-            uint32_t i;
-            for (i = 0; i < NPAGES && PAGES[i].graph != GR_FX; i++)
-                ;
-            ui.plk_src = (uint8_t)(i + 1u);
-            fm1_in.notes = 1u << key_at(0, 4);
+            fm1_in.notes = 1u << key_at(0, 4);   /* (Dah: HOME's four, always) */
             ui.hot_col = 3; ui.hot_t = 30;
         }
         break;

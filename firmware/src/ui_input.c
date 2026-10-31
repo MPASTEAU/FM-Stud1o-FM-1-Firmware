@@ -894,7 +894,7 @@ static void grid_keys(uint32_t pressed)
 
 /* ------------------------------------------------- parameter locks --- */
 /* 1.1 (Discussions #75, #53): on SEQ > STEP, hold a step and turn KNOB 1..4: the step gets a lock of the parameter
- * that knob edits on the sound page shown last (ui.plk_src: HOME's four, ENV, LFO, FX, EDIT 1 / 2, OP ENV, ..; the
+ * that knob edits on HOME (Dah: HOME's four, whatever page was shown last; the
  * cards show those four while a step is held, a locked value bright, the sound's own DIM). The step held: on the
  * DRUM grid its white keys (several at once: each gets the lock; a press on a hit takes it away only when let go,
  * and not at all when it was held for a lock), on the roll the step being entered (its note keys held). [EDIT]

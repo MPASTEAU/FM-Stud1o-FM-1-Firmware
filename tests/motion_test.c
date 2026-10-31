@@ -660,9 +660,9 @@ static int lock_ui(void)
     go_title("DIST");                                    /* the lock's knobs: the sound page shown last */
     open_family(FAM_SEQ);
     frame();
-    bad += check("from DIST: the knobs lock DRIVE COLOR OUT (Dah: IN its extras', none)", lock_id(0) == 0xFFu && lock_id(1) == P_DIST && lock_id(2) == P_DCOL);
+    bad += check("from DIST (Dah): the knobs still lock HOME's four (DRUM: E2..E5)", lock_id(0) == P_E1 && lock_id(3) == P_E4);
     lk_down(k4); turn(EN_K2, 5); lk_up(k4);
-    bad += check("  step 5 gets a DRIVE lock", motion_lock_get(t, 4, P_DIST, &v) && v == t->p[P_DIST] + 5);
+    bad += check("  step 5 gets an E3 lock", motion_lock_get(t, 4, P_E2, &v));
     go_page(GR_EVENTS);
     frame();
     bad += check("AUTOMATION: EVENT 0, LOCK 5", motion_count(t) - motion_lock_count(t) == 0u && motion_lock_count(t) == 5u);

@@ -180,8 +180,6 @@ static struct {
     uint8_t entry_open;          /* SEQ: keys held since the first press of this entry */
     uint8_t lane;                /* SEQ > STEP on a DRUM track (the grid): the lane the keys and KNOB 3 / 4 edit */
     uint8_t auto_id, auto_trk;   /* (Dah) STEP's automation lane: the parameter (+ 1, 0 none picked) and its track */
-    uint8_t plk_src;             /* parameter locks (ui_input.c lock_*): the sound page whose KNOB 1..4 a step held
-                                  * locks, PAGES index + 1; 0 = HOME's four */
     uint8_t plk_lane, plk_trk;   /* .. the grid: the lane and the track of the hits plk_rm takes away */
     uint64_t plk_rm, plk_acc;    /* .. the grid's step keys pressed on a hit (bit = step): it goes when the key is let
                                   * go, unless the key was held for a lock (its accent: plk_acc) */
@@ -581,22 +579,10 @@ static void chain_play_ui(void)
 }
 
 
-/* parameter locks: a page whose KNOB 1..4 can lock (a track's sound: one of its parameters can be motion), the parameter KNOB
- * k locks (ui.plk_src's page, HOME's four), 0xFF = none */
-static int lock_page_ok(uint32_t i)
-{
-    uint32_t k;
-    if (i >= NPAGES || (PAGES[i].scope != SC_TRACK && PAGES[i].scope != SC_ENGINE))
-        return 0;
-    for (k = 0; k < 4u; k++)
-        if (PAGES[i].id[k] != 0xFFu && motion_param(PAGES[i].id[k]))
-            return 1;
-    return 0;
-}
+/* parameter locks: the parameter KNOB k locks on a step held, HOME's four (Dah: always, whatever page was shown last), 0xFF = none */
 static uint32_t lock_id(uint32_t k)
 {
-    uint32_t id = ui.plk_src && lock_page_ok(ui.plk_src - 1u) ? page_id(&PAGES[ui.plk_src - 1u], k)
-                                                               : ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
+    uint32_t id = ENGINES[TSEL->eng_req % NENGINES]->knob[k & 3u];
     return id < P_COUNT && motion_param(id) ? id : 0xFFu;
 }
 
@@ -627,8 +613,6 @@ static void page_entered(void)
     const page_t *pg = cur_page();
     if (!ui.home && pg->graph == GR_EVENTS)      /* AUTOMATION: the cursor inside LEN */
         au_enter();
-    if (!ui.home && lock_page_ok(ui.page))
-        ui.plk_src = (uint8_t)(ui.page + 1u);
     song.seq_mode = !ui.home && pg->fam == FAM_SEQ;
     ui.entry_open = 0;
     ui.hot_t = 0;                                /* clear the previous page's emphasis */
@@ -1071,7 +1055,6 @@ static void open_family(uint32_t fam)
 static void go_home(void)
 {
     ui.home = 1;
-    ui.plk_src = 0;                              /* (parameter locks: HOME's four) */
     ui.entry_open = 0;
     ui.hot_t = 0;
     song.seq_mode = 0;
