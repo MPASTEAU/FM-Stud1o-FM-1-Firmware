@@ -134,7 +134,8 @@ if (typeof registerProcessor === "function") {
         this.sentWrites = writes;
         msg.sectors = storeSectors(new Uint8Array(mem, ex.web_nor(), ex.web_nor_size()));
       }
-      if (msg.leds || msg.fb || msg.sectors || msg.cpu || msg.load !== undefined) this.port.postMessage(msg, transfer);
+      if (ex.web_reboot_count && ex.web_reboot_count()) msg.reboot = 1;   // (MENU > FACTORY RESET: its sectors, then a new page)
+      if (msg.leds || msg.fb || msg.sectors || msg.cpu || msg.reboot || msg.load !== undefined) this.port.postMessage(msg, transfer);
     }
 
     // A click's down and up can arrive within one render quantum, but the FM-1's contacts never close for less than

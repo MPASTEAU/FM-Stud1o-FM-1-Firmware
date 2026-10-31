@@ -28,6 +28,8 @@
 #undef memcpy
 #undef memcmp
 static struct { volatile uint32_t notes, buttons; } fm1_in;
+static uint32_t host_reboots;                     /* (project.c factory_reset: the restart) */
+static void fm1_reboot(void) { host_reboots++; }
 #include "../firmware/src/core.h"
 #include "../firmware/src/engines.c"
 /* (Dah) the factory patterns of SAVE > PHRASES (gone from the firmware with it, engines.c), kept as the tests' phrases

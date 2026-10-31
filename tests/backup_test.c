@@ -34,6 +34,7 @@ static void irq_restore(uint32_t f) { (void)f; }
 static uint32_t fl_jedec_ram(void) { return 0; }
 static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
+static void fm1_wdt_feed(void) {}
 #include "../firmware/src/storage.c"
 #include "../firmware/src/upreset.c"
 #include "../firmware/src/project.c"
@@ -58,7 +59,6 @@ static uint32_t ed_unpack7(const uint8_t *a, uint32_t na, uint8_t *out, uint32_t
     return na ? 0u : n;
 }
 static uint8_t ed_smp_buf[512] __attribute__((aligned(4)));
-static void fm1_wdt_feed(void) {}
 static int ed_flash_stop(void) { return transport_busy(); }
 #include "../firmware/src/editor_backup.c"
 

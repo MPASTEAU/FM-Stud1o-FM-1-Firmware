@@ -512,6 +512,7 @@ static void enc_drop(void)                             /* knob turns nobody take
         panel_enc(k);
 }
 
+static void confirm_open(uint32_t kind, uint32_t trk);
 static void menu_close(void)
 {
     settings_save();                                   /* palette / panel table, if changed */
@@ -588,6 +589,9 @@ static void menu_input(uint32_t oct)                  /* oct: ui_input.c oct_tap
             panel_setup();
             scrn.idle = fm1_ms;                         /* (SCREEN OFF: its own loop had the input) */
             ui.force = 1;
+        } else if (ui.menu_sel == MI_FACTORY) {         /* FACTORY RESET: asked first (ui_input.c confirm_open) */
+            menu_close();
+            confirm_open(CF_FACTORY, 0);
         } else if (ui.menu_sel == MI_INFO) {
             ui.menu = 3;
             info.t = fm1_ms - INFO_CPU_MS;              /* (the CPU load read at once) */

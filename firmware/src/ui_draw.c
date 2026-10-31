@@ -2280,6 +2280,10 @@ static void confirm_text(char *a, char *b)
         str_cpy(a + str_len(a), "?", 2);
         up_name(k, b);
         break;
+    case CF_FACTORY:                                 /* MENU > FACTORY RESET: everything but the samples */
+        str_cpy(a, "FACTORY RESET?", 24);
+        str_cpy(b, "ERASES ALL BUT SAMPLES", 24);
+        break;
     default:                                         /* (Dah: CLEAR T1 SEQUENCE?, TRACK?: SAVE > TOOLS', gone) */
         a[0] = 0;
         break;

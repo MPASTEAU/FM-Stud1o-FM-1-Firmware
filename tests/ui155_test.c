@@ -439,7 +439,7 @@ static int menus_alike(void)
     ok &= menu_nvis() + 8u == MI_COUNT;                /* (every row but CLICK .. TUNE and T1..T4 CHANNEL: no tabs) */
     for (i = 0; i < menu_nvis(); i++)
         n += menu_pos(menu_vis(i)) == i;
-    ok &= n == menu_nvis() && menu_vis(menu_nvis() - 1u) == MI_ABOUT;
+    ok &= n == menu_nvis() && menu_vis(menu_nvis() - 1u) == MI_FACTORY;   /* (FACTORY RESET the last) */
     bad += check("MENU: one list (no tabs), KNOB 1 the row across DISPLAY into CONTROL, KNOB 2 the value", ok);
     press(B_PLAY);
     ok = ui.menu == 1 && (song.playing || transport_req == 1u);
@@ -451,6 +451,25 @@ static int menus_alike(void)
     press(B_HOME);
     ok &= ui.menu == 0;
     bad += check("  PLAY plays in it; another button closes it and acts (LFO: its page); HOME closes it", ok);
+    {   /* FACTORY RESET: the last row; OCT+ asks (the dialog, the menu closed), OCT- cancels, OCT+ answers */
+        char a[24], b[24];
+        hold(B_HOME);
+        ui.menu_sel = MI_FACTORY;
+        ok = ui.menu == 1 && oct_leds() == OCT_BREATH && str_eq(menu_label(MI_FACTORY), "FACTORY RESET");
+        press(B_OCTUP);
+        confirm_text(a, b);
+        ok &= ui.menu == 0 && ui.confirm == CF_FACTORY && str_eq(a, "FACTORY RESET?") && str_eq(b, "ERASES ALL BUT SAMPLES");
+        frame();
+        press(B_OCTDN);
+        ok &= !ui.confirm && ui.menu == 0;
+        hold(B_HOME);
+        ui.menu_sel = MI_FACTORY;
+        press(B_OCTUP);
+        ok &= ui.confirm == CF_FACTORY;
+        press(B_OCTUP);                                 /* (no flash here: factory_reset erases nothing) */
+        ok &= !ui.confirm && host_reboots == 0u;
+        bad += check("  FACTORY RESET (the last row): OCT+ the dialog, OCT- cancels it, OCT+ answers it", ok);
+    }
     ok = 1;
     for (i = 0; i < NELEM(HELP_PAGE); i++)
         ok &= !knob_named(HELP_PAGE[i].hint) && !strstr(HELP_PAGE[i].hint, "[PRESETS]") &&

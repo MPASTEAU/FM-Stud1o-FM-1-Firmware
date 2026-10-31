@@ -595,6 +595,10 @@ async function switchOn() {
             warned = true;
             console.warn("Dah: this browser does not keep the saves; they last until the page closes.");
           }
+          if (m.reboot && !resetting) {                         // (the device restarted: MENU > FACTORY RESET erased it)
+            resetting = true;
+            location.reload();
+          }
         }
       };
       node.port.postMessage({ type: "load", wasm, sectors: loadFlash(), master: masterValue }, [wasm]);

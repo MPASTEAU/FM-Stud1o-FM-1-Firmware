@@ -43,7 +43,8 @@
 #                   fades, shared-voice limits, deferred settings and retries, failed-save rollback, the autosave
 #                   (1.2: when it writes, the power-on restore, damaged copies, a write cut short, wear over a session),
 #                   malformed transfers, transport-stop timeouts, MIDI and UART recovery; the MENU settings over the
-#                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later).
+#                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later);
+#                   MENU > FACTORY RESET (project.c factory_reset): the stores erased, the samples kept, a restart, not while playing.
 # FM6 BANK (tests/fm6bank_test.c, 1.4.1): the voice bank (src/fm6_vbank.c) and its editor commands against simulated NOR:
 #                   written whole and read back, its sectors (0xE7000, staged in the autosave's older copy, nothing else
 #                   touched), a power cut after any programmed byte or in any erase (the old bank or the new one, the

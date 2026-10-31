@@ -58,6 +58,7 @@ static void irq_restore(uint32_t f) { (void)f; }
 static uint32_t fl_jedec_ram(void) { return 0; }
 static void fl_plain_window_init(void) {}
 #define FL_FAR(fn) (fn)
+static void fm1_wdt_feed(void) {}
 #include "../firmware/src/storage.c"
 #include "../firmware/src/upreset.c"
 #include "../firmware/src/project.c"
@@ -458,6 +459,52 @@ static int autosave_test(void)
     return bad;
 }
 
+/* MENU > FACTORY RESET (project.c factory_reset, its dialog answered): every sector Felucca keeps something in erased
+ * (settings, the PROJECTS, the old slots, the user presets and their FM6 patches, the autosave, the voice bank), then a
+ * restart; the samples (USR1 0xA0000..) and the OTA staging kept; nothing while playing; the next power-on a new device's */
+static int factory_test(void)
+{
+    static const uint32_t KEEP[] = {0xA0000u, 0xB3000u, 0xE0000u, 0xE4000u, 0xE8000u, 0xFB000u, 0xFF000u};
+    uint8_t blob[64];
+    uint32_t i, a, dirty = 0, kept = 1, before;
+    int bad = 0, ok;
+    reset();
+    settings_init();
+    memset(blob, 0x5A, sizeof blob);
+    settings.palette = 2;
+    settings_save();                                   /* the settings (0xFC000) */
+    ok = !persist_pending && pfs_write(1, "SONG") == 0 && pfs_there(1);   /* a project (0xB4000..) */
+    ok &= !st_save(OBJ_PROJECT0, &proj_slot[0], sizeof proj_slot[0]) && !st_save(OBJ_UPRESET0, &up_bank[0], sizeof up_bank[0]) &&
+          !st_save(OBJ_UPFM6, blob, sizeof blob) && !st_save(OBJ_AUTOSAVE, blob, sizeof blob);
+    st_prog(0xE7000u, blob, sizeof blob);              /* (the voice bank's sector, written) */
+    for (i = 0; i < NELEM(KEEP); i++)
+        st_prog(KEEP[i], blob, sizeof blob);           /* samples, OTA staging, the sectors around */
+    before = erases;
+    song.playing = 1;
+    factory_reset();
+    ok &= erases == before && !host_reboots && pfs_there(1);
+    bad += check("FACTORY RESET while playing: nothing erased, no restart (STOP FIRST)", ok);
+    song.playing = 0;
+    factory_reset();
+    for (a = 0x97000u; a < 0x100000u; a += 4096u) {    /* (the erased runs: the sectors Felucca writes) */
+        int in = (a < 0xA0000u) || (a >= 0xB4000u && a < 0xE0000u) || (a >= 0xE5000u && a < 0xE8000u) ||
+                 (a >= 0xFC000u && a < 0xFF000u);
+        for (i = 0; in && i < 4096u; i++)
+            dirty += nor[a + i] != 0xFFu;
+    }
+    for (i = 0; i < NELEM(KEEP); i++)
+        kept &= !memcmp(nor + KEEP[i], blob, sizeof blob);
+    bad += check("FACTORY RESET: settings, PROJECTS, old slots, presets, FM6 patches, autosave, voice bank erased; restart",
+                 !dirty && kept && host_reboots == 1u && erases - before == 59u);
+    reset();                                           /* (the power-on after it) */
+    pfs.ok = 0;
+    persist_boot();
+    settings_init();
+    bad += check("  the power-on after it: no project, no settings stored (a new device's), the samples' flash kept",
+                 !pfs_count() && st_load(OBJ_SETTINGS, blob, sizeof blob) < 0 && kept);
+    return bad;
+}
+
 int main(void)
 {
     int bad = 0, ok;
@@ -761,6 +808,7 @@ int main(void)
                   irq_races == 3u && song.playing && !transport_req && persist_pending && erases == before);
     bad += mig_test();
     bad += autosave_test();
+    bad += factory_test();
     printf("%s\n", bad ? "PERSISTENCE TEST FAILED" : "persistence test passed");
     return bad != 0;
 }

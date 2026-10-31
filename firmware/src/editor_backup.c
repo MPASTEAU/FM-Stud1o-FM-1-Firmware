@@ -204,30 +204,13 @@ static uint32_t ed_bk_commit(void)
         if (ed_bk_len) memcpy(&upf, raw, sizeof upf); else upf_empty();
         sync_reload = 1; ui.force = 1;
         return upf_save() == 2 ? 4u : 0u;           /* (a failed write keeps the restored RAM copy) */
-    } else if (ed_bk_id >= 10u && ed_bk_id <= 17u) {   /* a slot's tracks 5..8 / extras, its record's tag now */
-        uint32_t k = (ed_bk_id - 10u) & 3u, magic, tag, sum, y = ed_bk_id >= 14u;
-        if (!ed_bk_len) return 0;                   /* (none: the slot's own X, if any, no longer matches it) */
-        memcpy(&magic, raw, 4); memcpy(&sum, raw + PROJX_SIZE - 4u, 4);
-        if (ed_bk_len != PROJX_SIZE || magic != (y ? PROJY_MAGIC : PROJX_MAGIC) || !project_used(k) ||
-            sum != proj_hash(raw, PROJX_SIZE - 4u))
-            return 2;                               /* (its own hash first, as written: then tagged again) */
-        tag = proj_tag(&proj_slot[k]);
-        memcpy(raw + 8, &tag, 4);
-        sum = proj_hash(raw, PROJX_SIZE - 4u); memcpy(raw + PROJX_SIZE - 4u, &sum, 4);
-        if (!proj_import(&proj_scratch, &proj_slot[k], sizeof proj_slot[k]) ||   /* (its slot's music, then every check */
-            (y ? proj_unpack_y(&proj_scratch, raw, (int)PROJY_SIZE, tag) : proj_unpack_x(&proj_scratch, raw, (int)PROJX_SIZE, tag)) != 1)
-            return 2;                               /* proj_x_apply makes) */
-        obj = y ? PX_YOF(PX_OBJ0 + k) : PX_OBJ0 + k;
-        proj_wire_gen++;                            /* (SONG reads the slots again) */
     } else return 1;
 #if FELUCCA_FLASH
     if (!flash_ok || st_save(obj, raw, ed_bk_len)) return 4;
 #else
     (void)obj;
 #endif
-    if (ed_bk_id >= 10u) {
-        /* (the X written: nothing in RAM) */
-    } else if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
+    if (ed_bk_id >= 2u && ed_bk_id <= 5u) {
         memset(&proj_slot[ed_bk_id - 2u], 0, sizeof proj_slot[0]);
         if (proj_cur == ed_bk_id - 2u)
             proj_cur = PROJ_NO_SLOT;                     /* (another project there now: the music keeps its name) */

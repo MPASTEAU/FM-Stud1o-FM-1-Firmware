@@ -19,7 +19,8 @@ enum { MI_HELP, MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HO
 #if FELUCCA_CPU2
        MI_CPU2,                                        /* (not in a FELUCCA_CPU2=0 build: core.h) */
 #endif
-       MI_PANEL, MI_INFO, MI_ABOUT, MI_COUNT };
+       MI_PANEL, MI_INFO, MI_ABOUT, MI_FACTORY, MI_COUNT };   /* (FACTORY RESET: the last row of all; its dialog,
+                                                        * then project.c factory_reset) */
                                                        /* (1.1: the metronome's rows in AUDIO; 1.2: RESTORE LAST in
                                                         * SYSTEM, SCALE LEDS STEP PREVIEW CHORD ENTRY in CONTROL, SCOPE in
                                                         * DISPLAY, TUNE in AUDIO, MIDI IN in MIDI, INFO in SYSTEM;
@@ -47,7 +48,7 @@ static const char *const MI_NAME[MI_COUNT] = {"HELP", "COLOR", "STYLE", "LARGE",
                                               "2ND CORE",
 #endif
                                               "CALIBRATION", "INFO",
-                                              "ABOUT"};
+                                              "ABOUT", "FACTORY RESET"};
 /* 1.0.5: the MENU's tabs (ui_menu.c: ALGORITHM steps between them, PRESETS among one tab's rows; the editor gets a
  * row's tab after its MENU_DESC reply). A tab's rows follow each other in MI order (tests/ui_test.c checks it); at
  * most MTAB_ROWS each (the page does not scroll: ui_menu.c fits them; 1.2: 7, the rows of such a tab 21 px; 1.3: 8,
@@ -85,6 +86,7 @@ static const uint8_t MI_TAB[MI_COUNT] = {
     MTAB_SYSTEM,                                                            /* 2ND CORE (1.6.1) */
 #endif
     MTAB_SYSTEM, MTAB_SYSTEM, MTAB_SYSTEM,                                  /* CALIBRATION, INFO (1.2), ABOUT */
+    MTAB_SYSTEM,                                                            /* FACTORY RESET */
 };
 /* TUNE: the project's tuning in cents (G_TUNE, -50..+50); as a row its values 0..TUNE_N - 1 (value - TUNE_MIN). The
  * editor gets it as a number (EDM_INT: the cents, min..max, its unit) */

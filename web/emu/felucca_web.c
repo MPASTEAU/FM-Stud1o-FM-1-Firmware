@@ -260,7 +260,6 @@ static void fm1_adc_init(void) {}
 static void fm1_timer5_ack(void) {}
 static void fm1_timer5_start(void (*isr)(void), uint32_t prio) { (void)isr; (void)prio; }
 void isr_timer5(void) {}
-static void fm1_reboot(void) {}
 static void fm1_enter_uboot(void) {}
 static void fm1_guard_lock_top(void) {}
 static void fm1_irq_enable_all(void) {}
@@ -409,6 +408,8 @@ EXPORT uint8_t *web_nor(void) { return nor; }
 EXPORT uint32_t web_nor_size(void) { return sizeof nor; }
 EXPORT void web_nor_erase(void) { memset(nor, 0xFF, sizeof nor); }
 EXPORT uint32_t web_flash_writes_count(void) { return web_flash_writes; }
+EXPORT uint32_t web_reboot_count(void) { return host_reboots; }   /* (hostsim.c fm1_reboot: MENU > FACTORY RESET, a
+                                                                     * crash; the page loads again) */
 EXPORT void web_boot(void)
 {
     if (!web_booted)

@@ -800,6 +800,7 @@ static int live_rec_sel(void)
     return ((song.rec >> song.sel) & 1u) && (song.playing || transport_req == 1u || seq_counting());
 }
 
+static void factory_reset(void);                       /* (project.c) */
 /* the OCT- / OCT+ dialog (ui_draw.c draws it); trk: the track or the slot it is about */
 static void confirm_open(uint32_t kind, uint32_t trk)
 {
@@ -2266,6 +2267,8 @@ static void ui_input(void)
                 if (!chain_busy()) { set_engine(TSEL->eng_req); ui_message("SOUND INIT"); }
             } else if (kind == CF_CLEAN_SOUND) {
                 if (!chain_busy()) { clean_engine(); ui_message("CLEAN INIT"); }
+            } else if (kind == CF_FACTORY) {           /* MENU > FACTORY RESET, answered: erased, restarted */
+                factory_reset();
             }                                           /* (Dah: CLEAR T1 SEQUENCE / TRACK, SONG ORDER, the last track
                                                          * off: SAVE > TOOLS', gone) */
         } else if ((oct & 1u) || (ui.confirm == CF_ADD_TRACK && panel_enc(EN_ALGO) < 0) ||

@@ -1620,6 +1620,30 @@ static void settings_save(void)
     settings_poll();
 }
 
+/* MENU > FACTORY RESET (its dialog answered, ui_input.c): every sector Felucca keeps something in erased, then a restart,
+ * the power-on of a new device: the four old project slots and the user presets' FM6 patches (0x97000..0x9FFFF, 0xFE000),
+ * the PROJECTS and the user presets (0xB4000..0xDFFFF), the autosave and the FM6 voice bank (0xE5000..0xE7FFF), the
+ * settings (0xFC000, 0xFD000: the MENU, the palette, the panel's table, MIDI LEARN's map, the project open). Not the
+ * samples (the user slot USR1 0xA0000.., the sample pack in the image) nor the OTA staging. Stopped only (an erase
+ * silences the audio); the sectors by index (/ 4096), a run each */
+static __attribute__((noinline)) void factory_reset(void)
+{
+#if FELUCCA_FLASH
+    static const uint8_t FR[8] = {0x97, 9, 0xB4, 44, 0xE5, 3, 0xFC, 3};
+    uint32_t i, s;
+    if (transport_busy()) {
+        ui_message("STOP FIRST");
+        return;
+    }
+    for (i = 0; i < 8u; i += 2u)
+        for (s = 0; s < FR[i + 1u]; s++) {
+            (void)st_erase((FR[i] + s) * ST_SECTOR);
+            fm1_wdt_feed();
+        }
+    fm1_reboot();
+#endif
+}
+
 /* The autosave (1.2, Discussion #130): the music as it is (what a project holds: every track's sound, steps, LEN DIV
  * SWING GATE, mix, the song, the automation and locks, the FM6 patches, the name) kept in its own storage object
  * (OBJ_AUTOSAVE, A/B at 0xE5000 / 0xE6000, never one of the four project slots), and put back at power-on
