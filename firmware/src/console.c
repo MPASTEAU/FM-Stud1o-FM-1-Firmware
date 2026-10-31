@@ -203,6 +203,7 @@ static void con_status(void)
 #if FELUCCA_CPU2
     con_kv("cpu2_set", (ui_prefs2 & (PREF_CPU2_ON >> 16)) != 0u);   /* MENU > 2ND CORE: 1 ON (from power-on), 0 OFF */
     con_kv("cpu2", fm1_c1_on);                          /* the second core renders parts (hal/fm1_cpu1.h) */
+    con_kv("cpu2_boot", c1_boot);                       /* at power-on: 0 OFF, 1 started, 2 after a failed boot, 3 no answer */
     con_kv("cpu2_gave_up", fm1_c1_gave_up);             /* 1: it misread a job, 2: one timed out (then one core) */
     con_kv("cpu2_bad", (int32_t)fm1_c1_mb.bad);
     con_kv("cpu2_blocks", (int32_t)c1_blocks);          /* blocks it took parts of (fx.c mix_block) */

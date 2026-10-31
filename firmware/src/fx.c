@@ -1421,6 +1421,8 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
 #define C1_SPLIT() mix_split()
 #endif
 static uint32_t c1_blocks;                              /* blocks the second core took parts of (console) */
+static uint8_t c1_boot;                                 /* main.c, at power-on: 0 OFF, 1 started, 2 not (a failed boot
+                                                         * before), 3 it did not answer (console) */
 
 /* a part's block into the sums of sm; with C1_TICKS (the device: TIMER4, either core reads it) its cost is what it
  * took, the whole of it (render, chain, mix), for the next split; else ENG_VCOST's estimate (mix_part) */

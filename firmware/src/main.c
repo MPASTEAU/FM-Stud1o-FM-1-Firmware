@@ -1944,13 +1944,14 @@ static void fm1_main(void)
     master_boot();
     kb_boot_hold = 1;                         /* #137: no notes from the keys before the UI (seq.c keyboard_block) */
 #if FELUCCA_CPU2
+    c1_boot = bootguard.failed ? 2u : 0u;
     if (!bootguard.failed && (ui_prefs2 & (PREF_CPU2_ON >> 16))) {
         /* the second core (hal/fm1_cpu1.h; fx.c mix_block hands it parts), at power-on, before the audio and
          * the timers (started later it never reaches its entry). It starts in the chip's ROM: the PC limits open
          * meanwhile. MENU > 2ND CORE OFF (the default), a crash in the last boot's first 30 s, or no answer: it is
          * never started, one core, as 1.6 */
         fm1_guard_pc_open();
-        fm1_cpu1_start();
+        c1_boot = fm1_cpu1_start() && fm1_cpu1_start() ? 3u : 1u;   /* (no answer: once more; console status) */
         fm1_guard_enable(FM1_GUARD_PC);
     }
 #endif
@@ -2100,7 +2101,10 @@ void fm1_cstart(void)
         bootguard.failed = 0;
         bootguard.pending = 0;
     }
-    if (bootguard.pending)
+    if (p3 & 1u)
+        bootguard.failed = 0;                  /* (a power-on: the power was cut, no boot died; a crash resets by software,
+                                                * a hang by the watchdog) */
+    else if (bootguard.pending)
         bootguard.failed++;
     bootguard.pending = 1;
     if (bootguard.failed >= 2u) {

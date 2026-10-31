@@ -95,7 +95,7 @@ static uint32_t up_gen;                      /* bumped on every user bank change
 #define PREF_SEL_PAGE (0x10u << 16)
 #define PREF_WAKE_PANEL (0x20u << 16)
 #define PREF_SEL_HI (0x40u << 16)
-#define PREF_CPU2_ON (0x80u << 16)              /* MENU > SYSTEM > 2ND CORE ON (BETA): the second core from the next
+#define PREF_CPU2_ON (0x80u << 16)              /* MENU > SYSTEM > 2ND CORE ON (the default): the second core from the next
                                                  * power-on (main.c); clear = OFF, one core as 1.6 (every older setting:
                                                  * 1.6 never set bit 7). It turns itself OFF when core 1 misreads
                                                  * (hal/fm1_cpu1.h). (The 1.6.1 dual-core beta build had it the other

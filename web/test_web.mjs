@@ -188,7 +188,7 @@ async function editorMock() {
                                          d.names[17] === "OFF" && d.value === k && d.tab === 3) &&   // (1.5.5: T1..T4 CHANNEL)
        items[30].names.join() === "OFF,ON" && items[30].value === 0 && items[30].tab === 3 &&   // (1.5.5: AUTO SELECT)
        items[31].kind === 0 && items[31].names.join() === "+MIDI,PANEL" && items[31].value === 0 && items[31].tab === 3 &&   // (1.5.5: SCREEN WAKE)
-       items[32].kind === 0 && items[32].names.join() === "OFF,ON (BETA)" && items[32].value === 0 && items[32].tab === 4 &&   // (1.6.1: 2ND CORE, OFF)
+       items[32].kind === 0 && items[32].names.join() === "OFF,ON" && items[32].value === 1 && items[32].tab === 4 &&   // (1.6.1: 2ND CORE; Dah: ON by default)
        items[22].kind === 1 && items[22].min === -50 && items[22].max === 50 && items[22].unit === "ct" && items[22].value === 0 &&
        items[23].kind === 0 && items[23].names.join() === "SCOPE,TRACKS,LEVELS" && items[23].value === 0 &&
        items[24].kind === 0 && items[24].names.join() === "OFF,ON" && items[24].value === 0 &&   // (1.5: HELP)
@@ -252,7 +252,7 @@ async function editorMock() {
     }
     r = E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(32, 1)));
     ok(r.rc === 0 && r.id === 32 && r.value === 1 && E.parse[E.CMD.MENU_DESC](await rq(E.req.menuDesc(32))).value === 1,
-       "editor: MENU_SET 2ND CORE ON (BETA) (1.6.1, a setting: rc 0), read back");
+       "editor: MENU_SET 2ND CORE ON (1.6.1, a setting: rc 0), read back");
     await rq(E.req.menuSet(32, 0));
     ok(E.parse[E.CMD.MENU_SET](await rq(E.req.menuSet(33, 1))).rc === 1, "editor: MENU_SET of an unknown id: rc 1");
     await rq(E.req.menuSet(0, pal)); await rq(E.req.menuSet(4, 2));

@@ -23,7 +23,7 @@ static uint32_t palette_n(void) { return NPALETTES + ((ui_cpal_flags & CPAL_STOR
 static uint32_t palette_cur(void) { return cpal_on() ? NPALETTES : settings.palette % NPALETTES; }
 /* (Dah) its settings outside row 15 (full): row 13 (SLICE's favourites, no engine has 224 presets) bytes 30, 31 */
 #define DAH_MIG (favorites.factory[13][30])            /* the one-time changes done: bit 0 SELECT LIST, 1 CHORD ADD, 2 the
-                                                        * key map's bytes freed */
+                                                        * key map's bytes freed, 3 2ND CORE ON */
 #define DAH_CUR (favorites.factory[13][31])            /* the project open (projfs.c PFS_CUR), its id, 0 none */
 static const char *palette_name(uint32_t v) { return v == NPALETTES ? "CUSTOM" : UI_PALETTES[v % NPALETTES].name; }
 /* the palette in use into gfx.c (the settings changed under it: a start, an import, a restore, a STYLE change) */
@@ -55,6 +55,13 @@ static void palette_apply(void)
                                                      * step and stays on it (bit 2 of byte 24; KNOB 1 / PRESETS move on) */
         DAH_MIG |= 2u;
         favorites.factory[15][24] |= 0x04u;
+    }
+#endif
+#if FELUCCA_CPU2
+    if (!(DAH_MIG & 8u)) {                          /* (Dah) once: MENU > SYSTEM > 2ND CORE ON, the default (a new FM-1,
+                                                     * the settings reset, settings saved before); OFF stays OFF after */
+        DAH_MIG |= 8u;
+        favorites.factory[15][24] |= 0x80u;         /* (ui.c PREF_CPU2_ON, ui_prefs2's bit 7) */
     }
 #endif
     if (cpal_on()) {

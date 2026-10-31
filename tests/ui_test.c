@@ -1469,12 +1469,12 @@ static int test_menu_tabs(void)
     turn(EN_K2, -1); ok &= !(ui_prefs & PREF_USB_FIXED) && !fx_usb_fixed;
     bad += check("MENU: any of KNOB 1..4 changes the selected row's value in any tab, the menu stays", ok && ui.menu == 1);
 #if FELUCCA_CPU2
-    {   /* 1.6.1: 2ND CORE, OFF in every older setting (bit 7 of ui_prefs2 clear); up ON (BETA), down OFF, each with a
+    {   /* 1.6.1: 2ND CORE (Dah: ON by default, favorites.c DAH_MIG); up ON, down OFF, each with a
          * restart message; the value in words, not a switch (ui_menu.c MI_TEXT) */
         uint8_t p2 = ui_prefs2;
         ui_prefs2 = 0x7Fu;                             /* (1.6's bits all set but bit 7) */
         ok = menu_get(MI_CPU2) == 0u && str_eq(menu_vname(MI_CPU2, 0), "OFF") &&
-             str_eq(menu_vname(MI_CPU2, 1), "ON (BETA)") && MI_TEXT(MI_CPU2) && !MI_TEXT(MI_HELP);
+             str_eq(menu_vname(MI_CPU2, 1), "ON") && MI_TEXT(MI_CPU2) && !MI_TEXT(MI_HELP);
         ui.menu_sel = MI_CPU2; ui.msg_t = 0;
         press(B_OCTUP);
         ok &= menu_get(MI_CPU2) == 1u && ui_prefs2 == 0xFFu && msg_is("2ND CORE ON: RESTART");
@@ -1482,7 +1482,7 @@ static int test_menu_tabs(void)
         press(B_OCTDN);
         ok &= menu_get(MI_CPU2) == 0u && ui_prefs2 == 0x7Fu && msg_is("2ND CORE OFF: RESTART");
         ui_prefs2 = p2; ui.msg_t = 0;
-        bad += check("MENU > SYSTEM > 2ND CORE (1.6.1): OFF by default (bit 7 clear), OFF / ON (BETA) in words, a restart "
+        bad += check("MENU > SYSTEM > 2ND CORE (1.6.1): OFF / ON in words, a restart "
                      "message each way", ok && ui.menu == 1);
     }
 #endif

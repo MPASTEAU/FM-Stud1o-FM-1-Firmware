@@ -1137,7 +1137,7 @@ before MIDI IN the first 21, 1.2 the first 23, 1.3 / 1.4 the first 24, 1.5 / 1.5
 | 29 | 29 | T4 CHANNEL | 0 | as T1 CHANNEL | 4 | 3 MIDI |
 | 30 | 30 | AUTO SELECT | 0 | 0 OFF, 1 ON (1.5.5) | OFF | 3 MIDI |
 | 31 | 31 | SCREEN WAKE | 0 | 0 +MIDI, 1 PANEL (1.5.5) | +MIDI | 3 MIDI |
-| 32 | 32 | 2ND CORE | 0 | 0 OFF, 1 ON (BETA) (1.6.1, Discussion #141: the second core renders some of the parts; from the next power-on) | OFF | 4 SYSTEM |
+| 32 | 32 | 2ND CORE | 0 | 0 OFF, 1 ON (1.6.1, Discussion #141: the second core renders some of the parts; from the next power-on; ON by default) | ON | 4 SYSTEM |
 
 The device's AUDIO tab shows SPEAKER EQ, USB LEVEL, CLICK, CLICK LEVEL, COUNT-IN and (1.2) TUNE (index 9, 10, 12, 13,
 14, 22).

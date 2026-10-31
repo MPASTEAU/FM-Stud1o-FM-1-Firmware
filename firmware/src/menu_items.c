@@ -31,7 +31,7 @@ enum { MI_HELP, MI_COLOR, MI_STYLE, MI_LARGE, MI_ANIM, MI_LEDS, MI_SCROFF, MI_HO
                                                         * SWING gone: GLO's held menu has TEMPO SWING TUNE CLOCK) */
 #define MI_VALUES MI_PANEL
 #if FELUCCA_CPU2
-#define MI_TEXT(row) ((row) == MI_CPU2)                /* OFF / ON (BETA): its values as words, not a switch (ui_menu.c) */
+#define MI_TEXT(row) ((row) == MI_CPU2)                /* OFF / ON: its values as words, not a switch (ui_menu.c) */
 #else
 #define MI_TEXT(row) 0
 #endif
@@ -132,7 +132,8 @@ static const menu_flag_t MENU_FLAGS[] = {
     {MI_MFOLLOW, PREF_MIDI_FOLLOW, {"OFF", "ON"}},     /* 1.5.5, #208: ON, MIDI IN notes select their track (ui_input.c) */
     {MI_SCRWAKE, PREF_WAKE_PANEL, {"+MIDI", "PANEL"}}, /* 1.5.5: PANEL, only the panel wakes SCREEN OFF (ui.c scr_input) */
 #if FELUCCA_CPU2
-    {MI_CPU2, PREF_CPU2_ON, {"OFF", "ON (BETA)"}},     /* 1.6.1: ON, the second core (main.c, from the next power-on) */
+    {MI_CPU2, PREF_CPU2_ON, {"OFF", "ON"}},            /* 1.6.1: ON, the second core (main.c, from the next power-on; Dah:
+                                                        * ON by default, favorites.c DAH_MIG) */
 #endif
 };
 /* SPEAKER EQ (settings.lowcut, fx.c fx_lowcut): an EQ on the master for the small speaker, not a speaker switch
