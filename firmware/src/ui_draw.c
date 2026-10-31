@@ -626,7 +626,8 @@ static void home_foot(void)
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig, n, ok = 0, i;
     khint_t kh[3];
-    static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_OCTDN, "(HOLD) DEL"}},   /* HOME (OCT+ held: the VIEW; Dah: OCT- held the track out) */
+    static const khint_t KH[5][2] = {{{KC_OCTDN, "(HOLD) DEL"}, {KC_OCTUP, "(HOLD) VIEW"}},   /* HOME (Dah: OCT- held the track out; OCT+ held the VIEW;
+                                                                          * as the keys sit, OCT- left) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}},                         /* an effect's page (FX: back) */
                                      {{KC_FX, "NEXT"}},                          /* .. with a second page */
