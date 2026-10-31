@@ -69,6 +69,10 @@
 # LONG PATTERNS (tests/longpat_test.c): LEN up to 256 (pages of 64, pstore.c pg_*): playback order and timing over the
 #                   pages, a 200-step note, page 3 edited then heard, recording across a page's end, page 2's automation,
 #                   projects (PFS 9) saved and opened, a SONG section on a long pattern, LEN shrunk and grown, copies.
+# OVERLAPS (tests/overlap_test.c): each note of a step its own (core.h st_cont): A held from step 1, B pressed at step 4
+#                   while A is held, A let go at 8, B at 12 on a POLY track recorded live: A 1..8, B 4..12, one note-on and
+#                   one note-off each; NOTE LEN and the roll's bars of each, one shortened alone; over page 0's end (LEN 128);
+#                   a project saved and opened (PS_GOES); MONO as before (B ends A).
 # DETAIL 1.5.1 (tests/detail_test.c, #199): SEQ > DETAIL (STEP -> DETAIL -> AUTOMATION), KNOB 1..4 the cursor step's
 #                   CHANCE RATCH NUDGE VEL walked with PRESETS (NO NOTE on a REST / empty step), the steps' own fields
 #                   (no motion record), EDIT resets, the
@@ -273,6 +277,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "1.5.5 SEQ: conditions and FILL, SONG, storage, editor" "$OUT/seq155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/longpat_test" tests/longpat_test.c -lm
     run "long patterns: LEN up to 256 (pages, the ring, a held note, editing, recording, automation, projects, SONG)" "$OUT/longpat_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/overlap_test" tests/overlap_test.c -lm
+    run "overlapping notes: POLY holds each their own (recording, playback, NOTE LEN, the roll, pages, projects)" "$OUT/overlap_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm
     run "1.5.5 fixes and UI: PAN +-100, SELECT PAGE, OCT- on the press (1.5.6), PROJECT ERASE, CLEAN INIT" "$OUT/ui155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/v156_test" tests/v156_test.c -lm
