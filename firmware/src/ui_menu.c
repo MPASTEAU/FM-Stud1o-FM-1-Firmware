@@ -449,14 +449,14 @@ static void draw_menu(void)
     }
     ui.menu_sig = sig;
     mr.drawn = mr.dy;
-    if (ui.menu == 3) {                                /* INFO: its rows in the first band, the second clear */
+    if (ui.menu == 3) {                                /* INFO: its rows over both bands (each its part: the panel's
+                                                         * foot, rounded, in the second) */
         lcd_fill(0, HOME_HEAD_H, 240, H_HEAD - HOME_HEAD_H, T_BG);
         for (pass = 0; pass < 2u; pass++) {
             uint32_t top_y = pass ? 132u : (uint32_t)H_HEAD;
             cv_begin(240, pass ? 240u - HOME_FOOT_H - 132u : 132u - H_HEAD, T_BG);
             cv_oy = -(int32_t)top_y;
-            if (!pass)
-                info_rows();
+            info_rows();
             cv_oy = 0;
             cv_blit(0, top_y);
         }
