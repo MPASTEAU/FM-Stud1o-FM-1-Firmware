@@ -1313,6 +1313,11 @@ static void edit_param(uint32_t slot, int32_t steps)
         if (slot == 0u) {
             ui.song_row = (uint8_t)clamp((int32_t)ui.song_row + steps, 0,
                 chain_config.count < CHAIN_ROWS ? chain_config.count : CHAIN_ROWS - 1u);
+            if (ui.song_row < chain_config.count) {     /* (Dah) the GRID (where PLAY, RESTART start) on it: the last
+                                                         * of the two moved wins (playing: the next PLAY's) */
+                chain_from_row = ui.song_row;
+                chain_from_u = 0;
+            }
             return;
         }
         if (slot == 1u) {

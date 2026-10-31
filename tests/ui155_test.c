@@ -642,9 +642,55 @@ static int rec_rows(void)
     return bad;
 }
 
+/* (Dah) GLO > SONG: the GRID (where PLAY / RESTART start) and the section picked, the last moved wins: the VIEW's GRID
+ * moved into section 3, then section 2 picked: from 2's start; the GRID moved again: from it; playing, a section picked
+ * moves it for the next PLAY (the song plays on) */
+static int song_grid(void)
+{
+    int bad = 0, ok;
+    uint32_t r, k;
+    ui_power_on();
+    chain_defaults(&chain_config);
+    chain_config.count = 3;
+    for (r = 0; r < 3u; r++) {
+        for (k = 0; k < NTRK; k++)
+            chain_config.row[r].slot[k] = k ? (uint8_t)CHAIN_SILENT : 1u;
+        chain_config.row[r].repeat = 1;
+    }
+    trk[0].p[P_SLEN] = 64;                              /* (a section: four bars) */
+    go_page(GR_SONG);
+    frame();
+    song_view_knob(0, 5);                               /* (VIEW: GRID five bars on: section 2, its 2nd bar) */
+    ok = chain_from_row == 1u && chain_from_u == SG_BARU;
+    ui.song_row = 0;
+    turn(EN_K1, 2);                                     /* (section 3 picked) */
+    ok &= ui.song_row == 2u && chain_from_row == 2u && chain_from_u == 0u;
+    turn(EN_K1, -1);
+    ok &= chain_from_row == 1u && chain_from_u == 0u;
+    song_view_knob(0, -3);
+    ok &= chain_from_row == 0u && chain_from_u == SG_BARU;   /* (the GRID last: it wins) */
+    bad += check("SONG: the GRID and the section picked, the last moved decides where PLAY starts", ok);
+    ok = !chain_prepare();
+    blocks(40); frame();
+    ok &= chain.running && chain.row == 0u;
+    turn(EN_K1, 1);                                     /* (section 3: song_row 1 -> 2) */
+    ok &= chain.running && chain.row == 0u && chain_from_row == 2u && chain_from_u == 0u;
+    transport_req = 2;
+    blocks(8); frame();
+    chain.running = chain.armed = 0;
+    ok &= !chain_prepare();
+    blocks(8); frame();
+    ok &= chain.running && chain.row == 2u;
+    transport_req = 2;
+    blocks(8); frame();
+    chain.running = chain.armed = 0;
+    bad += check("  playing: a section picked, the song plays on; the next PLAY from it", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows() + song_grid();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }
