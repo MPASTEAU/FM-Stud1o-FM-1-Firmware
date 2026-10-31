@@ -1433,6 +1433,7 @@ static void engine_columns(void)
     draw_column(3, "", "", "", T_THEME, -1, ICON_NONE);
 }
 static void draw_columns_in(void);
+static uint8_t col_from;                               /* (the SEQ layer: KNOB 1 and 2 its own, ui_layer.c layer_cards) */
 /* the four cards in the colour of where one is: a page's family (ux.fam), HOME the selected track's */
 static void draw_columns(void)
 {
@@ -1907,7 +1908,7 @@ static void draw_columns_in(void)
         }
         return;
     }
-    for (c = 0; c < 4u; c++) {
+    for (c = col_from; c < 4u; c++) {                  /* (col_from: the cards before it are the caller's) */
         int16_t *vp;
         const param_desc_t *d = page_desc(cur_page(), c, &vp);
         if (cur_page()->graph == GR_PATTERN) {          /* (Dah) PATTERN: the one playing (KNOB 1); COPY NEW DELETE */

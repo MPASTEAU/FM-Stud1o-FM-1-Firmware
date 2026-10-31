@@ -1209,7 +1209,10 @@ static void layer_cards(uint32_t l)
             ui.home = 0;
             ui.page = (uint8_t)page_first(LAYERS[l].fam);
             page_over = ly_page(l);
+            col_from = 2;                               /* (KNOB 3 4 the page's, once: 1 and 2 ROW VALUE below, each
+                                                         * card drawn once a frame or its cache flips, the knobs flash) */
             draw_columns();
+            col_from = 0;
             page_over = 0;
             ui.home = h;
             ui.page = pg;
