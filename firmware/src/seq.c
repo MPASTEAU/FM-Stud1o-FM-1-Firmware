@@ -1453,25 +1453,29 @@ static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *n
 static volatile uint16_t aud_req;
 static step_t aud_far;                              /* (long patterns) the step asked for, from NSTEP on: the UI's copy */
 /* (Dah) PRESETS turned, stopped: the new sound heard, a note on the selected track (pv_req: track + 1) for PV_MS, the
- * last one let go first (a quick turn: each sound a moment, the last one whole); C4 (a DRUM kit: its kick) */
+ * last one let go first (a quick turn: each sound a moment, the last one whole); C4 (a DRUM kit: its kick). A note or a
+ * hit placed on SEQ (pv_want: its note, pv_wvel its velocity, then pv_req; ui_input.c place_heard): that note, stopped
+ * or playing (over the music, as a key played), let go at the track's GATE of a 1/16 (a fast turn: one at a time) */
 #define PV_MS 350u
-static volatile uint8_t pv_req;
+static volatile uint8_t pv_req, pv_want, pv_wvel;
 static uint8_t pv_on, pv_note;
-static uint32_t pv_ms;
+static uint32_t pv_ms, pv_len;
 static __attribute__((noinline)) void seq_preview(void)
 {
-    uint32_t i = pv_req;
-    if (pv_on && (i || fm1_ms - pv_ms > PV_MS)) {
+    uint32_t i = pv_req, w = pv_want;
+    if (pv_on && (i || fm1_ms - pv_ms > pv_len)) {
         trk_note_off(&trk[(pv_on - 1u) % NTRK], pv_note);
         pv_on = 0;
     }
     if (!i)
         return;
     pv_req = 0;
-    if (song.playing || cin_left || --i >= NTRK)
+    pv_want = 0;
+    if ((song.playing && !w) || cin_left || --i >= NTRK)
         return;
-    pv_note = trk[i].eng_req % NENGINES == ENGI_DRUM ? DRUM_LANE_NOTE[0] : 60u;
-    trk_note_on(&trk[i], pv_note, 100u);
+    pv_note = (uint8_t)(w ? w : trk[i].eng_req % NENGINES == ENGI_DRUM ? DRUM_LANE_NOTE[0] : 60u);
+    trk_note_on(&trk[i], pv_note, w ? pv_wvel : 100u);
+    pv_len = w ? div_samples(2) * (uint32_t)trk[i].p[P_SGATE] / 128u / (FS / 1000u) : PV_MS;
     pv_on = (uint8_t)(i + 1u);
     pv_ms = fm1_ms;
 }

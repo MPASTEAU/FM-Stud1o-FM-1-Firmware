@@ -47,6 +47,8 @@
 #                   MENU > FACTORY RESET (project.c factory_reset): the stores erased, the samples kept, a restart, not while playing.
 # IDLE (tests/idle_test.c): an idle frame blits nothing (the LCD flashes what is drawn twice): every held layer and the
 #                   MENU, over HOME and SEQ > STEP, on a synth and a DRUM track.
+# PLACE (tests/place_test.c): a note or a hit placed on SEQ heard once as PLAY plays it (the lane's kit note, the step's
+#                   VEL, ACC 127), stopped and playing; a removal silent; a fast NOTE turn one note at a time.
 # DEMO PROJECTS (tools/fm1_demo_projects.py --build): main.c's demo songs (the host build, DAH_DEMO_SONG) saved as
 #                   PROJECTS, the image restored through editor_backup.c's PUT of object 18, each project opened over
 #                   another song: its SONG's audio equal to the demo's (12 s).
@@ -289,6 +291,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "1.5.5 fixes and UI: PAN +-100, SELECT PAGE, OCT- on the press (1.5.6), PROJECT ERASE, CLEAN INIT" "$OUT/ui155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/idle_test" tests/idle_test.c -lm
     run "idle frames: every held layer and the MENU (HOME, SEQ > STEP; a synth and a DRUM track) draw nothing" "$OUT/idle_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/place_test" tests/place_test.c -lm
+    run "placed on SEQ, heard: a grid hit (its lane, ACC), KNOB 3 HIT, KNOB 2 NOTE (a fast turn: one note), step entry; playing too" "$OUT/place_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/v156_test" tests/v156_test.c -lm
     run "1.5.6: the matrix's VEL / TIME (#213), DRUM kits DEEP TIGHT PERC (#216), LEDS INV LO / HI (#212), SELECT MODW / VEL (#84)" "$OUT/v156_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/v16_test" tests/v16_test.c -lm

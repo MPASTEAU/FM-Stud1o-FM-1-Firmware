@@ -813,7 +813,8 @@ static void confirm_open(uint32_t kind, uint32_t trk)
 /* MENU > CONTROL > STEP PREVIEW ON (1.2, Discussion #169): on SEQ > STEP (the roll and the DRUM grid) with the transport
  * stopped, a move of the cursor by a knob (KNOB 1, PRESETS) or the grid's page keys sounds the step it lands on once,
  * on the selected track (seq.c seq_audition). Not while playing, counting in or in a song; step recording moving on
- * after its keys (seq_entry) does not; a grid key on a step neither (it edits the step, a lane key plays the lane).
+ * after its keys (seq_entry) does not; a grid key on a step neither (it edits the step: a hit placed is heard, place_heard;
+ * a lane key plays the lane).
  * OFF (the default): the cursor moves silently, as before */
 static void cursor_move(int32_t c)
 {
@@ -838,6 +839,23 @@ static void page_go(int32_t d)
 }
 
 /* the grid's knobs: 1 STEP (the cursor), 2 LANE, 3 HIT and 4 ACC of the lane at the cursor (right on, left off) */
+/* (Dah) a note or a hit placed on SEQ (a grid key's hit, step entry's note, the NOTE or HIT knob): heard once on the
+ * selected track as PLAY plays it, stopped or playing (seq.c seq_preview: over the music, as a key). Not a removal */
+static void place_heard(uint32_t note, uint32_t vel)
+{
+    pv_wvel = (uint8_t)vel;
+    pv_want = (uint8_t)note;
+    pv_req = (uint8_t)(song.sel + 1u);
+}
+/* a step's velocity as seq.c seq_step plays it: ACC 127, else its VEL (0: 96) */
+static uint32_t st_vel(const step_t *st) { return st->flags & SF_ACCENT ? 127u : st->vel ? st->vel : 96u; }
+/* .. lane l's hit at step i, if there: its lane's ACC 127 */
+static void hit_heard(uint32_t i, uint32_t l)
+{
+    const step_t *st = ui_st(TSEL, i);
+    if ((step_lanes(st) >> l) & 1u)
+        place_heard(DRUM_LANE_NOTE[l], (step_accents(st) >> l) & 1u ? 127u : st_vel(st));
+}
 static void grid_edit(uint32_t slot, int32_t steps)
 {
     if (slot == 0u)
@@ -848,6 +866,8 @@ static void grid_edit(uint32_t slot, int32_t steps)
         grid_hit(TSEL, ui.cursor, ui.lane, steps > 0);
     else
         grid_acc(TSEL, ui.cursor, ui.lane, steps > 0);
+    if (slot >= 2u && steps > 0)                        /* (HIT, ACC on: heard) */
+        hit_heard(ui.cursor, ui.lane);
 }
 
 /* the keys on the grid (presses): a white key toggles the selected lane at its step of the page (its accent
@@ -877,10 +897,12 @@ static void grid_keys(uint32_t pressed)
                     ui.plk_acc = acc ? ui.plk_acc | b : ui.plk_acc & ~b;
                     ui.plk_lane = ui.lane;
                     ui.plk_trk = song.sel;
-                } else if (acc) {
-                    grid_acc(TSEL, i, ui.lane, 1);
                 } else {
-                    grid_hit(TSEL, i, ui.lane, 1);
+                    if (acc)
+                        grid_acc(TSEL, i, ui.lane, 1);
+                    else
+                        grid_hit(TSEL, i, ui.lane, 1);
+                    hit_heard(i, ui.lane);              /* (placed: heard, as PLAY plays it) */
                 }
             }
             cursor_set((int32_t)i);
@@ -1094,6 +1116,7 @@ static void step_edit(uint32_t slot, int32_t steps)
             st->note[0] = last_note;
             st->n = 1;
             st->time = ST_NOTE;
+            place_heard(last_note, st_vel(st));
             break;
         }
         {                                                 /* (overlaps) the notes starting there (none: all,
@@ -1111,6 +1134,7 @@ static void step_edit(uint32_t slot, int32_t steps)
                 st->time = ST_NOTE;
             last_note = st->note[0];
         }
+        place_heard(st->note[0], st_vel(st));            /* (the new note heard) */
         break;
     case 2:                                               /* TIME; a note's LEN (1.5: ui.c note_set_len) */
         if (step_on(st)) {
