@@ -1107,6 +1107,7 @@ static __attribute__((noinline)) void send_tap(const track_t *t, const int32_t *
             bus[i] += mulq15(clamp(((b[i] >> 2) * lvl) >> 10, -xm, xm), g[j]);
     }
 }
+static int trk_silenced(const track_t *t);              /* (below: MUTE, SOLO) */
 static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_t n SM_DECL)
 {
     int32_t *d = SPREAD_BUF(t);
@@ -1156,8 +1157,8 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     eq_tap(t, b, n);
     if (dv_unit >= DV_CHO && DV_ON(t, dv_unit))
         dv_level(b, n, 0);                              /* (Dah: a send's page: the track going there) */
-    if ((pf.mute >> (t - trk)) & 1u)
-        perf_mute_sd((uint32_t)(t - trk), b, d, n);
+    if (((pf.mute >> (t - trk)) & 1u) || trk_silenced(t) || pf.mg[(t - trk) % NTRK] != 32768)
+        perf_mute_sd((uint32_t)(t - trk), b, d, n);     /* (Dah: MUTE and SOLO's too: their ramp) */
     for (i = 0; i < n; i++) {
         int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x, y = ((d[i] >> 2) * lvl) >> 10;
         int32_t xs = clamp(x, -xmax, xmax);
@@ -1293,11 +1294,45 @@ static void duck_part(track_t *t, int32_t *b, uint32_t n) { duck_part_sd(t, b, 0
 
 /* one synth part into the dry mix and the sends of sm (mx[0]; mx[1] on the second core); a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
+/* (Dah) a track off: its MUTE on, or another track soloed (perform.c perf_solo; a black key's mute of the FX layer is a
+ * moment's: the track plays on under it). Its output and its sends ramp to 0 (perform.c perf_mute), then it is not
+ * there at all: its voices gone, no render, no chain, nothing into the mix or the buses (their tails ring out); its
+ * steps run on, its notes refused (voice.c trk_note_on: MUTE; SOLO's: let go here), its LFO and SLICER clock on. On
+ * again: from silence, its next notes. As a SIDECHAIN source: a muted track's notes do not start, so it ducks
+ * nothing; one soloed out still does (the pump of the soloed track as in the mix) */
+static int trk_silenced(const track_t *t)
+{
+    uint32_t k = (uint32_t)(t - trk) % NTRK;
+    return t->p[P_MUTE] || (perf_solo && !((perf_solo >> k) & 1u));
+}
+static __attribute__((noinline)) void trk_off(track_t *t, uint32_t n)
+{
+    uint32_t i;
+    for (i = 0; i < NVOICE; i++) {
+        voice_t *v = &t->v[i];
+        v->active = v->gate = 0;
+        v->stage = 0;
+        v->env = v->env_out = 0;
+    }
+    t->nmono = 0;
+    t->tail = 0;
+#if FELUCCA_CPU2
+    track_lfo_adv(t);                                   /* (as track_render: the rest after the parts) */
+    part_cost[(uint32_t)(t - trk) % NTRK] = 0;
+#else
+    track_lfo_tick(t);
+#endif
+    slicer_track(t, 0, n);
+}
 static void mix_part(track_t *t, uint32_t n SM_DECL)
 {
     int32_t *b = SM(b);
-    uint32_t i;
+    uint32_t i, k = (uint32_t)(t - trk) % NTRK, sil = trk_silenced(t);
     uint32_t nr;
+    if (sil && !pf.mg[k]) {
+        trk_off(t, n);                                  /* (off, faded out: nothing of it) */
+        return;
+    }
     T_SPREAD(t) = t->p[P_SPRD] > 0 && (trk_vmode(t) == V_POLY || trk_vmode(t) == V_UNISON);   /* (SPREAD, mix_spread) */
     nr = track_render(t, b, n);
 #if FELUCCA_CPU2
@@ -1314,14 +1349,18 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
         slicer_track(t, 0, n);                          /* (the SLICER's step clock runs on) */
         if (t->ins_run && !t->p[P_ITYPE])
             ins_rest(t);                                /* TYPE OFF while silent: no fade-out left for the next note */
+        if (!sil && !((pf.act >> (PF_M1 + k)) & 1u))
+            pf.mg[k] = 32768;                           /* (on, nothing sounding: open at once, no ramp on its next note) */
+        else if (sil)
+            pf.mg[k] = 0;                               /* (off, nothing sounding: off at once) */
         return;
     }
     if (T_SPREAD(t)) {
         mix_spread(t, b, n SM_ARG(sm));                 /* (its chain in ORDER, the DUCK after it) */
     } else {
         fx_chain(t, b, n SM_ARG(sm));                   /* DIST INSERT SLICER EQ SIDECHAIN, in ORDER */
-        if ((pf.mute >> (t - trk)) & 1u)
-            perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
+        if (((pf.mute >> (t - trk)) & 1u) || sil || pf.mg[k] != 32768)
+            perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer (Dah: MUTE, SOLO) */
     }
     if (!T_SPREAD(t)) {                                /* (the mix's values read after the calls: none is held over
                                                          * them, no spill in the loop: the ISR's cost as before 1.5) */

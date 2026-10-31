@@ -366,6 +366,11 @@ if [ -f build/gen/felucca_tables.h ]; then
                 sh -c "\"$OUT/skip0\" \"$OUT/skip0.raw\" $rt && \"$OUT/skip1\" \"$OUT/skip1.raw\" $rt && cmp \"$OUT/skip0.raw\" \"$OUT/skip1.raw\""
         done
     done
+    for song in 8 5 1; do
+        $CC -O1 -w -DDAH_DEMO_SONG=$song -Ibuild/gen -Ifirmware/src -o "$OUT/solo_test" tests/solo_test.c -lm
+        run "SOLO / MUTE (song $song): a track out is off (no sends, no voices, the CPU down), solo = the others muted, no click" \
+            "$OUT/solo_test"
+    done
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/backup_test" tests/backup_test.c -lm
     run "full backup: CRC before writes, stale runtime, USB reset / timeout, malformed objects, older projects" "$OUT/backup_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6bank_test" tests/fm6bank_test.c -lm
