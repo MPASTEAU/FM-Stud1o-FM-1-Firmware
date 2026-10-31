@@ -856,6 +856,17 @@ static void hit_heard(uint32_t i, uint32_t l)
     if ((step_lanes(st) >> l) & 1u)
         place_heard(DRUM_LANE_NOTE[l], (step_accents(st) >> l) & 1u ? 127u : st_vel(st));
 }
+/* (Dah) the DRUM grid not armed (the keys play the kit): the lane of the last key played picked, the grid shows it
+ * (its row lit while the key is held: ui_graph.c gd_held) */
+static void key_lane(uint32_t pressed)
+{
+    uint32_t m = keys_lanes(TSEL, pressed), l = 0;
+    if (!m)
+        return;
+    while (m >> l > 1u)                                 /* (several at once: the highest) */
+        l++;
+    ui.lane = (uint8_t)l;
+}
 static void grid_edit(uint32_t slot, int32_t steps)
 {
     if (slot == 0u)
@@ -2380,10 +2391,13 @@ static void ui_input(void)
     } else if (song.grid) {
         grid_keys(notes);
     } else if (song.seq_mode && cur_page()->graph == GR_ROLL) {   /* STEP */
-        if (live_rec_sel() || !((song.rec >> song.sel) & 1u))   /* armed and playing: the keys record live, not
+        if (live_rec_sel() || !((song.rec >> song.sel) & 1u)) {   /* armed and playing: the keys record live, not
                                                          * into the cursor step too; not armed (1.2, #133): they
                                                          * only play, being on STEP writes nothing */
             ui.entry_open = 0;
+            if (drum_track(TSEL))
+                key_lane(notes);                        /* (Dah) the DRUM grid: the lane played picked */
+        }
         else if (!chain_busy())
             seq_entry(notes);                           /* armed and stopped: step recording at the cursor */
         else if (notes)

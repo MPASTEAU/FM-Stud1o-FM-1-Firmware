@@ -6,6 +6,8 @@
  *               the same key again (the hit off): nothing; KNOB 3 HIT on: the lane's hit; playing: over the music
  *   the roll    KNOB 2 NOTE: the new note (the step's VEL), a fast turn: the last note only; step entry (armed,
  *               stopped): the key's note sounds (the keyboard's own)
+ *   played      the DRUM grid not armed (the keys play the kit): the lane of the key played picked, its row lit
+ *               while the key is held (drawn again then and when it is let go)
  * The real UI sources with tests/ui_test.c's stubs */
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
@@ -126,9 +128,47 @@ static int place_roll(void)
     bad += check("  step entry (armed, stopped): the key's note written and sounding", ok);
     return bad;
 }
+static int played_lane(void)
+{
+    int bad = 0, ok;
+    track_t *t = &trk[0];
+    uint32_t k, ks = 27, kk = 27, rows;
+    ui_power_on();
+    set_engine_of(t, ENGI_DRUM);
+    t->engine = t->eng_req;
+    track_select(0);
+    open_family(FAM_SEQ);
+    frames(300);
+    for (k = 0; k < 27u; k++) {                         /* (the keys of the SNARE and of the KICK) */
+        if (kb_map(t, k) == DRUM_LANE_NOTE[DV_SNARE] && ks == 27u) ks = k;
+        if (kb_map(t, k) == DRUM_LANE_NOTE[DV_KICK] && kk == 27u) kk = k;
+    }
+    ok = !song.rec && !song.grid && grid_on() && ks < 27u && kk < 27u && ui.lane == 0u;
+    key_down(ks);
+    host_blit_rows = 0;
+    frame();
+    ok &= ui.lane == DV_SNARE && gd_held(t) == 1u << DV_SNARE && host_blit_rows > 0u;
+    host_blit_rows = 0;
+    frame();
+    ok &= !host_blit_rows;                              /* (held: drawn once) */
+    key_up(ks);
+    frame();
+    ok &= !gd_held(t) && ui.lane == DV_SNARE && host_blit_rows > 0u;
+    bad += check("DRUM grid not armed: the SNARE's key picks its lane, its row lit while held, then as picked", ok);
+    key_down(kk);
+    frame();
+    ok = ui.lane == DV_KICK && gd_held(t) == 1u << DV_KICK;
+    key_up(kk);
+    frame();
+    song.rec = 1u;                                      /* (armed: the keys are the steps, no lane played) */
+    frame();
+    ok &= song.grid == 1u && !gd_held(t);
+    bad += check("  the KICK's key next: the KICK's lane; armed: the keys are the steps (no lane lit)", ok);
+    return bad;
+}
 int main(void)
 {
-    int bad = place_drum() + place_roll();
+    int bad = place_drum() + place_roll() + played_lane();
     printf("%s\n", bad ? "PLACE TEST FAILED" : "place test passed");
     return bad != 0;
 }

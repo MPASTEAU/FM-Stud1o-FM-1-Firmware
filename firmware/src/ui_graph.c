@@ -433,9 +433,20 @@ static void graph_roll(const track_t *t, uint16_t c)
 #define GD_RH 14                                    /* (Dah) the ruler on top, as HOME's */
 #define GD_X0 40                                    /* the first step's column (12 px each) */
 static int32_t gd_lp = 14;                          /* (Dah) a lane's pitch: the panel shared by the eight */
+/* (Dah) the grid not armed (the keys play the kit): the lanes whose keys are held, lit (ui_input.c key_lane picks the
+ * last one played) */
+static __attribute__((noinline)) uint32_t keys_lanes(const track_t *t, uint32_t n)   /* the lanes keys n play */
+{
+    uint32_t k, x, m = 0;
+    for (k = 0; k < 27u; k++)
+        if (((n >> k) & 1u) && (x = kb_map(t, k)) != KB_SILENT)
+            m |= 1u << drum_lane(x);
+    return m;
+}
+static __attribute__((noinline)) uint32_t gd_held(const track_t *t) { return song.grid ? 0u : keys_lanes(t, fm1_in.notes & ~kb_layer); }
 static void graph_grid(const track_t *t, uint16_t c)
 {
-    uint32_t l, i, len = (uint32_t)t->p[P_SLEN], mute = drum_mute[trk_index(t) % NPART];
+    uint32_t l, i, len = (uint32_t)t->p[P_SLEN], mute = drum_mute[trk_index(t) % NPART], held = gd_held(t);
     uint32_t base = (song.playing && !prv.nofollow && t->seq_idx < len ? t->seq_idx / 16u : ui.bank) * 16u;   /* (Dah:
                                                          * playing, the page playing, as HOME follows it) */
     uint32_t ph = song.playing && t->seq_idx < len && t->seq_idx / 16u == base / 16u ? t->seq_idx % 16u : 0xFFu;
@@ -471,6 +482,8 @@ static void graph_grid(const track_t *t, uint16_t c)
             cv_frame(3, ly, 234, lh, lc);
             cv_rect(3, ly, 3, lh, lc);
         }
+        if ((held >> l) & 1u)                        /* (played: its key held, the band wide) */
+            cv_rect(3, ly, 6, lh, lc);
         GFX_HOOK_ALIGN(0, ly, 0, ly + lh, AL_V, "drum lane label on its hits' line");
         cv_text_on(10, ly + CAP_IN(S, lh), &AF_S, drum_lane_abbr(t, l), mu ? T_DIM : sel ? T_TEXT : lc, row);
         if (mu) {                                    /* (27 .. 39: between the name and the first hit) */
@@ -1595,7 +1608,7 @@ static uint32_t graph_signature(void)
         if (ph / 16u != ui.bank)
             ph = 0xFFFFu;                            /* the roll shows the cursor's bank only */
         h ^= steps_hash(t) + ph * 31u + ui.cursor * 7919u + ui.lane * 104723u + ui.bank * 613u +
-             drum_mute[trk_index(t) % NPART] * 2654435761u;
+             drum_mute[trk_index(t) % NPART] * 2654435761u + gd_held(t) * 50331653u;
         {                                            /* the parameter locks' marks (the roll, the grid) */
             h = (h ^ motion_sig(t)) * 16777619u;
         }
