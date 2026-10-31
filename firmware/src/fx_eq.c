@@ -42,7 +42,9 @@ typedef struct {
     uint16_t g[EQ_NS], dq[EQ_NS];                       /* the block's g and 1 / (1 + g (g + k)), Q16 (a one-pole: g / (1 + g)) */
     uint8_t own[EQ_NS];                                 /* what each stage ran (another band, kind: from rest) */
     int32_t m1[EQ_NB], m2[EQ_NB], mg[EQ_NB];            /* each band's mix: bp, lp, out (a shelf's, a bell's), Q12 */
-    uint8_t on;
+    uint32_t key[EQ_NB];                                /* what each band's coefficients were made of (0: none yet) */
+    int32_t din, dc;                                    /* (fix) the block of one value din: what it gives, every sample */
+    uint8_t on, fix;                                    /* fix: a block all din left every state as it was (eq_run) */
 } eq_t;
 static eq_t eq[NTRK] __attribute__((section(".pool")));
 static eq_t eq_m[2];                                    /* (the MASTER's: left, right) */
@@ -204,26 +206,61 @@ static void eq_coef(eq_t *s, uint32_t f, uint32_t g, uint32_t kh)
     s->g[f] = (uint16_t)g;
     s->dq[f] = (uint16_t)(0xFFFF0000u / den);            /* (65535 x 65536 / den: no 64-bit divide on the target) */
 }
-static inline int32_t eq_mq(int32_t v, int32_t m)       /* v m, m Q12 signed */
+#ifndef FM1_OPAQUE
+#define FM1_OPAQUE(v) ((void)0)                         /* (the host: hal/fm1_cc.h's, not needed there) */
+#endif
+/* a k / 65536 (k < 2^31), one 64-bit product: dsp.c mulq16's value bit for bit (the floor of the same product) */
+static inline int32_t eq_m16(int32_t a, uint32_t k) { return (int32_t)(((int64_t)a * (int32_t)k) >> 16); }
+/* v m, m Q12 signed, as mulq16(v, |m|) << 4 negated for m < 0 (am = |m|, ng = 0 or -1: m's sign) */
+static inline int32_t eq_mq(int32_t v, uint32_t am, int32_t ng) { return ((eq_m16(v, am) << 4) ^ ng) - ng; }
+/* one stage over the block, its state and coefficients held in registers: c 0 a one-pole (lp: its low output, else
+ * x minus it), 1 an SVF's high or low output (lp), 2 a shelf or bell, x + m1 bp + m2 lp (hs: then times mg). The
+ * bands run one after the other over the whole block, each sample through them in the same order as before: the
+ * same values bit for bit. A loop for each output (EQ_SVF: no test in it) */
+#define EQ_SVF(out)                                                                                 \
+    for (i = 0; i < n; i++) {                                                                       \
+        int32_t x = b[i], h;                                                                        \
+        FM1_OPAQUE(dq);                     /* (else its product grows to 64 x 64 bits) */            \
+        h = eq_m16(x - (eq_m16(s1, kh) << 1) - eq_m16(s1, g) - s2, dq);                             \
+        int32_t v = eq_m16(h, g), bp = v + s1, l;                                                   \
+        s1 = bp + v;                                                                                \
+        v = eq_m16(bp, g);                                                                          \
+        l = v + s2;                                                                                 \
+        s2 = l + v;                                                                                 \
+        b[i] = out;                                                                                 \
+    }
+static __attribute__((noinline)) void eq_pass(eq_t *s, uint32_t f, uint32_t k, uint32_t c, uint32_t kh, uint32_t lp,
+                                              int32_t *b, uint32_t n)
 {
-    return m >= 0 ? mulq16(v, (uint32_t)m) << 4 : -(mulq16(v, (uint32_t)-m) << 4);
-}
-/* one SVF step: x in, its high, band and low outputs */
-static inline void eq_svf(eq_t *s, uint32_t f, int32_t x, uint32_t kh, int32_t *hp, int32_t *bp, int32_t *lp)
-{
-    int32_t h = mulq16(x - (mulq16(s->s1[f], kh) << 1) - mulq16(s->s1[f], s->g[f]) - s->s2[f], s->dq[f]);
-    int32_t v = mulq16(h, s->g[f]), b = v + s->s1[f], l;
-    s->s1[f] = b + v;
-    v = mulq16(b, s->g[f]);
-    l = v + s->s2[f];
-    s->s2[f] = l + v;
-    *hp = h; *bp = b; *lp = l;
+    int32_t s1 = s->s1[f], s2 = s->s2[f], m1 = s->m1[k], m2 = s->m2[k];
+    uint32_t g = s->g[f], dq = s->dq[f], i, a1 = (uint32_t)(m1 < 0 ? -m1 : m1), a2 = (uint32_t)(m2 < 0 ? -m2 : m2);
+    uint32_t ag = (uint32_t)s->mg[k];
+    int32_t n1 = m1 < 0 ? -1 : 0, n2 = m2 < 0 ? -1 : 0;
+    if (!c) {
+        for (i = 0; i < n; i++) {
+            int32_t x = b[i], v = eq_m16(x - s1, g), l = v + s1;
+            s1 = l + v;
+            b[i] = lp ? l : x - l;
+        }
+    } else if (c == 1u && lp)
+        EQ_SVF(l)
+    else if (c == 1u)
+        EQ_SVF(h)
+    else if (c == 3u)
+        EQ_SVF(eq_m16(x + eq_mq(bp, a1, n1) + eq_mq(l, a2, n2), ag) << 4)
+    else if (m2)
+        EQ_SVF(x + eq_mq(bp, a1, n1) + eq_mq(l, a2, n2))
+    else
+        EQ_SVF(x + eq_mq(bp, a1, n1))                   /* (a bell: m2 0, its product 0) */
+    s->s1[f] = s1;
+    s->s2[f] = s2;
 }
 static void eq_run(eq_t *s, const track_t *t, int32_t *b, uint32_t n)
 {
     eqc_t c;
     uint8_t kd[EQ_NB], bk[EQ_NB], st[EQ_NB], own[EQ_NS] = {0};
     uint32_t nb, i, k, f;
+    int32_t z, s1[EQ_NS], s2[EQ_NS];
     eq_get(t, &c);
     nb = eq_plan(t, &c, kd, bk, st);
     if (!nb) {
@@ -231,19 +268,29 @@ static void eq_run(eq_t *s, const track_t *t, int32_t *b, uint32_t n)
             memset(s, 0, sizeof *s);                    /* (flat again: from rest next time) */
         return;
     }
-    for (k = 0; k < nb; k++) {                          /* each band's coefficients */
-        uint32_t j = eq_slot(&c, bk[k]), g = eq_band_g(kd[k], t->p[EQ_FID[j]], t->p[EQ_SID[j]]), x = kd[k];
-        int32_t v = t->p[EQ_SID[j]], a2 = eq_gain_q12(v), a = eq_db_q12(v * 1500 / 64 / 2);
+    for (k = 0; k < nb; k++) {                          /* each band's coefficients (when its values changed) */
+        uint32_t j = eq_slot(&c, bk[k]), x = kd[k], g, key;
+        int32_t v = t->p[EQ_SID[j]], a2, a;
         f = st[k];
         own[f] = (uint8_t)(1u + j * 32u + x * 2u);
+        if (x == EQK_HP24 || x == EQK_LP24)
+            own[f + 1u] = (uint8_t)(own[f] + 1u);
+        key = 1u + (x | f << 4 | ((uint32_t)t->p[EQ_FID[j]] & 0xFFu) << 8 | ((uint32_t)v & 0xFFFFu) << 16);
+        if (s->key[k] == key)
+            continue;
+        s->key[k] = key;
+        s->fix = 0;
+        g = eq_band_g(x, t->p[EQ_FID[j]], v);
+        a2 = eq_gain_q12(v);
+        a = eq_db_q12(v * 1500 / 64 / 2);
         if (x == EQK_HP6 || x == EQK_LP6)
             s->g[f] = (uint16_t)((g << 15) / ((65536u + g) >> 1));   /* (g / (1 + g)) */
         else if (x == EQK_HP24 || x == EQK_LP24) {
             eq_coef(s, f, g, EQ_KH_4A);
             eq_coef(s, f + 1u, g, EQ_KH_4B);
-            own[f + 1u] = (uint8_t)(own[f] + 1u);
         } else
             eq_coef(s, f, g, x == EQK_BELL ? EQ_KH_BELL : EQ_KH_BUT);
+        s->m2[k] = s->mg[k] = 0;
         if (x == EQK_LS) {
             s->m1[k] = ((a - 4096) * 92682) >> 16;      /* k (A - 1) */
             s->m2[k] = a2 - 4096;
@@ -254,51 +301,46 @@ static void eq_run(eq_t *s, const track_t *t, int32_t *b, uint32_t n)
         } else
             s->m1[k] = a2 - 4096;                       /* (a bell's) */
     }
+    for (k = nb; k < EQ_NB; k++)
+        s->key[k] = 0;                                  /* (a band not running: its stages may be another's now) */
     for (f = 0; f < EQ_NS; f++)
         if (own[f] != s->own[f]) {
             s->s1[f] = s->s2[f] = 0;                    /* a stage starting, or another band's now: from rest */
             s->own[f] = own[f];
+            s->fix = 0;
         }
     s->on = 1;
-    for (i = 0; i < n; i++) {
-        int32_t x = clamp(b[i], -3000000, 3000000), h, bp, l, v;
-        for (k = 0; k < nb; k++) {
-            f = st[k];
-            switch (kd[k]) {
-            case EQK_HP6: case EQK_LP6:
-                v = mulq16(x - s->s1[f], s->g[f]);
-                l = v + s->s1[f];
-                s->s1[f] = l + v;
-                x = kd[k] == EQK_LP6 ? l : x - l;
-                break;
-            case EQK_HP12: eq_svf(s, f, x, EQ_KH_BUT, &h, &bp, &l); x = h; break;
-            case EQK_LP12: eq_svf(s, f, x, EQ_KH_BUT, &h, &bp, &l); x = l; break;
-            case EQK_HP24:
-                eq_svf(s, f, x, EQ_KH_4A, &h, &bp, &l);
-                eq_svf(s, f + 1u, h, EQ_KH_4B, &h, &bp, &l);
-                x = h;
-                break;
-            case EQK_LP24:
-                eq_svf(s, f, x, EQ_KH_4A, &h, &bp, &l);
-                eq_svf(s, f + 1u, l, EQ_KH_4B, &h, &bp, &l);
-                x = l;
-                break;
-            case EQK_LS:
-                eq_svf(s, f, x, EQ_KH_BUT, &h, &bp, &l);
-                x += eq_mq(bp, s->m1[k]) + eq_mq(l, s->m2[k]);
-                break;
-            case EQK_HS:
-                eq_svf(s, f, x, EQ_KH_BUT, &h, &bp, &l);
-                x = eq_mq(x + eq_mq(bp, s->m1[k]) + eq_mq(l, s->m2[k]), s->mg[k]);
-                break;
-            default:                                    /* a bell (k = 1: k bp) */
-                eq_svf(s, f, x, EQ_KH_BELL, &h, &bp, &l);
-                x += eq_mq(bp, s->m1[k]);
-                break;
-            }
-        }
-        b[i] = x;
+    for (i = 1, z = 0; i < n && !z; i++)
+        z = b[i] - b[0];                                /* (z 0: the block one value, b[0]) */
+    if (!z && s->fix && b[0] == s->din) {               /* (that block again: what it gave, the states as they are; */
+        for (i = 0; i < n; i++)                         /* at 0 in, their rounding may hold them off 0) */
+            b[i] = s->dc;
+        return;
     }
+    s->din = b[0];
+    memcpy(s1, s->s1, sizeof s1);
+    memcpy(s2, s->s2, sizeof s2);
+    for (i = 0; i < n; i++)
+        b[i] = clamp(b[i], -3000000, 3000000);
+    for (k = 0; k < nb; k++) {
+        uint32_t x = kd[k], lp = x >= EQK_LP6 && x <= EQK_LP24;
+        f = st[k];
+        if (x == EQK_HP6 || x == EQK_LP6)
+            eq_pass(s, f, k, 0, 0, lp, b, n);
+        else if (x == EQK_HP24 || x == EQK_LP24) {
+            eq_pass(s, f, k, 1, EQ_KH_4A, lp, b, n);
+            eq_pass(s, f + 1u, k, 1, EQ_KH_4B, lp, b, n);
+        } else if (x <= EQK_LP24)
+            eq_pass(s, f, k, 1, EQ_KH_BUT, lp, b, n);
+        else
+            eq_pass(s, f, k, x == EQK_HS ? 3u : 2u, x == EQK_BELL ? EQ_KH_BELL : EQ_KH_BUT, 0, b, n);
+    }    if (!z) {                                           /* (a block of one value: did it change nothing, give one?) */
+        for (i = 1; i < n && b[i] == b[0]; i++)
+            ;
+        s->fix = i == n && !memcmp(s1, s->s1, sizeof s1) && !memcmp(s2, s->s2, sizeof s2);
+        s->dc = b[0];
+    } else
+        s->fix = 0;
 }
 static __attribute__((noinline)) void track_eq(track_t *t, int32_t *b, uint32_t n)
 {

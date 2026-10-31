@@ -13,6 +13,10 @@
 #ifndef FW_SPLASH_MS
 #define FW_SPLASH_MS 700u        /* the power-on splash's time on the screen (main.c; Felucca's: 400; Dah: as long as the LED sweep, ~0.7 s) */
 #endif
+#ifndef FELUCCA_PROF
+#define FELUCCA_PROF 0           /* the audio ISR's cost by stage (fx.c prf_lap, console.c `prof`): src/felucca.c sets
+                                  * it with the console */
+#endif
 #ifndef FELUCCA_DEMO
 #define FELUCCA_DEMO 0           /* power-on with the dubstep demo (main.c felucca_demo): src/felucca.c and the browser
                                   * build set 1; the host tests keep Felucca's power-on */

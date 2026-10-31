@@ -727,11 +727,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     const int16_t *p = t->p;
     uint32_t i;
     int32_t lfo = mulq15(t->lfo_val, t->lfo_fade);
-    /* TUNE in cents: whole 1/16 semitones in the pitch, the rest as a fine factor (no dead zone) */
-    int32_t tune = song.g[G_TUNE] >= 0 ? song.g[G_TUNE] * 16 / 100 : -((-song.g[G_TUNE] * 16 + 99) / 100);
-    int32_t tune_fine = (song.g[G_TUNE] * 16 - tune * 100) * 2367 / 16000;   /* rest, in 1/4096 (1 ct = 2.367) */
-    int32_t bend, bend16, bend_fine;
-    uint32_t ti = (uint32_t)(t - trk);
+    int32_t tune = 0, tune_fine = 0, bend, bend16 = 0, bend_fine = 0;
+    uint32_t ti = (uint32_t)(t - trk), act = 0;
     if (ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM) {
         midi_bend_q8[ti] = midi_bend_target[ti] = 0;
     } else {
@@ -739,9 +736,16 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         /* ~6 ms smoothing, with an exact landing (no permanent small offset). */
         midi_bend_q8[ti] += d > 0 ? (d < 4 ? d : (d + 3) / 4) : (d > -4 ? d : (d - 3) / 4);
     }
-    bend = midi_bend_q8[ti];
-    bend16 = bend >= 0 ? bend / 16 : -((-bend + 15) / 16);
-    bend_fine = (bend - bend16 * 16) * 2367 / 2560;
+    for (i = 0; i < NVOICE; i++)
+        act |= t->v[i].active;
+    if (act) {                                          /* (no voice: none of it is needed, its divides spared) */
+        /* TUNE in cents: whole 1/16 semitones in the pitch, the rest as a fine factor (no dead zone) */
+        tune = song.g[G_TUNE] >= 0 ? song.g[G_TUNE] * 16 / 100 : -((-song.g[G_TUNE] * 16 + 99) / 100);
+        tune_fine = (song.g[G_TUNE] * 16 - tune * 100) * 2367 / 16000;   /* rest, in 1/4096 (1 ct = 2.367) */
+        bend = midi_bend_q8[ti];
+        bend16 = bend >= 0 ? bend / 16 : -((-bend + 15) / 16);
+        bend_fine = (bend - bend16 * 16) * 2367 / 2560;
+    }
     uint32_t nr = 0, fade = t->xf_on && t->xf;
     int16_t pe_new[8];
     for (i = 0; i < n; i++)
@@ -758,7 +762,8 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 #else
     track_lfo_tick(t);
 #endif
-    esync_coef(t);                                      /* this block's envelope steps for env_tick (ENV SYNC) */
+    if (act)
+        esync_coef(t);                                  /* this block's envelope steps for env_tick (ENV SYNC) */
     if (e->block)                                       /* the engine's per-part work (WHEEL: bars, rotor) */
         e->block(t);
     for (i = 0; i < NVOICE; i++) {

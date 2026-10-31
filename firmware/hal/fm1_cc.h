@@ -8,3 +8,6 @@
 #pragma once
 
 #define FM1_INLINE static inline __attribute__((always_inline))
+/* FM1_OPAQUE(v): v as the compiler cannot see through it (no code: an empty asm that may change it), so it keeps an
+ * expression of v as written (src/fx_eq.c: a 32 x 32-bit product it would otherwise widen to 64 x 64) */
+#define FM1_OPAQUE(v) __asm__("" : "+r"(v))

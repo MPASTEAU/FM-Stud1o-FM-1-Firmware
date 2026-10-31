@@ -19,6 +19,9 @@
 #ifndef FELUCCA_CDC
 #define FELUCCA_CDC 1            /* USB CDC-ACM serial console */
 #endif
+#ifndef FELUCCA_PROF
+#define FELUCCA_PROF FELUCCA_CDC /* the audio ISR's cost by stage, read with the console's `prof` (fx.c prf_lap) */
+#endif
 #ifndef FELUCCA_UAC
 #define FELUCCA_UAC 1            /* USB audio input: the master output, 16-bit stereo 44.1 kHz (usb.c) */
 #endif
@@ -66,6 +69,7 @@
 #define C1_ON() fm1_c1_on                    /* fx.c mix_block: a second core is answering */
 #define C1_RUN(fn, arg) fm1_cpu1_run(fn, arg)
 #define C1_WAIT() fm1_cpu1_wait()
+#define C1_TICKS() fm1_ticks()               /* fx.c mix_part_c: a part's cost (TIMER4: either core reads it) */
 #endif
 #include "fm1_input.h"
 #include "fm1_timer.h"

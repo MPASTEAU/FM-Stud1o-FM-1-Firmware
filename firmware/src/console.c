@@ -350,10 +350,33 @@ static void con_params(void)
     }
 }
 
+#if FELUCCA_PROF
+/* `prof`: the audio ISR's stages (fx.c PRF_*) since the last `prof`, us per half: average, then worst; then cleared.
+ * ev: events, FX layer, LFOs; r1..r8 each part's render; f1..f8 its chain and mix; bus; mst: MASTER; out: the rest */
+static void con_prof(void)
+{
+    uint32_t k, h = prf_halves, w;
+    con_kv("halves", (int32_t)h);
+    for (w = 0; w < 2u; w++) {
+        con_puts(w ? "max" : "avg");
+        for (k = 0; k < PRF_N; k++) {
+            con_putc(k == PRF_R || k == PRF_F || k == PRF_BUS ? '|' : ' ');
+            con_dec((int32_t)((w ? prf_max[k] : h ? prf_sum[k] / h : 0u) / FM1_TICKS_PER_US));
+        }
+        con_puts("\r\n");
+    }
+    k = fm1__lock();
+    memset(prf_sum, 0, sizeof prf_sum);
+    memset(prf_max, 0, sizeof prf_max);
+    prf_halves = 0;
+    fm1__unlock(k);
+}
+#endif
+
 static void con_exec(const char *p)
 {
     if (con_word(&p, "help") || con_word(&p, "?"))
-        con_puts("status  dbg  inp  crash  params  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
+        con_puts("status  dbg  inp  crash  params  prof  memr ADDR [LEN]  flr OFF [LEN]  uboot yes\r\n");
     else if (con_word(&p, "status"))
         con_status();
     else if (con_word(&p, "dbg"))
@@ -364,6 +387,10 @@ static void con_exec(const char *p)
         con_inp();
     else if (con_word(&p, "params"))
         con_params();
+#if FELUCCA_PROF
+    else if (con_word(&p, "prof"))
+        con_prof();
+#endif
     else if (con_word(&p, "memr"))
         con_memr(p);
 #if FELUCCA_FLASH

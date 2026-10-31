@@ -41,7 +41,22 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
         out[2u * i] *= 1 << OUT_SHIFT;
         out[2u * i + 1u] *= 1 << OUT_SHIFT;
     }
+    PRF_LAP(PRF_OUT);
 }
+
+#if FELUCCA_PROF
+static __attribute__((noinline)) void prf_half(void)   /* a half's laps into the sums and worsts (fx.c prf_lap) */
+{
+    uint32_t k;
+    prf_halves++;
+    for (k = 0; k < PRF_N; k++) {
+        prf_sum[k] += prf_cur[k];
+        if (prf_cur[k] > prf_max[k])
+            prf_max[k] = prf_cur[k];
+        prf_cur[k] = 0;
+    }
+}
+#endif
 
 /* Overload: two halves in a row above 85 % (the render plus TIMER5 nested in it), fade one voice over the
  * next block, and one more each half while it lasts. Keep each part's
@@ -110,6 +125,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             shed_req = 0;
             shed_voice();
         }
+#if FELUCCA_PROF
+        prf_t = t0;
+#endif
 #if FELUCCA_UAC
         uac_render_start();
 #endif
@@ -121,6 +139,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         }
         fm1_audio_ack_half();
         audio_halves++;
+#if FELUCCA_PROF
+        prf_half();
+#endif
         us = shed_check(fm1_ticks() - t0);
         if (us > audio_max_us)
             audio_max_us = us;
