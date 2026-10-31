@@ -151,7 +151,7 @@ static const char *const SCROFF_N[5] = {"NEVER", "5 MIN", "15 MIN", "30 MIN", "6
 static const char *const ANIM_N[3] = {"ON", "OFF", "IDLE"};
 static const uint8_t ANIM_ORD[3] = {1, 0, 2};          /* (a value's place in the menu's order, and back: its own inverse) */
 /* 1.3 (Discussions #112, #134): what HOME shows under its cards (ui.c ui_home_view): the scope, or the four tracks */
-static const char *const HOME_N[HV_COUNT] = {"SCOPE", "TRACKS", "LEVELS"};   /* (1.5, #134: LEVELS) */
+static const char *const HOME_N[HV_COUNT] = {"TRACKS", "SCOPE", "LEVELS"};   /* (1.5, #134: LEVELS) */
 
 /* MENU > USB SERIAL (#67). The serial console is a developer tool (README: FELUCCA_CDC). ON (the default) presents it,
  * the descriptors byte for byte as before; OFF re-enumerates as audio + MIDI only, device class 0 (the bytes of a

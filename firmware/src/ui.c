@@ -118,7 +118,7 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
 #define REC_PLAY 0x80u                                  /* (Dah) REC's layer > PLAY ON: arming REC stopped starts the
                                                          * transport (OFF, the default: armed, it waits for PLAY) */
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && LEDS_INV_LV - 1u < 2u ? LEDS_INV_LV : 0u; }
-enum { HV_SCOPE, HV_TRACKS, HV_LEVELS, HV_COUNT };
+enum { HV_TRACKS, HV_SCOPE, HV_LEVELS, HV_COUNT };   /* (Dah: TRACKS first, the default) */
 static int home_tracks(void) { return ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS; }
 static int home_levels(void) { return ui_home_view == HV_LEVELS; }
 enum { RP_CLICK, RP_LEVEL, RP_COUNTIN };

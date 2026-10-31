@@ -1006,7 +1006,7 @@ static int menu_protocol(void)
     ok &= menu_set(19, 1) == 3 && ui_prefs2 == 3u && menu_set(20, 1) == 3 && ui_prefs2 == 7u;
     ok &= menu_set(21, 2) == 0 && song.g[G_ROUTE] == 2 && menu_set(22, -13) == 0 && song.g[G_TUNE] == -13;   /* (1.2: the
                                                          * project's, rc 0: in the music, no settings record) */
-    ok &= menu_set(23, 1) == 3 && ui_home_view == HV_TRACKS && ui_prefs2 == 7u && ui_scr == 1u;   /* (1.3: its own byte) */
+    ok &= menu_set(23, 1) == 3 && ui_home_view == HV_SCOPE && ui_prefs2 == 7u && ui_scr == 1u;   /* (1.3: its own byte) */
     ok &= menu_set(24, 1) == 3 && ui_prefs2 == 15u && !help_on();                                 /* (1.5: HELP, bit 3; Dah: set = OFF) */
     ok &= menu_set(25, 1) == 3 && ui_prefs2 == 31u;                                               /* (1.5.5: SELECT, bit 4) */
     ok &= menu_set(26, 9) == 0 && mch_get(0) == 9u && song.mch[0] == 9u && menu_set(27, MCH_OMNI) == 0 &&   /* (1.5.5: */
