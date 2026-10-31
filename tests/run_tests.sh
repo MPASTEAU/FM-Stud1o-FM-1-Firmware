@@ -45,6 +45,9 @@
 #                   malformed transfers, transport-stop timeouts, MIDI and UART recovery; the MENU settings over the
 #                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later);
 #                   MENU > FACTORY RESET (project.c factory_reset): the stores erased, the samples kept, a restart, not while playing.
+# DEMO PROJECTS (tools/fm1_demo_projects.py --build): main.c's demo songs (the host build, DAH_DEMO_SONG) saved as
+#                   PROJECTS, the image restored through editor_backup.c's PUT of object 18, each project opened over
+#                   another song: its SONG's audio equal to the demo's (12 s).
 # FM6 BANK (tests/fm6bank_test.c, 1.4.1): the voice bank (src/fm6_vbank.c) and its editor commands against simulated NOR:
 #                   written whole and read back, its sectors (0xE7000, staged in the autosave's older copy, nothing else
 #                   touched), a power cut after any programmed byte or in any erase (the old bank or the new one, the
@@ -337,6 +340,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "metronome and count-in: beats sample for sample (internal and external clock), accent, level, MASTER, not in USB, count-in timing, notes onto step 1" "$OUT/click_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/persistence_test" tests/persistence_test.c -lm
     run "persistence: deferred settings, retry and failed-save rollback" "$OUT/persistence_test"
+    run "demo projects: the lo-fi and the showcase songs saved as projects, restored as backup object 18, opened, played as the demo" \
+        python3 tools/fm1_demo_projects.py --build --songs 8,7 --img "$OUT/demo_projects_test.img"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/backup_test" tests/backup_test.c -lm
     run "full backup: CRC before writes, stale runtime, USB reset / timeout, malformed objects, older projects" "$OUT/backup_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/fm6bank_test" tests/fm6bank_test.c -lm
