@@ -626,7 +626,7 @@ static void home_foot(void)
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig, n, ok = 0, i;
     khint_t kh[3];
-    static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}},     /* HOME (OCT+ held: the VIEW) */
+    static const khint_t KH[5][2] = {{{KC_OCTUP, "(HOLD) VIEW"}, {KC_OCTDN, "(HOLD) DEL"}},   /* HOME (OCT+ held: the VIEW; Dah: OCT- held the track out) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}},                         /* an effect's page (FX: back) */
                                      {{KC_FX, "NEXT"}},                          /* .. with a second page */
@@ -646,7 +646,7 @@ static void home_foot(void)
     } else if (hk < 5u) {
         kh[0] = KH[hk][0];
         kh[1] = KH[hk][1];
-        n = hk == 1u ? 2u : 1u;                         /* (Dah: no SELECT PAT anywhere) */
+        n = hk <= 1u ? 2u : 1u;                         /* (Dah: no SELECT PAT anywhere) */
         ok = 3u;
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
@@ -672,7 +672,7 @@ static void home_foot(void)
     for (i = 0; i < n; i++)
         x = cv_key_hint(x, (HOME_FOOT_H - KC_H) / 2, kh[i].key, kh[i].act, (int)((ok >> i) & 1u), T_BG) + (i + 1u < n ? 8 : 10);
     w = text_w(&AF_S, pn);                              /* (the preset's name alone; no room: none, not cut) */
-    if (w <= 236 - x || hk < 5u) {
+    if (w <= 236 - x || (hk && hk < 5u)) {      /* (Dah: HOME, two keys: no room, no name) */
         if (w > 236 - x)
             w = 236 - x;
         GFX_HOOK_ALIGN(0, 0, 0, HOME_FOOT_H, AL_V, "home footer text on its middle");
