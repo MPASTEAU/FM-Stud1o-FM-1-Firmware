@@ -1297,12 +1297,13 @@ static void draw_column(uint32_t c, const char *label, const char *val, const ch
     cv_blit((uint32_t)CARD_X(c), Y_LABEL + (strip ? ROLL_Y : 0));
 }
 
-/* an action's column (act_cols): "--", the accent's when picked (OCT+ would act; DIM: it would not); the dialog
- * asks, no keycap on the card */
+/* an action's column (act_cols): "--", picked "OCT+" in the accent (OCT+ would act; DIM "--": it would not); the
+ * dialog asks, no keycap on the card */
 static void draw_act_column(uint32_t c, const char *label, uint16_t vc, uint32_t icon)   /* icon: ICON_AUTO = by label */
 {
     int picked = act_col() == c + 1u;
-    draw_column(c, label, "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc, -1, icon);
+    draw_column(c, label, picked && act_ready() ? "OCT+" : "--", "", picked ? (act_ready() ? T_ACCENT : T_DIM) : vc, -1,
+                icon);                                  /* (Dah: picked, ready: "OCT+" on its card, as the footer says) */
 }
 
 /* action pages: the footer's first row says what OCT+ and OCT- do ("OCT+ LOAD   OCT- BACK") */
@@ -1937,7 +1938,7 @@ static void draw_columns_in(void)
                     ;
                 fmt_int(val, (int32_t)(i < n ? i + 1u : 0u));
                 fmt_int(u + 1, (int32_t)n);
-                draw_column(0, "PROJECT", val, u, VAL(0u), -1, ICON_AUTO);
+                draw_column(0, "PROJECT", n ? val : "--", n ? u : "", VAL(0u), -1, ICON_AUTO);   /* (none yet: "--") */
             } else
                 draw_act_column(c, act_name(c), c != 1u || (pfs_there(ui.fsel) && ui.fsel != pfs_cur()) ? T_THEME : T_DIM,
                                 ICON_AUTO);
