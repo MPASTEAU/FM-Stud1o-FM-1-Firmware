@@ -1366,9 +1366,10 @@ static void edit_param(uint32_t slot, int32_t steps)
         ui.act = steps > 0 ? (uint8_t)(slot + 1u) : ui.act == slot + 1u ? 0u : ui.act;   /* OCT+ does it (act_do) */
         return;
     }
-    if (pg->graph == GR_PATTERN) {                        /* (Dah) KNOB 1 the pattern, every track on it */
+    if (pg->graph == GR_PATTERN || pg->graph == GR_FILE) {   /* (Dah) KNOB 1 the pattern (every track on it), the
+                                                         * project (the list glides) */
         if (slot == 0u)
-            pt_move(steps);
+            pg->graph == GR_PATTERN ? pt_move(steps) : file_move(steps);
         return;
     }
     if (pg->graph == GR_USER) {                           /* KNOB 1 the slot */
@@ -1559,11 +1560,9 @@ static void act_do(void)
         ui.act = 0;
         if (transport_busy() || chain_busy())
             ui_message("STOP FIRST");
-        else if (c == 3u)                               /* (Dah) DELETE: the dialog */
-            pfs_there(ui.fsel) ? confirm_open(CF_DEL_ARCH, ui.fsel) : ui_message("NO PROJECT");
-        else if (c == 0u)
+        else if (c == 1u)                               /* (KNOB 2 OPEN, 3 COPY, 4 NEW; DELETE: OCT- held) */
             (void)project_open(ui.fsel);
-        else if (c == 1u)
+        else if (c == 2u)
             name_open(NK_ARCH_SAVE, 0);
         else if (!project_new_file())
             file_enter();
@@ -2428,7 +2427,8 @@ static void ui_input(void)
         {                                               /* (Dah) SONG: OCT- held 0.5 s, a section added */
             static uint32_t dn_ms;
             int dn = ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm &&
-                     (cur_page()->graph == GR_SONG || cur_page()->graph == GR_TRK) && !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
+                     (cur_page()->graph == GR_SONG || cur_page()->graph == GR_TRK || cur_page()->graph == GR_FILE) &&
+                     !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
             if (!dn)
                 dn_ms = 0;
             else if (!dn_ms)
@@ -2440,6 +2440,10 @@ static void ui_input(void)
                     else if (trk_count() <= 1u) ui_message("ONE TRACK AT LEAST");
                     else if (mx_master || song.sel + 1u != trk_count()) ui_message("THE LAST TRACK ONLY");
                     else confirm_open(CF_DEL_TRK, song.sel);
+                } else if (cur_page()->graph == GR_FILE) {   /* (Dah) FILE: OCT- held, the project picked deleted (asked) */
+                    if (transport_busy() || chain_busy()) ui_message("STOP FIRST");
+                    else if (pfs_there(ui.fsel)) confirm_open(CF_DEL_ARCH, ui.fsel);
+                    else ui_message("NO PROJECT");
                 } else if (chain_busy()) ui_message("STOP TO EDIT");
                 else if (chain_config.count >= CHAIN_ROWS) ui_message("SONG FULL");
                 else {                                  /* (shown blinking: OCT+ adds it) */

@@ -556,9 +556,44 @@ static int rec_keeps(void)
     return bad;
 }
 
+/* (Dah) SAVE > FILE: KNOB 1 the projects' list, OPEN COPY NEW on KNOB 2..4; DELETE is OCT- held 0.5 s (the dialog;
+ * NO PROJECT, STOP FIRST), its release no tap; the footer says it */
+static int file_page(void)
+{
+    int bad = 0, ok;
+    khint_t kh[4];
+    uint32_t okm, n, i;
+    char ha[16], hb[16];
+    ui_power_on();
+    go_page(GR_FILE);
+    frame();
+    ok = act_cols() == 14u && str_eq(act_name(0), "PROJECT") && str_eq(act_name(1), "OPEN") && str_eq(act_name(3), "NEW");
+    turn(EN_K1, 1);
+    ok &= ui.act == 0u;                                 /* (KNOB 1: the list, no action picked) */
+    n = foot_keys(kh, &okm, ha, hb);
+    for (i = 0; i < n && !(kh[i].key == KC_OCTDN && str_eq(kh[i].act, "(HOLD) DELETE")); i++)
+        ;
+    ok &= i < n;
+    bad += check("SAVE > FILE: KNOB 1 the list, KNOB 2..4 OPEN COPY NEW; the footer OCT- (HOLD) DELETE", ok);
+    btn_down(B_OCTDN);
+    frames(700);
+    btn_up(B_OCTDN);
+    frame();
+    ok = !ui.confirm && msg_is("NO PROJECT") && cur_page()->graph == GR_FILE;
+    song.playing = 1;
+    btn_down(B_OCTDN);
+    frames(700);
+    btn_up(B_OCTDN);
+    frame();
+    ok &= !ui.confirm && msg_is("STOP FIRST");
+    song.playing = 0;
+    bad += check("  OCT- held 0.5 s: DELETE asked (no project: NO PROJECT; playing: STOP FIRST), never without the dialog", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

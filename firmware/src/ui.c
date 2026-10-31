@@ -1734,7 +1734,7 @@ static uint32_t act_cols(void)                   /* the columns that are actions
     if (pg->graph == GR_SLICES)
         return slice_page_ok() ? 12u : 0u;       /* SPLIT JOIN (a SLICE track only) */
     if (pg->graph == GR_FILE)
-        return 15u;                              /* (Dah) FILE: OPEN COPY NEW DELETE (the list: PRESETS, SELECT) */
+        return 14u;                              /* (Dah) FILE: KNOB 1 the project; OPEN COPY NEW (OCT- held: DELETE) */
     if (pg->graph == GR_PATTERN)
         return 14u;                              /* (Dah) PATTERN: KNOB 1 the pattern; COPY NEW DELETE */
     return 0;
@@ -1758,7 +1758,8 @@ static const char *act_name(uint32_t c)          /* column c's action (the foote
         return c == 3u ? "JOIN" : "SPLIT";
     if (cur_page()->graph == GR_PATTERN || cur_page()->graph == GR_FILE) {   /* (Dah) */
         static const char *const FL_ACT[4] = {"OPEN", "COPY", "NEW", "DELETE"};
-        return cur_page()->graph == GR_PATTERN && !(c & 3u) ? "PATTERN" : FL_ACT[c & 3u];
+        return !(c & 3u) ? cur_page()->graph == GR_PATTERN ? "PATTERN" : "PROJECT" :
+               FL_ACT[cur_page()->graph == GR_PATTERN ? c & 3u : (c - 1u) & 3u];   /* (FILE: OPEN COPY NEW from KNOB 2) */
     }
     return "SAVE";
 }
@@ -1781,6 +1782,6 @@ static int act_ready(void)
     if (cur_page()->graph == GR_PATTERN)                /* (Dah) OPEN another, COPY / NEW: a number free, DELETE */
         return pt_ready(c);
     if (cur_page()->graph == GR_FILE)                   /* (Dah) OPEN another project, COPY, NEW, DELETE one there */
-        return c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
+        return c == 1u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : 1;
     return !song.playing;
 }

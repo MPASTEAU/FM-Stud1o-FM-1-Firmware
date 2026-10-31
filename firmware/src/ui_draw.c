@@ -595,6 +595,11 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
             *ok = 1u | *ok << 1;
         } else
             kh[0] = (khint_t){KC_OCTUP, ha + 5};
+        if (cur_page()->graph == GR_FILE && nk == 1u) {   /* (Dah) FILE: OCT- held deletes the project picked */
+            kh[nk] = (khint_t){KC_OCTDN, "(HOLD) DELETE"};
+            *ok |= (pfs_there(ui.fsel) ? 1u : 0u) << nk;
+            nk++;
+        }
         if (dl) {
             kh[nk] = (khint_t){KC_REC, "DELETE"};
             *ok |= (dl == 2u ? 1u : 0u) << nk;
@@ -1922,9 +1927,20 @@ static void draw_columns_in(void)
                 draw_act_column(c, act_name(c), pt_ready(c) ? T_THEME : T_DIM, ICON_AUTO);
             continue;
         }
-        if (cur_page()->graph == GR_FILE) {             /* (Dah) FILE: OPEN COPY NEW DELETE (the memory: the list's) */
-            int ok = c == 0u ? pfs_there(ui.fsel) && ui.fsel != pfs_cur() : c == 3u ? pfs_there(ui.fsel) : 1;
-            draw_act_column(c, act_name(c), ok ? T_THEME : T_DIM, ICON_AUTO);
+        if (cur_page()->graph == GR_FILE) {             /* (Dah) FILE: the project (n/N), OPEN COPY NEW (the memory: the
+                                                         * list's) */
+            if (!c) {
+                uint8_t ids[32];
+                uint32_t n = pfs_list(ids), i;
+                char u[6] = "/";
+                for (i = 0; i < n && ids[i] != ui.fsel; i++)
+                    ;
+                fmt_int(val, (int32_t)(i < n ? i + 1u : 0u));
+                fmt_int(u + 1, (int32_t)n);
+                draw_column(0, "PROJECT", val, u, VAL(0u), -1, ICON_AUTO);
+            } else
+                draw_act_column(c, act_name(c), c != 1u || (pfs_there(ui.fsel) && ui.fsel != pfs_cur()) ? T_THEME : T_DIM,
+                                ICON_AUTO);
             continue;
         }
         if (cur_page()->graph == GR_CHORD && TSEL->p[P_CHRD] == CH_MATCH && c >= 2u) {   /* (Dah) MATCH: COLOR, NOTES */
