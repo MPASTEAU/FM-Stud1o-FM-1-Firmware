@@ -1717,6 +1717,80 @@ static void trk_count_changed(void)
 #include "ui_events.c"                            /* SEQ > AUTOMATION: the four HOME knobs' lanes */
 #include "midi_learn.c"                           /* MIDI LEARN (1.5): GLO + D4, a knob, a CC */
 
+/* (Dah) a track deleted (MIXER or HOME, OCT- held, answered; stopped): track d gone (its sound, patterns, pages,
+ * automation, its SONG lane), the ones after it one down with everything of theirs (TD: their state, the heap's records,
+ * the motion store, the SONG's lanes, the bits of track masks) and everything that names one (SIDECHAIN SRC and SRC 2,
+ * MIDI LEARN's map: the deleted one's gone); the last, now a copy, then goes as before */
+#define TD(a) {(uint8_t *)(a), sizeof (a)[0]}
+static const struct { uint8_t *p; uint16_t n; } TD_ARR[] = {
+    TD(trk), TD(trkx), TD(fm6_patch), TD(fm6_slot), TD(fm6_own), TD(fm6_lfo), TD(ps_cur), TD(drum_mute), TD(song.mch),
+    TD(oct_trk), TD(pat_from), TD(pat_from_h), TD(eq), TD(ins), TD(sl), TD(cmp_trk), TD(motion_base), TD(motion_active),
+    TD(motion_locked), TD(chord_last), TD(drum_drv)};
+static void td_move(uint8_t *d, const uint8_t *s, uint32_t n) { while (n--) *d++ = *s++; }   /* (down: d before s) */
+static uint32_t td_bits(uint32_t m, uint32_t d) { return (m & ((1u << d) - 1u)) | (m >> (d + 1u)) << d; }
+static uint32_t td_ref(uint32_t v, uint32_t d) { return v == d + 1u ? 0u : v > d + 1u ? v - 1u : v; }   /* (a track + 1) */
+static void track_delete(uint32_t d)
+{
+    uint32_t n = trk_count(), k, i, at, e;
+    pgc_flush_all();
+    for (k = 0; k < n; k++)
+        (void)pg_sync(k);                               /* (the pages' automation into their records) */
+    panic_req = (uint8_t)((1u << NTRK) - 1u);
+    for (k = 1; k <= PS_NUM; k++) {                     /* d's patterns, pages and SONG lane gone */
+        ps_del(d, k);
+        pg_del(d, k);
+    }
+    fm1_irq_off();
+    for (i = 0; i < NELEM(TD_ARR); i++)
+        td_move(TD_ARR[i].p + d * TD_ARR[i].n, TD_ARR[i].p + (d + 1u) * TD_ARR[i].n, (n - 1u - d) * TD_ARR[i].n);
+    for (k = d; k + 1u < n; k++) {                      /* (moved: silent, the engine's memory as at a switch) */
+        for (i = 0; i < NVOICE; i++)
+            trk[k].v[i].active = 0;
+        eng_mem_owner[k] = 0;
+        eng_mem_claim(&trk[k]);
+        fm6_pgen[k]++;
+        pg_ring_drop(k);
+    }
+    fm1_irq_on();
+    for (at = 0; at + 4u <= ps_used; at += 4u + ps_rlen(at))   /* the heap's records: their track */
+        if (ps_heap[at] > d && ps_heap[at] < n)
+            ps_heap[at]--;
+    for (i = k = 0; i < motion.count; i++) {            /* the motion store: d's out, the others' track */
+        motion_event_t *m = &motion.event[i];
+        if (MP_TRK(m) == d)
+            continue;
+        if (MP_TRK(m) > d)
+            m->place = (uint16_t)(m->place - (1u << 6));
+        motion.event[k++] = *m;
+    }
+    motion.count = k;
+    for (i = 0; i < CHAIN_ROWS; i++) {                  /* the SONG's lanes */
+        td_move(&chain_config.row[i].slot[d], &chain_config.row[i].slot[d + 1u], NTRK - 1u - d);
+        chain_config.row[i].slot[NTRK - 1u] = (uint8_t)CHAIN_SILENT;
+    }
+    for (k = 0; k < n; k++) {                           /* SIDECHAIN SRC, SRC 2 */
+        trk[k].p[P_DKSRC] = (int16_t)td_ref((uint32_t)trk[k].p[P_DKSRC], d);
+        trkx[k].sc2 = (uint8_t)td_ref(trkx[k].sc2, d);
+    }
+    for (i = 0; i < ML_N; i++)                          /* MIDI LEARN: track bits 7..8 */
+        if ((e = ml_get(i)) != 0u)
+            ml_put(i, ((e >> 7) & 3u) == d ? 0u : ((e >> 7) & 3u) > d ? e - (1u << 7) : e);
+    song.rec = (uint8_t)td_bits(song.rec, d);
+    mix_solo = (uint8_t)td_bits(mix_solo, d);
+    perf_solo = (uint8_t)td_bits(perf_solo, d);
+    seq_off = (uint8_t)td_bits(seq_off, d);
+    k = n - 1u;                                         /* the last: a copy now, gone */
+    track_reset(k);
+    pg_ring_drop(k);
+    ps_cur[k] = 0;
+    ps_gen++;
+    pgc_drop(NTRK);
+    song.ntrk = (uint8_t)k;
+    trk_count_changed();
+    track_select(d < k ? d : k - 1u);
+    ui_message("TRACK DELETED");
+}
+
 /* ---------------------------------------------------- action pages --- */
 /* Pages whose purpose is an action (SAVE > USER, PROJECT, EDIT > SLICES): the knobs pick,
  * OCT+ does it, OCT- cancels the picked action or goes HOME (ui_input.c). There OCT- / OCT+ do not

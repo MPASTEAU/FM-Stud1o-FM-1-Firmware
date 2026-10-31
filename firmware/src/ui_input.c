@@ -2233,22 +2233,8 @@ static void ui_input(void)
                 up_ui(0u, ui.confirm_trk);
             } else if (kind == CF_DEL_PAT) {       /* SAVE > PATTERN, REC */
                 pt_delete();
-            } else if (kind == CF_DEL_TRK) {           /* (Dah) MIXER, OCT- held: the last track gone, its patterns */
-                uint32_t k = trk_count() - 1u;
-                panic_req |= (uint8_t)(1u << k);
-                track_reset(k);
-                ps_song_forget(k, 0);
-                for (k = 1; k <= PS_NUM; k++) {
-                    ps_del(trk_count() - 1u, k);
-                    pg_del(trk_count() - 1u, k);
-                }
-                pg_ring_drop(trk_count() - 1u);
-                ps_cur[trk_count() - 1u] = 0;
-                ps_gen++;
-                song.ntrk = (uint8_t)(trk_count() - 1u);
-                trk_count_changed();
-                track_select(song.ntrk - 1u);
-                ui_message("TRACK DELETED");
+            } else if (kind == CF_DEL_TRK) {           /* (Dah) MIXER / HOME, OCT- held: the track picked gone */
+                track_delete(ui.confirm_trk % NTRK);
             } else if (kind == CF_ADD_TRACK) {     /* one track more: its power-on sound, no steps */
                 track_add();
             } else if (kind == CF_PICK_FX) {       /* (Dah) the one picked (SELECT), added last, its page open */
@@ -2429,16 +2415,19 @@ static void ui_input(void)
             int dn = ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm &&
                      (cur_page()->graph == GR_SONG || cur_page()->graph == GR_TRK || cur_page()->graph == GR_FILE) &&
                      !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
+            dn |= ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && ui.home && !ui.menu && !ui.confirm &&
+                  !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);   /* (HOME too: the track deleted) */
             if (!dn)
                 dn_ms = 0;
             else if (!dn_ms)
                 dn_ms = fm1_ms | 1u;
             else if (!oct_dn_used && (int32_t)(fm1_ms - dn_ms) >= 500) {
                 oct_dn_used = 1;
-                if (cur_page()->graph == GR_TRK) {      /* (Dah) MIXER: OCT- held, the track deleted (asked) */
+                if (ui.home || cur_page()->graph == GR_TRK) {   /* (Dah) MIXER, HOME: OCT- held, the track picked
+                                                         * deleted (asked; any one, the ones after it one down) */
                     if (song.playing || chain_busy()) ui_message("STOP FIRST");
                     else if (trk_count() <= 1u) ui_message("ONE TRACK AT LEAST");
-                    else if (mx_master || song.sel + 1u != trk_count()) ui_message("THE LAST TRACK ONLY");
+                    else if (!ui.home && mx_master) ui_message("NOT THE MASTER");
                     else confirm_open(CF_DEL_TRK, song.sel);
                 } else if (cur_page()->graph == GR_FILE) {   /* (Dah) FILE: OCT- held, the project picked deleted (asked) */
                     if (transport_busy() || chain_busy()) ui_message("STOP FIRST");

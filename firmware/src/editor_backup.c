@@ -11,7 +11,7 @@
  * slot is, or its X belongs to no record there), restored after their slot (ids 2..5): tagged again with the slot's
  * record as restored (an older format is packed again: another hash). Ids 14..17 the same of their extras (FUNY, LFO DRAW
  * and CURVE, proj_pack_y). Retired with the PROJECTS (projfs.c: their flash is the projects' now): a PUT of them is
- * refused (rc 1, the page skips them).
+ * refused (rc 1, the page skips them), and so is a GET (none lists them).
  * Id 18: the PROJECTS, the flash of projfs.c as it is, up to its last used sector (whole sectors, 0: none).
  * Read from the flash 256 bytes at a time; restored straight into it (a sector erased when its first chunk comes, the
  * ones after the image's end at the commit, its CRC read back), then scanned again. Restored before the settings
@@ -66,16 +66,6 @@ static const uint8_t *ed_bk_object(uint32_t id, uint32_t *len)
         return (const uint8_t *)&upf;
     }
 #if FELUCCA_FLASH
-    if (id >= 10u && id <= 17u) {                   /* a slot's tracks 5..8 / extras: st_buf (st_current) */
-        st_hdr_t h;
-        uint32_t k = (id - 10u) & 3u, tag, y = id >= 14u;
-        if (flash_ok && project_used(k) && st_current(y ? PX_YOF(PX_OBJ0 + k) : PX_OBJ0 + k, &h) >= 0 && h.len == PROJX_SIZE) {
-            memcpy(&tag, st_buf + 8, 4);
-            if (tag == proj_tag(&proj_slot[k]))
-                *len = h.len;
-        }
-        return st_buf;
-    }
     if (id == ED_BK_PFS) {                          /* (read by ed_bk_pfs_read: no pointer into it) */
         uint32_t k;
         pfs_need();

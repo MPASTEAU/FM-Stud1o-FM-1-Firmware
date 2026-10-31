@@ -45,6 +45,9 @@
 #                   malformed transfers, transport-stop timeouts, MIDI and UART recovery; the MENU settings over the
 #                   editor (MENU_DESC / MENU_SET: every item, clamping, unknown ids, saving, USB SERIAL applied later);
 #                   MENU > FACTORY RESET (project.c factory_reset): the stores erased, the samples kept, a restart, not while playing.
+# TRACK DELETE (tests/trackdel_test.c): track 1 of 4 deleted (ui.c track_delete): tracks 2..4 now 1..3 with their
+#                   patterns, pages, automation, SONG lanes, SIDECHAIN SRC, armed bit; the SONG plays the same; saved and
+#                   opened as a project the same; the last one deleted.
 # IDLE (tests/idle_test.c): an idle frame blits nothing (the LCD flashes what is drawn twice): every held layer and the
 #                   MENU, over HOME and SEQ > STEP, on a synth and a DRUM track.
 # PLACE (tests/place_test.c): a note or a hit placed on SEQ heard once as PLAY plays it (the lane's kit note, the step's
@@ -288,6 +291,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "long patterns: LEN up to 256 (pages, the ring, a held note, editing, recording, automation, projects, SONG)" "$OUT/longpat_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/overlap_test" tests/overlap_test.c -lm
     run "overlapping notes: POLY holds each their own (recording, playback, NOTE LEN, the roll, pages, projects)" "$OUT/overlap_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/trackdel_test" tests/trackdel_test.c -lm
+    run "track delete: any track (1 of 4): the others one down with patterns, automation, SONG lanes, SIDECHAIN; plays the same; a project" "$OUT/trackdel_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm
     run "1.5.5 fixes and UI: PAN +-100, SELECT PAGE, OCT- on the press (1.5.6), PROJECT ERASE, CLEAN INIT" "$OUT/ui155_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/idle_test" tests/idle_test.c -lm

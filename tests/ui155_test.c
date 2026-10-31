@@ -591,9 +591,36 @@ static int file_page(void)
     return bad;
 }
 
+/* (Dah) OCT- held 0.5 s deletes the track picked, any one (asked): on MIXER and on HOME; STOP FIRST, ONE TRACK AT LEAST */
+static int del_track_hold(void)
+{
+    int bad = 0, ok;
+    ui_power_on();
+    song.ntrk = 4;
+    trk_count_changed();
+    track_select(0);
+    go_home();
+    frame();
+    btn_down(B_OCTDN); frames(700); btn_up(B_OCTDN); frame();
+    ok = ui.confirm == CF_DEL_TRK && ui.confirm_trk == 0u;
+    press(B_OCTUP);                                     /* (yes) */
+    ok &= !ui.confirm && trk_count() == 3u && msg_is("TRACK DELETED");
+    bad += check("HOME: OCT- held asks DELETE TRACK 1? (the first: any one), OCT+ deletes it, 3 tracks", ok);
+    song.playing = 1;
+    btn_down(B_OCTDN); frames(560); btn_up(B_OCTDN); frame();
+    ok = !ui.confirm && msg_is("STOP FIRST");
+    song.playing = 0;
+    song.ntrk = 1;
+    trk_count_changed();
+    btn_down(B_OCTDN); frames(560); btn_up(B_OCTDN); frame();
+    ok &= !ui.confirm && msg_is("ONE TRACK AT LEAST");
+    bad += check("  playing: STOP FIRST; one track: ONE TRACK AT LEAST", ok);
+    return bad;
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }
