@@ -535,7 +535,7 @@ static void menu_move(int32_t s)                       /* KNOB 1: the next / pre
 static void menu_reset(void)
 {
     static const uint8_t DEF[][2] = {{MI_HELP, 0}, {MI_COLOR, 3}, {MI_STYLE, 0}, {MI_LARGE, 0}, {MI_ANIM, 0}, {MI_LEDS, 2},
-                                     {MI_SCROFF, 0}, {MI_HOME, 1}, {MI_HOLD, 1}, {MI_ACCEL, 0}, {MI_LATCH, 0},
+                                     {MI_SCROFF, 0}, {MI_HOME, 0}, {MI_HOLD, 1}, {MI_ACCEL, 0}, {MI_LATCH, 0},
                                      {MI_BPMLOCK, 0}, {MI_SCLLED, 0}, {MI_PREVIEW, 0}, {MI_CHADD, 1}, {MI_SELECT, 1},
                                      {MI_SNDPV, 0}, {MI_LOWCUT, 0}, {MI_USB, 0}, {MI_MFOLLOW, 0}, {MI_SCRWAKE, 0},
                                      {MI_SERIAL, 0}, {MI_RESTORE, 0}, {MI_SCOPE, 0}};
