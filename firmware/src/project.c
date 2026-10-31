@@ -702,12 +702,13 @@ static uint32_t proj_pack_trk(uint8_t *b, const proj_trk_t *t)
         const step_t *s = &t->step[i];
         uint32_t r = step_ratchet(s) - 1u;          /* RATCH: bit 7 of the velocity and chance bytes (see the top) */
         uint32_t nd = (uint32_t)step_nudge(s) & 15u;   /* NUDGE (FUN10): bit j in bit 7 of note j */
-        if (s->n > 4u || s->time > ST_REST || (s->flags & ~(3u | SF_RATCH | SF_NUDGE)) || s->probability >= COND_FIRST + NCOND)
+        if (s->n > 4u || st_kind(s) > ST_REST || (s->flags & ~(3u | SF_RATCH | SF_NUDGE)) || s->probability >= COND_FIRST + NCOND)
             return 0;
         for (uint32_t j = 0; j < 4u; j++)           /* what proj_unpack checks, so a saved project always loads: */
             b[pos++] = (uint8_t)((s->note[j] > 127u ? 127u : s->note[j]) | (nd >> j & 1u) << 7);   /* notes and
                                                      * velocity 0..127, accents */
-        b[pos++] = (uint8_t)(s->n | s->time << 3 | (s->flags & 3u) << 5);   /* only on hits */
+        b[pos++] = (uint8_t)(s->n | st_kind(s) << 3 | (s->flags & 3u) << 5);   /* only on hits (overlaps: FUN10 has no
+                                                     * notes going on, each starts on its step) */
         b[pos++] = (uint8_t)((s->vel > 127u ? 127u : s->vel) | (r & 1u) << 7); b[pos++] = s->hit;
         b[pos++] = s->acc & s->hit;
         b[pos++] = (uint8_t)(s->probability | (r >> 1) << 7);
@@ -1030,7 +1031,9 @@ static void proj_steps(step_t *s)            /* a loaded sequence stays inside i
     uint32_t i, j;
     for (i = 0; i < NSTEP; i++) {
         if (s[i].n > 4u) s[i].n = 4;
-        if (s[i].time > ST_REST) s[i].time = ST_REST;
+        if (st_kind(&s[i]) > ST_REST) s[i].time = ST_REST;
+        s[i].time &= (uint8_t)(st_kind(&s[i]) == ST_NOTE ? 0xF3u : ST_KIND);   /* (notes going on: a NOTE step's) */
+        if (st_kind(&s[i]) == ST_NOTE) st_set_cont(&s[i], st_cont(&s[i]));
         for (j = 0; j < 4u; j++) s[i].note[j] &= 127u;
         s[i].acc &= s[i].hit;
     }
@@ -1227,9 +1230,9 @@ static uint32_t proj_density(const proj_trk_t *t, uint8_t *n)
         uint32_t i0 = c * len / nc, i1 = (c + 1u) * len / nc, w = 0;
         for (i = i0; i < i1; i++) {
             const step_t *s = &t->step[i];
-            if (s->time == ST_TIE)
+            if (st_kind(s) == ST_TIE)
                 w += 1u;
-            else if (s->time == ST_NOTE && (s->n || s->hit) && step_chance(s))
+            else if (st_kind(s) == ST_NOTE && (s->n || s->hit) && step_chance(s))
                 w += (s->flags & SF_ACCENT) || s->acc ? 3u : 2u;
         }
         w = (w + (i1 - i0) - 1u) / (i1 - i0);

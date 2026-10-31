@@ -15,7 +15,7 @@
  * (projfs.c) keeps the heap and each track's number; the SONG's sections name a number per track. */
 #define PS_NUM 32u                                      /* patterns a track, 1..PS_NUM */
 #define PS_HEAP 8192u
-#define PS_PAT_MAX (10u + 1u + NSTEP * 10u + 1u + MOTION_MAX * 3u + 1u)   /* a pattern at most */
+#define PS_PAT_MAX (10u + 1u + NSTEP * 11u + 1u + MOTION_MAX * 3u + 1u)   /* a pattern at most (overlaps: 11 a step) */
 static uint8_t ps_heap[PS_HEAP] __attribute__((section(".pool")));
 static uint8_t ps_buf[PS_PAT_MAX] __attribute__((section(".pool")));   /* one pattern on its way */
 static uint32_t ps_used;
@@ -64,19 +64,23 @@ static int ps_put(uint32_t k, uint32_t num, const uint8_t *p, uint32_t n)
     ps_gen++;
     return 0;
 }
-/* a step <-> FUN10's 9 bytes (project.c proj_pack_trk / proj_unpack_trk) */
+/* a step <-> FUN10's 9 bytes (project.c proj_pack_trk / proj_unpack_trk). (overlaps) A NOTE step with notes going on
+ * (core.h st_cont): time 3 there (older firmware refuses it), the notes going on in a 10th byte (b[9]) after its bytes */
+#define PS_GOES 3u
 static void ps_step_pack(const step_t *s, uint8_t *b)
 {
     uint32_t r = step_ratchet(s) - 1u, nd = (uint32_t)step_nudge(s) & 15u, j;
     for (j = 0; j < 4u; j++)
         b[j] = (uint8_t)((s->note[j] > 127u ? 127u : s->note[j]) | (nd >> j & 1u) << 7);
-    b[4] = (uint8_t)(s->n | s->time << 3 | (s->flags & 3u) << 5);
+    b[4] = (uint8_t)(s->n | (st_cont(s) ? PS_GOES : st_kind(s)) << 3 | (s->flags & 3u) << 5);
     b[5] = (uint8_t)((s->vel > 127u ? 127u : s->vel) | (r & 1u) << 7);
     b[6] = s->hit;
     b[7] = s->acc & s->hit;
     b[8] = (uint8_t)(s->probability | (r >> 1) << 7);
+    b[9] = (uint8_t)st_cont(s);
 }
-static int ps_step_unpack(step_t *s, const uint8_t *b)
+static int ps_goes(const uint8_t *b) { return (b[4] >> 3 & 3u) == PS_GOES; }   /* (its 10th byte follows) */
+static int ps_step_unpack(step_t *s, const uint8_t *b, uint32_t goes)   /* (goes: that 10th byte, 0 none) */
 {
     uint32_t meta, nd = 0, j;
     for (j = 0; j < 4u; j++) {
@@ -88,7 +92,13 @@ static int ps_step_unpack(step_t *s, const uint8_t *b)
     s->vel = b[5] & 127u; meta |= (b[5] & 128u) << 1;
     s->hit = b[6]; s->acc = b[7];
     s->probability = b[8] & 127u; meta |= (b[8] & 128u) << 2;
-    if ((meta & 255u) > 127u || s->n > 4u || s->time > ST_REST || s->probability >= COND_FIRST + NCOND || (s->acc & ~s->hit))
+    if (s->time == PS_GOES) {
+        if (!goes || goes >= 1u << (s->n & 7u))
+            return 0;
+        s->time = ST_NOTE;
+        st_set_cont(s, goes);
+    }
+    if ((meta & 255u) > 127u || s->n > 4u || st_kind(s) > ST_REST || s->probability >= COND_FIRST + NCOND || (s->acc & ~s->hit))
         return 0;
     step_set_ratchet(s, (meta >> 8) + 1u);
     step_set_nudge(s, (int32_t)(nd ^ 8u) - 8);
@@ -97,14 +107,14 @@ static int ps_step_unpack(step_t *s, const uint8_t *b)
 #define PS_V2 0xFEu                                     /* (Dah) the compact steps follow (else: their count) */
 static int ps_step_empty(const step_t *s)
 {
-    return s->time == ST_REST && !s->n && !s->hit && !s->vel && !s->flags && !s->probability;
+    return st_kind(s) == ST_REST && !s->n && !s->hit && !s->vel && !s->flags && !s->probability;
 }
 static const uint8_t PS_TIMING[5] = {P_SLEN, P_SDIV, P_SSWING, P_SGATE, P_SQNT};
 /* (Dah) the steps st[NSTEP], compact, into b: the bytes */
 static uint32_t ps_steps_put(const step_t *st, uint8_t *b)
 {
     uint32_t i = 0, pos = 0, j;
-    uint8_t r[9];
+    uint8_t r[10];
     while (i < NSTEP) {
         const step_t *s = &st[i];
         if (ps_step_empty(s)) {
@@ -114,7 +124,7 @@ static uint32_t ps_steps_put(const step_t *st, uint8_t *b)
         ps_step_pack(s, r);
         if (i < NSTEP - 1u && r[4] == (ST_TIE << 3) && !(r[0] | r[1] | r[2] | r[3] | r[5] | r[6] | r[7] | r[8])) {   /* a plain
                                                          * TIE: a run (not from the last step: 0xC0 | 63 is the end) */
-            uint8_t q[9];
+            uint8_t q[10];
             for (j = i + 1u; j < NSTEP; j++) {
                 ps_step_pack(&st[j], q);
                 if (memcmp(q, r, 9))
@@ -140,6 +150,8 @@ static uint32_t ps_steps_put(const step_t *st, uint8_t *b)
             memcpy(b + pos, r, 9);
             pos += 9u;
         }
+        if (ps_goes(r))
+            b[pos++] = r[9];
         i++;
     }
     b[pos++] = 0xFFu;
@@ -157,7 +169,7 @@ static int ps_steps_get(const uint8_t *b, uint32_t n, uint32_t *pos, step_t *st)
         return 0;
     if (b[p] != PS_V2) {                                /* the older form: a count, then index + 9 bytes each */
         for (c = b[p++]; c--;) {
-            if (p + 10u > n || b[p] >= NSTEP || !ps_step_unpack(&st[b[p]], b + p + 1u))
+            if (p + 10u > n || b[p] >= NSTEP || !ps_step_unpack(&st[b[p]], b + p + 1u, 0))   /* (never a note going on) */
                 return 0;
             p += 10u;
         }
@@ -167,6 +179,7 @@ static int ps_steps_get(const uint8_t *b, uint32_t n, uint32_t *pos, step_t *st)
     for (p++; p < n && b[p] != 0xFFu;) {
         uint32_t l = b[p++], at = l & 63u, j;
         uint8_t r[9];
+        const uint8_t *q = r;
         if ((l & 0xC0u) == 0xC0u) {                     /* a run of TIEs */
             if (p >= n || at + b[p] > NSTEP || !b[p])
                 return 0;
@@ -189,13 +202,14 @@ static int ps_steps_get(const uint8_t *b, uint32_t n, uint32_t *pos, step_t *st)
             if (x) {
                 r[6] = b[p++]; r[7] = b[p++]; r[8] = b[p++];
             }
-            if (!ps_step_unpack(&st[at], r))
-                return 0;
         } else {                                        /* a whole one */
-            if (l >= NSTEP || p + 9u > n || !ps_step_unpack(&st[at], b + p))
+            if (l >= NSTEP || p + 9u > n)
                 return 0;
+            q = b + p;
             p += 9u;
         }
+        if (l < 0xC0u && !ps_step_unpack(&st[at], q, ps_goes(q) && p < n ? b[p++] : 0u))
+            return 0;
     }
     if (p >= n)
         return 0;
@@ -824,11 +838,11 @@ static uint32_t ps_info(uint32_t k, uint32_t num, uint8_t *slen)
             pick.time = ST_REST;
             for (i = c * len / NSTEP; i < (c + 1u) * len / NSTEP; i++) {
                 const step_t *st = i < NSTEP ? &ps_st[i] : &pgc_get(k, num, i / NSTEP)->st[i % NSTEP];
-                if (st->time == ST_NOTE && (st->n || st->hit)) {
+                if (st_kind(st) == ST_NOTE && (st->n || st->hit)) {
                     pick = *st;
                     break;
                 }
-                if (st->time == ST_TIE && pick.time == ST_REST)
+                if (st_kind(st) == ST_TIE && st_kind(&pick) == ST_REST)
                     pick = *st;
             }
             ps_st[c] = pick;

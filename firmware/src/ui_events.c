@@ -57,7 +57,7 @@ static const char *ev_chance_fmt(char *b, int32_t v)
 /* a NUDGE that plays: the track's QUANTIZE OFF, a note step, not ratcheted (seq.c seq_tick) */
 static int ev_nudge_plays(const track_t *t, const step_t *s)
 {
-    return t->p[P_SQNT] != 1 && s->time == ST_NOTE && (s->n || s->hit) && step_ratchet(s) == 1u;
+    return t->p[P_SQNT] != 1 && st_kind(s) == ST_NOTE && (s->n || s->hit) && step_ratchet(s) == 1u;
 }
 /* "+3" "-8" "0" (b holds 4) */
 static void ev_nudge_fmt(char *b, int32_t v)
@@ -70,7 +70,7 @@ static void ev_nudge_fmt(char *b, int32_t v)
  * the cursor step, one storage. A step takes them where they play: a NOTE step (notes or
  * hits); CHANCE a TIE too (a failed roll cuts the held note). A REST or an empty step none (nothing to hear) */
 static const uint8_t SD_KIND[4] = {EVK_CHANCE, EVK_RATCH, EVK_NUDGE, EVK_VEL};
-static int sd_takes(const step_t *s, uint32_t k) { return step_on(s) || (k == EVK_CHANCE && s->time == ST_TIE); }
+static int sd_takes(const step_t *s, uint32_t k) { return step_on(s) || (k == EVK_CHANCE && st_kind(s) == ST_TIE); }
 
 
 /* ---- (Dah) the page: four lanes ---- */

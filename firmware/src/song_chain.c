@@ -203,8 +203,9 @@ static __attribute__((noinline)) void chain_apply(void)
         track_t *t = &trk[i];
         uint32_t s = ok && i < trk_count() ? r->slot[i] : CHAIN_SILENT;   /* (the buffer not ready: silent) */
         chain.lane[i] = (uint8_t)s;
-        if (!(s != CHAIN_SILENT && t->seq_hold && t->seq_n))
-            seq_release(t);                             /* (Dah: a SLIDE over the section's start held: it slides) */
+        if (!(s != CHAIN_SILENT && (t->seq_hold || (t->seq_keep & 15u)) && t->seq_n))
+            seq_release(t);                             /* (Dah: a SLIDE over the section's start held: it slides;
+                                                         * overlaps: a note going on into its first step goes on) */
         if (s != CHAIN_SILENT && ok)
             motion_restore_keep(t, &chain.source[b].motion);   /* (Dah: its curves go on from where they are) */
         else

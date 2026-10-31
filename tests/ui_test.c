@@ -4182,10 +4182,13 @@ static int pr_columns_match(const track_t *t, uint32_t *nbars)
 {
     uint32_t i, r, j, len = (uint32_t)t->p[P_SLEN], base = ui.bank * 16u;
     int ok = 1;
+    pr_set_t ps;                                         /* (overlaps: what sounds at each step, ui_graph.c pr_walk) */
+    pr_walk(t, base, len, &ps);
     for (i = 0; i < 16u && base + i < len; i++) {
-        uint32_t want = 0, got = 0, s = pr_src(t, base + i, len);
-        for (j = 0; s < NSTEP && j < 4u + NLANE; j++) {
-            int32_t n = pr_note(&t->step[s], j), rr = (int32_t)proll.lo + PR_ROWS - 1 - n;
+        uint32_t want = 0, got = 0;
+        pr_next(&ps, ui_st(t, base + i), base + i);
+        for (j = 0; j < ps.n; j++) {
+            int32_t n = ps.note[j], rr = (int32_t)proll.lo + PR_ROWS - 1 - n;
             if (n >= 0 && rr >= 0 && rr < PR_ROWS) want |= 1u << rr;
         }
         for (r = 0; r < PR_ROWS; r++)

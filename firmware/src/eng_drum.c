@@ -279,7 +279,7 @@ static uint32_t drum_stack_note(const track_t *t, uint32_t note);
 static uint32_t step_lanes(const step_t *s)
 {
     uint32_t m = 0, i;
-    if (s->time != ST_NOTE)
+    if (st_kind(s) != ST_NOTE)
         return 0;
     for (i = 0; i < s->n && i < 4u; i++)
         m |= 1u << drum_lane(s->note[i]);
@@ -296,7 +296,7 @@ static uint32_t step_accents(const step_t *s) { return s->flags & SF_ACCENT ? st
 static void step_to_grid(step_t *s)
 {
     uint32_t i, k = 0;
-    if (s->time != ST_NOTE)
+    if (st_kind(s) != ST_NOTE)
         return;
     for (i = 0; i < s->n && i < 4u; i++) {
         uint32_t l = drum_lane(s->note[i]);
@@ -308,6 +308,7 @@ static void step_to_grid(step_t *s)
     for (i = k; i < 4u; i++)
         s->note[i] = 0;
     s->n = (uint8_t)k;
+    st_set_cont(s, 0);                           /* (a kit's notes never go on) */
     if (!k && (s->flags & SF_ACCENT)) {
         s->acc |= s->hit;
         s->flags &= (uint8_t)~SF_ACCENT;

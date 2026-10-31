@@ -171,18 +171,55 @@ static uint32_t hv_base(const track_t *t, int sel)
 }
 static int32_t prv_x(uint32_t i) { return PR_X0 + (int32_t)(i * 195u / prv_cols()); }   /* (column i's left: x 35 .. 230) */
 
-static int32_t pr_note(const step_t *st, uint32_t j)   /* the step's note j (0..3), then its lane hits (-1: none) */
+/* (overlaps) the bars sounding at a step: each note (then the lane hits) with the step it started on (src) and at: bit 0
+ * accented, 1 a hit, 2 its step slides out. A TIE carries them all on, a NOTE step its notes going on (core.h st_cont:
+ * those sounding) beside the ones it starts */
+#define PR_N (4u + NLANE)
+typedef struct { uint8_t n, note[PR_N], at[PR_N]; uint16_t src[PR_N]; } pr_set_t;
+static void pr_next(pr_set_t *p, const step_t *s, uint32_t si)     /* p: at the step before si -> at si */
 {
-    if (j < 4u)
-        return j < st->n ? st->note[j] : -1;
-    return (st->hit >> (j - 4u)) & 1u ? DRUM_LANE_NOTE[j - 4u] : -1;
+    pr_set_t o = *p;
+    uint32_t c = st_cont(s), k, j, a;
+    if (st_kind(s) == ST_TIE)
+        return;
+    p->n = 0;
+    if (st_kind(s) != ST_NOTE)
+        return;
+    a = ((s->flags & SF_ACCENT) ? 1u : 0u) | ((s->flags & SF_SLIDE) && step_ratchet(s) == 1u ? 4u : 0u);
+    for (k = 0; k < s->n && k < 4u; k++) {
+        if ((c >> k) & 1u) {                        /* (going on: as it was, if it sounds) */
+            for (j = 0; j < o.n && (o.note[j] != s->note[k] || (o.at[j] & 2u)); j++)
+                ;
+            if (j < o.n) {
+                p->note[p->n] = o.note[j], p->at[p->n] = o.at[j], p->src[p->n++] = o.src[j];
+            }
+            continue;
+        }
+        p->note[p->n] = s->note[k], p->at[p->n] = (uint8_t)a, p->src[p->n++] = (uint16_t)si;
+    }
+    for (k = 0; k < NLANE; k++)
+        if ((s->hit >> k) & 1u) {
+            p->note[p->n] = DRUM_LANE_NOTE[k];
+            p->at[p->n] = (uint8_t)(a | 2u | ((s->acc >> k) & 1u));
+            p->src[p->n++] = (uint16_t)si;
+        }
 }
-static uint32_t pr_src(const track_t *t, uint32_t si, uint32_t len)   /* the step whose notes sound at si (LEN_MAX: none) */
+/* .. the bars sounding before step si (LEN len): from the last step before that says them all (a REST, a NOTE step
+ * with none going on; round the loop), on */
+static void pr_walk(const track_t *t, uint32_t si, uint32_t len, pr_set_t *p)
 {
     uint32_t k;
-    for (k = 0; k < len && ui_st(t, si)->time == ST_TIE; k++)
-        si = (si + len - 1u) % len;
-    return step_on(ui_st(t, si)) ? si : LEN_MAX;
+    const step_t *s;
+    p->n = 0;
+    for (k = 1; k < len; k++) {
+        s = ui_st(t, (si + len - k) % len);
+        if (st_kind(s) == ST_REST || (st_kind(s) == ST_NOTE && !st_cont(s)))
+            break;
+    }
+    if (k == len)
+        k = len - 1u;                               /* (none: from the step after si, from nothing) */
+    for (; k > 0; k--)
+        pr_next(p, ui_st(t, (si + len - k) % len), (si + len - k) % len);
 }
 /* the rows lit by keys held on the selected track (bit r: row r from the top) */
 static uint32_t pr_held(void)
@@ -206,12 +243,13 @@ static void pr_follow(const track_t *t)
     int snap = ui.force || !proll.init || proll.trk != song.sel || ui.frame != proll.frame + 1u || (ui_prefs & PREF_ANIM_OFF);
     if (proll.init && proll.frame == ui.frame)
         return;
+    pr_set_t ps;
+    if (base < len)
+        pr_walk(t, base, len, &ps);
     for (i = 0; i < nc && base + i < len; i++) {
-        uint32_t s = pr_src(t, base + i, len);
-        for (j = 0; s < LEN_MAX && j < 4u + NLANE; j++) {
-            int32_t n = pr_note(ui_st(t, s), j);
-            if (n < 0)
-                continue;
+        pr_next(&ps, ui_st(t, base + i), base + i);
+        for (j = 0; j < ps.n; j++) {
+            int32_t n = ps.note[j];
             lo = n < lo ? n : lo;
             hi = n > hi ? n : hi;
         }
@@ -246,28 +284,19 @@ static void pr_split(int32_t x, int32_t y, int32_t w, int32_t h, uint16_t c, uin
 }
 /* the bars of step s in column x (in its RATCH parts, hits; a TIE's carried bars: 1): a 1 px edge mark for a note
  * out of view; first: row y of the step's first note */
-static void pr_bars(const step_t *st, int32_t x, int32_t w, uint16_t c, int acc_all, int32_t *first, uint32_t hits)
+static void pr_bar(int32_t n, int acc, int32_t x, int32_t w, uint16_t c, int32_t *first, uint32_t hits)
 {
-    uint32_t j;
-    int32_t ybot = PR_Y0 + PR_ROWS * PR_RH;
-    for (j = 0; j < 4u + NLANE; j++) {
-        int32_t n = pr_note(st, j), y;
-        int acc;
-        if (n < 0)
-            continue;
-        acc = acc_all || (j >= 4u && ((st->acc >> (j - 4u)) & 1u));
-        y = pr_row_y(n);
-        if (*first < -1000)
-            *first = y;
-        if (y < PR_Y0)
-            pr_split(x, PR_Y0, w, 1, c, hits);
-        else if (y >= ybot)
-            pr_split(x, ybot - 1, w, 1, c, hits);
-        else if (acc)
-            pr_split(x, y, w, PR_RH, c == T_ACCENT ? c : T_TEXT, hits);
-        else
-            pr_split(x, y + 1, w, PR_RH - 2, c, hits);
-    }
+    int32_t ybot = PR_Y0 + PR_ROWS * PR_RH, y = pr_row_y(n);
+    if (*first < -1000)
+        *first = y;
+    if (y < PR_Y0)
+        pr_split(x, PR_Y0, w, 1, c, hits);
+    else if (y >= ybot)
+        pr_split(x, ybot - 1, w, 1, c, hits);
+    else if (acc)
+        pr_split(x, y, w, PR_RH, c == T_ACCENT ? c : T_TEXT, hits);
+    else
+        pr_split(x, y + 1, w, PR_RH - 2, c, hits);
 }
 static void graph_roll(const track_t *t, uint16_t c)
 {
@@ -340,29 +369,44 @@ static void graph_roll(const track_t *t, uint16_t c)
         int32_t x = prv_x(t->seq_idx - base);
         cv_rect(x + 1, PR_Y0, prv_x(t->seq_idx - base + 1u) - x - 1, ybot - PR_Y0, ux_mix(T_SURF, T_TEXT, 22));
     }
+    pr_set_t ps;
+    if (ncol)
+        pr_walk(t, base, len, &ps);
     for (i = 0; i < ncol; i++) {                      /* the notes */
-        uint32_t si = base + i, s = pr_src(t, si, len), nx = (si + 1u) % len;
-        const step_t *st, *ns;
+        uint32_t si = base + i, nx = (si + 1u) % len, j, k;
+        const step_t *st;
         step_t nst;
-        int32_t x = prv_x(i), y = -10000, w = prv_x(i + 1u) - x;
-        uint16_t col;
-        if (s == LEN_MAX)
+        int32_t x = prv_x(i), y = -10000, w = prv_x(i + 1u) - x, nd = 0, ny = -1;
+        uint32_t hits = 1u;
+        uint16_t col = c;
+        st = ui_st(t, si);
+        pr_next(&ps, st, si);
+        if (!ps.n)
             continue;                                 /* a REST, empty, or a TIE after one */
-        nst = *ui_st(t, nx);                          /* (a copy: another page read after it would move it) */
-        ns = &nst;
-        st = ui_st(t, s);
-        col = s == ui.cursor || si == ui.cursor ? T_ACCENT : c;
-        if (s == si) {                                /* (Dah) where it plays: its NUDGE as QUANTIZE leaves it, the bar
+        for (j = 0; j < ps.n; j++)
+            if (ps.src[j] == si) {                    /* (Dah) where it plays: its NUDGE as QUANTIZE leaves it, the bar
                                                          * moved that much of a column (OFF: as played, ON: on the grid) */
-            int32_t nd = seq_nudge(t, st) * w / NUDGE_DIV;
-            pr_bars(st, x + nd + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, col, (st->flags & SF_ACCENT) != 0u,
-                    &y, step_ratchet(st));
+                nd = seq_nudge(t, st) * w / NUDGE_DIV;
+                hits = step_ratchet(st);
+                break;
+            }
+        nst = *ui_st(t, nx);                          /* (a copy: another page read after it would move it) */
+        for (k = 0; k < nst.n && k < 4u && ((st_cont(&nst) >> k) & 1u); k++)
+            ;                                         /* (the note it slides into: the first starting there) */
+        if (st_kind(&nst) == ST_NOTE && k < nst.n && k < 4u)
+            ny = nst.note[k];
+        for (j = 0; j < ps.n; j++) {                  /* each note: from its step (a TIE's, one going on: through the gap) */
+            uint16_t cj = ps.src[j] == ui.cursor || si == ui.cursor ? T_ACCENT : c;
+            if (!j)
+                col = cj;
+            if (ps.src[j] == si)
+                pr_bar(ps.note[j], ps.at[j] & 1u, x + nd + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, cj, &y, hits);
+            else
+                pr_bar(ps.note[j], ps.at[j] & 1u, x - 1, w, cj, &y, 1u);
         }
-        else                                          /* a TIE: the bars on through the gap before */
-            pr_bars(st, x - 1, w, col, (st->flags & SF_ACCENT) != 0u, &y, 1u);
-        if ((st->flags & SF_SLIDE) && step_ratchet(st) == 1u &&   /* (a ratcheted step never slides out) */
-            ns->time == ST_NOTE && ns->n && y >= PR_Y0 && y < ybot) {
-            int32_t ny = clamp(pr_row_y(ns->note[0]), PR_Y0, ybot - PR_RH), x0 = x + w / 2, x1 = x + w + 2, xx, py = y;
+        if ((ps.at[0] & 4u) && ny >= 0 && y >= PR_Y0 && y < ybot) {   /* (a ratcheted step never slides out) */
+            int32_t x0 = x + w / 2, x1 = x + w + 2, xx, py = y;
+            ny = clamp(pr_row_y(ny), PR_Y0, ybot - PR_RH);
             for (xx = x0; xx <= x1; xx++) {             /* (Dah) the slide as FL draws it: the note's bar bending into
                                                          * the next one's, a ramp as thick, in its colour */
                 int32_t cy = y + (ny - y) * (xx - x0) / (x1 - x0), lo = cy < py ? cy : py, hi = cy > py ? cy : py;
@@ -1250,14 +1294,14 @@ static const uint8_t *sg_pic(uint32_t k, uint32_t s, uint32_t *sl)
     *sl = sgp.e[b].sl;
     p = sgp.e[b].p;
     for (i = 0; i < *sl; i++)                          /* the notes' range */
-        for (j = 0; ps_st[i].time == ST_NOTE && j < ps_st[i].n && j < 4u; j++) {
+        for (j = 0; st_kind(&ps_st[i]) == ST_NOTE && j < ps_st[i].n && j < 4u; j++) {
             lo = ps_st[i].note[j] < lo ? ps_st[i].note[j] : lo;
             hi = ps_st[i].note[j] > hi ? ps_st[i].note[j] : hi;
         }
     for (i = 0; i < 2u * *sl; i++) {                   /* (twice round: a TIE at the start carries the end's note) */
         const step_t *t = &ps_st[i % *sl];
         uint32_t m = 0;
-        if (t->time == ST_NOTE && (t->n || t->hit) && step_chance(t)) {
+        if (st_kind(t) == ST_NOTE && (t->n || t->hit) && step_chance(t)) {
             if (drum || !t->n)
                 for (j = 0; j < NLANE; j++)
                     m |= t->hit >> j & 1u ? (uint32_t)BAND[j] << (drum ? 0 : 1) : 0u;
@@ -1265,7 +1309,7 @@ static const uint8_t *sg_pic(uint32_t k, uint32_t s, uint32_t *sl)
                 m |= 1u << (hi > lo ? ((t->note[j] - lo) * 5u + (hi - lo) / 2u) / (hi - lo) : 2u);
             cur = m ? m : 2u;
             m = cur | ((t->flags & SF_ACCENT) || (t->acc & t->hit) ? SGP_ACC : SGP_NOTE);
-        } else if (t->time == ST_TIE && cur)
+        } else if (st_kind(t) == ST_TIE && cur)
             m = cur | SGP_TIE;
         else
             cur = 0;
@@ -2012,10 +2056,10 @@ static void pt_mini(uint32_t num, int32_t x0, int32_t y0, int32_t w, int32_t h, 
         cv_rect(x0, y + dh / 2, w * (int32_t)len / NSTEP, 1, T_LINE);
         for (i = 0; i < len; i++) {
             int32_t x = x0 + (int32_t)i * w / NSTEP;
-            if (s[i].time == ST_NOTE && (s[i].n || s[i].hit)) {
+            if (st_kind(&s[i]) == ST_NOTE && (s[i].n || s[i].hit)) {
                 cv_rect(x, y, dw, dh, tc);
                 on = 1;
-            } else if (s[i].time == ST_TIE && on)
+            } else if (st_kind(&s[i]) == ST_TIE && on)
                 cv_rect(x - 1, y, dw + 1, dh, ux_mix(bg, tc, 50));
             else
                 on = 0;
@@ -2835,9 +2879,9 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
     }
     for (i = 1; i <= p0; i++) {                        /* a TIE at the view's start: carried from a note before it? */
         step_t q = *ui_st(R->t, (p0 + len - i) % len);
-        if (q.time != ST_TIE) {
-            carry = q.time == ST_NOTE && (q.n || q.hit);
-            if (carry && ui_st(R->t, p0 % len)->time == ST_TIE) {
+        if (st_kind(&q) != ST_TIE) {
+            carry = st_kind(&q) == ST_NOTE && (q.n || q.hit);
+            if (carry && st_kind(ui_st(R->t, p0 % len)) == ST_TIE) {
                 srcv = q;                               /* (Dah: its notes, every one, carried into the view) */
                 src = &srcv;
             }
@@ -2871,12 +2915,15 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
                 under = ux_mix(bg, T_TEXT, 22);
                 cv_rect(bx - 1, top - 1, cw + 2, sh + 2, under);
             }
-            if (st->time == ST_NOTE && (st->n || st->hit)) {
+            if (st_kind(st) == ST_NOTE && (st->n || st->hit)) {
                 int acc = (st->flags & SF_ACCENT) || (st->acc & st->hit);
                 if (roll && st->n && hi >= lo) {
                     for (j = 0; j < st->n && j < 4; j++) {
                         int32_t ny = hi > lo ? top + sh - nh - (st->note[j] - lo) * (sh - nh) / (hi - lo) : top + sh / 2 - 1;
-                        cv_rect(bx, ny, cw, nh, acc && !R->mute ? T_TEXT : tc);
+                        if ((st_cont(st) >> j) & 1u)        /* (overlaps) one going on: carried, as a TIE's */
+                            cv_rect(bx - 1, ny, cw + 2, nh, ux_mix(under, tc, 55));
+                        else
+                            cv_rect(bx, ny, cw, nh, acc && !R->mute ? T_TEXT : tc);
                         cy[j] = ny;
                     }
                     ncy = j;
@@ -2885,12 +2932,12 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
                 carry = 1;
                 continue;
             }
-            if (st->time == ST_TIE && carry) {         /* carried on: fainter (the roll: each note at its height) */
+            if (st_kind(st) == ST_TIE && carry) {         /* carried on: fainter (the roll: each note at its height) */
                 for (j = 0; j < (roll ? ncy : 1); j++)
                     cv_rect(bx - 1, roll ? cy[j] : top + sh / 2 - 1, cw + 2, roll ? nh : 2, ux_mix(under, tc, 55));
             } else
                 cv_rect(bx, top + sh - 1, cw, 1, T_LINE);
-            carry = st->time == ST_TIE && carry;
+            carry = st_kind(st) == ST_TIE && carry;
         }
     }
 }

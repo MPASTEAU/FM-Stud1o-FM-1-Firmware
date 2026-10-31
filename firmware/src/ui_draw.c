@@ -1900,7 +1900,7 @@ static void draw_columns_in(void)
                 fmt_int(sn, (int32_t)note_len(TSEL, ui.cursor));
                 draw_column(2, "LEN", sn, "", VAL(2u), -1, ICON_AUTO);
             } else {
-                draw_column(2, "TIME", TIME_N[st->time % 3u], "", VAL(2u), -1, ICON_AUTO);
+                draw_column(2, "TIME", TIME_N[st_kind(st) % 3u], "", VAL(2u), -1, ICON_AUTO);
             }
             draw_column(3, "FLAG", FLAG_N[(st->flags & SF_ACCENT ? 1u : 0u) | (st->flags & SF_SLIDE ? 2u : 0u)], "",
                         VAL(3u), -1, ICON_AUTO);

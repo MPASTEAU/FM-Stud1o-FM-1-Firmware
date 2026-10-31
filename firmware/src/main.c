@@ -1641,7 +1641,7 @@ static void lf_loose(uint32_t k, uint32_t v)
         step_t *s = &t->step[i];
         uint32_t h = (i * 2654435761u + (k * 8u + v) * 40503u) >> 13;
         int32_t n = LEAN[k] + (int32_t)(h % (2u * DRIFT[k] + 1u)) - (int32_t)DRIFT[k];
-        if (s->time != ST_NOTE || (!s->n && !s->hit))
+        if (st_kind(s) != ST_NOTE || (!s->n && !s->hit))
             continue;
         if (k == 1u && (s->hit & (1u << 1 | 1u << 6)))
             n = 3 + (int32_t)(h % 3u);                                      /* the rim, the snare: late */

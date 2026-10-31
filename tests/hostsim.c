@@ -626,7 +626,8 @@ static int rec_test(void)
     input_off(t1, 64);
     rec_run_to(t1, 12, 50);
     ok_half = rec_step_is(t1, 10, ST_NOTE, 1, 64) && rec_step_is(t1, 11, ST_TIE, 0, 0) && rec_step_is(t1, 12, ST_REST, 0, 0);
-    /* (d) a two-key chord held 2.6 steps: ties until the last key is up */
+    /* (d) a two-key chord, 67 let go early in step 14, 71 held 2.6 steps (POLY, overlaps: each key its own): 13 the
+     * chord, 14 71 going on alone (67 ends at 13's end), 15 TIE */
     rec_run_to(t1, 13, 5);
     input_on(t1, 67, 100);
     input_on(t1, 71, 100);
@@ -635,8 +636,9 @@ static int rec_test(void)
     rec_run_to(t1, 15, 60);
     input_off(t1, 71);
     rec_run_to(t1, 0, 10);
-    ok_chord = t1->step[13].n == 2u && rec_step_is(t1, 14, ST_TIE, 0, 0) && rec_step_is(t1, 15, ST_TIE, 0, 0) &&
-               t1->step[0].time != ST_TIE;
+    ok_chord = t1->step[13].n == 2u && t1->step[13].time == ST_NOTE && t1->step[14].n == 1u && t1->step[14].note[0] == 71u &&
+               st_kind(&t1->step[14]) == ST_NOTE && st_cont(&t1->step[14]) == 1u && rec_step_is(t1, 15, ST_TIE, 0, 0) &&
+               st_kind(&t1->step[0]) != ST_TIE;
     /* (e) LEN 4, held for 10 steps: the note fills the pattern (3 TIEs), not more */
     rec_run_to(t2, 1, 10);
     input_on(t2, 55, 100);
@@ -671,7 +673,7 @@ static int rec_test(void)
     printf("tracks: recording lengths: held 3.3 steps -> NOTE TIE TIE (the 4th step put back) %s; 0.3 step -> one "
            "step %s; past the middle of the next -> NOTE TIE %s\n", ok_len ? "ok" : "FAIL", ok_short ? "ok" : "FAIL",
            ok_half ? "ok" : "FAIL");
-    printf("tracks: recording lengths: a chord ties until its last key %s; capped at LEN 4 %s; MONO legato A..B -> "
+    printf("tracks: recording lengths: a chord, each key its own length %s; capped at LEN 4 %s; MONO legato A..B -> "
            "A TIE B TIE %s\n", ok_chord ? "ok" : "FAIL", ok_cap ? "ok" : "FAIL", ok_mono ? "ok" : "FAIL");
     printf("tracks: recording with SWING 50 %%: nearest swung step (0.55 into a long step stays, 0.42 into a short "
            "one moves on) %s\n", ok_swing ? "ok" : "FAIL");

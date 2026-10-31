@@ -2,7 +2,8 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* 1.5's sequencer edits (Discussions #178, #173), on the real sequencer and UI sources (with the stubs of tests/ui_test.c):
  *   LEN   SEQ > STEP's KNOB 3 on a note (ui.c note_set_len): right writes clean TIE steps after it (a REST or an empty
- *         step; a chord ties whole), stopping at the next step holding notes (NOTE AHEAD; a REST's kept notes too) and
+ *         step; a chord ties whole), stopping at the next step holding notes (NOTE AHEAD; a REST's kept notes too; POLY:
+ *         on beside them, each note its own, core.h st_cont) and
  *         at LEN (END OF PATTERN); left turns its last TIEs back into RESTs, never the note itself; nothing else moves
  *         (the steps' locks stay); on a REST / TIE / empty step KNOB 3 is TIME as
  *         before; the DRUM grid's KNOB 3 is still HIT. Played: one note-on, held to the end of its last TIE (as a
@@ -101,15 +102,28 @@ static int len_edit(void)
     ok = note_len(t, 1) == 4u && is_tie(&t->step[4]);
     ui.msg_t = 0;
     turn(EN_K3, 1);
-    ok &= note_len(t, 1) == 4u && msg_is("NOTE AHEAD") && !memcmp(&t->step[5], &ref[5], sizeof ref[5]);
-    bad += check("  it stops before the next note (NOTE AHEAD, that note kept)", ok);
+    ok &= note_len(t, 1) == 5u && !msg_is("NOTE AHEAD") && t->step[5].n == 3u && t->step[5].note[0] == 67u &&
+          st_cont(&t->step[5]) == 6u && note_len(t, 5) == 1u;
+    bad += check("  POLY (overlaps): on over the next note, beside it (step 6: 67 starting, the chord going on)", ok);
     turn(EN_K3, -1);
-    ok = note_len(t, 1) == 3u && is_rest(&t->step[4]);
+    ok = note_len(t, 1) == 4u && !memcmp(&t->step[5], &ref[5], sizeof ref[5]);
+    turn(EN_K3, -1);
+    ok &= note_len(t, 1) == 3u && is_rest(&t->step[4]);
     for (i = 0; i < 6u; i++)
         turn(EN_K3, -1);
     ok &= note_len(t, 1) == 1u && is_rest(&t->step[2]) && is_rest(&t->step[3]) && t->step[1].n == 2u &&
           t->step[1].time == ST_NOTE;
     bad += check("  left: its last TIEs become RESTs, down to LEN 1 (the note stays)", ok);
+    t = roll(1);                                      /* MONO: it stops before the next note, as ever */
+    t->p[P_VOICE] = V_MONO;
+    put(t, 1, 60, ST_NOTE);
+    put(t, 3, 67, ST_NOTE);
+    memcpy(ref, t->step, sizeof ref);
+    turn(EN_K3, 1);
+    ui.msg_t = 0;
+    turn(EN_K3, 1);
+    bad += check("  MONO: it stops before the next note (NOTE AHEAD, that note kept)", note_len(t, 1) == 2u &&
+                 msg_is("NOTE AHEAD") && !memcmp(&t->step[3], &ref[3], sizeof ref[3]));
 
     t = roll(15);                                     /* the last step of LEN */
     put(t, 15, 60, ST_NOTE);

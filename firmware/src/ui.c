@@ -642,7 +642,7 @@ static void page_entered(void)
     ui.force = 1;
 }
 
-static int step_on(const step_t *st) { return st->time == ST_NOTE && (st->n || st->hit); }
+static int step_on(const step_t *st) { return st_kind(st) == ST_NOTE && (st->n || st->hit); }
 /* 1.5.1 (#199): a step whose CHANCE, RATCH or NUDGE is off its default: marked on the roll and the grid (ui_graph.c).
  * Not VEL: every recorded step has one */
 static int step_detailed(const step_t *st)
@@ -664,27 +664,137 @@ static void step_clear(step_t *st)
  * (inside LEN, no wrap); SEQ > STEP's KNOB 3 on a note sets it (ui_input.c step_edit). Longer: the steps after it
  * become clean TIEs (a REST or an empty step; it stops at the next step holding notes or hits, a REST's kept ones too,
  * which stays, and at LEN);
- * shorter: its last TIEs become RESTs (step_clear). The steps' locks stay. Returns the length it got */
+ * shorter: its last TIEs become RESTs (step_clear). The steps' locks stay. Returns the length it got.
+ * (overlaps) Each note its own: the notes starting at the step (none: those going on there), each made that long, the
+ * steps after it carrying it on beside what they hold (core.h st_cont; a TIE made explicit where the notes differ). On a
+ * POLY track a note goes on over the steps of others (beside them, a chord of 4 at most); it stops at a step starting it
+ * again, at hits, at a REST's kept notes. MONO / LEGATO / UNISON (and a kit): at the next step holding notes, as ever */
 static const step_t *ui_st(const track_t *t, uint32_t i);   /* (pstore.c: step i of LEN_MAX, page 0 on the track) */
 static step_t *ed_st(track_t *t, uint32_t i);
+static uint32_t ui_len(const track_t *t) { return (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX); }
+/* the notes the pattern sounds at step i (as its steps say, chance aside), into q (their number): from the last step
+ * before that says them all (a REST, a NOTE step with none going on), on (none in the whole loop: from nothing) */
+static uint32_t pat_at(const track_t *t, uint32_t i, uint8_t *q)
+{
+    uint32_t len = ui_len(t), k, n = 0;
+    uint8_t w[4];
+    const step_t *s;
+    i %= len;
+    for (k = 0; k + 1u < len; k++) {
+        s = ui_st(t, (i + len - k) % len);
+        if (st_kind(s) == ST_REST || (st_kind(s) == ST_NOTE && !st_cont(s)))
+            break;
+    }
+    for (k++; k--;) {
+        memcpy(w, q, 4);
+        n = pat_after(ui_st(t, (i + len - k) % len), w, n, q);
+    }
+    return n;
+}
+/* the notes of NOTE step i a length is about (x, their number): those starting there, else those going on there */
+static uint32_t note_mine(const track_t *t, uint32_t i, uint8_t *x)
+{
+    const step_t *s = ui_st(t, i);
+    uint32_t c = st_cont(s), k, n = 0;
+    for (k = 0; k < s->n && k < 4u; k++)
+        if (!((c >> k) & 1u) || c == (1u << s->n) - 1u)
+            x[n++] = s->note[k];
+    return n;
+}
+/* note x sounding at step i: its steps from i on; to (not x): the steps carrying it on after i say `to` now (the note
+ * starting at i moved: a TIE carries it by itself) */
+static uint32_t note_run(track_t *t, uint32_t i, uint32_t x, uint32_t to)
+{
+    uint32_t len = ui_len(t), n = 1, k;
+    for (; i + n < len; n++) {
+        const step_t *s = ui_st(t, i + n);
+        if (st_kind(s) == ST_TIE)
+            continue;
+        for (k = 0; k < s->n && k < 4u && (s->note[k] != x || !((st_cont(s) >> k) & 1u)); k++)
+            ;
+        if (st_kind(s) != ST_NOTE || k == s->n || k == 4u)
+            break;
+        if (to != x)
+            ed_st(t, i + n)->note[k] = (uint8_t)to;
+    }
+    return n;
+}
 static uint32_t note_len(const track_t *t, uint32_t i)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), n = 1;
-    while (i + n < len && ui_st(t, i + n)->time == ST_TIE)
-        n++;
+    uint8_t x[4];
+    uint32_t m = note_mine(t, i, x), k, n = 1, r;
+    if (!m) {                                       /* (hits only) */
+        while (i + n < ui_len(t) && st_kind(ui_st(t, i + n)) == ST_TIE)
+            n++;
+        return n;
+    }
+    for (k = 0; k < m; k++)
+        n = (r = note_run((track_t *)t, i, x[k], x[k])) > n ? r : n;
     return n;
+}
+/* note x goes on into step j (on) or no longer (off), q (*qn) the notes sounding before it, then after it: j beside its
+ * other notes (a TIE there made explicit, back to a TIE when it is that), the TIE after it made explicit when x came in
+ * (it would carry x on). 0: not done (x starts at j, j full) */
+static int pat_cont(track_t *t, uint32_t j, uint32_t x, int on, uint8_t *q, uint32_t *qn)
+{
+    uint32_t len = ui_len(t), np, k, ok = 1;
+    uint8_t po[4], w[4];
+    step_t *s = ed_st(t, j);
+    if (on && (st_kind(s) == ST_REST || (st_kind(s) == ST_NOTE && !s->n && !s->hit)))
+        step_clear(s);                              /* (an empty step: a clean one) */
+    np = pat_after(s, q, *qn, po);
+    st_explicit(s, q, *qn);
+    for (k = 0; k < s->n && s->note[k] != x; k++)
+        ;
+    if (on && ((k < s->n && !((st_cont(s) >> k) & 1u)) || k == 4u))
+        ok = 0;
+    else if (on) {
+        if (k == s->n)
+            s->note[s->n++] = (uint8_t)x;
+        st_set_cont(s, st_cont(s) | 1u << k);
+    } else if (k < s->n && ((st_cont(s) >> k) & 1u))
+        st_del(s, k);
+    st_canon(s, q, *qn);
+    if (st_kind(s) == ST_REST && !s->n && !s->hit)
+        step_clear(s);
+    memcpy(w, q, 4);
+    *qn = pat_after(s, w, *qn, q);
+    if (ok && on && j + 1u < len)
+        st_hold_off(ed_st(t, j + 1u), po, np);
+    return (int)ok;
 }
 static uint32_t note_set_len(track_t *t, uint32_t i, uint32_t want)
 {
-    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), n = note_len(t, i);
-    for (; n > want && n > 1u; n--)
-        step_clear(ed_st(t, i + n - 1u));
-    for (; n < want && i + n < len && !ui_st(t, i + n)->n && !ui_st(t, i + n)->hit; n++) {
-        step_t *s = ed_st(t, i + n);
-        step_clear(s);
-        s->time = ST_TIE;
+    uint32_t len = ui_len(t), n = note_len(t, i), k, m, l, j, qn, got = 1;
+    uint8_t x[4], q[4], w[4];
+    if (!(m = note_mine(t, i, x)) || trk_vmode(t) != V_POLY || drum_track(t)) {   /* (hits only; MONO: as ever) */
+        for (; n > want && n > 1u; n--)
+            step_clear(ed_st(t, i + n - 1u));
+        for (; n < want && i + n < len && !ui_st(t, i + n)->n && !ui_st(t, i + n)->hit; n++) {
+            step_t *s = ed_st(t, i + n);
+            step_clear(s);
+            s->time = ST_TIE;
+        }
+        return n;
     }
-    return n;
+    for (k = 0; k < m; k++) {                       /* each note: from step i on, what sounds (q) along */
+        l = note_run(t, i, x[k], x[k]);
+        qn = pat_at(t, i, q);
+        for (j = i + 1u; j < i + l; j++)
+            if (j >= i + want)
+                (void)pat_cont(t, j, x[k], 0, q, &qn);
+            else {
+                memcpy(w, q, 4);
+                qn = pat_after(ui_st(t, j), w, qn, q);
+            }
+        for (l = l < want ? l : want; l < want && i + l < len; l++) {
+            const step_t *s = ui_st(t, i + l);
+            if (s->hit || (st_kind(s) == ST_REST && s->n) || !pat_cont(t, i + l, x[k], 1, q, &qn))
+                break;
+        }
+        got = l > got ? l : got;
+    }
+    return got;
 }
 
 /* ------------------------------------------------------- the DRUM grid --- */
@@ -795,6 +905,7 @@ static void grid_own(step_t *s, uint32_t l)
     for (k = j; k < 4u; k++)
         s->note[k] = 0;
     s->n = (uint8_t)j;
+    st_set_cont(s, 0);                           /* (a kit's notes never go on) */
 }
 
 /* lane l of step i: on 1, off 0, toggled 2 */
@@ -804,7 +915,7 @@ static void grid_hit(track_t *t, uint32_t i, uint32_t l, uint32_t on)
     uint32_t b = 1u << (l % NLANE);
     if (on == 2u)
         on = !(step_lanes(s) & b);
-    if (s->time != ST_NOTE) {                    /* a REST or a TIE: an empty step (nothing to turn off) */
+    if (st_kind(s) != ST_NOTE) {                    /* a REST or a TIE: an empty step (nothing to turn off) */
         if (!on)
             return;
         step_clear(s);

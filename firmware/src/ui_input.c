@@ -270,7 +270,7 @@ static uint32_t step_leds(void)
         chain_busy())
         return 0;
     st = ui_st(t, ui.cursor);
-    if (!st->n || st->time == ST_REST)
+    if (!st->n || st_kind(st) == ST_REST)
         return 0;
     for (k = 0; k < 27u; k++) {
         note = kb_map(t, k);
@@ -1110,10 +1110,21 @@ static void step_edit(uint32_t slot, int32_t steps)
             st->time = ST_NOTE;
             break;
         }
-        for (i = 0; i < st->n; i++)
-            st->note[i] = (uint8_t)clamp(st->note[i] + steps, 1, 127);
-        st->time = ST_NOTE;
-        last_note = st->note[0];
+        {                                                 /* (overlaps) the notes starting there (none: all,
+                                                           * struck there now), each carried on after it as it moves */
+            uint32_t c = st_cont(st), all = c == (1u << st->n) - 1u, was;
+            for (i = 0; i < st->n; i++) {
+                if (!all && ((c >> i) & 1u))
+                    continue;
+                was = st->note[i];
+                st->note[i] = (uint8_t)clamp(st->note[i] + steps, 1, 127);
+                (void)note_run(TSEL, ui.cursor, was, st->note[i]);   /* (overlaps: carried on as it moves) */
+                st = ed_st(TSEL, ui.cursor);
+            }
+            if (st_kind(st) != ST_NOTE || all)
+                st->time = ST_NOTE;
+            last_note = st->note[0];
+        }
         break;
     case 2:                                               /* TIME; a note's LEN (1.5: ui.c note_set_len) */
         if (step_on(st)) {
@@ -1123,7 +1134,7 @@ static void step_edit(uint32_t slot, int32_t steps)
                 ui_message(ui.cursor + n < (uint32_t)clamp(TSEL->p[P_SLEN], 1, LEN_MAX) ? "NOTE AHEAD" : "END OF PATTERN");
             break;
         }
-        st->time = (uint8_t)clamp((int32_t)st->time + (steps > 0 ? 1 : -1), ST_NOTE, ST_REST);
+        st->time = (uint8_t)clamp((int32_t)st_kind(st) + (steps > 0 ? 1 : -1), ST_NOTE, ST_REST);
         break;
     default: {                                            /* FLAG: - / ACC / SLD / A+S */
         uint32_t f = (st->flags & SF_ACCENT ? 1u : 0u) | (st->flags & SF_SLIDE ? 2u : 0u);
@@ -1580,8 +1591,8 @@ static uint32_t oct_taps(uint32_t pressed, int here)
  * EDIT leaves it */
 static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_t n)
 {
-    uint32_t i, j, k;
-    if (st->time != ST_NOTE) {
+    uint32_t i, j;
+    if (st_kind(st) != ST_NOTE) {
         st->n = 0;
         st->time = ST_NOTE;
     }
@@ -1591,9 +1602,7 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
         for (i = 0; i < n; i++)
             for (j = 0; j < st->n; j++)
                 if (st->note[j] == ch[i]) {
-                    for (k = j; k + 1u < st->n; k++)
-                        st->note[k] = st->note[k + 1u];
-                    st->n--;
+                    st_del(st, j);                     /* (overlaps: the others going on as they did) */
                     break;
                 }
         if (!st->n)
@@ -1603,6 +1612,7 @@ static void step_toggle(const track_t *t, step_t *st, const uint8_t *ch, uint32_
     if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* MONO / LEG / UNI: one note */
         st->note[0] = ch[0];
         st->n = 1;
+        st->time = ST_NOTE;
         return;
     }
     for (i = 0; i < n && st->n < 4u; i++) {

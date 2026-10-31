@@ -30,7 +30,7 @@ static uint32_t qz_nudged(const track_t *t)
 {
     uint32_t i, n = 0;
     for (i = 0; i < tl_len(t); i++)
-        n += step_nudge(ui_st(t, i)) != 0 && ui_st(t, i)->time == ST_NOTE;
+        n += step_nudge(ui_st(t, i)) != 0 && st_kind(ui_st(t, i)) == ST_NOTE;
     return n;
 }
 /* OCT+ APPLY: each NUDGE as it plays now written, QUANTIZE OFF; 0 = nothing to do (said why) */

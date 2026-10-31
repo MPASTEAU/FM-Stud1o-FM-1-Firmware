@@ -181,6 +181,13 @@ enum { V_POLY, V_MONO, V_LEGATO, V_UNISON };   /* P_VOICE */
 
 /* ------------------------------------------------- tracks, the song --- */
 enum { ST_NOTE, ST_TIE, ST_REST };
+/* (overlaps) the step's time: bits 0..1 ST_NOTE / ST_TIE / ST_REST (st_kind), bits 4..7 on a NOTE step its notes that go
+ * on (st_cont: bit k, note k sounds on from the step before, a TIE of that note alone; the others start there). A TIE
+ * still carries on every note sounding, as always: a note held from step 1 beside one pressed at step 4 is a NOTE, TIEs,
+ * a NOTE of the two (the first going on), TIEs, a NOTE of the second going on alone. A note said to go on that does not
+ * sound before (an edit cut it) stays silent, as a TIE after a REST. 0 in every older pattern */
+#define ST_KIND 3u
+#define ST_CONT_SH 4u
 #define SF_ACCENT 1u
 #define SF_SLIDE 2u
 #define SF_RATCH_SH 3u                   /* RATCH: the hits of a NOTE step - 1 (0..3: x1..x4, seq.c seq_ratchet); */
@@ -189,13 +196,32 @@ enum { ST_NOTE, ST_TIE, ST_REST };
 typedef struct {                 /* acid-style step: up to 4 notes (POLY), time, accent, slide; drum hits */
     uint8_t note[4];
     uint8_t n;                   /* notes in use, 0 = empty */
-    uint8_t time;                /* ST_NOTE / ST_TIE / ST_REST */
+    uint8_t time;                /* ST_NOTE / ST_TIE / ST_REST, its notes going on (ST_CONT_SH) */
     uint8_t flags;               /* SF_ACCENT | SF_SLIDE | SF_RATCH */
     uint8_t vel;
     uint8_t hit;                 /* bit l: lane l hits (its GM note, on any engine): the DRUM grid */
     uint8_t acc;                 /* bit l: that hit is accented (velocity 127) */
     uint8_t probability;         /* 0 = legacy 100%; 1..100 = percent, 101 = silent; 1.5.5: 102..112 a condition */
 } step_t;
+static uint32_t st_kind(const step_t *s) { return s->time & ST_KIND; }
+static uint32_t st_cont(const step_t *s)          /* bit k: note k goes on (a NOTE step only, its n notes) */
+{
+    return (s->time & ST_KIND) == ST_NOTE ? (uint32_t)(s->time >> ST_CONT_SH) & ((1u << (s->n & 7u)) - 1u) & 15u : 0u;
+}
+static void st_set_cont(step_t *s, uint32_t m)
+{
+    s->time = (uint8_t)((s->time & ST_KIND) | (m & ((1u << (s->n & 7u)) - 1u) & 15u) << ST_CONT_SH);
+}
+static void st_del(step_t *s, uint32_t k)        /* note k out (the others down one, each going on as it did) */
+{
+    uint32_t c = st_cont(s), i, lo = (1u << k) - 1u;
+    if (k >= s->n)
+        return;
+    for (i = k; i + 1u < s->n; i++)
+        s->note[i] = s->note[i + 1u];
+    s->note[--s->n] = 0;                         /* (a clean slot: a step emptied so is a clean REST / TIE) */
+    st_set_cont(s, (c & lo) | (c >> 1 & ~lo));
+}
 typedef struct {                 /* a step as formats 1..4 (projects to FUN4) stored it: no hits */
     uint8_t note[4];
     uint8_t n, time, flags, vel;
@@ -363,10 +389,13 @@ typedef struct track {
     uint32_t esync_k[3];         /* ATK's step, DEC's and REL's coefficient (Q16) this block (voice.c esync_coef) */
     uint8_t spread_on;           /* SPREAD this block (fx.c mix_part, voice.c track_render) */
     uint8_t tie_over;            /* (Dah) the notes held over to the next step's (a TIE into another note): no glide */
-    uint8_t rsv_sz[7];           /* (sizeof(track_t) a multiple of 16: below; Dah: 7 with its 13 parameters, tie_over) */
+    uint8_t seq_keep;            /* (overlaps) bits 0..3: seq_notes[k] goes on into the next step (its own TIE: no release
+                                  * at the gate); 4..7: it went on into this one (ends half a step after the gate) */
+    uint8_t rsv_sz[6];           /* (sizeof(track_t) a multiple of 16: below; Dah: 7 with its 13 parameters, tie_over) */
 #else
     uint8_t tie_over;            /* (Dah) as above */
-    uint8_t rsv_sz[8];           /* (sizeof(track_t) a multiple of 16: below; Dah: 8) */
+    uint8_t seq_keep;            /* (overlaps) as above */
+    uint8_t rsv_sz[7];           /* (sizeof(track_t) a multiple of 16: below; Dah: 8) */
 #endif
     int16_t armp, aholdp;        /* P_AMODE / P_AHOLD as last seen by the ISR */
     /* engine switch (voice.c engine_block): the old engine's voices fade out, then it switches */

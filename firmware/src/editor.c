@@ -300,11 +300,15 @@ static const param_desc_t *ed_desc(uint32_t scope, uint32_t id, int16_t **vp)
  * editor that does not know them saw 100 there and writes it back); another chance replaces it */
 static void ed_step_put(step_t *st, const uint8_t *a, uint32_t na)
 {
-    uint32_t i;
-    st->n = (uint8_t)(a[0] > 4u ? 4u : a[0]);
-    for (i = 0; i < 4u; i++)
+    uint32_t i, c = st_cont(st);
+    for (i = 0; i < 4u; i++) {                           /* (overlaps: a note the same in its place goes on as it did) */
+        c &= ~((uint32_t)(st->note[i] != (a[1 + i] & 0x7Fu)) << i);
         st->note[i] = a[1 + i] & 0x7Fu;
+    }
+    st->n = (uint8_t)(a[0] > 4u ? 4u : a[0]);
     st->time = (uint8_t)(a[5] > ST_REST ? ST_REST : a[5]);
+    if (st->time == ST_NOTE)
+        st_set_cont(st, c);
     st->flags = (uint8_t)((a[6] & (SF_ACCENT | SF_SLIDE)) | (st->flags & (SF_RATCH | SF_NUDGE)));
     st->vel = a[7] & 0x7Fu;
     if (na >= 11u) {
@@ -323,7 +327,7 @@ static void ed_step_reply(const step_t *st)              /* the same 15 bytes */
     ed_b(st->n);
     for (i = 0; i < 4u; i++)
         ed_b(st->note[i]);
-    ed_b(st->time);
+    ed_b(st_kind(st));                                   /* (overlaps: a NOTE step, each of its notes as a start) */
     ed_b(st->flags & (SF_ACCENT | SF_SLIDE));
     ed_b(st->vel);
     ed_b(st->hit & 0x7Fu);
