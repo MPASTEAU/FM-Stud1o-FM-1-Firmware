@@ -605,6 +605,144 @@ static int rec_keeps(void)
     return bad;
 }
 
+/* (Dah) inside a chord going on (step recording, POLY): a key on a note going on ends it at the step before (the
+ * others go on), a new note starts there and lasts as long as the notes it joins; heard so through the sequencer */
+static int goes(const step_t *s, uint32_t x)            /* NOTE step s carries x on from the step before */
+{
+    uint32_t k;
+    for (k = 0; k < s->n && k < 4u && s->note[k] != x; k++)
+        ;
+    return st_kind(s) == ST_NOTE && k < s->n && ((st_cont(s) >> k) & 1u);
+}
+static int starts(const step_t *s, uint32_t x)
+{
+    return has_note(s, x) && !goes(s, x);
+}
+typedef struct { uint8_t ons, offs, on_at, off_at; } ce_t;
+static void ce_listen(track_t *t, const uint32_t *nt, ce_t *h, uint32_t nn)   /* one loop of 16 from step 1 */
+{
+    uint32_t va[NVOICE], i, j, b, loops = 0, last = 0;
+    uint8_t vg[NVOICE];
+    memset(h, 0, nn * sizeof *h);
+    transport_req = 1;
+    blocks(1);
+    for (i = 0; i < NVOICE; i++) {
+        va[i] = t->v[i].age;
+        vg[i] = 0;
+    }
+    for (b = 0; b < 40000u && loops < 1u; b++) {
+        blocks(1);
+        if (t->seq_idx < last)
+            loops++;
+        last = t->seq_idx;
+        for (i = 0; i < NVOICE; i++) {
+            const voice_t *v = &t->v[i];
+            uint8_t g = (uint8_t)(v->active && v->gate), on = v->age != va[i], off = vg[i] && !g;
+            for (j = 0; j < nn && nt[j] != v->note; j++)
+                ;
+            if (j < nn && on && !loops && !h[j].ons++)  /* (the loop's: the next one's start aside) */
+                h[j].on_at = (uint8_t)last;
+            if (j < nn && off && !on && !h[j].offs++)
+                h[j].off_at = (uint8_t)(loops ? 16u + last : last);
+            va[i] = v->age;
+            vg[i] = g;
+        }
+    }
+    transport_req = 2;
+    blocks(8);
+    frame();
+}
+static int chord_inside(void)
+{
+    int bad = 0, ok;
+    uint32_t i, k, kE = 7, kC = 5, kG = 10, kA = 99, C, E, G, A, nt[4];
+    ce_t h[4];
+    track_t *t = rule_setup();
+    C = kb_map(t, kC); E = kb_map(t, kE); G = kb_map(t, kG);
+    for (k = 0; k < 27u; k++)
+        if (kb_map(t, k) == E + 5u)
+            kA = k;
+    A = E + 5u;
+    t->p[P_SLEN] = 16;
+    t->step[0] = (step_t){{(uint8_t)C, (uint8_t)E, (uint8_t)G}, 3, ST_NOTE, 0, 100};
+    for (i = 1; i < 16u; i++)
+        t->step[i].time = ST_TIE;
+    ok = kA < 27u && note_len(t, 0) == 16u;
+    cursor_set(9); frame();
+    tap_k(kE);
+    ok &= st_kind(&t->step[8]) == ST_TIE && t->step[9].n == 2u && goes(&t->step[9], C) && goes(&t->step[9], G) &&
+          !has_note(&t->step[9], E);
+    for (i = 10; i < 16u; i++)
+        ok &= st_kind(&t->step[i]) == ST_TIE;
+    ok &= note_run(t, 0, C, C) == 16u && note_run(t, 0, E, E) == 9u && note_run(t, 0, G, G) == 16u;
+    bad += check("inside a chord C E G (LEN 16), E pressed at step 10: E ends at 9, C G go on to 16", ok);
+    tap_k(kA);
+    ok = t->step[9].n == 3u && goes(&t->step[9], C) && goes(&t->step[9], G) && starts(&t->step[9], A) &&
+         note_run(t, 9, A, A) == 7u && note_run(t, 0, C, C) == 16u;
+    for (i = 10; i < 16u; i++)
+        ok &= st_kind(&t->step[i]) == ST_TIE;
+    bad += check("  then A pressed there: A starts at 10, going on with C G to 16", ok);
+    nt[0] = C; nt[1] = E; nt[2] = G; nt[3] = A;
+    ce_listen(t, nt, h, 4);
+    ok = h[0].ons == 1u && h[0].on_at == 0u && h[2].ons == 1u && h[2].on_at == 0u && h[1].ons == 1u &&
+         h[1].on_at == 0u && h[1].offs == 1u && (h[1].off_at == 8u || h[1].off_at == 9u) && h[3].ons == 1u &&
+         h[3].on_at == 9u;
+    ok &= h[3].offs == 1u && h[3].off_at >= 15u;       /* (C G: on into the next loop's C E G) */
+    if (!ok)
+        for (k = 0; k < 4u; k++)
+            printf("  note %u: %u on (step %u), %u off (step %u)\n", nt[k], h[k].ons, h[k].on_at + 1u, h[k].offs, h[k].off_at + 1u);
+    bad += check("  played: C G A E on once each (C E G at 1, A at 10), E off at 9's end, A at 16's", ok);
+    cursor_set(9); frame();
+    tap_k(kA);
+    ok = t->step[9].n == 2u && !has_note(&t->step[9], A) && note_run(t, 0, C, C) == 16u;
+    for (i = 10; i < 16u; i++)
+        ok &= st_kind(&t->step[i]) == ST_TIE;
+    tap_k(kG);
+    ok &= t->step[9].n == 1u && goes(&t->step[9], C) && note_run(t, 0, G, G) == 9u && note_run(t, 0, C, C) == 16u;
+    cursor_set(12); frame();
+    key_down(kC); key_down(kE); frame(); key_up(kC); key_up(kE); frame();   /* (both at once: C ends, E comes in) */
+    ok &= t->step[12].n == 1u && starts(&t->step[12], E) && note_run(t, 12, E, E) == 4u && note_run(t, 0, C, C) == 12u;
+    for (i = 13; i < 16u; i++)
+        ok &= st_kind(&t->step[i]) == ST_TIE;
+    bad += check("  A again: out; G: ends at 9; C and E together at 13: C ends, E comes in to 16", ok);
+    cursor_set(0); frame();
+    tap_k(kC);
+    ok = only(&t->step[0], C, 0) && note_run(t, 0, C, C) == 1u && note_run(t, 12, E, E) == 4u;
+    bad += check("  on the chord's first step the rules as before: C alone pressed, C alone (the others' tails out)", ok);
+    {   /* full: 4 notes going on, a fifth: 4 NOTES MAX */
+        uint32_t kx = 99;
+        track_defaults_steps(t);
+        t->step[0] = (step_t){{(uint8_t)C, (uint8_t)E, (uint8_t)G, (uint8_t)A}, 4, ST_NOTE, 0, 100};
+        for (i = 1; i < 16u; i++)
+            t->step[i].time = ST_TIE;
+        for (k = 0; k < 27u; k++)
+            if (kb_map(t, k) != C && kb_map(t, k) != E && kb_map(t, k) != G && kb_map(t, k) != A && kb_map(t, k) != KB_SILENT)
+                kx = k;
+        cursor_set(5); frame();
+        tap_k(kx);
+        ok = msg_is("4 NOTES MAX") && st_kind(&t->step[5]) == ST_TIE && note_run(t, 0, C, C) == 16u;
+        bad += check("  4 notes going on, a fifth pressed: 4 NOTES MAX, nothing changed", ok);
+    }
+    {   /* a long pattern: the chord over page 0's end (LEN 128, steps 61 .. 72), E ends at 66 */
+        track_defaults_steps(t);
+        t->p[P_SLEN] = 128;
+        *ed_st(t, 60) = (step_t){{(uint8_t)C, (uint8_t)E, (uint8_t)G}, 3, ST_NOTE, 0, 100};
+        for (i = 61; i < 72u; i++) {
+            step_t *s = ed_st(t, i);
+            memset(s, 0, sizeof *s);
+            s->time = ST_TIE;
+        }
+        cursor_set(66); frame();
+        tap_k(kE);
+        tap_k(kA);
+        ok = note_run(t, 60, C, C) == 12u && note_run(t, 60, E, E) == 6u && starts(ui_st(t, 66), A) &&
+             note_run(t, 66, A, A) == 6u && st_kind(ui_st(t, 72)) != ST_TIE;
+        bad += check("  a long pattern (LEN 128, a chord over page 0's end): E ends at 66, A from 67 to 72", ok);
+    }
+    press(B_REC);
+    return bad;
+}
+
 /* (Dah) SAVE > FILE: KNOB 1 the projects' list, OPEN COPY NEW on KNOB 2..4; DELETE is OCT- held 0.5 s (the dialog;
  * NO PROJECT, STOP FIRST), its release no tap; the footer says it */
 static int file_page(void)
@@ -798,7 +936,7 @@ static int fine_len(void)
 
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows() + song_grid() + save_hold() + fine_len();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + chord_inside() + file_page() + del_track_hold() + rec_rows() + song_grid() + save_hold() + fine_len();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

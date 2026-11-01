@@ -1628,18 +1628,118 @@ static uint32_t oct_taps(uint32_t pressed, int here)
  *   on an empty step, a REST, a TIE: its note written;
  *   two keys or more held together (or a CHRD key's chord): the step is exactly their notes (POLY, up to 4; MONO the
  *     last key's), never a removal: E taken out by its key, G pressed while E is still held: E and G.
- * Notes going on there from a step before (another note held over it, core.h st_cont) stay beside them. With CHRD on
- * a key writes what it sounds, as live recording does: POLY its chord, MONO the chord's root. (CHORD ENTRY ADD no longer
- * changes step recording) */
+ * With CHRD on a key writes what it sounds, as live recording does: POLY its chord, MONO the chord's root. (CHORD ENTRY
+ * ADD no longer changes step recording)
+ * (Dah) Inside notes going on (POLY: the cursor step carries notes sounding from a step before, a TIE or a NOTE step
+ * with some going on, core.h st_cont), the chord changes there, a note at a time: each note of the gesture (each key,
+ * each note of a CHRD key's chord, several keys together each by itself, a gesture mixing both doing both) toggles:
+ *   a note going on there: it ends at the step before (from here on out, its TIEs made explicit without it: entry_end),
+ *     the others going on;
+ *   a note starting there: out, with its tail (st_cut);
+ *   a new note: it starts there beside them and lasts as long as the notes it joins (to where the longest of them
+ *     ended when the gesture began: ent.run), each going on its own (entry_add); the step full: "4 NOTES MAX" */
 static struct {
     uint8_t keys, n, note[4];
+    uint8_t cn, cx[4];                                  /* the notes going on into the step */
+    uint16_t run;                                       /* .. the longest one's steps from it */
     step_t orig;                                        /* the step as the gesture found it */
 } ent __attribute__((section(".pool")));
+/* the notes the cursor step carries on from the step before (POLY), into x (their number) */
+static uint32_t entry_carried(track_t *t, const step_t *o, uint8_t *x)
+{
+    uint8_t q[4];
+    uint32_t qn, n = 0, k, j, c;
+    if (!ui.cursor || trk_vmode(t) != V_POLY || drum_track(t) || st_kind(o) == ST_REST)
+        return 0;
+    qn = pat_at(t, ui.cursor - 1u, q);
+    for (k = 0, c = st_kind(o) == ST_TIE ? 15u : st_cont(o); k < (st_kind(o) == ST_TIE ? qn : o->n) && k < 4u; k++) {
+        uint32_t y = st_kind(o) == ST_TIE ? q[k] : o->note[k];
+        for (j = 0; ((c >> k) & 1u) && j < qn && q[j] != y; j++)
+            ;
+        if (((c >> k) & 1u) && j < qn)
+            x[n++] = (uint8_t)y;
+    }
+    return n;
+}
+/* note x going on into step i ends at the step before: every step carrying it on from i out without it */
+static void entry_end(track_t *t, uint32_t i, uint32_t x)
+{
+    uint8_t q[4];
+    uint32_t qn = pat_at(t, i - 1u, q), n = note_run(t, i, x, x), j;
+    for (j = i; j < i + n; j++)
+        (void)pat_cont(t, j, x, 0, q, &qn);
+}
+/* note x starts at step i beside the notes going on there, for l steps (each going on); 0: the step full */
+static int entry_add(track_t *t, uint32_t i, uint32_t x, uint32_t l)
+{
+    uint8_t q[4], po[4], w[4];
+    uint32_t len = ui_len(t), qn = pat_at(t, i - 1u, q), np, j, c;
+    step_t *s = ed_st(t, i);
+    np = pat_after(s, q, qn, po);                       /* (what the TIE after it carries on without x) */
+    st_explicit(s, q, qn);
+    if (s->n >= 4u) {
+        st_canon(s, q, qn);
+        return 0;
+    }
+    c = st_cont(s);
+    s->note[s->n++] = (uint8_t)x;
+    st_set_cont(s, c);                                  /* (x starts here) */
+    memcpy(w, q, 4);
+    qn = pat_after(s, w, qn, q);
+    for (j = i + 1u; j < i + l && j < len; j++) {
+        const step_t *u = ui_st(t, j);
+        if (u->hit || (st_kind(u) == ST_REST && u->n) || !pat_cont(t, j, x, 1, q, &qn))
+            break;
+    }
+    if (j == i + 1u && j < len)
+        st_hold_off(ed_st(t, j), po, np);
+    return 1;
+}
+static void entry_inside(track_t *t)
+{
+    uint32_t i = ui.cursor, len = ui_len(t), k, j, c, full = 0;
+    *ed_st(t, i) = ent.orig;                            /* (the gesture's earlier keys undone at the step; after it
+                                                         * each note's edit is the same again) */
+    for (k = 0; k < ent.n; k++) {
+        const step_t *s = ui_st(t, i);
+        for (j = 0; j < ent.cn && ent.cx[j] != ent.note[k]; j++)
+            ;
+        if (j < ent.cn) {
+            entry_end(t, i, ent.note[k]);
+            continue;
+        }
+        for (j = 0; j < s->n && j < 4u && s->note[j] != ent.note[k]; j++)
+            ;
+        if (j < s->n && j < 4u && st_kind(s) == ST_NOTE) {
+            uint8_t q[4];
+            uint32_t qn;
+            st_cut(t, ed_st, i, len, 1u << j);
+            qn = pat_at(t, i, q);
+            if (i + 1u < len)                           /* (the TIE st_cut made explicit: a TIE again, as it was) */
+                st_canon(ed_st(t, i + 1u), q, qn);
+        }
+    }
+    for (k = 0; k < ent.n; k++) {
+        for (j = 0; j < ent.cn && ent.cx[j] != ent.note[k]; j++)
+            ;
+        for (c = 0; j == ent.cn && c < ent.orig.n && c < 4u && ent.orig.note[c] != ent.note[k]; c++)
+            ;
+        if (j == ent.cn && (st_kind(&ent.orig) != ST_NOTE || c == ent.orig.n || c == 4u) &&
+            !entry_add(t, i, ent.note[k], ent.run))
+            full = 1;                                   /* (a new note: not one going on, nor one starting here) */
+    }
+    if (full)
+        ui_message("4 NOTES MAX");
+}
 static void entry_write(track_t *t, int single)
 {
     step_t *st = ed_st(t, ui.cursor);
     const step_t *o = &ent.orig;
     uint32_t m = st_starts(o), k, j;
+    if (ent.cn) {
+        entry_inside(t);
+        return;
+    }
     *st = *o;                                           /* (the gesture's earlier keys undone: their notes are in ent) */
     if (m)
         st_cut(t, ed_st, ui.cursor, ui_len(t), m);      /* (the notes starting there out, with their tails) */
@@ -1682,6 +1782,10 @@ static void seq_entry(uint32_t pressed)
             follow_hold();                                /* (1.6, #242) */
             ent.keys = ent.n = 0;
             ent.orig = *ed_st(t, ui.cursor);
+            ent.cn = (uint8_t)entry_carried(t, &ent.orig, ent.cx);
+            for (i = 0, ent.run = 1; i < ent.cn; i++)
+                if ((j = note_run(t, ui.cursor, ent.cx[i], ent.cx[i])) > ent.run)
+                    ent.run = (uint16_t)j;
         }
         n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root; Dah: MONO keys add as POLY's) */
         ent.keys++;
