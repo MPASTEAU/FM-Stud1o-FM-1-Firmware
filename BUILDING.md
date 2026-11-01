@@ -16,7 +16,7 @@ Five engines are in a git submodule (`firmware/engines/`, [Felucca-Engines](http
 MIT), so clone with `--recurse-submodules`:
 
 ```
-git clone --recurse-submodules git@github.com:MPASTEAU/FM-Stud1o-FM-1-Firmware.git
+git clone --recurse-submodules https://github.com/MPASTEAU/FM-Stud1o-FM-1-Firmware.git
 ```
 
 In a clone made without it, run `git submodule update --init` once. GitHub's "Download ZIP" and source archives
