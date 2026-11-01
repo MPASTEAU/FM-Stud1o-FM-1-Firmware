@@ -55,6 +55,46 @@ VERSION = None                      # FELUCCA_VERSION for release builds (defaul
 # stacks (firmware/hal/fm1_cpu1.S) linked and its waiting loop (.c1_text) checked; MENU > SYSTEM > 2ND CORE starts it
 # (OFF by default: one core, as 1.6). FELUCCA_CPU2=0: none of it is built (1.6's one-core code and RAM)
 CPU2 = os.environ.get("FELUCCA_CPU2") != "0"
+# FAST (an experiment, off: FELUCCA_FAST=a,b,..): functions run from RAM (app.ld .fast_text, copied with .ram_text at
+# boot), out of the flash cache both cores share; reached through pointers (engine_t's for the engines' renders).
+# FAST_COPY: the helpers they inline, copied into .fast_text (name.fast, called instead): this clang inlines nothing
+# across sections, and they must not call into the flash: NEAR (first in .text, app.ld .text.near) links (the linker
+# takes +-4 MiB) but the core lands 8 MiB off now and then. NOINLINE: helpers the flash's code then calls rather than
+# inlines (the flash's budget). Measured (ANALOG, GRAIN, PHYS in RAM, 2ND CORE ON): DARK -530, LONG CHORDS -880 us a
+# half; but with both cores in it the RAM code faults (core 1 and core 0, a jump into the data, a bus fault) about
+# every two minutes (one core: none in 3 minutes): so none by default
+FAST = [f for f in os.environ.get("FELUCCA_FAST", "").split(",") if f]
+FAST_COPY = [f for f in os.environ.get("FELUCCA_FAST_COPY", "").split(",") if f]
+NEAR = [f for f in os.environ.get("FELUCCA_NEAR", "").split(",") if f]   # (first in .text: see the top)
+NOINLINE = [f for f in os.environ.get("FELUCCA_NOINLINE", "").split(",") if f]
+
+
+def fast_ir(ll):
+    """FAST's functions into .fast_text, FAST_COPY's copied there (name.fast) for them; NOINLINE's not inlined"""
+    for f in NOINLINE:
+        ll, k = re.subn(r"^(define [^\n]*@" + re.escape(f) + r"\([^\n]*?\))( [^\n]*\{)$", r"\1 noinline\2", ll, flags=re.M)
+        if k != 1:
+            raise SystemExit(f"build: NOINLINE {f}: {k} definitions")
+    def body(name):
+        m = re.search(r"^define [^\n]*@" + re.escape(name) + r"\(.*?^\}$", ll, re.M | re.S)
+        if not m:
+            raise SystemExit(f"build: FAST {name}: no definition")
+        return m
+    for f in FAST_COPY:
+        b = re.sub(r"@" + re.escape(f) + r"\(", "@" + f + ".fast(", body(f).group(0), count=1)
+        b = re.sub(r"^define (?:(?:internal|dso_local|available_externally|linkonce_odr)\s+)*", "define internal ", b, count=1)
+        ll += "\n" + b + "\n"
+    for f in FAST + [c + ".fast" for c in FAST_COPY]:
+        m = body(f)
+        b = re.sub(r"^(define [^\n]*?)( \{)$", r'\1 section ".fast_text"\2', m.group(0), count=1, flags=re.M)
+        for c in FAST_COPY:
+            b = re.sub(r"(call [^\n]*?)@" + re.escape(c) + r"\(", r"\1@" + c + ".fast(", b)
+        ll = ll[:m.start()] + b + ll[m.end():]
+    for f in NEAR:
+        ll, k = re.subn(r"^(define [^\n]*@" + re.escape(f) + r"\([^\n]*?)( \{)$", r'\1 section ".text.near"\2', ll, flags=re.M)
+        if k != 1:
+            raise SystemExit(f"build: NEAR {f}: {k} definitions")
+    return ll
 
 
 def toolchain():
@@ -220,6 +260,9 @@ def build_app():
     if size:
         subprocess.run([sys.executable, SRC / "tools" / "size_fns.py", OUT / "felucca.ll", OUT / "felucca_size.ll"],
                        check=True)
+        if FAST or NOINLINE:        # the audio's hot code into RAM (app.ld .fast_text, after the flash driver's)
+            ll = fast_ir((OUT / "felucca_size.ll").read_text())
+            (OUT / "felucca_size.ll").write_text(ll)
         tc("cc", *[f for f in flags if not f.startswith(("-I", "-D", "-W"))], "-c",
            OUT / "felucca_size.ll", "-o", OUT / "felucca.o")
     elf = OUT / "felucca.elf"
@@ -266,7 +309,9 @@ def check(img, syms, dis, rt):
         errors.append(f"image starts with {img[:4].hex()}, not the entry stub")
     # RAM code runs with the flash off: no calls into XIP. The second core's waiting loop (.c1_text) calls only its
     # job, through the pointer core 0 handed it (a register: "call rN")
-    sect, rt_calls, c1_calls, c1_insns, rt_insns = None, [], [], 0, 0
+    sect, rt_calls, c1_calls, c1_insns, rt_insns, fast_insns = None, [], [], 0, 0, 0
+    m = re.search(r"^([0-9a-f]+) .*\s_rt_fast$", syms, re.M)
+    rt_fast = int(m.group(1), 16) if m else 1 << 32
     for ln in rt.splitlines():
         mm = re.match(r"^Disassembly of section (\S+):", ln)
         if mm:
@@ -278,6 +323,8 @@ def check(img, syms, dis, rt):
             c1_insns += 1
             if re.search(r"\bcall\b", ln) and not re.search(r"\bcall\s+r\d+\b", ln):
                 c1_calls.append(ln.strip())
+        elif int(LINE.match(ln).group(1), 16) >= rt_fast:
+            fast_insns += 1                         # (.fast_text: the audio's, runs with the flash on: calls allowed)
         else:
             rt_insns += 1
             if re.search(r"\bcall\b", ln):
@@ -285,7 +332,7 @@ def check(img, syms, dis, rt):
     if rt_calls:
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
-        notes.append(f".ram_text: {rt_insns} insns, no calls")
+        notes.append(f".ram_text: {rt_insns} insns, no calls; .fast_text: {fast_insns} insns")
     c1_syms = re.findall(r"\s(fm1_c1_\w+|_c1_ustack\w*|_c1_sstack\w*)$", syms, re.M)
     if not CPU2:                    # FELUCCA_CPU2=0: nothing of the second core (no stack, waiting loop, mailbox)
         if c1_insns or c1_syms:
