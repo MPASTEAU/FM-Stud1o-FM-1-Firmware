@@ -13,7 +13,7 @@
  *   hash                   the song this build powers on with: its audio hash only
  * The hashes of build and verify are equal when the project plays what the demo plays (every step, sound, mix, effect,
  * the SONG). Host only: nothing of it is in the firmware.
- *   cc -O1 -w -DDAH_DEMO_SONG=8 -Ibuild/gen -Ifirmware/src -o build/host/demo8 tools/fm1_demo_projects.c -lm */
+ *   cc -O1 -w -DDAH_DEMO_SONG=1 -Ibuild/gen -Ifirmware/src -o build/host/demo1 tools/fm1_demo_projects.c -lm */
 #include "../web/emu/felucca_web.c"
 
 /* (editor_backup.c's surroundings, as tests/backup_test.c has them: editor.c's packing and its transfer buffer) */

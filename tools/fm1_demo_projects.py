@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 """The demo songs as PROJECTS on an FM-1, with no program space (the device's build has no FELUCCA_DEMO: its flash is full).
 
-  fm1_demo_projects.py --build [--songs 8,7,...]    the projects' flash with the demos, build/demo_projects.img
+  fm1_demo_projects.py --build [--songs 1]    the projects' flash with the demos, build/demo_projects.img
   fm1_demo_projects.py --send [--port NAME] [--yes] that image onto the FM-1 (USB-MIDI)
 
 --build compiles tools/fm1_demo_projects.c once per song (the firmware for the host, as the emulator: main.c
@@ -36,8 +36,8 @@ SECTOR = 4096
 PFS_BYTES = 40 * SECTOR                                  # (projfs.c PFS_NSECT sectors)
 PFS_ID = 18                                              # (editor_backup.c ED_BK_PFS)
 PUT = 67                                                 # (editor.c ED_BACKUP_PUT)
-# main.c DAH_DEMO_SONG: the song, the project's name (12 characters, the NAME page's set); the project ids in this order
-SONGS = {8: "LO-FI", 7: "SHOWCASE", 6: "TIME", 5: "DARK", 4: "LONG CHORDS", 3: "SLOW", 2: "DEEP HOUSE", 1: "TRIP-HOP"}
+# main.c DAH_DEMO_SONG: the song (the trip-hop, the one kept), the project's name (12 characters, the NAME page's set); the project ids in this order
+SONGS = {1: "TRIP-HOP"}
 RC = {1: "invalid object", 2: "data failed validation", 3: "stop playback first", 4: "flash write failed",
       5: "start again (timed out, USB reset or a save meanwhile)"}
 

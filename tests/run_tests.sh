@@ -354,9 +354,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "metronome and count-in: beats sample for sample (internal and external clock), accent, level, MASTER, not in USB, count-in timing, notes onto step 1" "$OUT/click_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/persistence_test" tests/persistence_test.c -lm
     run "persistence: deferred settings, retry and failed-save rollback" "$OUT/persistence_test"
-    run "demo projects: the lo-fi and the showcase songs saved as projects, restored as backup object 18, opened, played as the demo" \
-        python3 tools/fm1_demo_projects.py --build --songs 8,7 --img "$OUT/demo_projects_test.img"
-    for song in 8 5; do                                 # the at-rest skips (fx.c FX_SKIP) against always running
+    run "demo projects: the trip-hop song saved as a project, restored as backup object 18, opened, played as the demo" \
+        python3 tools/fm1_demo_projects.py --build --songs 1 --img "$OUT/demo_projects_test.img"
+    for song in 1 0; do                                 # the at-rest skips (fx.c FX_SKIP) against always running
         for v in 0 1; do
             $CC -O1 -w -DDAH_DEMO_SONG=$song -DFX_SKIP=$v -DWEB_COST=0 -Ibuild/gen -Ifirmware/src -o "$OUT/skip$v" \
                 tests/skip_test.c -lm
@@ -366,7 +366,7 @@ if [ -f build/gen/felucca_tables.h ]; then
                 sh -c "\"$OUT/skip0\" \"$OUT/skip0.raw\" $rt && \"$OUT/skip1\" \"$OUT/skip1.raw\" $rt && cmp \"$OUT/skip0.raw\" \"$OUT/skip1.raw\""
         done
     done
-    for song in 8 5 1; do
+    for song in 1 0; do
         $CC -O1 -w -DDAH_DEMO_SONG=$song -Ibuild/gen -Ifirmware/src -o "$OUT/solo_test" tests/solo_test.c -lm
         run "SOLO / MUTE (song $song): a track out is off (no sends, no voices, the CPU down), solo = the others muted, no click" \
             "$OUT/solo_test"

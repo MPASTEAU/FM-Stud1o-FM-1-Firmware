@@ -4,7 +4,7 @@
  * gives, sample for sample: a demo song (the emulator's build, -DDAH_DEMO_SONG=N) played, stopped (the tails ring out,
  * the skips start), played again mid-tail, tracks muted and back, stopped for 30 s; both channels of every sample
  * written to OUT (raw int32); a second argument picks the reverb model. run_tests.sh builds it with FX_SKIP 0 and 1 and compares the two files.
- *   cc -O1 -w -DDAH_DEMO_SONG=8 -DFX_SKIP=0 -DWEB_COST=0 -Ibuild/gen -Ifirmware/src -o skip0 tests/skip_test.c -lm */
+ *   cc -O1 -w -DDAH_DEMO_SONG=1 -DFX_SKIP=0 -DWEB_COST=0 -Ibuild/gen -Ifirmware/src -o skip0 tests/skip_test.c -lm */
 #include "../web/emu/felucca_web.c"
 
 int main(int argc, char **argv)
