@@ -20,7 +20,8 @@
 #define FELUCCA_CDC 1            /* USB CDC-ACM serial console */
 #endif
 #ifndef FELUCCA_PROF
-#define FELUCCA_PROF FELUCCA_CDC /* the audio ISR's cost by stage, read with the console's `prof` (fx.c prf_lap) */
+#define FELUCCA_PROF 0           /* the audio ISR's cost by stage, read with the console's `prof` (fx.c prf_lap); off in the
+                                  * release (flash): FELUCCA_PROF=1 build.py for a measuring build */
 #endif
 #ifndef FELUCCA_UAC
 #define FELUCCA_UAC 1            /* USB audio input: the master output, 16-bit stereo 44.1 kHz (usb.c) */
