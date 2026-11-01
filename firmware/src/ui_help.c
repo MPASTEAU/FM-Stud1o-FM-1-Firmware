@@ -44,7 +44,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"PATTERN", H_SAVE},
     {"MY PRESETS", H_SAVE},
 };
-#define H_HOME "[HOME]HOLD: MENU"
+#define H_HOME "[OCT+]+SELECT: BPM[HOME]HOLD: MENU"   /* (Dah: the tempo, OCT+ held and SELECT turned) */
 #define H_LEVELS "[HOME]MIXER"
 #define H_GRID "[REC]STEPS[SEQ]RATCH"
 /* a layer's (LAYER_*): what its footer (LAYERS[].foot) does not say, after it where it fits */

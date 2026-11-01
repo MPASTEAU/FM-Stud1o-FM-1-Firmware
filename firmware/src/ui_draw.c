@@ -653,6 +653,9 @@ static void home_foot(void)
         kh[0] = (khint_t){KC_OCTUP, "ADD EFFECT"};
         n = 1u;
         ok = 1u;
+    } else if (!hk && help && (n = help_parse(help, kh, hp, sizeof hp)) != 0u) {   /* (Dah) HOME entered, HELP ON: its
+                                                         * hint a while (the tempo, the MENU), then its keys */
+        ok = 7u;
     } else if (hk < 5u) {
         kh[0] = KH[hk][0];
         kh[1] = KH[hk][1];
