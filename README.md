@@ -62,8 +62,8 @@ is not affiliated with or supported by Hügelton Instruments or M-VAVE.
 ## Quick start
 
 ```sh
-git clone --recurse-submodules git@github.com:MPASTEAU/FM-Stud1o.git
-cd FM-Stud1o
+git clone --recurse-submodules git@github.com:MPASTEAU/FM-Stud1o-FM-1-Firmware.git
+cd FM-Stud1o-FM-1-Firmware
 tools/get_toolchain.sh                         # JieLi toolchain -> ~/.jieli/toolchain
 # JieLi AC79 SDK in ~/fw-AC79_AIoT_SDK (see BUILDING.md), Docker running on macOS
 ./build.sh                                     # -> build/fm-stud1o.fwsc
