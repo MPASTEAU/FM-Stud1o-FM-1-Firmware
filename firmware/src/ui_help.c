@@ -13,6 +13,7 @@
 /* (Dah) never a knob (K1..K4: the cards say what they do), never SELECT, ALGORITHM or PRESETS: the keys and the
  * buttons only; a page with nothing else to say has no hint (the footer keeps its room) */
 static const char H_EDIT[] = "[EDIT]HOLD: ENGINES";
+static const char H_SAVE[] = "[SAVE]HOLD: SAVE THE PROJECT";
 static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ENV", "[ENV]ENV DEST"},
     {"ENV DEST", "[ENV]ENV"},
@@ -39,6 +40,9 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"ARP 2", "[ARP]ARP"},
     {"STEP", "[KEYS]WRITE[OCT+]HOLD: VIEW"},   /* (1.5.1: SEQ to DETAIL; Dah: EDIT no longer clears: OCT+ held the VIEW) */
     {"MIXER", "[HOME]CLOCK"},
+    {"FILE", H_SAVE},                                   /* (Dah) the SAVE pages: the quick save (ui_input.c save_quick) */
+    {"PATTERN", H_SAVE},
+    {"MY PRESETS", H_SAVE},
 };
 #define H_HOME "[HOME]HOLD: MENU"
 #define H_LEVELS "[HOME]MIXER"
