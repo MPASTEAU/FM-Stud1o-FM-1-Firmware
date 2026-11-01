@@ -338,6 +338,8 @@ static void test_motion(void)
         put_step(t, i, 1, NOTE, ST_NOTE, 0);
     t->p[P_SLEN] = 16;
     t->seq_active = 1;
+    trkx[0].home[0] = P_IMIX + 1;                       /* (Dah: automation and locks on HOME's knobs only: MIX and */
+    trkx[0].home[1] = P_ITYPE + 1;                      /*  TYPE ASSIGN'd there) */
     ok_a &= !motion_set_event(t, 0, P_IMIX, 0) && !motion_set_event(t, 8, P_IMIX, 127);
     ok_l &= !motion_set_lock(t, 4, P_ITYPE, IT_CRUSH);
     seq_start();

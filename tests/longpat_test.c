@@ -316,6 +316,7 @@ static int t_motion(void)
     track_t *t = setup(160);
     int16_t before, after;
     t->p[P_REV] = 0;
+    trkx[trk_index(t) % NTRK].home[0] = P_REV + 1;     /* (Dah: automation on HOME's knobs only: REV ASSIGN'd there) */
     put(t, 150, 70);
     bad += check("an automation event on step 151 (page 2): stored, page 0's records as before",
                  !motion_set_event(t, 150, P_REV, 100) && motion_find(t, 150, P_REV) >= 0 && motion.event[0].place == MPLACE(0, 150) &&

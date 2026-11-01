@@ -407,6 +407,7 @@ static int motion128(void)
     track_t *t = seq1(1);
     for (i = 0; i < MOTION_MAX - 1u; i++)            /* 127 on tracks 2..4 */
         ok &= !motion_set_event(&trk[1 + i % 3u], (i / 3u) % NSTEP, i / 3u < NSTEP ? P_REV : P_DLY, 5);
+    trkx[trk_index(t) % NTRK].home[0] = P_REV + 1;   /* (Dah: automation on HOME's knobs only: REV ASSIGN'd there) */
     ok &= !motion_set_event(t, 3, P_REV, 90) && motion.count == MOTION_MAX && motion_set_event(t, 4, P_REV, 1) == 2;
     seq_start();
     for (i = 0; i < 4u * P16 / CTL + 2u; i++)

@@ -301,11 +301,23 @@ static uint32_t motion_clear_locks(track_t *t, uint32_t step)
     motion_unguard(f);
     return gone;
 }
+/* (Dah) automation and locks only on HOME's four knobs of the track (ASSIGN's, else the engine's): another parameter
+ * turned while recording records nothing, and a record of one (an older project's) plays nothing */
+static int motion_home_id(const track_t *t, uint32_t id)
+{
+    uint32_t k = trk_index(t) % NTRK, j, a;
+    for (j = 0; j < 4u; j++) {
+        a = trkx[k].home[j];
+        if ((a && a <= P_COUNT ? a - 1u : ENGINES[t->eng_req % NENGINES]->knob[j]) == id)
+            return 1;
+    }
+    return 0;
+}
 static int motion_capture(track_t *t, uint32_t id, int16_t value)
 {
     uint32_t k = trk_index(t), idx, len, period, f;
     if (!motion_param(id)) return 0;
-    if (!rec_on(t) || t != TSEL) {
+    if (!rec_on(t) || t != TSEL || !motion_home_id(t, id)) {
         /* A live edit becomes a new base, even when an earlier motion value is
          * currently sounding. Subsequent recorded events can still override it. */
         f = motion_guard();
@@ -440,7 +452,8 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
         uint32_t id = MOTION_ID(e);
-        if (e->place != place || ((e->param & MOTION_LOCK) && !play) || id >= P_COUNT) continue;   /* (FINE LEN: none) */
+        if (e->place != place || ((e->param & MOTION_LOCK) && !play) || id >= P_COUNT || !motion_home_id(t, id))
+            continue;                                   /* (FINE LEN: none; Dah: HOME's four only) */
         const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
         t->p[id] = (int16_t)param_fit(d, e->value);
         motion_active[k][id / 32u] |= 1u << (id % 32u);

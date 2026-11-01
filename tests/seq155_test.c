@@ -143,6 +143,7 @@ static int cond_locks_rolls(void)
     track_t *t = melody(1u | 1u << 4);
     uint32_t r0, r1, i;
     set_cond(&t->step[4], 1);                          /* 1:2 */
+    trkx[trk_index(t) % NTRK].home[0] = P_LEVEL + 1;   /* (Dah: locks on HOME's knobs only: LEVEL ASSIGN'd there) */
     motion_set_lock(t, 4, P_LEVEL, 7);
     seq_start();
     for (i = 0; i < 5u * div_samples(2) / CTL; i++)

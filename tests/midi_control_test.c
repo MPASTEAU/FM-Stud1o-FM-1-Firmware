@@ -131,6 +131,7 @@ static int clock_test(uint32_t source)
     clock_packet(source, 0xFA, 700); clock_to(source, 700, 7);
     bad += check("Start after timeout restarts cleanly at the master's phase", song.playing && trk[0].seq_idx == 1u);
     /* Original base values remain after MIDI Stop even while motion sounds. */
+    trkx[0].home[0] = P_REV + 1;                       /* (Dah: automation on HOME's knobs only: REV ASSIGN'd there) */
     trk[0].p[P_REV] = 23; motion_clear(&trk[0]); motion_set_event(&trk[0], 0, P_REV, 100);
     clock_packet(source, 0xFA, 1000); clock_packet(source, 0xF8, 1000);
     bad += check("external-clock playback applies recorded motion", trk[0].p[P_REV] == 100);

@@ -4,9 +4,12 @@
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 
+/* (Dah) automation and locks only on HOME's four knobs: ASSIGN id to HOME's knob j of t (trkx[].home, ui.c) */
+static void home_assign(const track_t *t, uint32_t j, uint32_t id) { trkx[trk_index(t) % NTRK].home[j] = (uint8_t)(id + 1u); }
 static int motion_recording(void)
 {
     int bad = 0; ui_power_on(); track_t *t = &trk[0];
+    home_assign(t, 1, P_REV); home_assign(&trk[1], 1, P_REV);   /* (REV on HOME's KNOB 2 of tracks 1 and 2) */
     t->p[P_REV] = 23; song.sel = 0; song.rec = 1;
     seq_start(); seq_tick(t, CTL); /* first real step */
     t->p[P_REV] = 92;
@@ -173,6 +176,7 @@ static int loads_and_song(void)
     int bad = 0; ui_power_on(); track_t *t = &trk[0];
     int16_t v;
     uint32_t e0 = t->eng_req, e1 = e0 == ENGI_DRUM ? ENGI_FM6 : ENGI_DRUM;
+    home_assign(t, 0, P_E0); home_assign(t, 1, P_REV);           /* (E1 and REV on HOME's knobs) */
     t->p[P_REV] = 21; motion_set_event(t, 0, P_REV, 100); t->step[0] = (step_t){{60}, 1, ST_NOTE, 0, 100};
     motion_set_lock(t, 1, P_E0, motion_base_value(t, P_E0));
     apply_preset_to(t, 1);
@@ -418,6 +422,7 @@ static track_t *lock_track(int32_t sw)
     t->p[P_SSWING] = (int16_t)sw;
     song.g[G_SWING] = 0;
     t->p[P_REV] = 20;
+    home_assign(t, 1, P_REV);                    /* (REV on HOME's KNOB 2, E4 the engine's KNOB 1: ANALOG) */
     for (i = 0; i < 8u; i++)
         t->step[i] = (step_t){{60}, 1, ST_NOTE, 0, 100};
     return t;
@@ -547,12 +552,15 @@ static int lock_project(void)
     bad += check("a project without locks: the bytes as before (ids < 128), the same round trip", ok);
     motion_set_lock(t, 2, P_REV, 101); motion_set_lock(t, 7, P_E4, 77);
     project_capture(&before);
-    ok = proj_pack(&a, &before) && proj_import(&after, &a, sizeof a) && proj_same(&before, &after);
+    ok = proj_pack(&a, &before) && proj_import(&after, &a, sizeof a);
+    memcpy(after.x, before.x, sizeof after.x);         /* (the extras, HOME's ASSIGN: not FUN10's, projfs.c keeps them) */
+    ok = ok && proj_same(&before, &after);
     bad += check("FUN9 round trip keeps the locks (bit 7 of the id byte), their values and steps", ok &&
         after.motion.event[1].param == (P_REV | MOTION_LOCK) && after.motion.event[2].value == 77);
     project_save(2);
     motion_clear(t);
     project_load(2);
+    home_assign(t, 1, P_REV);                            /* (the host's slots keep no extras: HOME's ASSIGN again) */
     bad += check("  saved and loaded: the locks play again", motion_lock_count(t) == 2u && lock_passes(t,
         (const int16_t[8]){20, 33, 101, 33, 33, 33, 33, 33}));
     seq_stop();
@@ -782,10 +790,55 @@ static int auto_list(void)
     ui_prefs &= ~PREF_LARGE;
     return bad;
 }
+/* (Dah) automation and locks only on HOME's four knobs of the track (motion.c motion_home_id): ANALOG's E5 E6 ATK REL
+ * on track 1; REV none of them until ASSIGN'd */
+static int home_only(void)
+{
+    int bad = 0, ok; ui_power_on(); track_t *t = &trk[0];
+    uint32_t i;
+    track_defaults_steps(t);
+    t->p[P_SLEN] = 8;
+    for (i = 0; i < 8u; i++) t->step[i] = (step_t){{60}, 1, ST_NOTE, 0, 100};
+    t->p[P_REV] = 23; t->p[P_E4] = 10; song.sel = 0; song.rec = 1;
+    seq_start(); seq_tick(t, CTL);
+    t->p[P_REV] = 92; motion_capture(t, P_REV, 92);
+    bad += check("HOME only: REV (not on HOME) turned while recording records nothing, the base its value",
+        motion_count(t) == 0u && motion_base_value(t, P_REV) == 92);
+    t->p[P_E4] = 40; motion_capture(t, P_E4, 40);
+    bad += check("  E5 (HOME's KNOB 1) turned while recording: recorded", motion_count(t) == 1u && motion_find(t, 0, P_E4) >= 0);
+    seq_stop(); song.rec = 0; motion_clear(t);
+    t->p[P_REV] = 20; t->p[P_E4] = 10;
+    ok = !motion_set_event(t, 0, P_REV, 100) && !motion_set_lock(t, 1, P_REV, 90) && !motion_set_lock(t, 2, P_E4, 70);
+    seq_start(); seq_tick(t, CTL);
+    ok &= t->p[P_REV] == 20;
+    lock_next(t);
+    ok &= t->p[P_REV] == 20;
+    lock_next(t);
+    ok &= t->p[P_REV] == 20 && t->p[P_E4] == 70;
+    seq_stop();
+    bad += check("  stored records of REV (an older project's; the editor's MOTION SET): kept, play nothing; E5's lock plays",
+        ok && motion_count(t) == 3u && t->p[P_REV] == 20);
+    home_assign(t, 2, P_REV);                           /* ASSIGN: REV on HOME's KNOB 3 (ATK's) */
+    seq_start(); seq_tick(t, CTL);
+    ok = t->p[P_REV] == 100;
+    lock_next(t);
+    ok &= t->p[P_REV] == 90;
+    lock_next(t);
+    ok &= t->p[P_REV] == 100;
+    seq_stop();
+    bad += check("  REV ASSIGN'd to a HOME knob: its records play (the event, the lock)", ok && t->p[P_REV] == 20);
+    motion_clear(t); song.rec = 1;
+    seq_start(); seq_tick(t, CTL);
+    t->p[P_REV] = 64; motion_capture(t, P_REV, 64);
+    ok = motion_count(t) == 1u && motion_find(t, 0, P_REV) >= 0;
+    seq_stop(); song.rec = 0;
+    bad += check("  .. and recorded; stop puts the base back", ok && t->p[P_REV] == 20);
+    return bad;
+}
 int main(void)
 {
     int bad = motion_recording() + motion_capacity() + probability_playback() + compact_project() + fun7_89() + loads_and_song() + repeat_mode();
     bad += arp_new_modes();
-    bad += lock_playback() + lock_edit() + lock_project() + lock_ui() + lock_hand() + auto_list();
+    bad += lock_playback() + lock_edit() + lock_project() + lock_ui() + lock_hand() + auto_list() + home_only();
     printf("%s\n", bad ? "MOTION TEST FAILED" : "motion/chance/compact storage tests passed"); return bad != 0;
 }
