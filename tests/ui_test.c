@@ -139,7 +139,8 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++) host_put((y + j) * 240u + x + i, p[j * w + i]);
 }
-static struct { uint32_t stage; } felucca_dbg;
+static struct { uint32_t stage, late; } felucca_dbg;
+static uint32_t shed_count;                      /* (the header's CPU warning, ui_draw.c hld) */
 #define FELUCCA_FLASH 0
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "TEST"

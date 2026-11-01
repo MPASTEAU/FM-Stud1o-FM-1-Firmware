@@ -436,7 +436,8 @@ static int32_t head_batt(int32_t x1, int32_t hh)
  * colour) and its sound; the tempo while it is changed, a message over the rest; an armed REC and the battery right */
 static void sound_name(const track_t *t, char *b);
 #define HL_MS 250u                                      /* (Dah) the header's load read this often */
-static struct { uint8_t voices, cpu; uint32_t t; } hld;
+static struct { uint8_t voices, cpu, warn; uint32_t t, late; } hld;   /* (warn: HL_MS reads left blinking since the audio was
+                                                         * late or shed a voice) */
 /* (Dah) a message for the window in the middle: two parts (cards_say: HELP's, a warning with its why) or a layer's
  * hint; any other (REC, ARMED, SAVED..) small in the header, the page left alone */
 static int msg_win(void)
@@ -472,6 +473,8 @@ static void head_home(void)
         hld.t = fm1_ms;
         hld.voices = (uint8_t)voices_busy();
         hld.cpu = (uint8_t)(song.cpu_q8 * 100u / 256u > 99u ? 99u : song.cpu_q8 * 100u / 256u);
+        hld.warn = (uint8_t)(felucca_dbg.late + shed_count != hld.late ? 8u : hld.warn ? hld.warn - 1u : 0u);   /* (~2 s) */
+        hld.late = felucca_dbg.late + shed_count;
     }
     (void)head_slot(sl);
     if ((seq_off >> k) & 1u && !chain.running)          /* (the track on no pattern) */
@@ -488,7 +491,7 @@ static void head_home(void)
                          (uint32_t)song.rec * 977u + tc * 13u +
                          (ui.msg_t && (song.playing || chain_busy() || !msg_win()) ? str_hash(5u, ui.msg) * 7u + 1u : 0u) +
                          (uint32_t)song.g[G_BPM] * 2654435761u + (ui.bpm_t != 0) * 3u + (uint32_t)batt_shown() * 40503u +
-                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u +
+                         (uint32_t)song.batt_raw / 4u * 104729u + hld.voices * 15485863u + hld.cpu * 7919u + hld.warn * 101u +
                          str_hash(3u, ti) * 3141592653u + (uint32_t)layer_locked() * 524287u);
     if (!ui.force && sig == ui.head_sig)
         return;
@@ -504,7 +507,7 @@ static void head_home(void)
     }
     lw = 6 + text_w(&AF_S, ti) + 8 + text_w(&AF_S, "PAT") + 4 + text_w(&AF_S, num + 1) + 8 + 14 + 4;
     {   /* (Dah) the load: the voices sounding ("6V"), the audio's CPU ("42%"), read every HL_MS; the
-         * accent when the CPU is over 85 %. Not where the page's name leaves no room for it */
+         * accent when the CPU is over 85 %; (Dah) blinking red ~2 s after the audio was late or shed a voice. Not where the page's name leaves no room for it */
         char lv[8], lc[8];
         int32_t w;
         fmt_int(lv, (int32_t)hld.voices);
@@ -514,7 +517,7 @@ static void head_home(void)
                                                          * right: nothing moves as they change) */
         if (xr - text_w(&AF_S, "88%") - 5 - text_w(&AF_S, "V") - 1 - w - (song.rec ? 14 : 0) >= lw) {
             GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-            cv_text_r(xr, ty, &AF_S, lc, hld.cpu > 85u ? T_ACCENT : T_MID, T_BG);
+            cv_text_r(xr, ty, &AF_S, lc, hld.warn ? (hld.warn & 1u ? T_REC : T_MID) : hld.cpu > 85u ? T_ACCENT : T_MID, T_BG);
             xr -= text_w(&AF_S, "88%") + 5;
             xr = cv_text_r(xr, ty, &AF_S, "V", T_DIM, T_BG) - 1;   /* (Dah: the voices sounding, "V" after them as BPM
                                                          * after the tempo; no budget but the CPU's) */
