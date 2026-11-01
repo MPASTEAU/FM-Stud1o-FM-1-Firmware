@@ -144,8 +144,8 @@ static uint32_t prv_base(const track_t *t)
     uint32_t len = (uint32_t)t->p[P_SLEN], n = prv_cols(), b;
     if (song.playing && !prv.nofollow && t->seq_idx < len)
         b = t->seq_idx > n / 2u ? t->seq_idx - n / 2u : 0u;
-    else if (prv.at >= 0)
-        b = (uint32_t)prv.at;
+    else if (prv.at >= 0 && (prv.on || (ui.cursor >= (uint32_t)prv.at && ui.cursor < (uint32_t)prv.at + n)))
+        b = (uint32_t)prv.at;                         /* (Dah: the VIEW closed, the cursor out of it: the cursor's page) */
     else
         b = (ui.cursor / n) * n;
     if (len > n && b + n > len)
