@@ -244,8 +244,8 @@ static int project_erase_ui(void)
 
     turn(EN_K1, 1);
     ok = !act_ready();                                  /* (OPEN: the one played already) */
-    ok &= !help_page();                                 /* (Dah: its hint named knobs and PRESETS only: none) */
-    bad += check("  OPEN on the one played: nothing to do; no HELP hint (knobs and PRESETS are never named)", ok);
+    ok &= help_page() == H_SAVE;                        /* (Dah: the quick save's, SAVE held: no knob, no PRESETS) */
+    bad += check("  OPEN on the one played: nothing to do; the HELP hint the quick save's ([SAVE] HOLD)", ok);
     return bad;
 }
 
@@ -493,8 +493,9 @@ static int menus_alike(void)
     return bad;
 }
 
-/* (Dah) REC never takes a note out: step recording (armed, stopped; CHORD ENTRY ADD and HOLD) and live recording
- * (armed, playing) of a key whose note is on the step already: it stays (recorded again), the step a note step */
+/* (Dah) REC's rule (step recording: armed, stopped; live: armed, playing, QUANTIZE OFF nudged too): one key alone on a
+ * step holding that note alone takes it out (with its tail), onto other notes it replaces them, keys together (or held
+ * while another of them is) make the step exactly their notes; on an empty step the note is written */
 static int has_note(const step_t *st, uint32_t note)
 {
     uint32_t j;
@@ -502,58 +503,105 @@ static int has_note(const step_t *st, uint32_t note)
         ;
     return st_kind(st) == ST_NOTE && j < st->n;
 }
-static int rec_keeps(void)
+static int only(const step_t *st, uint32_t a, uint32_t b)   /* exactly a (and b; 0 none) */
 {
-    int bad = 0, ok = 1;
-    uint32_t add, i, k = 7, note, held = 0;
+    return st_kind(st) == ST_NOTE && st->n == (b ? 2u : 1u) && has_note(st, a) && (!b || has_note(st, b)) && !st_cont(st);
+}
+static track_t *rule_setup(void)
+{
     track_t *t;
-    for (add = 0; add < 2u; add++) {
-        ui_power_on();
-        menu_put(MI_CHADD, add);
-        t = TSEL;
-        t->p[P_VOICE] = V_POLY;
-        track_defaults_steps(t);
-        note = kb_map(t, k);
-        t->step[3] = (step_t){{(uint8_t)note}, 1, ST_NOTE, 0, 100};
-        go_page(GR_ROLL);
-        cursor_set(3);
-        frame();
-        press(B_REC);
-        ok &= song.rec == 1u && !song.playing;
-        tap_k(k);
-        ok &= add ? !t->step[3].n && st_kind(&t->step[3]) == ST_REST    /* (Dah) ADD: a single note there goes out */
-                  : has_note(&t->step[3], note) && t->step[3].n == 1u;   /* HOLD: the keys are the step */
-        tap_k(k);
-        ok &= has_note(&t->step[3], note) && t->step[3].n == 1u;
-    }
-    bad += check("REC on STEP (stopped): ADD, a single note there goes out and comes back; HOLD keeps it", ok);
     ui_power_on();
     t = TSEL;
     t->p[P_VOICE] = V_POLY;
-    t->p[P_SLEN] = 16;
     track_defaults_steps(t);
-    t->p[P_SLEN] = 16;
-    note = kb_map(t, k);
-    for (i = 0; i < 16u; i++)
-        t->step[i] = (step_t){{(uint8_t)note}, 1, ST_NOTE, 0, 100};
     go_page(GR_ROLL);
+    cursor_set(3);
     frame();
-    song.rec = 1u << song.sel;
-    transport_req = 1;
-    for (i = 0; i < 500u; i++) {                        /* (8 s: four loops, the key struck again and again) */
-        blocks(6);
-        if (i % 5u == 0u) { key_down(k); held = 1; }
-        else if (held && i % 5u == 2u) { key_up(k); held = 0; }
-        frame();
+    press(B_REC);
+    return t;
+}
+static int rec_keeps(void)
+{
+    int bad = 0, ok = 1;
+    uint32_t i, kE = 7, kF = 8, kG = 10, kC = 5, E, F, G, C, done;
+    track_t *t = rule_setup();
+    E = kb_map(t, kE); F = kb_map(t, kF); G = kb_map(t, kG); C = kb_map(t, kC);
+    ok &= song.rec == 1u && !song.playing && E != F && E != G;
+    t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+    tap_k(kE);
+    ok &= st_kind(&t->step[3]) == ST_REST && !t->step[3].n;
+    bad += check("REC on STEP (stopped): E alone, E played: removed (a REST)", ok);
+    t->step[3] = (step_t){{(uint8_t)C, (uint8_t)E, (uint8_t)G}, 3, ST_NOTE, 0, 100};
+    tap_k(kE);
+    bad += check("  a chord C E G, E played: E alone", only(&t->step[3], E, 0));
+    t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+    tap_k(kF);
+    bad += check("  E, F played: F", only(&t->step[3], F, 0));
+    track_defaults_steps(t);
+    key_down(kC); key_down(kE); frame(); key_up(kC); key_up(kE); frame();
+    ok = only(&t->step[3], C, E);
+    t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+    key_down(kC); key_down(kE); frame(); key_up(kC); key_up(kE); frame();
+    ok &= only(&t->step[3], C, E);
+    bad += check("  C and E pressed together: C E (an empty step, a step holding E: never a removal)", ok);
+    t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+    key_down(kE); frame();
+    ok = st_kind(&t->step[3]) == ST_REST;
+    key_down(kG); frame();
+    ok &= only(&t->step[3], E, G);
+    key_up(kE); key_up(kG); frame();
+    ok &= only(&t->step[3], E, G);
+    bad += check("  E held: removed; G pressed while E is held: E G; all let go: E G", ok);
+    track_defaults_steps(t);                            /* a long E (3 steps), then a C going on from it */
+    t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+    t->step[4].time = ST_TIE; t->step[5].time = ST_TIE;
+    tap_k(kE);
+    ok = st_kind(&t->step[3]) == ST_REST && st_kind(&t->step[4]) == ST_REST && st_kind(&t->step[5]) == ST_REST;
+    t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+    t->step[4].time = ST_TIE; t->step[5] = (step_t){{(uint8_t)E, (uint8_t)C}, 2, ST_NOTE, 0, 100};
+    st_set_cont(&t->step[5], 1u);                       /* (E going on, C starting) */
+    tap_k(kF);
+    ok &= only(&t->step[3], F, 0) && st_kind(&t->step[4]) == ST_REST && only(&t->step[5], C, 0);
+    bad += check("  a long E taken out / replaced: its TIEs and its going on after it gone (C kept)", ok);
+    /* live: QUANTIZE OFF, E a little early and a little late onto step 4 (index 3) holding E alone: removed */
+    for (done = 0; done < 2u; done++) {
+        uint32_t len, cur;
+        t = rule_setup();
+        song.rec = 1u << song.sel;
+        t->p[P_SLEN] = 16;
+        t->p[P_SQNT] = 0;
+        t->step[3] = (step_t){{(uint8_t)E}, 1, ST_NOTE, 0, 100};
+        transport_req = 1;
+        blocks(2);
+        len = 0;
+        for (i = 0; i < 4000u; i++) {                   /* (to step 3, 80 % in: early for step 4; or step 4, 20 % in) */
+            cur = step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx);
+            if (t->seq_idx == (done ? 3u : 2u) && t->seq_pos > (done ? cur / 5u : cur * 4u / 5u))
+                break;
+            blocks(1);
+        }
+        key_down(kE); frame(); blocks(2); key_up(kE); frame();
+        len = st_kind(&t->step[3]) == ST_REST && !t->step[3].n;
+        transport_req = 2; blocks(8); frame(); song.rec = 0;
+        bad += check(done ? "REC playing, QUANTIZE OFF: E a little late onto a step holding E alone: removed"
+                          : "REC playing, QUANTIZE OFF: E a little early onto a step holding E alone: removed", (int)len);
     }
-    if (held) key_up(k);
-    transport_req = 2;
-    blocks(8); frame();
-    song.rec = 0;
-    ok = !song.playing;
-    for (i = 0; i < 16u; i++)
-        ok &= has_note(&t->step[i], note);
-    bad += check("REC playing: the same note struck over the steps that hold it: every step keeps it", ok);
+    {   /* live: E then G held together onto an empty step: E G; across loops, notes on other steps build up */
+        t = rule_setup();
+        song.rec = 1u << song.sel;
+        t->p[P_SLEN] = 16;
+        transport_req = 1;
+        blocks(2);
+        for (i = 0; i < 4000u && t->seq_idx != 5u; i++)
+            blocks(1);
+        key_down(kE); frame(); key_down(kG); frame(); blocks(1); key_up(kE); key_up(kG); frame();
+        for (i = 0; i < 4000u && t->seq_idx != 9u; i++)
+            blocks(1);
+        key_down(kC); frame(); blocks(1); key_up(kC); frame();
+        transport_req = 2; blocks(8); frame(); song.rec = 0;
+        bad += check("REC playing: E and G held together onto step 6: E G; then C on step 10: both kept",
+                     has_note(&t->step[5], E) && has_note(&t->step[5], G) && has_note(&t->step[9], C));
+    }
     return bad;
 }
 

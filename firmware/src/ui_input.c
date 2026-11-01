@@ -1610,52 +1610,59 @@ static uint32_t oct_taps(uint32_t pressed, int here)
     return ((tap & where) & (here ? 3u : 0u)) | (tap & ~where & 3u) << 4 | ch;
 }
 
-/* MENU > CONTROL > CHORD ENTRY ADD (1.2, #155: chords with one hand): a key's notes go into the cursor step beside what
- * is there (up to 4); MONO keeps one note (another key replaces it). A TIE or REST step becomes a note step. (Dah) A
- * single note there already goes out (the step a REST when none is left): step recording's way to take one out; live
- * recording never takes a note out */
-static void step_add(const track_t *t, step_t *st, const uint8_t *ch, uint32_t n)
+/* SEQ step entry = step recording (1.2, Discussion #133: only with the track armed and the transport stopped), acid
+ * style, into the cursor step (the cursor stays: KNOB 1 / PRESETS move it; EDIT clears the step and moves on). (Dah) The
+ * keys of one gesture (from the first key down to the last one up) decide what the step is:
+ *   one key alone (one note: CHRD off, MONO, a kit) on a step holding that note alone: the note goes out (the step a
+ *     REST, its tail with it), the key writes nothing more;
+ *   one key on a step holding other notes: they are replaced by its note (theirs go with their tails, st_cut);
+ *   on an empty step, a REST, a TIE: its note written;
+ *   two keys or more held together (or a CHRD key's chord): the step is exactly their notes (POLY, up to 4; MONO the
+ *     last key's), never a removal: E taken out by its key, G pressed while E is still held: E and G.
+ * Notes going on there from a step before (another note held over it, core.h st_cont) stay beside them. With CHRD on
+ * a key writes what it sounds, as live recording does: POLY its chord, MONO the chord's root. (CHORD ENTRY ADD no longer
+ * changes step recording) */
+static struct {
+    uint8_t keys, n, note[4];
+    step_t orig;                                        /* the step as the gesture found it */
+} ent __attribute__((section(".pool")));
+static void entry_write(track_t *t, int single)
 {
-    uint32_t i, j;
+    step_t *st = ed_st(t, ui.cursor);
+    const step_t *o = &ent.orig;
+    uint32_t m = st_starts(o), k, j;
+    *st = *o;                                           /* (the gesture's earlier keys undone: their notes are in ent) */
+    if (m)
+        st_cut(t, ed_st, ui.cursor, ui_len(t), m);      /* (the notes starting there out, with their tails) */
+    if (single && m) {
+        for (k = 0; !((m >> k) & 1u); k++)
+            ;
+        if (m == 1u << k && o->note[k] == ent.note[0])
+            return;                                     /* that note alone: out */
+    }
     if (st_kind(st) != ST_NOTE) {
         st->n = 0;
         st->time = ST_NOTE;
     }
-    for (j = 0; n == 1u && j < st->n && st->note[j] != ch[0]; j++)
-        ;
-    if (n == 1u && j < st->n) {                        /* (Dah) a single note there already: out (a chord key adds only) */
-        st_del(st, j);
-        if (!st->n)
-            st->time = ST_REST;
-        return;
-    }
     if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* MONO / LEG / UNI: one note */
-        st->note[0] = ch[0];
+        st->note[0] = ent.note[ent.n - 1u];
         st->n = 1;
         st->time = ST_NOTE;
         return;
     }
-    for (i = 0; i < n && st->n < 4u; i++) {
-        for (j = 0; j < st->n && st->note[j] != ch[i]; j++)
+    for (k = 0; k < ent.n; k++) {
+        for (j = 0; j < st->n && st->note[j] != ent.note[k]; j++)
             ;
-        if (j == st->n)
-            st->note[st->n++] = ch[i];
-        else                                           /* (there, going on from the step before: it starts here) */
+        if (j == st->n && st->n < 4u)
+            st->note[st->n++] = ent.note[k];
+        else if (j < st->n)                             /* (there, going on from the step before: it starts here) */
             st_set_cont(st, st_cont(st) & ~(1u << j));
     }
 }
-
-/* SEQ step entry = step recording (1.2, Discussion #133: only with the track armed and the transport stopped), acid
- * style: the keys pressed together (POLY: up to 4 notes, MONO: the last one) become the cursor step; releasing all
- * keys leaves the cursor there (Dah: no moving on). With CHRD on a key writes what it sounds, as live recording does:
- * POLY its chord, MONO the chord's root. MENU > CONTROL > CHORD ENTRY ADD (1.2, #155): each key adds its notes to
- * the cursor step (step_add: a note there stays), one after another with one hand, and letting go moves nothing: the
- * cursor moves by KNOB 1 (STEP) or PRESETS only, as it always could (EDIT still clears the step and moves on) */
 static void seq_entry(uint32_t pressed)
 {
     track_t *t = TSEL;
-    step_t *st = ed_st(t, ui.cursor);
-    uint32_t k, add = (ui_prefs2 & (PREF_CHORD_ADD >> 16)) != 0u;
+    uint32_t k;
     for (k = 0; k < 27u; k++) {
         uint8_t ch[CHORD_MAX];
         int32_t r;
@@ -1669,29 +1676,26 @@ static void seq_entry(uint32_t pressed)
         if (!ui.entry_open) {
             ui.entry_open = 1;
             follow_hold();                                /* (1.6, #242) */
-            if (!add) {
-                st->n = 0;
-                st->time = ST_NOTE;
-            }
+            ent.keys = ent.n = 0;
+            ent.orig = *ed_st(t, ui.cursor);
         }
         n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root) */
-        if (add)
-            step_add(t, st, ch, n);
-        else if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* (drums: hits stack as a chord) */
-            st->note[0] = ch[0];
-            st->n = 1;
-        } else {
-            for (i = 0; i < n && st->n < 4u; i++) {
-                for (j = 0; j < st->n && st->note[j] != ch[i]; j++)
+        ent.keys++;
+        if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {
+            ent.n = 1;
+            ent.note[0] = ch[0];
+        } else
+            for (i = 0; i < n; i++) {
+                for (j = 0; j < ent.n && ent.note[j] != ch[i]; j++)
                     ;
-                if (j == st->n)
-                    st->note[st->n++] = ch[i];
+                if (j == ent.n && ent.n < 4u)
+                    ent.note[ent.n++] = ch[i];
             }
-        }
+        entry_write(t, ent.keys == 1u && n == 1u);
         last_note = (uint8_t)note;
     }
     if (ui.entry_open && !(fm1_in.notes & ~kb_layer))
-        ui.entry_open = 0;                              /* (Dah: the cursor stays, as ADD: KNOB 1 moves it) */
+        ui.entry_open = 0;                              /* (Dah: the cursor stays: KNOB 1 moves it) */
 }
 
 /* Discussions #92 / #94: the PRESETS knob by page (the menu, a dialog, NAME and the layers: ui_input before this).

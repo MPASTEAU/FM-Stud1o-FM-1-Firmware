@@ -536,8 +536,61 @@ static void st_canon(step_t *s, const uint8_t *q, uint32_t qn)
  * go bit k, it has been held into a step since (back to its own: the whole loop, it ends); cm bit k, rec_hold carried it
  * on into the step playing (let go before its middle: taken out again); pv / pvn the notes the pattern sounds at the
  * step playing (as its steps say, chance and gate aside: seq_enter), what a TIE there carries on */
-static struct { uint8_t st[4], go, cm, pv[4], pvn, poly, pass, took; } rp[NTRK];   /* (Dah) pass: the loops since PLAY;
+static struct { uint8_t st[4], go, cm, pv[4], pvn, poly, pass, took, gi, gk, gn, gnote[4]; int8_t gnd; } rp[NTRK];   /* (Dah) pass: the loops since PLAY;
                                                      * took: the pass REPLACE last wiped for */
+/* (Dah) the notes m (bits of its notes) of NOTE step idx out, with their tails: the TIE after it made explicit with
+ * what goes on there (none: a REST), every later step carrying one of them on without it (none left, no hit: a REST),
+ * up to the first step that carries none of them on, so nothing is left going on or tied from them. at: the pattern's
+ * step i (seq_wr live, ed_st on the page); len: the pattern's length (no wrap, as a note's length) */
+static __attribute__((noinline)) void st_cut(track_t *t, step_t *(*at)(track_t *, uint32_t), uint32_t idx, uint32_t len,
+                                             uint32_t m)
+{
+    step_t *s = at(t, idx), *u;
+    uint8_t x[4], q[4];
+    uint32_t nx = 0, qn = 0, k, j, i, c, any, rest;
+    if (st_kind(s) != ST_NOTE)
+        return;
+    for (k = 0, c = st_cont(s); k < s->n && k < 4u; k++)
+        if ((m >> k) & 1u)
+            x[nx++] = s->note[k];
+        else if ((c >> k) & 1u)
+            q[qn++] = s->note[k];
+    for (k = s->n > 4u ? 4u : s->n; k--;)
+        if ((m >> k) & 1u)
+            st_del(s, k);
+    if (!s->n && !s->hit)
+        s->time = ST_REST;
+    for (i = idx + 1u, rest = 1; i < len && nx; i++) {   /* (rest: the step before ends what it carried) */
+        u = at(t, i);
+        if (st_kind(u) == ST_TIE) {
+            if (rest) {                                 /* (it carried them: what goes on there, or a REST) */
+                st_hold_off(u, i == idx + 1u ? q : 0, i == idx + 1u ? qn : 0u);
+                rest = st_kind(u) == ST_REST;
+            }
+            continue;
+        }
+        if (st_kind(u) != ST_NOTE)
+            break;
+        for (j = any = 0; j < nx; j++)
+            for (k = 0; k < u->n && k < 4u; k++)
+                if (u->note[k] == x[j] && ((st_cont(u) >> k) & 1u)) {
+                    st_del(u, k);
+                    any = 1;
+                    break;
+                }
+        if (!u->n && !u->hit)
+            u->time = ST_REST;
+        rest = st_kind(u) == ST_REST;
+        if (!any)
+            break;
+    }
+}
+/* .. the notes starting at NOTE step s (bits of its notes; none going on there) */
+static uint32_t st_starts(const step_t *s)
+{
+    return st_kind(s) == ST_NOTE ? ((1u << (s->n > 4u ? 4u : s->n)) - 1u) & ~st_cont(s) : 0u;
+}
+
 static void rh_drop(track_t *t, uint32_t k)        /* hold k ends */
 {
     uint32_t i = trk_index(t) % NTRK, j, lo = (1u << k) - 1u;
@@ -668,9 +721,10 @@ static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note
 }
 
 /* live recording: the note goes into the nearest step, as swung (the one playing, or
- * the next one when it is past the middle of the playing one). Overdub: a step that
- * holds notes gets this one added (a chord of up to 4; when full, the last note is
- * replaced); MONO / LEGATO / UNISON parts keep one note per step, as step entry does.
+ * the next one when it is past the middle of the playing one; QUANTIZE OFF: the step whose window it falls in).
+ * (Dah) A key onto a step holding that note alone takes it out; onto other notes starting there it replaces them;
+ * keys landing there together (while the first is held) make it their chord (rec_live, rp[].gi / gk / gnote; the ARP
+ * adds as before); MONO / LEGATO / UNISON parts keep one note per step, as step entry does.
  * Held on (synth parts): each further step the sequencer enters while the note is
  * held becomes a TIE (rec_hold), up to the pattern length; a release before the middle
  * of the last one puts that step back (rec_release), so a short note stays one step.
@@ -694,6 +748,7 @@ static __attribute__((noinline)) void rec_wipe(track_t *t)
         }
     rec_wipe_req |= (uint8_t)(1u << k);
 }
+static uint8_t rec_live;                            /* (Dah) rec_note: a key played (input_on, the count-in), not the ARP */
 static void rec_note(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t len = t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u, idx = t->seq_idx % len, k;
@@ -757,6 +812,44 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
             t->rskip[t->rskip_n++] = (uint8_t)note;
     }
     t->seq_active = 1;
+    if (rec_live) {   /* (Dah) the keys played: one onto a step holding that note alone takes it out (and records nothing
+                       * more: no hold); onto other notes it replaces them; keys landing on that step together (while the
+                       * first is held) make it exactly their notes. The notes replaced go with their tails (st_cut) */
+        uint32_t i = trk_index(t) % NTRK, m = st_starts(s), j;
+        if (rp[i].gk && rp[i].gi == idx + 1u) {         /* another key of the keys held there: the step is all of them */
+            for (j = 0; j < rp[i].gn && rp[i].gnote[j] != note; j++)
+                ;
+            if (j == rp[i].gn && j < 4u)
+                rp[i].gnote[rp[i].gn++] = (uint8_t)note;
+            rp[i].gk++;
+            off = rp[i].gnd;                            /* (the first key's time) */
+            if (m)
+                st_cut(t, seq_wr, idx, len, m);
+            if (trk_vmode(t) == V_POLY) {
+                for (j = 0; j < rp[i].gn; j++)
+                    rec_poly(t, seq_wr(t, idx), idx, next, rp[i].gnote[j], vel, off, len);
+                return;
+            }
+        } else {
+            rp[i].gi = (uint8_t)(idx + 1u);
+            rp[i].gk = 1;
+            rp[i].gn = 1;
+            rp[i].gnote[0] = (uint8_t)note;
+            rp[i].gnd = (int8_t)off;
+            if (m) {
+                for (j = 0; !((m >> j) & 1u); j++)
+                    ;
+                if (m == 1u << j && s->note[j] == note) {   /* that note alone: out */
+                    st_cut(t, seq_wr, idx, len, m);
+                    if (trk_vmode(t) != V_POLY)
+                        t->rh_n = 0;                    /* (a MONO hold elsewhere ends, as another note would end it) */
+                    return;
+                }
+                st_cut(t, seq_wr, idx, len, m);         /* other notes: replaced */
+            }
+        }
+        s = seq_wr(t, idx);
+    }
     if (trk_vmode(t) == V_POLY) {
         rec_poly(t, s, idx, next, note, vel, off, len);
         return;
@@ -812,7 +905,12 @@ static void rec_hold(track_t *t, uint32_t idx, uint32_t len)
 /* a key of a recorded note is up: the hold ends with the last one */
 static void rec_release(track_t *t, uint32_t note)
 {
-    uint32_t i, k = 0;
+    uint32_t i, k = 0, g = trk_index(t) % NTRK;
+    for (i = 0; rp[g].gk && i < rp[g].gn; i++)          /* (Dah) one of the keys of a step's gesture let go */
+        if (rp[g].gnote[i] == note) {
+            rp[g].gk--;
+            break;
+        }
     if (rp[trk_index(t) % NTRK].poly) {
         rec_release_poly(t, note);
         return;
@@ -850,8 +948,11 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
     last_note = (uint8_t)note;
     if (cin_left)
         cin_keep(t, note, vel);
-    if (rec_on(t) && !t->p[P_AMODE])               /* (ARP on: arp_tick records its notes) */
+    if (rec_on(t) && !t->p[P_AMODE]) {             /* (ARP on: arp_tick records its notes) */
+        rec_live = 1;
         rec_note(t, note, vel);
+        rec_live = 0;
+    }
     if (t->p[P_AMODE])
         arp_add(t, note);
     else
@@ -1767,7 +1868,9 @@ static __attribute__((noinline)) void cin_record(void)
         track_t *t = &trk[i];
         for (k = 0; k < cin_n[i]; k++)
             if (rec_on(t)) {
+                rec_live = 1;
                 rec_note(t, cin_note[i][k], cin_vel[i][k]);
+                rec_live = 0;
                 if ((cin_up[i] >> k) & 1u)
                     rec_release(t, cin_note[i][k]);
             }

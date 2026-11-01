@@ -235,8 +235,11 @@ static int nudge(void)
     input_off(t, 66);
     ok &= t->step[4].note[0] == 66u && step_nudge(&t->step[4]) == 1;
     t->seq_idx = 4;
-    t->seq_pos = P16 / 8u;                           /* a second note into step 5 (a chord): the first's time stays */
+    t->seq_pos = P16 / 16u + 40u;
+    input_on(t, 66, 100);                            /* (66 again, held: taken out) */
+    t->seq_pos = P16 / 8u;                           /* a second key held with it into step 5 (a chord): the first's time */
     input_on(t, 69, 100);
+    input_off(t, 66);
     input_off(t, 69);
     ok &= t->step[4].n == 2u && step_nudge(&t->step[4]) == 1;
     seq_stop();
@@ -355,11 +358,11 @@ static int nudge(void)
         ons = vage - v0;
         for (b = 1; b < P16 / CTL; b++)
             seq_tick(t, CTL);
-        ok = vage - v0 == 2u && ons == 1u && t->step[0].n == 2u;
+        ok = vage - v0 == 1u && ons == 1u && t->step[0].n == 1u && t->step[0].note[0] == 67u;
         input_off(t, 67);
     }
     seq_stop();
-    bad += check("REC into a step before its nudged play: 60 at its time, the live 67 not again (2 note-ons)", ok);
+    bad += check("REC into a step before its nudged play: 60 replaced by the live 67, played once (1 note-on)", ok);
 
     /* the controls: QUANTIZE's strength (seq.c seq_nudge), STEP with steps held + PRESETS */
     t = seq1(1);
