@@ -593,8 +593,13 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
-    autosave_boot(boot_clean);                /* (1.2) the last session's music, under the splash (else the
+    if (!autosave_boot(boot_clean) && !FELUCCA_DEMO) {   /* (1.2) the last session's music, under the splash (else the
                                                * drone, felucca_demo; the PROJECT slots stay empty) */
+        song.ntrk = 1;                        /* (Dah) none (a new device, FACTORY RESET, RESTORE LAST OFF): one track, */
+        song.sel = 0;                         /* a polyphonic sound on it (FM6's PAD) */
+        set_engine_of(&trk[0], ENGI_FM6);
+        apply_preset_to(&trk[0], 4);
+    }
     for (ms = 0; ms < FW_SPLASH_MS; ms += 10u) {   /* the splash; the pot followed (MIDI IN plays under it) */
         fm1_delay_ms(10);
         fm1_wdt_feed();                       /* (a longer splash than Felucca's: the watchdog's 8 s stay far) */
