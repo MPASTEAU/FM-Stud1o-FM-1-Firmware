@@ -48,10 +48,14 @@ static uint32_t web_ticks;
  * buses not at rest (fx_cd, hall_still), the MASTER's chain (its EQ bands on both channels unless held: eq_t fix, its
  * DIST, its COMPRESSOR), master_out unless still; plus the voices: each part's sounding voices x ENG_VCOST (the host's
  * instructions per sample), at web_cpu_cal thousandths of a percent of real time per 100 instructions per sample
- * (4000: the demos' renders on the device, `prof` r1..r8; the host tests' 1.7 % was PHYS's alone). Inside the ISR TIMER4 runs on by
- * that cost, so the firmware's own meter (song.cpu_q8: MENU > INFO), its peak (felucca_dbg.max_us) and its overload
- * shedding (audio.c shed_check, above 85 %) see the device's load; outside it the clock is the audio's, as before. One
- * core (MENU > SYSTEM > 2ND CORE OFF, the device's default; ON takes about half the parts' share off). An estimate:
+ * (1200: TRIP-HOP on the device, 2ND CORE ON, 1682 us a half, no voice shed; 4000 before, fitted to shed-limited
+ * renders, gave it ~3 times its voices' cost; the old heavy demos, measured on the device, now ~25 % under). Inside the
+ * ISR TIMER4 runs on by that cost, so the firmware's own meter (song.cpu_q8: MENU > INFO), its peak
+ * (felucca_dbg.max_us) and its overload shedding (audio.c shed_check, above 85 %) see the device's load; outside it the
+ * clock is the audio's, as before. A track's EQ is BASS / TREBLE now (one pass, WEB_US_TONE), the MASTER's its bands.
+ * Two cores as MENU > SYSTEM > 2ND CORE says (ON, the default; web_cpu2 forces either): the parts split as fx.c
+ * mix_split does (the busier core's time, + C1_HAND), each part slower with both running (WEB_C2_SLOW: the flash
+ * cache they share), the MASTER chain's right on the other core. An estimate:
  * recalibrate against the device's console `prof` and cpu_pct. */
 #define WEB_US_EV 30u                    /* the events, the FX layer, at rest (us x 1 a block) */
 #define WEB_US_EVT 6u                    /* .. more for each part running */
@@ -61,50 +65,94 @@ static uint32_t web_ticks;
 #define WEB_US_INS 12u
 #define WEB_US_COMP 5u
 #define WEB_US_SPRD 20u                  /* SPREAD: its side through the chain, the wider mix */
-#define WEB_US_EQB 9u                    /* an EQ band doing something, one channel */
+#define WEB_US_EQB 9u                    /* an EQ band doing something, one channel (the MASTER's) */
+#define WEB_US_TONE 6u                   /* a track's BASS / TREBLE (fx_eq.c track_eq: two one-pole shelves, one pass) */
 #define WEB_US_REV 45u                   /* the reverb not at rest */
 #define WEB_US_CHO 8u
 #define WEB_US_DLY 10u
 #define WEB_US_MCOMP 8u
 #define WEB_US_OUT 33u                   /* master_out (DC, limiter, soft clip), USB, the click; still: WEB_US_OUTS */
 #define WEB_US_OUTS 9u
+#ifndef WEB_C2_SLOW
+#define WEB_C2_SLOW 1.2f                 /* both cores running: each slower (the flash cache they share; the device: a part's
+                                         * time on two cores ~0.6 of one core's, not 0.5) */
+#endif
+#define WEB_US_HAND 5u                   /* handing parts to the second core and taking them back (fx.c C1_HAND) */
 static uint8_t web_in_isr;
-static uint32_t web_cost_ticks, web_cpu_cal = 4000u, web_peak_ticks, web_overruns;
+static uint32_t web_cost_ticks, web_cpu_cal = 1200u, web_peak_ticks, web_overruns;
 static uint32_t fm1_ticks(void) { return web_ticks + (web_in_isr ? web_cost_ticks : 0u); }
 /* a block's estimated cost on the device (see the top: WEB_US_*) */
 static uint32_t web_bits(uint32_t m) { uint32_t n = 0; for (; m; m &= m - 1u) n++; return n; }
 #ifndef WEB_COST
 #define WEB_COST 1                       /* 0: no cost (tests/skip_test.c: no overload shedding to tell builds apart) */
 #endif
+/* the stages' estimated time so far (us; web_cost_stats): the events, the parts' voices, the parts' chains, the
+ * buses, the MASTER, the output; and the halves that went by */
+static float web_st[6], web_pt[NTRK][2];   /* (and each part's: its voices, its chain, one core's) */
+static uint32_t web_cpu2 = 2u;           /* the second core: 2 as MENU > 2ND CORE says (ON by default), 1 on, 0 off */
+static int web_two(void);
 static void web_cost_add(uint32_t n)
 {
-    uint32_t ips = 0, us = WEB_US_EV, i;
+    float ev = (float)WEB_US_EV, vo = 0, ch = 0, bus = 0, mst = 0, out, pc[NTRK], all = 0, lo, a = 0, w;
+    uint32_t i, m, g = 0, np = trk_count() < NTRK ? trk_count() : NTRK;
     if (!WEB_COST)
         return;
-    for (i = 0; i < trk_count(); i++) {
+    for (i = 0; i < np; i++) {
         const track_t *t = &trk[i];
+        float v = 0, c;
 #if FELUCCA_CPU2
-        uint32_t v = part_cost[i] > 60u ? part_cost[i] - 60u : 0u;   /* (its voices: fx.c's 60 the chain's guess) */
-        uint32_t run = v || (t->tail && (t->p[P_DIST] | t->p[P_ITYPE]));   /* (fx.c mix_part: voices, or a tail) */
-        ips += v;
+        uint32_t ip = part_cost[i] > 60u ? part_cost[i] - 60u : 0u;   /* (its voices: fx.c's 60 the chain's guess) */
+        uint32_t run = ip || (t->tail && (t->p[P_DIST] | t->p[P_ITYPE]));   /* (fx.c mix_part: voices, or a tail) */
+        v = (float)ip * (float)web_cpu_cal * 32.0f / 441000.0f;   /* (us a 32-sample block) */
 #else
         uint32_t run = t->tail && (t->p[P_DIST] | t->p[P_ITYPE]);   /* (no voice count here: the tails only) */
 #endif
         if (!run) {
-            us += WEB_US_REST;
+            pc[i] = (float)WEB_US_REST;
+            web_pt[i][1] += pc[i] * n / CTL;
+            ch += pc[i];
+            all += pc[i];
             continue;
         }
-        us += WEB_US_EVT + WEB_US_MIX + web_bits(eq_units(t)) * WEB_US_EQB + (t->p[P_DIST] ? WEB_US_DIST : 0u) +
-              (t->ins_run ? WEB_US_INS : 0u) + (trkx[i].rsv0 ? WEB_US_COMP : 0u) + (T_SPREAD(t) ? WEB_US_SPRD : 0u);
+        ev += (float)WEB_US_EVT;
+        c = (float)(WEB_US_MIX + (eq_units(t) ? WEB_US_TONE : 0u) + (t->p[P_DIST] ? WEB_US_DIST : 0u) +
+                    (t->ins_run ? WEB_US_INS : 0u) + (trkx[i].rsv0 ? WEB_US_COMP : 0u) + (T_SPREAD(t) ? WEB_US_SPRD : 0u));
+        vo += v;
+        ch += c;
+        pc[i] = v + c;
+        web_pt[i][0] += v * n / CTL;
+        web_pt[i][1] += c * n / CTL;
+        all += pc[i];
     }
-    us += (song.g[G_RTYPE] == 2 ? hl.side : 1u) ? WEB_US_REV : 0u;
-    us += (fx.cho_q < CHO_LEN ? WEB_US_CHO : 0u) + (fx.dly_q < DLY_LEN ? WEB_US_DLY : 0u);
+    bus += (song.g[G_RTYPE] == 2 ? hl.side : 1u) ? WEB_US_REV : 0u;
+    bus += (fx.cho_q < CHO_LEN ? WEB_US_CHO : 0u) + (fx.dly_q < DLY_LEN ? WEB_US_DLY : 0u);
     if (mst_on())
-        us += (eq_m[0].fix ? 0u : 2u * web_bits(eq_units(&mtrk)) * WEB_US_EQB) + (mtrk.p[P_DIST] ? 2u * WEB_US_DIST : 0u) +
-              (song.g[G_MCOMP] > 0 ? WEB_US_MCOMP : 0u);
-    us += out_still(n, fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12) ? WEB_US_OUTS : WEB_US_OUT;
-    web_cost_ticks += us * n / CTL * FM1_TICKS_PER_US +
-                      (uint32_t)((uint64_t)ips * n * web_cpu_cal * 24000000u / (44100ull * 10000000ull));
+        mst = (float)((eq_m[0].fix ? 0u : 2u * web_bits(eq_units(&mtrk)) * WEB_US_EQB) +
+                      (mtrk.p[P_DIST] ? 2u * WEB_US_DIST : 0u) + (song.g[G_MCOMP] > 0 ? WEB_US_MCOMP : 0u));
+    out = out_still(n, fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12) ? (float)WEB_US_OUTS : (float)WEB_US_OUT;
+    lo = all;
+    if (web_two() && all > (float)WEB_US_HAND) {        /* (fx.c mix_split: the parts split across the cores, the
+                                                         * busier one's time; the MASTER chain's right on the other) */
+        for (m = 1; m < (1u << np); m++) {              /* (Gray code: a part in or out a step) */
+            uint32_t k = (uint32_t)__builtin_ctz(m);
+            g ^= 1u << k;
+            a += g >> k & 1u ? pc[k] : -pc[k];
+            if (g == (1u << np) - 1u)
+                continue;
+            w = (a > all - a ? a : all - a) * WEB_C2_SLOW + (float)WEB_US_HAND;
+            if (w < lo)
+                lo = w;
+        }
+        mst *= 0.5f * WEB_C2_SLOW;
+    }
+    w = all > 0 ? lo / all : 1.0f;                      /* (each stage's share of the parts' time as it shrank) */
+    web_st[0] += ev * n / CTL;
+    web_st[1] += vo * w * n / CTL;
+    web_st[2] += ch * w * n / CTL;
+    web_st[3] += bus * n / CTL;
+    web_st[4] += mst * n / CTL;
+    web_st[5] += out * n / CTL;
+    web_cost_ticks += (uint32_t)((ev + lo + bus + mst + out) * n / CTL * FM1_TICKS_PER_US);
 }
 #define mix_block(o, n) (mix_block(o, n), web_cost_add(n))   /* (audio.c's audio_block: each block's cost) */
 
@@ -245,6 +293,14 @@ static void lcd_init(void) {}
 #include "../../firmware/src/ui_menu.c"
 #include "../../firmware/src/ui_input.c"
 #include "../../firmware/src/ui_layer.c"
+static int web_two(void)                 /* (the cost estimate: two cores) */
+{
+#if FELUCCA_CPU2
+    return web_cpu2 == 2u ? (ui_prefs2 & (PREF_CPU2_ON >> 16)) != 0u : web_cpu2 != 0u;
+#else
+    return 0;
+#endif
+}
 
 /* ------------------------------------------------------------ the flash --- */
 static uint32_t web_flash_writes;
