@@ -1877,6 +1877,12 @@ static void seq_tick(track_t *t, uint32_t n)
         top = t->seq_pos >= 0x7FFFFFFFu;            /* (PLAY, a SONG section: its first step) */
         t->seq_pos = top ? (chain.running ? chain.carry : 0u) : t->seq_pos - cur_len;
         t->seq_idx = (uint16_t)((t->seq_idx + 1u) % len);
+        if (!t->seq_idx) {                          /* (Dah) the pattern's start: the ARP again from its first note, on
+                                                     * it (a RATE, MODE or pattern changed since stays in time) */
+            t->arp_pos = 0xFFFFFFF;
+            t->arp_idx = 0xFFFFFFFFu;
+            t->arp_walk = 0;
+        }
         seq_enter(t, top, len);
         if (t->p[P_SQNT] == 1 && !t->nd_fired)
             seq_play(t, t->seq_idx, period);        /* QUANTIZE ON: every step on its start, as before 1.2 */
