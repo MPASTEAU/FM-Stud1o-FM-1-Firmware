@@ -440,6 +440,20 @@ static void pg_service(void)
                                                          * (the ring's steps, wiped and recorded into, come back below) */
         if ((w >> k) & 1u)
             pg_del(k, ps_num(k));
+    for (k = 0; k < NTRK; k++)                          /* (Dah) .. on a DRUM track, a lane's hits on its pages */
+        if (rp_wl[k]) {
+            uint32_t m, p, i;
+            f = motion_guard();
+            m = rp_wl[k];
+            rp_wl[k] = 0;
+            motion_unguard(f);
+            for (p = 1; p < NPAGE && p * NSTEP < (uint32_t)clamp(trk[k].p[P_SLEN], 1, LEN_MAX); p++) {
+                pgc_t *e = pgc_get(k, ps_num(k), p);
+                for (i = 0; i < NSTEP; i++)
+                    lane_out(&e->st[i], m);
+                e->dirty = 1;
+            }
+        }
     pgc_flush_all();
     for (k = 0; k < NTRK; k++) {
         const track_t *t = &trk[k];

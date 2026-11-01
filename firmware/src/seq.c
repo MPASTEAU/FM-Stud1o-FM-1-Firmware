@@ -773,6 +773,32 @@ static __attribute__((noinline)) void rec_wipe(track_t *t)
         memset(&motion.event[j], 0, sizeof motion.event[j]);
     motion.count = (uint8_t)n;
 }
+/* (Dah) REPLACE on a DRUM track: lane by lane. A pass's first hit of lane l wipes that lane only (its hits and accents;
+ * a step left with nothing a REST), the other lanes stay: the hats played again, the kick kept. rp_lw[track]: the lanes
+ * wiped this pass; rp_wl: those still to wipe on its pages (the main loop's: pg_service). In the pool (zeroed) */
+static uint8_t rp_lw[NTRK] __attribute__((section(".pool")));
+static uint8_t rp_wl[NTRK] __attribute__((section(".pool")));
+static void lane_out(step_t *s, uint32_t m)
+{
+    s->hit &= (uint8_t)~m;
+    s->acc &= (uint8_t)~m;
+    if (!s->hit && !s->n && st_kind(s) == ST_NOTE) {
+        memset(s, 0, sizeof *s);
+        s->time = ST_REST;
+    }
+}
+static __attribute__((noinline)) void rec_wipe_lane(track_t *t, uint32_t m)
+{
+    uint32_t k = trk_index(t) % NTRK, j;
+    for (j = 0; j < NSTEP; j++)
+        lane_out(&t->step[j], m);
+    for (j = 0; j < PGR_N; j++)
+        if (pgr[k].abs[j]) {
+            lane_out(&pgr[k].st[j], m);
+            pgr[k].dirty |= (uint16_t)(1u << j);
+        }
+    rp_wl[k] |= (uint8_t)m;
+}
 static uint8_t rec_live;                            /* (Dah) rec_note: a key played (input_on, the count-in), not the ARP */
 static void rec_note(track_t *t, uint32_t note, uint32_t vel)
 {
@@ -785,7 +811,15 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
         idx = (idx + 1u) % len;
     {   /* (Dah) REPLACE: the first note of a new pass (one played just before its step 1: that pass) */
         uint32_t i = trk_index(t) % NTRK, p = (uint8_t)(rp[i].pass + (next && !idx));
-        if (rec_replace && p != rp[i].took)
+        if (rec_replace && drum_track(t)) {           /* (DRUM: the lane played only) */
+            uint32_t m = 1u << (drum_lane(note) & 7u);
+            if (p != rp[i].took)
+                rp_lw[i] = 0;
+            if (!(rp_lw[i] & m)) {
+                rec_wipe_lane(t, m);
+                rp_lw[i] |= (uint8_t)m;
+            }
+        } else if (rec_replace && p != rp[i].took)
             rec_wipe(t);
         rp[i].took = (uint8_t)p;
     }
