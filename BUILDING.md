@@ -1,4 +1,6 @@
-# Building Felucca
+# Building FM Studio
+
+FM Studio is built exactly as Felucca, whose build it keeps (the output files keep Felucca's names).
 
 The build makes three files in `build/`:
 
@@ -14,12 +16,11 @@ Five engines are in a git submodule (`firmware/engines/`, [Felucca-Engines](http
 MIT), so clone with `--recurse-submodules`:
 
 ```
-git clone --recurse-submodules https://github.com/hugelton/Felucca.git
+git clone --recurse-submodules git@github.com:MPASTEAU/FM-Studio.git
 ```
 
-In a clone made without it, run `git submodule update --init` once. GitHub's "Download ZIP" and the source archives
-it adds to a release leave `firmware/engines/` empty; each release also has `felucca-X.Y.Z-source.tar.gz`, the whole
-source with the submodule's files in it. The build stops with "firmware/engines is empty" when they are missing.
+In a clone made without it, run `git submodule update --init` once. GitHub's "Download ZIP" and source archives
+leave `firmware/engines/` empty. The build stops with "firmware/engines is empty" when they are missing.
 
 ## Prerequisites (macOS)
 
@@ -73,14 +74,19 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/felucca.c`, `c
 | `FELUCCA_UAC` | 1 | USB audio input (the master output, stereo, 44.1 or 48 kHz) |
 | `FELUCCA_UAC_48K` | 1 | `0`: the USB audio input at 44.1 kHz only, as up to 1.0.5.2 (`firmware/src/usb.c`) |
 | `FELUCCA_UAC_AS_FIRST` | 1 | the audio control header lists the audio streaming interface before the MIDI one, so the USB audio driver of older macOS (up to 15) finds it; `0`: 1.0 to 1.5's order, byte for byte (`firmware/src/usb.c`) |
-| `FELUCCA_CPU2` | 1 | the second core is built in (MENU > SYSTEM > 2ND CORE, OFF by default); `0`: none of it, 1.6's one-core code and RAM (`firmware/hal/fm1_cpu1.h`, `firmware/src/fx.c`) |
+| `FELUCCA_CPU2` | 1 | the second core is built in (MENU > SYSTEM > 2ND CORE, ON by default in FM Studio); `0`: none of it, 1.6's one-core code and RAM (`firmware/hal/fm1_cpu1.h`, `firmware/src/fx.c`) |
 | `FELUCCA_UART` | 1 | TRS MIDI IN |
 | `FELUCCA_SLICE` | 1 | the SLICE engine |
 | `FELUCCA_ICONS` | 1 | parameter icons on the knob cards |
 | `FELUCCA_FM4` | 0 | the retired DIGITAL engine (4-operator FM) instead of its FM6 conversion |
+| `FELUCCA_DEMO` | 0 | power on with a demo song (the browser emulator's default; the device's flash has no room for it: use `tools/fm1_demo_projects.py` instead) |
 
 `FELUCCA_USB_LAYOUT` (`0` to `3`, default `0`) picks other USB descriptor layouts for testing; see
 `firmware/src/usb.c`.
+
+`FELUCCA_FAST` (with `FELUCCA_FAST_COPY`, `FELUCCA_NEAR`, `FELUCCA_NOINLINE`; comma-separated function names) is an
+**experiment, off by default**: the named functions run from RAM instead of the flash cache. It measured faster but, with
+both cores running, faulted about every two minutes; see the comment at the top of `tools/build.py`.
 
 ## Samples
 
@@ -101,8 +107,8 @@ python3 -m http.server -d build/emu 8790     # open http://localhost:8790/
 `web/emu/felucca_web.c` builds the firmware's sources as the host tests do, against a simulated FM-1, and
 Emscripten compiles it to WebAssembly (`build/emu/felucca.wasm`, with `index.html`, `worklet.js` and the font in `fonts/`). The page
 keeps the flash's storage sectors (projects, user presets, settings) in the browser. Not emulated: USB (audio,
-MIDI out, the editor, updates), TRS MIDI and the user sample slots. A build of it is on the site:
-<https://hugelton.github.io/Felucca/webapp/try/>.
+MIDI out, the editor, updates), TRS MIDI and the user sample slots. (The build on
+<https://hugelton.github.io/Felucca/webapp/try/> is upstream Felucca, not FM Studio.)
 
 ## Tests
 
@@ -130,15 +136,16 @@ does the same for the cost files.
 
 ## Install
 
-Use the web installer in Chrome or Edge:
-<https://hugelton.github.io/Felucca/webapp/installer/>. It installs the released package.
-
-From the command line (needs `pip3 install mido python-rtmidi`):
+The public Felucca web installer (<https://hugelton.github.io/Felucca/webapp/installer/>) installs upstream Felucca,
+not FM Studio. Install your build from the command line (needs `pip3 install mido python-rtmidi`):
 
 ```
 python3 tools/fm1_install.py build/felucca.fwsc
 python3 tools/fm1_install.py --info          # identity of the connected FM-1
+python3 tools/fm1_install.py FM-1.fwsc       # back to the official V15 (other packages without the loader marker: --force)
 ```
+
+The update writes the application area only: settings, projects, user presets and samples are kept.
 
 Or, to install your own build from the web installer, make a local copy of the site and open it from `localhost`
 (Web MIDI needs a secure context):
