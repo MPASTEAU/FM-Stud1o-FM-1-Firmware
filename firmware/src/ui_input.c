@@ -1653,13 +1653,8 @@ static void entry_write(track_t *t, int single)
         st->n = 0;
         st->time = ST_NOTE;
     }
-    if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {   /* MONO / LEG / UNI: one note */
-        st->note[0] = ent.note[ent.n - 1u];
-        st->n = 1;
-        st->time = ST_NOTE;
-        return;
-    }
-    for (k = 0; k < ent.n; k++) {
+    for (k = 0; k < ent.n; k++) {                      /* (Dah: MONO too: its chords feed the ARP; without it the voice
+                                                         * plays one of them) */
         for (j = 0; j < st->n && st->note[j] != ent.note[k]; j++)
             ;
         if (j == st->n && st->n < 4u)
@@ -1688,18 +1683,14 @@ static void seq_entry(uint32_t pressed)
             ent.keys = ent.n = 0;
             ent.orig = *ed_st(t, ui.cursor);
         }
-        n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root) */
+        n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root; Dah: MONO keys add as POLY's) */
         ent.keys++;
-        if (t->p[P_VOICE] && !ENGINES[t->engine]->oneshot) {
-            ent.n = 1;
-            ent.note[0] = ch[0];
-        } else
-            for (i = 0; i < n; i++) {
-                for (j = 0; j < ent.n && ent.note[j] != ch[i]; j++)
-                    ;
-                if (j == ent.n && ent.n < 4u)
-                    ent.note[ent.n++] = ch[i];
-            }
+        for (i = 0; i < n; i++) {
+            for (j = 0; j < ent.n && ent.note[j] != ch[i]; j++)
+                ;
+            if (j == ent.n && ent.n < 4u)
+                ent.note[ent.n++] = ch[i];
+        }
         entry_write(t, ent.keys == 1u && n == 1u);
         last_note = (uint8_t)note;
     }
