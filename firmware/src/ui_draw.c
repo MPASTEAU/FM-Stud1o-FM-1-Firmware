@@ -473,8 +473,8 @@ static void head_home(void)
         hld.t = fm1_ms;
         hld.voices = (uint8_t)voices_busy();
         hld.cpu = (uint8_t)(song.cpu_q8 * 100u / 256u > 99u ? 99u : song.cpu_q8 * 100u / 256u);
-        hld.warn = (uint8_t)(felucca_dbg.late + shed_count != hld.late ? 8u : hld.warn ? hld.warn - 1u : 0u);   /* (~2 s) */
-        hld.late = felucca_dbg.late + shed_count;
+        hld.warn = (uint8_t)(felucca_dbg.late != hld.late ? 8u : hld.warn ? hld.warn - 1u : 0u);   /* (~2 s) */
+        hld.late = felucca_dbg.late;
     }
     (void)head_slot(sl);
     if ((seq_off >> k) & 1u && !chain.running)          /* (the track on no pattern) */
@@ -517,7 +517,7 @@ static void head_home(void)
                                                          * right: nothing moves as they change) */
         if (xr - text_w(&AF_S, "88%") - 5 - text_w(&AF_S, "V") - 1 - w - (song.rec ? 14 : 0) >= lw) {
             GFX_HOOK_ALIGN(0, 0, 0, hh, AL_V, "home header text on its middle");
-            cv_text_r(xr, ty, &AF_S, lc, hld.warn ? (hld.warn & 1u ? T_REC : T_MID) : hld.cpu > 85u ? T_ACCENT : T_MID, T_BG);
+            cv_text_r(xr, ty, &AF_S, lc, hld.warn & 1u ? T_REC : hld.cpu > 85u ? T_ACCENT : T_MID, T_BG);
             xr -= text_w(&AF_S, "88%") + 5;
             xr = cv_text_r(xr, ty, &AF_S, "V", T_DIM, T_BG) - 1;   /* (Dah: the voices sounding, "V" after them as BPM
                                                          * after the tempo; no budget but the CPU's) */
