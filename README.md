@@ -20,10 +20,10 @@ All captured from the firmware itself (the browser emulator's build, the TRIP-HO
 
 | | |
 |:---:|:---:|
-| <img src="assets/readme/home.png" width="240" alt="HOME"><br>**HOME**: the eight tracks as a channel rack, the playhead | <img src="assets/readme/glo-song.png" width="240" alt="GLO SONG"><br>**GLO > SONG**: the arrangement, a pattern per track and section |
+| <img src="assets/readme/home.png" width="240" alt="HOME"><br>**HOME**: the eight tracks as a channel rack, the playhead | <img src="assets/readme/glo-song.png" width="240" alt="GLO SONG"><br>**GLO > SONG**, playing: the arrangement, a pattern per track and section, the playhead |
 | <img src="assets/readme/mixer.png" width="240" alt="MIXER"><br>**MIXER**: levels, pan, meters, the MASTER strip | <img src="assets/readme/patterns.png" width="240" alt="Patterns"><br>**PATTERN**: the pattern selector, each one drawn |
 | <img src="assets/readme/piano-roll.png" width="240" alt="Piano roll"><br>**SEQ > STEP**: the piano roll | <img src="assets/readme/drum-grid.png" width="240" alt="Drum grid"><br>**SEQ > GRID**: the drum grid, lane by lane |
-| <img src="assets/readme/step-detail.png" width="240" alt="Step detail"><br>**SEQ > DETAIL**: chance, ratchet, nudge, velocity per step | <img src="assets/readme/fx-chain.png" width="240" alt="FX chain"><br>**FX > CHAIN**: a track's effects and its sends |
+| <img src="assets/readme/step-detail.png" width="240" alt="Step detail"><br>**SEQ > DETAIL**: chance, ratchet, nudge, velocity per step | <img src="assets/readme/fx-chain.png" width="240" alt="FX chain"><br>**FX > CHAIN**: a pad's effects, its sends, its SIDECHAIN on the kick |
 
 FM Stud1o is an alternative firmware for the **M-VAVE FM-1** pocket synthesizer. It turns the FM-1 into an
 **8-track groovebox** loosely modelled on FL Studio's workflow: a channel rack of eight tracks, global patterns, a
