@@ -14,7 +14,7 @@
  *              cursor).
  *   MOTION     128 records shared by the four tracks, all played.
  *   FORMATS    FUN10 round trip (nudges, 128 records, the four parameters), FUN9 / FUN8 / FUN7 as 1.1 / 1.0 wrote
- *              them (tests/old_pack.h) refused (FM Studio reads FUN10 only), a
+ *              them (tests/old_pack.h) refused (FM Stud1o reads FUN10 only), a
  *              user preset's pattern keeps no nudge (its bit 4 is the tie), user presets of 99 and 103 parameters.
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
@@ -509,7 +509,7 @@ static int formats(void)
                  motion.count == MOTION_MAX && t->p[P_LSYNC] == 8);
     st.raw[68u + 4u] |= 0x80u;                       /* a nudge bit in a FUN10 note byte: fine; in a FUN9: refused */
 
-    /* FUN9 (1.1), FUN8 (1.0.x), FUN7: upstream's older formats, not read (FM Studio) */
+    /* FUN9 (1.1), FUN8 (1.0.x), FUN7: upstream's older formats, not read (FM Stud1o) */
     memset(&a.motion, 0, sizeof a.motion);
     chain_defaults(&a.chain);
     a.sum = proj_sum(&a);

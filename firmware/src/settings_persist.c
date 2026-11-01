@@ -32,7 +32,7 @@ typedef struct {
 /* Normalize in place; 1 = current, 2 = migrated, 0 = invalid. */
 static int settings_import(persist_t *p, int n)
 {
-    int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;   /* (FM Studio: PER4 only; PER1..PER3 were upstream's) */
+    int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;   /* (FM Stud1o: PER4 only; PER1..PER3 were upstream's) */
     if (!current) return 0;
     if (p->favorites.factory[15][29] > 1u)        /* STYLE (ui.c ui_style): 2, the retired PIXEL = LINE; unknown = FLAT */
         p->favorites.factory[15][29] = p->favorites.factory[15][29] == 2u ? 1u : 0u;

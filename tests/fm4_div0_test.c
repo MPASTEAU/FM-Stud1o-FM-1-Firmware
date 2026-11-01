@@ -10,7 +10,7 @@
  * 1. the same values: fm4_convert against the guarded form as it was (fm4_convert_ref below, as 1.0.3 had it):
  *    the patch, the returned FM6 preset and the values it leaves in p, over every INDEX x FLT ENV x a SUS / ATK
  *    grid (every ALG, op envelopes varied), then random values over every parameter's whole range.
- * (FM Studio: the firmware converts no DIGITAL sound any more; fm4_convert is the web editor's reference.)
+ * (FM Stud1o: the firmware converts no DIGITAL sound any more; fm4_convert is the web editor's reference.)
  * Run by tests/run_tests.sh (needs build/gen from one firmware build). */
 #define main hostsim_main
 #include "hostsim.c"

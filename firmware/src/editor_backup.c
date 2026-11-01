@@ -182,7 +182,7 @@ static uint32_t ed_bk_commit(void)
             p->rsize != sizeof(up_rec_t) || p->nslot != UP_PER_BANK)) return 2;
         /* Unknown record versions remain inert bytes, preserving future/older bank data. */
         obj = OBJ_UPRESET0 + ed_bk_id - 6u;
-    } else if (ed_bk_id == 8u) {                    /* the retired FM6 bank (always empty; FM Studio: an older archive's
+    } else if (ed_bk_id == 8u) {                    /* the retired FM6 bank (always empty; FM Stud1o: an older archive's
                                                      * bank is not moved) */
         return 0;
     } else if (ed_bk_id == 9u) {                    /* the user presets' FM6 patches (0: none) */

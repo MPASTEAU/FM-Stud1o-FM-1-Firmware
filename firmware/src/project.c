@@ -189,8 +189,8 @@ static int proj_engines_ok(const project_t *q)
     return 1;
 }
 static int proj_unpack(project_t *q, const uint8_t *b);
-/* n bytes of a stored project (FUN10, FM Studio's only one: the older formats and their conversions are gone, no
- * FM Studio user has a file of them) -> q; 0 = not a project */
+/* n bytes of a stored project (FUN10, FM Stud1o's only one: the older formats and their conversions are gone, no
+ * FM Stud1o user has a file of them) -> q; 0 = not a project */
 static int proj_import(project_t *q, const void *b, int n)
 {
     return n == PROJ_STORE_SIZE && ((const uint32_t *)b)[0] == PROJ_MAGIC && proj_unpack(q, b) && proj_engines_ok(q);

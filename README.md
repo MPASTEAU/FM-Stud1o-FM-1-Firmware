@@ -1,8 +1,20 @@
-# FM Studio
+<p align="center">
+  <img src="assets/readme/logo.png" width="160" alt="FM Stud1o logo: a blueberry">
+</p>
 
-[![License: GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+<h1 align="center">FM Stud1o</h1>
 
-FM Studio is an alternative firmware for the **M-VAVE FM-1** pocket synthesizer. It turns the FM-1 into an
+<p align="center">
+  An 8-track groovebox firmware for the M-VAVE FM-1, based on Felucca.<br>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-GPL--3.0--only-blue.svg" alt="License: GPL-3.0-only"></a>
+</p>
+
+<p align="center">
+  <img src="assets/readme/splash.png" width="240" alt="The power-on screen">
+  <img src="assets/readme/home.png" width="240" alt="HOME with the tracks">
+</p>
+
+FM Stud1o is an alternative firmware for the **M-VAVE FM-1** pocket synthesizer. It turns the FM-1 into an
 **8-track groovebox** loosely modelled on FL Studio's workflow: a channel rack of eight tracks, global patterns, a
 piano roll and a drum grid, a SONG arranger, a mixer and an FX chain on every track.
 
@@ -39,13 +51,13 @@ is not affiliated with or supported by Hügelton Instruments or M-VAVE.
 ## Quick start
 
 ```sh
-git clone --recurse-submodules git@github.com:MPASTEAU/FM-Studio.git
-cd FM-Studio
+git clone --recurse-submodules git@github.com:MPASTEAU/FM-Stud1o.git
+cd FM-Stud1o
 tools/get_toolchain.sh                         # JieLi toolchain -> ~/.jieli/toolchain
 # JieLi AC79 SDK in ~/fw-AC79_AIoT_SDK (see BUILDING.md), Docker running on macOS
-./build.sh                                     # -> build/felucca.fwsc
+./build.sh                                     # -> build/fm-stud1o.fwsc
 pip3 install mido python-rtmidi
-python3 tools/fm1_install.py build/felucca.fwsc   # FM-1 connected by USB
+python3 tools/fm1_install.py build/fm-stud1o.fwsc   # FM-1 connected by USB
 ```
 
 No hardware? `web/emu/build.sh` builds the same firmware for the browser (see [Browser emulator](#browser-emulator)).
@@ -63,7 +75,7 @@ the loader receives the package over USB-MIDI and writes it, the FM-1 restarts a
 
 ```sh
 pip3 install mido python-rtmidi
-python3 tools/fm1_install.py build/felucca.fwsc        # asks before writing; --yes skips the question
+python3 tools/fm1_install.py build/fm-stud1o.fwsc        # asks before writing; --yes skips the question
 python3 tools/fm1_install.py --info                    # identity of the connected FM-1
 python3 tools/fm1_install.py PACKAGE.fwsc --port NAME  # pick a MIDI port by part of its name
 ```
@@ -72,9 +84,9 @@ The loader only writes the application area; it never touches the region where s
 user samples are stored, so **installing or updating keeps your projects**. If an earlier install was interrupted and the
 FM-1 is still in update mode, running the installer again finishes the write.
 
-A local copy of the web installer page can also install your own build (`python3 web/make_site.py build/felucca.fwsc dev
+A local copy of the web installer page can also install your own build (`python3 web/make_site.py build/fm-stud1o.fwsc dev
 /tmp/site`, served from `localhost`; see [BUILDING.md](BUILDING.md)). The public Felucca web installer installs upstream
-Felucca, not FM Studio.
+Felucca, not FM Stud1o.
 
 ### Going back to the official firmware
 
@@ -237,7 +249,7 @@ KNOB 1 picks the row, KNOB 2 changes its value. Holding OCT- and OCT+ at power-o
 ## Browser emulator
 
 `web/emu/` compiles the firmware's own sources to WebAssembly against a simulated FM-1 (keys, knobs, screen, audio in
-an AudioWorklet), so FM Studio can be tried without a device. It powers on with a demo song, keeps its flash (projects,
+an AudioWorklet), so FM Stud1o can be tried without a device. It powers on with a demo song, keeps its flash (projects,
 presets, settings) in the browser, can map MIDI notes / CCs to the panel's buttons, has a Factory reset button, and
 shows a CPU estimate derived from measurements on the FM-1. USB, TRS MIDI and user sample slots are not emulated.
 
@@ -254,7 +266,7 @@ SDK (three of its boot / config files go into the package) and, on macOS, Docker
 runs in a `linux/amd64` container). Full instructions: [BUILDING.md](BUILDING.md).
 
 ```sh
-./build.sh                      # build/felucca.bin, build/loader/ota.bin, build/felucca.fwsc
+./build.sh                      # build/fm-stud1o.bin, build/loader/ota.bin, build/fm-stud1o.fwsc
 ./build.sh --release 1.0        # release build and folder build/release-1.0/
 ```
 
@@ -287,7 +299,7 @@ land in `build/ui_new/`. With Node.js the web page tests run too, and with Emscr
 
 ## Licence and credits
 
-FM Studio is free software under the [GNU General Public License, version 3 only](LICENSE) (`GPL-3.0-only`), as Felucca
+FM Stud1o is free software under the [GNU General Public License, version 3 only](LICENSE) (`GPL-3.0-only`), as Felucca
 is. If you distribute it, or firmware built from it, you must give recipients the complete corresponding source under the
 same licence.
 
@@ -307,5 +319,5 @@ same licence.
   (GPL-3.0). Everyone credited: [CREDITS.md](CREDITS.md).
 
 "M-VAVE" and "FM-1" are trademarks of their respective owners; "Felucca" and "Hügelton Instruments" are names of
-Hügelton Instruments; "FL Studio" is a trademark of Image-Line. FM Studio is an independent project, not affiliated with
+Hügelton Instruments; "FL Studio" is a trademark of Image-Line. FM Stud1o is an independent project, not affiliated with
 or endorsed by any of them. The firmware never enables the FM-1's Bluetooth / Wi-Fi radio.

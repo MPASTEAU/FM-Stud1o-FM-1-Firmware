@@ -343,7 +343,7 @@ int main(void)
     bad += check("a FUN10 project restores into slot 3 (flash and RAM)",
                  put_all(4, &st, sizeof st, st_crc32(&st, sizeof st)) == 0 && project_used(2) &&
                  !memcmp(&proj_slot[2], &st, sizeof st) && st_load(OBJ_PROJECT0 + 2, &proj_wire, sizeof proj_wire) == (int)sizeof st);
-    {   /* FUN8 of 1.0.x and FUN9 of 1.1 (upstream's older formats): refused at begin (FM Studio reads FUN10 only) */
+    {   /* FUN8 of 1.0.x and FUN9 of 1.1 (upstream's older formats): refused at begin (FM Stud1o reads FUN10 only) */
         static uint8_t v8[3584], v9[3648];
         project_capture(&proj_scratch);
         bad += check("a FUN8 / FUN9 project (upstream's older formats) is refused (1)",
@@ -375,7 +375,7 @@ int main(void)
         memcpy(bk.v[2] + 118, "BANK B3   ", 10);
         upf_empty();
         bad += check("the user presets of an old archive (id 6) restore", put_all(6, &ub, sizeof ub, st_crc32(&ub, sizeof ub)) == 0);
-        bad += check("an old archive's FM6 bank (id 8) is taken (0) and ignored (FM Studio: not moved)",
+        bad += check("an old archive's FM6 bank (id 8) is taken (0) and ignored (FM Stud1o: not moved)",
                      put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 0 && upf_get(0, pk) && upf_get(4, pk));
         up_load(1);
         bad += check("  .. the F2 preset loads the factory patch, SLOT F2", TSEL->p[P_E7] == 1 &&

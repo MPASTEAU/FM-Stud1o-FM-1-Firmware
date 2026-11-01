@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
-"""FM Studio's logo: a blueberry (after FL Studio's fruit), drawn at 4x then reduced, in ICE's colours (TEXT, THEME,
+"""FM Stud1o's logo: a blueberry (after FL Studio's fruit), drawn at 4x then reduced, in ICE's colours (TEXT, THEME,
 ACCENT): the fruit alone, no glow, no rim, no background (transparent: the splash shows the screen's BG there,
 tools/gen_splash_image.py; the pages their own).
   gen_logo.py [OUT]   OUT (default assets/splash.webp, with its alpha), and the pages' icon (a 64 x 64 PNG):

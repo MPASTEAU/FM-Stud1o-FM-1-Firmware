@@ -1334,7 +1334,7 @@ static uint32_t preset_rank(const engine_t *e, uint32_t k)
 
 #if !FELUCCA_FM4
 static void set_engine_of(track_t *t, uint32_t ei);
-/* DIGITAL (engine 1, retired): a track that holds it anyway plays FM6's first sound (FM Studio: no DIGITAL sound to
+/* DIGITAL (engine 1, retired): a track that holds it anyway plays FM6's first sound (FM Stud1o: no DIGITAL sound to
  * convert, the conversion of 1.0 is gone) */
 static void fm4_track(track_t *t) { set_engine_of(t, ENGI_FM6); }
 #endif

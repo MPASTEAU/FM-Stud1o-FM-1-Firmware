@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* Host test of the project format (firmware/src/project.c, -DPROJ_HOST part): FUN10, the only one FM Studio reads (the
- * older formats FUN1..FUN9 and their conversions are gone: no FM Studio user has one): the name, the FM6 patches, the
+/* Host test of the project format (firmware/src/project.c, -DPROJ_HOST part): FUN10, the only one FM Stud1o reads (the
+ * older formats FUN1..FUN9 and their conversions are gone: no FM Stud1o user has one): the name, the FM6 patches, the
  * locks, a step out of range packed inside it; damaged, short and older records refused.
  * Run by tests/run_tests.sh (needs build/gen from one firmware build). */
 #define main hostsim_main

@@ -158,7 +158,7 @@ static int upf_save(void)
 #endif
 }
 
-static void upf_boot(void)                       /* up_boot, after the user preset banks (FM Studio: the retired FM6
+static void upf_boot(void)                       /* up_boot, after the user preset banks (FM Stud1o: the retired FM6
                                                   * bank of 1.0..1.0.2 is never read: none to move) */
 {
 #if FELUCCA_FLASH
