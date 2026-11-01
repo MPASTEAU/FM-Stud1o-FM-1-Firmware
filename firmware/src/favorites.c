@@ -34,7 +34,7 @@ static void palette_apply(void)
                                                      * HV_TRACKS; byte 13: free; saved with the settings, so a view picked
                                                      * later stays) */
         favorites.factory[15][13] = 'H';
-        favorites.factory[15][26] = 1u;
+        favorites.factory[15][26] = 0u;             /* (HV_TRACKS: 0 since TRACKS came first) */
     }
     if (!(DAH_MIG & 4u)) {                          /* (Dah) once: bytes 16, 17 of row 15 are the FX layer's key map
                                                      * (ui_layer.c fx_keys, 14..23): the open project and a mark were kept
