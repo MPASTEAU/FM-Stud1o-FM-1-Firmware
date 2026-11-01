@@ -492,7 +492,7 @@ static int project_copy(const char *name)               /* COPY: the music as a 
     if (pfs_write(id, proj_name)) { ui_message("MEMORY FULL"); return 2; }
     PFS_CUR = (uint8_t)id;
     settings_later();
-    ui_message("COPIED");
+    ui_big("SAVED", proj_name);                         /* (Dah) big, as SAVE held: the new project's name under it */
     return 0;
 }
 static int project_rename_cur(const char *name)         /* EDIT on FILE: the project open renamed */

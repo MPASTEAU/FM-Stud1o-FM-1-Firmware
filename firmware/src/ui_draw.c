@@ -1540,6 +1540,24 @@ static int msg_popup(void)
         b = LY_LONG[ly_hint][1];
         help = 1;
     }
+    if (cards_big && b == cards_b) {                   /* (Dah) a confirmation (ui.c ui_big): BIG, its name under it */
+        H = 2 * 20 + AF_L_CAP_H + (b[0] ? 14 + AF_M_CAP_H : 0);
+        y0 = 120 - H / 2;
+        sig = str_hash(str_hash(11u, a), b) + 1u;
+        if (!ui.force && sig == msig)
+            return 1;
+        msig = sig;
+        cv_begin((uint32_t)W, (uint32_t)H, T_BG);
+        cv_rrect(0, 0, W, H, 8, T_THEME, T_BG);
+        cv_rrect(2, 2, W - 4, H - 4, 6, T_SURF, T_THEME);
+        GFX_HOOK_ALIGN(0, 0, W, 0, AL_H, "big confirmation centred");
+        cv_text_in(0, 20 - AF_L_CAP_Y, W, &AF_L, a, T_THEME, T_SURF);
+        if (b[0])
+            cv_text_in(0, 20 + AF_L_CAP_H + 14 - AF_M_CAP_Y, W, &AF_M, b, T_MID, T_SURF);
+        lcd_fill(0, (uint32_t)card_y(), 240, (uint32_t)(240 - (int32_t)card_y()), T_BG);
+        cv_blit((uint32_t)x0, (uint32_t)y0);
+        return 1;
+    }
     help |= str_eq(a, "ON THE MASTER") || str_eq(a, "EFFECTS");   /* (Dah) HELP's windows: how to have them no more,
                                                          * small (EFFECTS: ui.c page_entered) */
     int knob = 0;                                       /* (Dah) "\x02" in its first line: a knob drawn there */

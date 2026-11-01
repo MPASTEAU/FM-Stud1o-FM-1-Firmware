@@ -608,13 +608,25 @@ static void help_start(void) { ui.help_t = (uint8_t)(help_on() ? HELP_FRAMES : 0
 /* (Dah) a message over HOME's look's knobs on two lines (ui_draw.c cards_msg): the first as ui.msg, the second here */
 static const char *cards_b;
 static char cards_a[24];
+static uint8_t cards_big;                              /* (Dah) the message a confirmation: big (ui_big) */
 static void cards_say(const char *a, const char *b)
 {
     ui_message(a);
+    cards_big = 0;
     str_cpy(cards_a, ui.msg, sizeof cards_a);
     cards_b = b;
     ui.msg_t = (uint8_t)clamp(30 + 3 * (int32_t)(str_len(a) + str_len(b)) / 2, 45, 110);   /* (Dah: by what there is to
                                                          * read: ~0.5 s + 25 ms a letter, ~1.8 s at most) */
+}
+/* (Dah) a confirmation, BIG: a in the large face (its glyphs: tools/gen_aa_font.py L_CHARS) in a window centred over
+ * the page, b (a project's name) under it, ~1 s (ui_draw.c msg_popup); playing: the header's small line, as any */
+static char big_b[16] __attribute__((section(".pool")));
+static void ui_big(const char *a, const char *b)
+{
+    str_cpy(big_b, b, sizeof big_b);
+    cards_say(a, big_b);
+    cards_big = 1;
+    ui.msg_t = 60;
 }
 static void page_entered(void)
 {

@@ -1848,7 +1848,7 @@ static void sel_list(int32_t s)
  * write silences the audio) */
 static void save_quick(void)
 {
-    char m[24] = "SAVED ";
+    char m[16];
     if (pfs_busy())
         return;
     if (!pfs_there(pfs_cur())) {
@@ -1859,8 +1859,8 @@ static void save_quick(void)
         ui_message("SAVE ERROR");
         return;
     }
-    (void)pfs_name(pfs_cur(), m + 6);
-    ui_message(m);
+    (void)pfs_name(pfs_cur(), m);
+    ui_big("SAVED", m);                                 /* (Dah) big, its name under it */
 }
 /* HOME / REC / SAVE: tap on release, hold 0.7 s fires once. t0 = press time | 1,
  * bit 1 = fired (or swallowed: then the release is no tap either) */
