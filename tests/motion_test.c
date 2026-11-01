@@ -83,31 +83,13 @@ static int compact_project(void)
     bad += check("FUN10 round trip preserves signed values/FM params/probability/motion", proj_import(&after, &packed, sizeof packed) &&
         proj_same(&before, &after));
     corrupt = packed; corrupt.raw[112] ^= 1u;
-    bad += check("FUN7 torn or corrupted payload is refused", !proj_import(&after, &corrupt, sizeof corrupt));
+    bad += check("FUN10 torn or corrupted payload is refused", !proj_import(&after, &corrupt, sizeof corrupt));
     corrupt = packed; corrupt.raw[68] = 255; uint32_t sum = proj_hash(corrupt.raw, sizeof corrupt - 4u);
     memcpy(corrupt.raw + sizeof corrupt - 4u, &sum, 4);
     bad += check("compact parameter range is validated even with a correct hash", !proj_import(&after, &corrupt, sizeof corrupt));
     corrupt = packed; uint32_t probability_byte = 68u + PROJ_NP_W + 2u + 8u; corrupt.raw[probability_byte] = 127;
     sum = proj_hash(corrupt.raw, sizeof corrupt - 4u); memcpy(corrupt.raw + sizeof corrupt - 4u, &sum, 4);
     bad += check("invalid probability is refused even with a correct hash", !proj_import(&after, &corrupt, sizeof corrupt));
-    project_v6_t old; memset(&old, 0, sizeof old); old.magic = PROJ_MAGIC_V6; old.size = sizeof old;
-    memcpy(old.g, before.g, sizeof old.g); old.parts = NPART; old.phys = PROJ_PHYS;
-    for (uint32_t k = 0; k < NTRK_V10; k++) {
-        for (uint32_t j = 0; j < 61u; j++) old.t[k].p[j] = before.t[k].p[j];
-        for (uint32_t j = 0; j < 8u; j++) old.t[k].p[61u + j] = before.t[k].p[P_E0 + j];
-        old.t[k].engine = before.t[k].engine; old.t[k].preset = before.t[k].preset;
-        for (uint32_t j = 0; j < NSTEP; j++) memcpy(&old.t[k].step[j], &before.t[k].step[j], sizeof(step10_t));
-    }
-    old.chain.count = before.chain.count;              /* (the rows of FUN6: one slot each) */
-    for (uint32_t r = 0; r < CHAIN_ROWS; r++) {
-        old.chain.row[r].slot = before.chain.row[r].slot[0];
-        old.chain.row[r].repeat = before.chain.row[r].repeat;
-    }
-    old.sum = proj_hash(&old, sizeof old - 4u);
-    bad += check("real FUN6 disk image migrates with FM defaults/100% chance/no motion", proj_import(&after, &old, sizeof old) &&
-        after.t[0].p[P_E0] == before.t[0].p[P_E0] && after.t[0].p[P_ED_FLT] == -50 &&
-        after.t[0].p[P_FM1_LEVEL] == 127 && !after.motion.count && step_chance(&after.t[0].step[3]) == 100u);
-    bad += check("migrated FUN6 can be written as fixed-size FUN7", proj_pack(&packed, &after));
     project_save(1); motion_clear(t); t->p[P_FM1_LEVEL] = 127; step_set_chance(&t->step[3], 100);
     project_load(1);
     bad += check("actual project save/load restores motion, chance and operator settings", motion_count(t) == 1u &&

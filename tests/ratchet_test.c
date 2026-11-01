@@ -187,34 +187,6 @@ static int projects(void)
         for (i = 0; i < NSTEP; i++)
             ok &= packed.raw[pos + PROJ_NP_W + 2u + i * 9u + 5u] < 128u && packed.raw[pos + PROJ_NP_W + 2u + i * 9u + 8u] < 128u;
     bad += check("  a project without ratchets: every velocity and chance byte below 128, as firmware before wrote", ok);
-    {   /* a FUN7 image (its tracks without patches) as firmware before RATCH wrote it: x1 */
-        project_store_t old;
-        uint32_t sum, magic = PROJ_MAGIC_V7, size = PROJ_STORE_V7;
-        project_t fun7;
-        memcpy(&old, &packed, sizeof old);
-        memcpy(old.raw, &magic, 4); memcpy(old.raw + 4, &size, 4);
-        memset(old.raw + PROJ_STORE_V7 - 4u - PROJ_NAME_LEN, 0, PROJ_NAME_LEN);
-        sum = proj_hash(old.raw, PROJ_STORE_V7 - 4u); memcpy(old.raw + PROJ_STORE_V7 - 4u, &sum, 4);
-        ok = proj_import(&fun7, &old, PROJ_STORE_V7);
-        for (k = 0; ok && k < NTRK_V10; k++)
-            for (i = 0; i < NSTEP; i++)
-                ok &= step_ratchet(&fun7.t[k].step[i]) == 1u;
-        bad += check("  FUN7 of before: every step x1", ok && fun7.t[0].step[1].flags == SF_ACCENT);
-    }
-    {   /* FUN6 (10-byte steps): only accent and slide come over, x1 */
-        project_v6_t v6;
-        memset(&v6, 0, sizeof v6);
-        v6.magic = PROJ_MAGIC_V6; v6.size = sizeof v6; v6.parts = NPART; v6.phys = PROJ_PHYS;
-        memcpy(v6.g, before.g, sizeof v6.g);
-        memset(&v6.chain, 0, sizeof v6.chain);
-        for (k = 0; k < NTRK_V10; k++) {
-            for (i = 0; i < 69u; i++) v6.t[k].p[i] = TP[i < 61u ? i : i - 61u + P_E0].def;
-            v6.t[k].step[0] = (step10_t){{60}, 1, ST_NOTE, 0xFBu, 100, 0, 0};   /* (stray high bits) */
-        }
-        v6.sum = proj_hash(&v6, sizeof v6 - 4u);
-        bad += check("  FUN6: x1, accent and slide kept", proj_import(&after, &v6, sizeof v6) &&
-                     step_ratchet(&after.t[0].step[0]) == 1u && after.t[0].step[0].flags == (SF_ACCENT | SF_SLIDE));
-    }
     ui_power_on();                                   /* a real save and load */
     step_set_ratchet(&trk[1].step[7], 3);
     trk[1].step[7].time = ST_NOTE; trk[1].step[7].n = 1; trk[1].step[7].note[0] = 50;

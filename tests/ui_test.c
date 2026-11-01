@@ -549,41 +549,6 @@ static int test_sound_loads(void)
                      str_eq(sd->names[7], "USR3") && sd->max == 7 &&
                      enum_orig(&ENGINES[8]->edit[0], SMP_SET_PERC) == 0 && SMP_SETS[SMP_SET_PERC].z0 == SMP_SETS[0].z0);
     }
-    host_legacy_sample_perc(t);                /* SAMPLE PERC (SET 4, retired after 1.0.2): every load gives DRUM */
-    t->preset = 4;                             /* a project written before the factory removal */
-    my_steps(t);
-    t->p[P_LEVEL] = 71;
-    t->p[P_REV] = 33;
-    before = *t;
-    project_save(0);
-    apply_preset_to(t, 0);
-    track_defaults_steps(t);
-    project_load(0);
-    bad += check("saved SAMPLE PERC project: a DRUM track (its kit), the rest of the sound and every step kept",
-                 t->eng_req == ENGI_DRUM && t->preset == 0u && perc_kit(t) &&
-                 !memcmp(t->p, before.p, P_E0 * sizeof t->p[0]) && !memcmp(t->step, before.step, sizeof t->step));
-    bad += check("  its GM hits play as drums (kick, snare, closed hat on their lanes)", gm_hits_play(t));
-    {   /* a user preset of SAMPLE PERC (UP_PUT from an older editor, or a bank read): DRUM, its kit */
-        up_rec_t r;
-        int16_t keep[P_COUNT];
-        uint32_t k;
-        memset(&r, 0, sizeof r);
-        r.used = UP_USED; r.ver = UP_VER; r.engine = ENGI_SAMPLE; r.np = P_COUNT;
-        memcpy(r.name, "OLD PERC", 8);
-        host_legacy_sample_perc(t);
-        for (k = 0; k < P_COUNT; k++)
-            up_set_value(&r, k, t->p[k]);
-        up_migrate(&r);
-        *up_rec(7) = r;
-        set_engine_of(t, 0);
-        memcpy(keep, t->p, sizeof keep);
-        song.sel = (uint8_t)(t - trk);
-        up_load(7);
-        bad += check("SAMPLE PERC user preset: loads as a DRUM track (its kit)", t->eng_req == ENGI_DRUM && perc_kit(t) &&
-                     t->p[P_LEVEL] == keep[P_LEVEL]);
-        bad += check("  its GM hits play as drums", gm_hits_play(t));
-        memset(up_rec(7), 0, sizeof r);
-    }
     set_engine_of(t, 0);
     apply_preset_to(t, SMP_SET_PERC);             /* (engine 0: an ANALOG preset 4, not PERC) */
     bad += check("factory preset 4 of another engine stays that engine's", t->eng_req == 0u && t->preset == 4u);
@@ -591,36 +556,7 @@ static int test_sound_loads(void)
     apply_preset_to(t, SMP_SET_PERC);             /* SAMPLE preset 4 (once PERC): the editor's PRESET, a favourite */
     bad += check("SAMPLE preset 4 (once PERC): DRUM's kit", t->eng_req == ENGI_DRUM && t->preset == 0u && perc_kit(t) &&
                  gm_hits_play(t));
-    ui_power_on();
-    host_legacy_sample_perc(&trk[3]);
-    my_steps(&trk[3]);
-    trk[3].p[P_SDIV] = 3;
-    before = trk[3];
-    project_save(1);
-    project_v6_t legacy = {0};
-    project_t decoded;
-    proj_import(&decoded, &proj_slot[1], sizeof proj_slot[1]);
-    legacy.magic = PROJ_MAGIC_V6; legacy.size = sizeof legacy;
-    legacy.parts = 0; legacy.phys = PROJ_PHYS;
-    memcpy(legacy.g, decoded.g, sizeof legacy.g);
-    for (uint32_t ti = 0; ti < NTRK_V10; ti++) {
-        memcpy(legacy.t[ti].p, decoded.t[ti].p, 61u * sizeof(int16_t));
-        memcpy(legacy.t[ti].p + 61, decoded.t[ti].p + P_E0, 8u * sizeof(int16_t));
-        legacy.t[ti].engine = decoded.t[ti].engine; legacy.t[ti].preset = decoded.t[ti].preset;
-        for (uint32_t st = 0; st < NSTEP; st++) memcpy(&legacy.t[ti].step[st], &decoded.t[ti].step[st], sizeof(step10_t));
-    }
-    legacy.t[3].engine = 0;
-    legacy.g[G_DRLVL] = 71; legacy.g[G_DRREV] = 43;
-    legacy.g[G_RTYPE] = 10;                               /* (id 24 was the GM drum part's MIDI channel: 10) */
-    legacy.sum = proj_hash(&legacy, offsetof(project_v6_t, sum));
-    memcpy(&proj_slot[1], &legacy, sizeof legacy);
-    project_load(1);
-    bad += check("old GM projects (the drum part) load as DRUM's kit, their mix and steps kept",
-                 trk[3].eng_req == ENGI_DRUM && trk[3].preset == 0u && perc_kit(&trk[3]) &&
-                 trk[3].p[P_LEVEL] == 71 && trk[3].p[P_REV] == 43 && trk[3].p[P_SDIV] == 3 &&
-                 !memcmp(trk[3].step, before.step, sizeof trk[3].step));
-    bad += check("  their GM hits play as drums", gm_hits_play(&trk[3]));
-    bad += check("  its old drum channel (10, in id 24) loads as REVERB TYPE ROOM", song.g[G_RTYPE] == 0);
+    (void)before;
     return bad;
 }
 

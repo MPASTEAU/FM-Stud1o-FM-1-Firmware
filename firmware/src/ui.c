@@ -1257,45 +1257,10 @@ static uint32_t preset_rank(const engine_t *e, uint32_t k)
 #define preset_shown(e) (!eng_fits(song.sel, e) ? 0u : ENGINES[e]->npresets - (ENGINES[e]->presets == SMP_PRESET_TABLE ? SMP_NALIAS : 0u))   /* (none of an engine the track cannot play) */
 
 #if !FELUCCA_FM4
-/* DIGITAL (engine 1, retired): t's sound = p, values as DIGITAL has them, converted to FM6 with a patch of its own
- * (fm4_convert.c). Every path that brings a DIGITAL sound into a track ends here: a track never keeps engine 1 */
-static void fm4_apply(track_t *t, int16_t *p)
-{
-    uint8_t v[FP_SIZE + 1u];
-    uint32_t pr = fm4_convert(p, v), tr = trk_index(t), f;
-    fm6_set_patch(tr, v);
-    f = motion_guard();                               /* the audio ISR sees the old sound or the new one */
-    memcpy(t->p, p, sizeof t->p);
-    t->eng_req = ENGI_FM6;
-    t->preset = (uint8_t)pr;
-    motion_unguard(f);
-    fm6_adopt(tr);                                    /* SLOT OWN: the converted patch is the track's own */
-}
-static void fm4_track(track_t *t)                     /* t holds a DIGITAL sound (engine 1): convert it */
-{
-    int16_t p[P_COUNT];
-    memcpy(p, t->p, sizeof p);
-    fm4_apply(t, p);
-}
-/* DIGITAL preset k (a stored preset number of engine 1: the editor's PRESET, SET G_ENGSEL, an old project's
- * power-on sound): its sound as a preset load sets it, converted. The sound only (not the steps, not param_kept) */
-static void fm4_load_preset(track_t *t, uint32_t k)
-{
-    int16_t p[P_COUNT];
-    uint32_t i;
-    load_begin(t, LOAD_SOUND);
-    panic_req |= (uint8_t)(1u << trk_index(t));
-    t->user = 0;
-    if (t == TSEL)
-        sync_reload = 1;
-    memcpy(p, t->p, sizeof p);
-    for (i = 0; i < P_E0; i++)
-        if (!param_kept(i))
-            p[i] = TP[i].def;
-    fm4_preset_values(p, k);
-    fm4_apply(t, p);
-    load_end(t);
-}
+static void set_engine_of(track_t *t, uint32_t ei);
+/* DIGITAL (engine 1, retired): a track that holds it anyway plays FM6's first sound (FM Studio: no DIGITAL sound to
+ * convert, the conversion of 1.0 is gone) */
+static void fm4_track(track_t *t) { set_engine_of(t, ENGI_FM6); }
 #endif
 
 static void set_engine_of(track_t *t, uint32_t ei);
@@ -1306,7 +1271,7 @@ static void apply_preset_to(track_t *t, uint32_t pi)
     uint32_t i;
 #if !FELUCCA_FM4
     if (t->eng_req % NENGINES == ENGI_DIGITAL) {
-        fm4_load_preset(t, pi);
+        fm4_track(t);
         return;
     }
 #endif
@@ -1355,13 +1320,11 @@ static void set_engine_of(track_t *t, uint32_t ei)
     uint32_t i;
     if (!eng_fits((uint32_t)(t - trk), ei % NENGINES))   /* (PHYS GRAIN on tracks 1..4) */
         ei = 0;
-    e = ENGINES[ei % NENGINES];
 #if !FELUCCA_FM4
-    if (ei % NENGINES == ENGI_DIGITAL) {             /* DIGITAL (retired): its first preset, as FM6 */
-        fm4_load_preset(t, 0);
-        return;
-    }
+    if (ei % NENGINES == ENGI_DIGITAL)               /* DIGITAL (retired): FM6 */
+        ei = ENGI_FM6;
 #endif
+    e = ENGINES[ei % NENGINES];
     load_begin(t, LOAD_SOUND);
     fm1_irq_off();
     t->eng_req = (uint8_t)(ei % NENGINES);

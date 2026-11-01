@@ -55,6 +55,10 @@
  *                                  BRASS, ORGAN, PAD, MARIMBA, FUNK KEY -> PLUCK): what reloads when the sound is
  *                                  saved as a user preset again (a user preset keeps PTCH, not the patch); the
  *                                  OP ENV values their defaults (inert since; ids 61..80 stay, no id moves)
+ * FM Studio: the firmware converts nothing any more (no FM Studio user has a DIGITAL sound: a track holding engine 1
+ * plays FM6's first sound, ui.c fm4_track); fm4_convert stays as the reference of the web editor's conversion of
+ * DIGITAL library sounds (tests/descdump.c, web/test_web.mjs) and for the FELUCCA_FM4 tests, unreferenced in the
+ * firmware (no flash).
  * Not carried: the accent's index boost (velocity > 110), LFO amounts keep their values (FM6 reads FLT
  * as MLVL, SHP as the feedback). fm4_test.c renders DIGITAL (FELUCCA_FM4=1) against the conversion. */
 

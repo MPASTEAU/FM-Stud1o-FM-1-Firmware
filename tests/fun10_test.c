@@ -14,7 +14,7 @@
  *              cursor).
  *   MOTION     128 records shared by the four tracks, all played.
  *   FORMATS    FUN10 round trip (nudges, 128 records, the four parameters), FUN9 / FUN8 / FUN7 as 1.1 / 1.0 wrote
- *              them load as before (tests/old_pack.h), a FUN9 claiming more than 64 records or a nudge bit refused, a
+ *              them (tests/old_pack.h) refused (FM Studio reads FUN10 only), a
  *              user preset's pattern keeps no nudge (its bit 4 is the tie), user presets of 99 and 103 parameters.
  * Built and run by tests/run_tests.sh. */
 #define UI_TEST_NO_MAIN 1
@@ -506,78 +506,14 @@ static int formats(void)
                  motion.count == MOTION_MAX && t->p[P_LSYNC] == 8);
     st.raw[68u + 4u] |= 0x80u;                       /* a nudge bit in a FUN10 note byte: fine; in a FUN9: refused */
 
-    /* FUN9 (1.1), FUN8 (1.0.x), FUN7: as before; the four parameters at their defaults, every nudge 0 */
+    /* FUN9 (1.1), FUN8 (1.0.x), FUN7: upstream's older formats, not read (FM Studio) */
     memset(&a.motion, 0, sizeof a.motion);
-    for (i = 0; i < 64u; i++)
-        a.motion.event[i] = (motion_event_t){(uint8_t)((i % 4u) << 6 | i / 4u), (uint8_t)(i % 5u ? P_REV : P_E0 + 3), (int8_t)(i % 5u ? i : 2)};
-    a.motion.count = 64; a.motion.on = 15;
-    a.motion.event[7].param = P_PAN; a.motion.event[7].value = -40;
-    a.motion.event[9].param |= MOTION_LOCK;
-    for (k = 0; k < NTRK_V10; k++) {
-        a.t[k].p[P_LSYNC] = a.t[k].p[P_LTRIG] = a.t[k].p[P_LPOL] = 0;
-        a.t[k].p[P_SQNT] = TP[P_SQNT].def;            /* (Dah: OFF now: no nudges, as ON played them) */
-        for (i = 0; i < NSTEP; i++)
-            step_set_nudge(&a.t[k].step[i], 0);
-    }
-    memcpy(a.name, "OLD SONG", 9);
-    chain_defaults(&a.chain);                         /* a song of rows {slot, repeat} (36 bytes then) */
-    a.chain.count = 3;
-    a.chain.row[0] = chain_row_of(1, 4); a.chain.row[1] = chain_row_of(4, 16); a.chain.row[2] = chain_row_of(2, 1);   /* (A D B) */
+    chain_defaults(&a.chain);
     a.sum = proj_sum(&a);
-    ok = old_pack(v9, &a, OLD_FUN9, 99u) == sizeof v9 && proj_import(&b, v9, sizeof v9) && proj_same(&a, &b);
-    bad += check("FUN9 (1.1, 64 records of 4 bytes): exactly the project (LFO 2 / QUANTIZE defaults, nudges 0)", ok);
-    {
-        uint8_t c9[3648];
-        uint32_t sum, at = 68u + NTRK_V10 * (99u + 2u + NSTEP * 9u);
-        ok = b.chain.count == 3u && !memcmp(b.chain.row[1].slot, "\4\4\4\4", NTRK_V10) && b.chain.row[1].repeat == 16 &&
-             v9[at] == 3 && v9[at + 4u] == 0 && v9[at + 5u] == 4 && v9[at + 6u] == 3 && v9[at + 7u] == 16;
-        memcpy(c9, v9, sizeof c9);
-        c9[at + 6u] = 4;                              /* a row on slot 4: never in a FUN9 */
-        sum = proj_hash(c9, 3644u); memcpy(c9 + 3644u, &sum, 4);
-        ok &= !proj_import(&b, c9, sizeof c9);
-        bad += check("  its song: rows {slot, repeat} load as sections with the four tracks on the row's slot; slot 4 refused", ok);
-        proj_import(&b, v9, sizeof v9);
-    }
-    {
-        uint8_t c9[3648];
-        uint32_t sum, mo = 68u + NTRK_V10 * (99u + 2u + NSTEP * 9u) + sizeof(chain_v9_t);
-        memcpy(c9, v9, sizeof c9);
-        c9[mo] = 65;                                  /* 65 records: never in a FUN9 */
-        sum = proj_hash(c9, 3644u); memcpy(c9 + 3644u, &sum, 4);
-        ok = !proj_import(&b, c9, sizeof c9);
-        memcpy(c9, v9, sizeof c9);
-        c9[mo + 4u + 4u * 7u + 2u] = 0x00; c9[mo + 4u + 4u * 7u + 3u] = 0x01;   /* a value of 256 */
-        sum = proj_hash(c9, 3644u); memcpy(c9 + 3644u, &sum, 4);
-        ok &= !proj_import(&b, c9, sizeof c9);
-        memcpy(c9, v9, sizeof c9);
-        c9[68u + 99u + 2u] |= 0x80u;                  /* a note byte above 127 (a FUN10's nudge bit) */
-        sum = proj_hash(c9, 3644u); memcpy(c9 + 3644u, &sum, 4);
-        ok &= !proj_import(&b, c9, sizeof c9);
-        bad += check("  a FUN9 claiming 65 records, a value out of -64..127 or a note byte above 127: refused", ok);
-    }
-    for (k = 0; k < NTRK_V10; k++)                       /* (FUN8 / FUN7: no lane levels, no locks then) */
-        for (i = P_LN0; i <= P_LN7; i++)
-            a.t[k].p[i] = 127;
-    a.motion.event[9].param &= 0x7Fu;
-    a.sum = proj_sum(&a);
-    ok = old_pack(v8, &a, OLD_FUN8, 91u) == sizeof v8 && proj_import(&b, v8, sizeof v8) && proj_same(&a, &b);
-    bad += check("FUN8 (1.0.x, 91 parameters): exactly the project", ok);
-    for (k = 0; k < NTRK_V10; k++)
-        memcpy(a.fm6[k], FM6_INIT, FM6_PACKED);
-    a.g[G_RTYPE] = 1;                                /* (a FUN7 knew ROOM and SPRING: above, the old drum channel) */
-    a.sum = proj_sum(&a);
-    ok = old_pack(v7, &a, OLD_FUN7, 91u) == sizeof v7 && proj_import(&b, v7, sizeof v7) && proj_same(&a, &b);
-    bad += check("FUN7 (91 parameters): exactly the project, the init patches", ok);
-    for (i = 0; i < 2u; i++) {                        /* a retained slot of 3840 holding the older records */
-        static project_store_t slot;
-        memset(&slot, 0xA5, sizeof slot);
-        memcpy(slot.raw, i ? v8 : v9, i ? sizeof v8 : sizeof v9);
-        ok = proj_import(&b, &slot, sizeof slot) && b.motion.count == 64u;
-        bad += check(i ? "  a retained (longer) slot holding a FUN8: loads" : "  a retained (longer) slot holding a FUN9: loads", ok);
-    }
-    project_restore_runtime(&b);
-    bad += check("  restored: QUANTIZE ON, LFO 2 off, every step's nudge 0, the 64 records", trk[0].p[P_SQNT] == TP[P_SQNT].def &&
-                 !trk[0].p[P_LSYNC] && !step_nudge(&trk[0].step[1]) && motion.count == 64u && motion.event[7].value == -40);
+    ok = old_pack(v9, &a, OLD_FUN9, 99u) == sizeof v9 && !proj_import(&b, v9, sizeof v9) &&
+         old_pack(v8, &a, OLD_FUN8, 91u) == sizeof v8 && !proj_import(&b, v8, sizeof v8) &&
+         old_pack(v7, &a, OLD_FUN7, 91u) == sizeof v7 && !proj_import(&b, v7, sizeof v7);
+    bad += check("FUN9 / FUN8 / FUN7 (upstream's older formats): refused", ok);
 
     /* user presets: a record of 103 round trips; one of 99 (1.1) gets the four at their defaults; a pattern keeps no
      * nudge (bit 4 of its flags is the tie) */

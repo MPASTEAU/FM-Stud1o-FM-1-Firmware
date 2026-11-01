@@ -32,19 +32,8 @@ typedef struct {
 /* Normalize in place; 1 = current, 2 = migrated, 0 = invalid. */
 static int settings_import(persist_t *p, int n)
 {
-    int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;
-    int old3 = n == (int)(sizeof *p - sizeof p->favorites) && p->magic == 0x50455233u;
-    int old2 = n == (int)(sizeof *p - sizeof p->favorites - sizeof p->bold) && p->magic == 0x50455232u;
-    int old1 = n == (int)(8u + sizeof(panel_t)) && p->magic == 0x50455231u;
-    if (!(current || old3 || old2 || old1)) return 0;
-    if (old1) {
-        panel_t old;
-        memcpy(&old, (uint8_t *)p + 8, sizeof old);
-        p->panel = old;
-        p->lowcut = p->zoom = 0;
-    }
-    if (old1 || old2) p->bold = 0;
-    if (!current) memset(&p->favorites, 0, sizeof p->favorites);
+    int current = n == (int)sizeof *p && p->magic == PERSIST_MAGIC;   /* (FM Studio: PER4 only; PER1..PER3 were upstream's) */
+    if (!current) return 0;
     if (p->favorites.factory[15][29] > 1u)        /* STYLE (ui.c ui_style): 2, the retired PIXEL = LINE; unknown = FLAT */
         p->favorites.factory[15][29] = p->favorites.factory[15][29] == 2u ? 1u : 0u;
     {   /* CLICK, CLICK LEVEL, COUNT-IN (ui.c ui_rec_prefs): two bits each, 3 is no value: the default (0) */
@@ -78,7 +67,7 @@ static int settings_import(persist_t *p, int n)
     memcpy(&favorites, &p->favorites, sizeof favorites);
 #endif
     if (p->panel.magic == PANEL_MAGIC) panel = p->panel;
-    return current ? 1 : 2;
+    return 1;
 }
 
 /* Start with the last imported/saved object, including fields owned by a

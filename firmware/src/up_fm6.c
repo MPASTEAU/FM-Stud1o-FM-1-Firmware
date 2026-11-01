@@ -158,42 +158,14 @@ static int upf_save(void)
 #endif
 }
 
-/* the retired bank's patches -> the FM6 user presets whose stored SLOT is a B slot and have no patch yet; the count */
-static uint32_t upf_migrate(const fm6_bank_t *b)
-{
-    uint32_t k, moved = 0;
-    if (!upf_valid(&upf))
-        upf_empty();
-    for (k = 0; k < UP_SLOTS; k++) {
-        const up_rec_t *r = up_rec(k);
-        uint8_t pk[FM6_PACKED];
-        int32_t s;
-        if (!upf_fm6(k) || !upf_get(k, pk))
-            continue;
-        s = up_value(r, r->np - 1u) - (int32_t)FM6_NFACTORY;   /* SLOT (P_E7): the record's last value */
-        if (s >= 0 && s < (int32_t)FM6_BANK_N && ((b->used >> s) & 1u)) {
-            upf_set(k, b->v[s]);
-            moved++;
-        }
-    }
-    return moved;
-}
-
-static void upf_boot(void)                       /* up_boot, after the user preset banks */
+static void upf_boot(void)                       /* up_boot, after the user preset banks (FM Studio: the retired FM6
+                                                  * bank of 1.0..1.0.2 is never read: none to move) */
 {
 #if FELUCCA_FLASH
-    st_hdr_t h;
     if (flash_ok && st_load(OBJ_UPFM6, &upf, sizeof upf) == (int)sizeof upf && upf_valid(&upf))
         return;
-    upf_empty();
-    if (flash_ok && st_current(OBJ_FM6BANK, &h) >= 0 && h.len == sizeof(fm6_bank_t) &&
-        fm6_bank_valid((const fm6_bank_t *)st_buf)) {
-        upf_migrate((const fm6_bank_t *)st_buf);   /* (st_buf holds the bank until upf_save) */
-        upf_save();
-    }
-#else
-    upf_empty();
 #endif
+    upf_empty();
 }
 
 /* up_load: track t (its values just loaded from slot k) gets the record's patch; without one, as before 1.0.3:

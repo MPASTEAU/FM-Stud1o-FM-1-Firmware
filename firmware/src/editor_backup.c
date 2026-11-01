@@ -182,12 +182,9 @@ static uint32_t ed_bk_commit(void)
             p->rsize != sizeof(up_rec_t) || p->nslot != UP_PER_BANK)) return 2;
         /* Unknown record versions remain inert bytes, preserving future/older bank data. */
         obj = OBJ_UPRESET0 + ed_bk_id - 6u;
-    } else if (ed_bk_id == 8u) {                    /* an older archive's FM6 bank: into the restored user presets */
-        if (!ed_bk_len) return 0;
-        if (ed_bk_len != sizeof(fm6_bank_t) || !fm6_bank_valid((const fm6_bank_t *)raw)) return 2;
-        upf_migrate((const fm6_bank_t *)raw);
-        sync_reload = 1; ui.force = 1;
-        return upf_save() == 2 ? 4u : 0u;
+    } else if (ed_bk_id == 8u) {                    /* the retired FM6 bank (always empty; FM Studio: an older archive's
+                                                     * bank is not moved) */
+        return 0;
     } else if (ed_bk_id == 9u) {                    /* the user presets' FM6 patches (0: none) */
         const upf_t *u = (const upf_t *)raw;
         if (ed_bk_len && (ed_bk_len != sizeof *u || !upf_valid(u) || (u->used >> (UP_SLOTS - 1u) >> 1))) return 2;
@@ -227,11 +224,8 @@ static uint32_t ed_bk_commit(void)
     sync_reload = 1; ui.force = 1;
     return 0;
 }
-/* a project object's length: FUN10 (today's, 1.2), FUN9 (1.1), FUN8 (before the DRUM lane levels, 1.0.x), FUN7 */
-static int proj_store_len(uint32_t len)
-{
-    return len == sizeof(project_store_t) || len == PROJ_STORE_V9 || len == PROJ_STORE_V8 || len == PROJ_STORE_V7;
-}
+/* a project object's length: FUN10's (the only format read) */
+static int proj_store_len(uint32_t len) { return len == sizeof(project_store_t); }
 static uint32_t ed_bk_write(const uint8_t *a, uint32_t n)
 {
     /* the arguments first: a malformed request never stops the transport */

@@ -127,18 +127,6 @@ static void up_set_value(up_rec_t *r, uint32_t k, int16_t v)
     v = (int16_t)(v < -64 ? -64 : v > 127 ? 127 : v);   /* (a LEN over 127: the byte's most; a sound load keeps LEN) */
     if (r->ver >= 4u) r->packed[k] = (uint8_t)(v + 64); else r->p[k] = v;
 }
-/* Legacy PHYS drums map through decoded parameters, not their disk representation. */
-static void up_migrate(up_rec_t *r)
-{
-    int16_t e[8]; uint32_t k;
-    if (!up_valid(r)) return;
-    for (k = 0; k < 8u; k++) e[k] = up_value(r, r->np - 8u + k);
-    if (drum_from_phys(r->engine, e) || drum_from_perc(r->engine, e)) {   /* (SAMPLE PERC: see the top) */
-        r->engine = ENGI_DRUM;
-        for (k = 0; k < 8u; k++) up_set_value(r, r->np - 8u + k, e[k]);
-    }
-}
-
 static void up_pat_norm(uint8_t *note, uint8_t *flags);
 /* after loading bank b (len bytes, -1 = none): wrong shape -> empty; each record's pattern inside its fields, as
  * UP_PUT and SAVE store it (flash or a restored backup may hold anything there) */
@@ -153,7 +141,6 @@ static void up_bank_check(uint32_t b, int len)
         up_rec_t *r = &bk->r[i];
         if (!up_valid(r))
             continue;
-        up_migrate(r);
         for (k = 0; k < 16u; k++)
             if (up_grid(r))
                 r->flags[k] &= r->note[k];          /* a drum grid: accents only on its hits */
@@ -271,7 +258,6 @@ static int up_parse(const uint8_t *a, uint32_t na, up_rec_t *r, uint32_t *slot)
     }
     if (na == end + 18u)
         up_set_cat(r, a[end + 17u]);
-    up_migrate(r);                               /* (an editor of before the DRUM engine) */
     *target = *r;
     return 0;
 }
@@ -284,8 +270,6 @@ static void up_values(const up_rec_t *r, int16_t *v)   /* mapped and clamped for
     for (i = 0; i < P_COUNT; i++)
         def[i] = param_desc_of(r->engine, i)->def;
     up_params(r, v, def);
-    if (r->ver == 1u && ENGINES[r->engine] == &ENG_PHYS)   /* (before 1.0: MODEL 2 was DUST) */
-        phys_legacy(&v[P_E0]);
     for (i = 0; i < P_COUNT; i++)
         v[i] = (int16_t)param_fit(param_desc_of(r->engine, i), v[i]);   /* (a retired KIT: the kit it plays) */
 }
@@ -467,14 +451,6 @@ static int up_load(uint32_t k)
     up_values(r, v);
     load_begin(t, LOAD_SOUND);
     panic_req |= (uint8_t)(1u << song.sel);
-#if !FELUCCA_FM4
-    if (r->engine == ENGI_DIGITAL) {                    /* a DIGITAL sound (kept as it was stored): FM6 */
-        int16_t p[P_COUNT];
-        for (i = 0; i < P_COUNT; i++)
-            p[i] = param_kept(i) ? t->p[i] : v[i];
-        fm4_apply(t, p);
-    } else
-#endif
     {
         fm1_irq_off();                                  /* the audio ISR must not see half a sound */
         t->eng_req = r->engine;
