@@ -85,6 +85,11 @@
 #                   while A is held, A let go at 8, B at 12 on a POLY track recorded live: A 1..8, B 4..12, one note-on and
 #                   one note-off each; NOTE LEN and the roll's bars of each, one shortened alone; over page 0's end (LEN 128);
 #                   a project saved and opened (PS_GOES); MONO as before (B ends A).
+# FINE LEN (tests/len_test.c): a note's length to a tenth of a step (core.h MOTION_FINE, a record on its last step):
+#                   LEN 2.3 / 0.5 / 0.1 off at that point (a NUDGE, overlaps, SLIDE, RATCH, LEN 128 over page 0's end);
+#                   QUANTIZE ON plays it whole (the same events as 3.0), 25 / 50 / 75 % that far toward the GATE; whole
+#                   lengths no record; a note cleared, its record gone; recorded live (let go 0.6 into its last step);
+#                   a project saved and opened. The knob: tests/ui155_test.c.
 # DETAIL 1.5.1 (tests/detail_test.c, #199): SEQ > DETAIL (STEP -> DETAIL -> AUTOMATION), KNOB 1..4 the cursor step's
 #                   CHANCE RATCH NUDGE VEL walked with PRESETS (NO NOTE on a REST / empty step), the steps' own fields
 #                   (no motion record), EDIT resets, the
@@ -291,6 +296,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "long patterns: LEN up to 256 (pages, the ring, a held note, editing, recording, automation, projects, SONG)" "$OUT/longpat_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/overlap_test" tests/overlap_test.c -lm
     run "overlapping notes: POLY holds each their own (recording, playback, NOTE LEN, the roll, pages, projects)" "$OUT/overlap_test"
+    $CC -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/len_test" tests/len_test.c -lm
+    run "FINE LEN: a note's length to a tenth of a step (playback, QUANTIZE, UI, recording, pages, projects)" "$OUT/len_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/trackdel_test" tests/trackdel_test.c -lm
     run "track delete: any track (1 of 4): the others one down with patterns, automation, SONG lanes, SIDECHAIN; plays the same; a project" "$OUT/trackdel_test"
     $CC -O1 -w -Ibuild/gen -Ifirmware/src -o "$OUT/ui155_test" tests/ui155_test.c -lm

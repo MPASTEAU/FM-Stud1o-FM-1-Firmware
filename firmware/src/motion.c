@@ -57,7 +57,9 @@ static int motion_valid(const motion_store_t *m)
     if (m->count > MOTION_MAX || (m->on & ~((1u << NTRK) - 1u))) return 0;
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
-        if (!motion_param(MOTION_ID(e)) || e->value < -64 || e->value > 127 || e->place >= (NPAGE << 9)) return 0;
+        if (e->param == MOTION_FINE ? e->value < 1 || e->value > 9 : !motion_param(MOTION_ID(e)) || e->value < -64 || e->value > 127)
+            return 0;                                  /* (FINE LEN: its tenths, core.h) */
+        if (e->place >= (NPAGE << 9)) return 0;
         for (j = 0; j < i; j++)
             if (m->event[j].place == e->place && MOTION_ID(&m->event[j]) == MOTION_ID(e)) return 0;
     }
@@ -228,6 +230,61 @@ static void motion_delete_event(track_t *t, uint32_t step, uint32_t id)   /* (ei
     motion.count = (uint8_t)n;
     motion_unguard(f);
 }
+/* FINE LEN (core.h MOTION_FINE): the tenths of track k's step `step` in store m, 0 none (whole) */
+static uint32_t fine_at(const motion_store_t *m, uint32_t k, uint32_t step)
+{
+    uint32_t i, place = MPLACE(k, step);
+    for (i = 0; i < m->count && i < MOTION_MAX; i++)
+        if (m->event[i].place == place && m->event[i].param == MOTION_FINE)
+            return (uint32_t)m->event[i].value;
+    return 0;
+}
+/* .. set on track t's step (f 1..9), or taken out (0). 0 ok, 1 invalid, 2 the MOTION_MAX are used (motion_full).
+ * fine_raw: the audio ISR's (live recording: nothing preempts it), fine_put the main loop's (under the guard) */
+static int fine_raw(track_t *t, uint32_t step, uint32_t f)
+{
+    uint32_t k = trk_index(t), i, place;
+    if (k >= NTRK || step >= LEN_MAX || f > 9u) return 1;
+    place = MPLACE(k, step);
+    for (i = 0; i < motion.count && (motion.event[i].place != place || motion.event[i].param != MOTION_FINE); i++)
+        ;
+    if (!f) {
+        if (i < motion.count) {
+            for (; i + 1u < motion.count; i++)
+                motion.event[i] = motion.event[i + 1u];
+            motion.count--;
+            memset(&motion.event[motion.count], 0, sizeof motion.event[0]);
+        }
+    } else if (i == MOTION_MAX) {
+        motion_full = 1;
+        return 2;
+    } else {
+        motion.event[i].place = (uint16_t)place;
+        motion.event[i].param = MOTION_FINE;
+        motion.event[i].value = (int8_t)f;
+        RING_PUBLISH();
+        if (i == motion.count) motion.count++;
+    }
+    return 0;
+}
+static int fine_put(track_t *t, uint32_t step, uint32_t f)
+{
+    uint32_t g = motion_guard();
+    int r = fine_raw(t, step, f);
+    motion_unguard(g);
+    return r;
+}
+/* the steps of track k from step `base` on with a FINE LEN, bit s = step base + s (as motion_lock_steps) */
+static uint64_t fine_steps(uint32_t k, uint32_t base)
+{
+    uint32_t i, s;
+    uint64_t m = 0;
+    for (i = 0; i < motion.count; i++)
+        if (motion.event[i].param == MOTION_FINE && MP_TRK(&motion.event[i]) == k && (s = MP_STEP(&motion.event[i])) >= base &&
+            s < base + 64u)
+            m |= (uint64_t)1 << (s - base);
+    return m;
+}
 /* the locks of track t's step (MOTION_ALL: of every step); their automation events stay. A lock sounding now goes
  * back at the next step as always (motion_locked). The locks it removed */
 static uint32_t motion_clear_locks(track_t *t, uint32_t step)
@@ -383,7 +440,7 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
         uint32_t id = MOTION_ID(e);
-        if (e->place != place || ((e->param & MOTION_LOCK) && !play)) continue;
+        if (e->place != place || ((e->param & MOTION_LOCK) && !play) || id >= P_COUNT) continue;   /* (FINE LEN: none) */
         const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
         t->p[id] = (int16_t)param_fit(d, e->value);
         motion_active[k][id / 32u] |= 1u << (id % 32u);

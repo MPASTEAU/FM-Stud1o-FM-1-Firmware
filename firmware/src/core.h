@@ -294,6 +294,16 @@ static void step_set_nudge(step_t *s, int32_t v)
  * (step >> 6, 0..3) in bits 9..10, so page 0's places are as before (and code reading place >> 6 as the track, the
  * editor's, sees page 0 only) */
 typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
+/* FINE LEN: a note's length to a tenth of a step (ui.c note_len10). A note of whole steps (every older pattern) has no
+ * record; one of 2.3 is its 3 steps and a record on its LAST step, id MOTION_FINE (no MOTION_LOCK bit), value the tenths
+ * of that step it sounds (1..9): its note-off there at that much of the step (seq.c seq_fine) instead of the GATE; the
+ * notes ending on one step share it. It travels as the automation does (the shared MOTION_MAX, the pattern store and its
+ * pages, the projects, a SONG's sections); never a parameter (motion_step, the lanes, the lock marks skip it). Set by
+ * SEQ > STEP's LEN (ui.c note_set_len10) and by live recording (seq.c rec_fine: let go late in its last step); gone where
+ * no note ends any more (ui.c fine_prune). Not in FUN10 (motion_to_v10), a user preset's pattern, nor the editor's
+ * MOTION list / STEP_GET: whole steps there */
+#define MOTION_FINE 127u
+_Static_assert(P_COUNT < MOTION_FINE, "MOTION_FINE: an id no parameter has");
 #define MPLACE(k, s) ((uint16_t)(((uint32_t)(s) >> 6) << 9 | (uint32_t)(k) << 6 | ((uint32_t)(s) & 63u)))
 #define MP_TRK(e) (((uint32_t)(e)->place >> 6) & 7u)
 #define MP_STEP(e) (((uint32_t)(e)->place >> 9) << 6 | ((uint32_t)(e)->place & 63u))

@@ -763,9 +763,42 @@ static int save_hold(void)
     return bad;
 }
 
+/* FINE LEN (ui_input.c step_edit, ui.c note_set_len10): SEQ > STEP's KNOB 3 on a note, turned slowly a tenth a detent,
+ * fast a whole step; the LEN card "1.3" */
+static int fine_len(void)
+{
+    track_t *t;
+    uint32_t i, a, b;
+    ui_power_on();
+    song.sel = 0;
+    t = &trk[0];
+    track_defaults_steps(t);
+    t->p[P_SLEN] = 16;
+    t->p[P_VOICE] = V_POLY;
+    t->step[0] = (step_t){{60}, 1, ST_NOTE, 0, 0};
+    go_page(GR_ROLL);
+    ui.cursor = 0;
+    frame();
+    for (i = 0; i < 3u; i++) {
+        memset(ui.enc_t, 0, sizeof ui.enc_t);          /* (a slow hand: a new turn each detent) */
+        turn(EN_K3, 1);
+    }
+    a = note_len10(t, 0) * (fine_at(&motion, 0, 1) == 3u);
+    for (i = 0; i < 6u; i++) {                         /* (a detent a frame: fast) */
+        host_enc[panel.enc[EN_K3]] += panel.dir[EN_K3];
+        frame();
+    }
+    b = note_len10(t, 0);
+    memset(ui.enc_t, 0, sizeof ui.enc_t);
+    turn(EN_K3, -1);
+    return check("FINE LEN: KNOB 3 slowly 1 -> 1.3 (its tenths on step 2), fast 1.4 then a step a detent (6.4), back 6.3",
+                 a == 13u && b == 64u && note_len10(t, 0) == 63u &&
+                 fine_at(&motion, 0, 6) == 3u);   /* (fast: the first detent of a turn a tenth, then a step each) */
+}
+
 int main(void)
 {
-    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows() + song_grid() + save_hold();
+    int bad = pan_range() + select_page() + oct_press() + project_erase_ui() + clean_init() + oct_layers() + menus_alike() + rec_keeps() + file_page() + del_track_hold() + rec_rows() + song_grid() + save_hold() + fine_len();
     printf("%s\n", bad ? "1.5.5 UI TEST FAILED" : "1.5.5 ui tests passed");
     return bad != 0;
 }

@@ -504,22 +504,29 @@ static void ui_leds(void)
  * ui.enc_t[role]: bits 0..23 the ms of its last read, bit 24 its direction (+1), 25..31 its ms per detent (127 slow) */
 #define ACC_GAP 40u
 #define ACC_RATE 50u
-static int32_t accel(uint32_t role, int32_t s, int32_t range)
+/* the factor of this read of knob `role` (s detents), at most cap (1: slow); acc_rate itself, whatever KNOB ACCEL says:
+ * FINE LEN's knob (ui_input.c step_edit), a tenth a detent turned slowly, a step fast */
+static uint32_t acc_rate(uint32_t role, int32_t s, uint32_t cap)
 {
     uint32_t now = fm1_ms & 0xFFFFFFu, st = ui.enc_t[role], up = s > 0, pi = st >> 25, a, i, m = 1;
-    if (!(ui_prefs & PREF_ACCEL) || range <= 32 || !s)
-        return s;
+    if (!s)
+        return 1u;
     a = (uint32_t)(s < 0 ? -s : s);
     i = ((now - st) & 0xFFFFFFu) / a;                   /* ms per detent of this read */
     if (!st || ((st >> 24) & 1u) != up || i >= ACC_GAP)
         i = 127u;                                       /* a new turn, or reversed */
     else if (pi < ACC_GAP) {
         m = ACC_RATE / (i > pi ? i : pi ? pi : 1u);
-        a = range > 64 ? 8u : 4u;                       /* (the cap) */
-        m = m < 1u ? 1u : m > a ? a : m;
+        m = m < 1u ? 1u : m > cap ? cap : m;
     }
     ui.enc_t[role] = now | up << 24 | (i ? i : 1u) << 25;
-    return s * (int32_t)m;
+    return m;
+}
+static int32_t accel(uint32_t role, int32_t s, int32_t range)
+{
+    if (!(ui_prefs & PREF_ACCEL) || range <= 32 || !s)
+        return s;
+    return s * (int32_t)acc_rate(role, s, range > 64 ? 8u : 4u);   /* (the cap) */
 }
 
 /* MIXER page: KNOB 1 LEVEL, 2 PAN, 3 REV send, 4 MUTE of the selected track (right = ON, left = OFF: the
@@ -1147,12 +1154,14 @@ static void step_edit(uint32_t slot, int32_t steps)
         }
         place_heard(st->note[0], st_vel(st));            /* (the new note heard) */
         break;
-    case 2:                                               /* TIME; a note's LEN (1.5: ui.c note_set_len) */
+    case 2:                                               /* TIME; a note's LEN (1.5: ui.c note_set_len; FINE LEN:
+                                                           * turned slowly a tenth a detent, fast a whole step) */
         if (step_on(st)) {
-            uint32_t was = note_len(TSEL, ui.cursor), n;
-            n = note_set_len(TSEL, ui.cursor, (uint32_t)clamp((int32_t)was + steps, 1, LEN_MAX));
-            if (steps > 0 && n == was)
-                ui_message(ui.cursor + n < (uint32_t)clamp(TSEL->p[P_SLEN], 1, LEN_MAX) ? "NOTE AHEAD" : "END OF PATTERN");
+            uint32_t was = note_len10(TSEL, ui.cursor), n;
+            int32_t d = acc_rate(EN_K1 + slot, steps, 4) > 1u ? steps * 10 : steps;
+            n = note_set_len10(TSEL, ui.cursor, (uint32_t)clamp((int32_t)was + d, 1, LEN_MAX * 10));
+            if (steps > 0 && n <= was)
+                ui_message(ui.cursor + (n + 9u) / 10u < (uint32_t)clamp(TSEL->p[P_SLEN], 1, LEN_MAX) ? "NOTE AHEAD" : "END OF PATTERN");
             break;
         }
         st->time = (uint8_t)clamp((int32_t)st_kind(st) + (steps > 0 ? 1 : -1), ST_NOTE, ST_REST);
@@ -2032,6 +2041,7 @@ static void ui_notices(void)
     static uint32_t midi_t, midi_last;
     sample_notice();
     ml_poll();                                          /* (MIDI LEARN: a CC came for the picked parameter) */
+    fine_prune();                                       /* (FINE LEN: none left where no note ends) */
     if (motion_full) { motion_full = 0; ui_message("AUTOMATION FULL"); }
     if (midi_follow())                                  /* (AUTO SELECT took the track: no "MIDI IN -> Tn") */
         midi_hint = 0;

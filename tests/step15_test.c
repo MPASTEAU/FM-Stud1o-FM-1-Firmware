@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* 1.5's sequencer edits (Discussions #178, #173), on the real sequencer and UI sources (with the stubs of tests/ui_test.c):
- *   LEN   SEQ > STEP's KNOB 3 on a note (ui.c note_set_len): right writes clean TIE steps after it (a REST or an empty
+ *   LEN   SEQ > STEP's KNOB 3 on a note (ui.c note_set_len; FINE LEN: a step ten slow detents, len_turn): right writes clean TIE steps after it (a REST or an empty
  *         step; a chord ties whole), stopping at the next step holding notes (NOTE AHEAD; a REST's kept notes too; POLY:
  *         on beside them, each note its own, core.h st_cont) and
  *         at LEN (END OF PATTERN); left turns its last TIEs back into RESTs, never the note itself; nothing else moves
@@ -15,6 +15,15 @@
 #define UI_TEST_NO_MAIN 1
 #include "ui_test.c"
 
+/* KNOB 3 on a note s whole steps (FINE LEN: a tenth a detent turned slowly, ui_input.c step_edit): ten slow detents each */
+static void len_turn(int32_t s)
+{
+    uint32_t i;
+    for (i = 0; i < 10u; i++) {
+        memset(ui.enc_t, 0, sizeof ui.enc_t);
+        turn(EN_K3, s);
+    }
+}
 /* track 1 alone (ANALOG, POLY), 16 steps of 1/16, GATE 64, no swing; SEQ > STEP on step `cur` */
 static track_t *roll(uint32_t cur)
 {
@@ -93,24 +102,24 @@ static int len_edit(void)
     put(t, 5, 67, ST_NOTE);
     motion_set_lock(t, 2, P_ATK, 9);
     memcpy(ref, t->step, sizeof ref);
-    turn(EN_K3, 1);
+    len_turn(1);
     ok = is_tie(&t->step[2]) && same_but(t, ref, 2, 2) && note_len(t, 1) == 2u && motion_find(t, 2, P_ATK) >= 0;
-    turn(EN_K3, 1);
+    len_turn(1);
     ok &= is_tie(&t->step[3]) && same_but(t, ref, 2, 3) && note_len(t, 1) == 3u;
     bad += check("LEN: KNOB 3 right on a note: the next REST, then an empty step, clean TIEs (its lock kept)", ok);
-    turn(EN_K3, 1);
+    len_turn(1);
     ok = note_len(t, 1) == 4u && is_tie(&t->step[4]);
     ui.msg_t = 0;
-    turn(EN_K3, 1);
+    len_turn(1);
     ok &= note_len(t, 1) == 5u && !msg_is("NOTE AHEAD") && t->step[5].n == 3u && t->step[5].note[0] == 67u &&
           st_cont(&t->step[5]) == 6u && note_len(t, 5) == 1u;
     bad += check("  POLY (overlaps): on over the next note, beside it (step 6: 67 starting, the chord going on)", ok);
-    turn(EN_K3, -1);
+    len_turn(-1);
     ok = note_len(t, 1) == 4u && !memcmp(&t->step[5], &ref[5], sizeof ref[5]);
-    turn(EN_K3, -1);
+    len_turn(-1);
     ok &= note_len(t, 1) == 3u && is_rest(&t->step[4]);
     for (i = 0; i < 6u; i++)
-        turn(EN_K3, -1);
+        len_turn(-1);
     ok &= note_len(t, 1) == 1u && is_rest(&t->step[2]) && is_rest(&t->step[3]) && t->step[1].n == 2u &&
           t->step[1].time == ST_NOTE;
     bad += check("  left: its last TIEs become RESTs, down to LEN 1 (the note stays)", ok);
@@ -119,15 +128,15 @@ static int len_edit(void)
     put(t, 1, 60, ST_NOTE);
     put(t, 3, 67, ST_NOTE);
     memcpy(ref, t->step, sizeof ref);
-    turn(EN_K3, 1);
+    len_turn(1);
     ui.msg_t = 0;
-    turn(EN_K3, 1);
+    len_turn(1);
     bad += check("  MONO: it stops before the next note (NOTE AHEAD, that note kept)", note_len(t, 1) == 2u &&
                  msg_is("NOTE AHEAD") && !memcmp(&t->step[3], &ref[3], sizeof ref[3]));
 
     t = roll(15);                                     /* the last step of LEN */
     put(t, 15, 60, ST_NOTE);
-    turn(EN_K3, 1);
+    len_turn(1);
     bad += check("  on the last step: END OF PATTERN (no wrap)", note_len(t, 15) == 1u && msg_is("END OF PATTERN") &&
                  t->step[0].time == ST_REST);
     t = roll(3);                                      /* a REST: KNOB 3 is TIME, as before */
@@ -137,7 +146,7 @@ static int len_edit(void)
     ok &= t->step[3].time == ST_NOTE;   /* (empty: still TIME) */
     t->step[4] = (step_t){{0}, 0, ST_REST, 0, 0, 1, 0, 0};    /* a REST keeping a hit: not overwritten */
     put(t, 3, 50, ST_NOTE);
-    turn(EN_K3, 1);
+    len_turn(1);
     ok &= note_len(t, 3) == 1u && msg_is("NOTE AHEAD") && t->step[4].hit == 1u;
     bad += check("  a REST / TIE / empty step: KNOB 3 TIME (NOTE TIE REST); a REST keeping notes or hits is kept", ok);
 

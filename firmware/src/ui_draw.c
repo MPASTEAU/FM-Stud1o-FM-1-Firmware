@@ -1937,7 +1937,16 @@ static void draw_columns_in(void)
             draw_column(0, "STEP", sn, sl, VAL(0u), -1, ICON_AUTO);
             draw_column(1, "NOTE", val, u, step_on(st) ? VAL(1u) : T_DIM, -1, ICON_AUTO);
             if (step_on(st)) {                            /* a note: its LEN (1.5, KNOB 3: the TIEs after it) */
-                fmt_int(sn, (int32_t)note_len(TSEL, ui.cursor));
+                uint32_t l10 = note_len10(TSEL, ui.cursor);   /* (FINE LEN: "2.3"; whole "2") */
+                fmt_int(sn, (int32_t)(l10 / 10u));
+                if (l10 % 10u) {
+                    uint32_t e = 0;
+                    while (sn[e])
+                        e++;
+                    sn[e] = '.';
+                    sn[e + 1u] = (char)('0' + l10 % 10u);
+                    sn[e + 2u] = 0;
+                }
                 draw_column(2, "LEN", sn, "", VAL(2u), -1, ICON_AUTO);
             } else {
                 draw_column(2, "TIME", TIME_N[st_kind(st) % 3u], "", VAL(2u), -1, ICON_AUTO);

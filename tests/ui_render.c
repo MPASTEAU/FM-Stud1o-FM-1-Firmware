@@ -915,14 +915,16 @@ static void roll_scene(int s)
         }
         ui.cursor = 20; song.playing = 1; t->seq_idx = 22;
         break;
-    case S_ROLL_LEN:                                 /* 1.5 (#178): step 5's note made 4 steps long (KNOB 3 LEN, hot) */
+    case S_ROLL_LEN:                                 /* 1.5 (#178): step 5's note made 3.7 steps long (KNOB 3 LEN, hot;
+                                                      * FINE LEN: "3.7", its bar to 0.7 of step 8), step 13's 0.5 */
         t->p[P_ROOT] = 0; t->p[P_SCALE] = 1;
         for (i = 0; i < 16u; i += 4u) {
             uint8_t n = LINE[i] ? LINE[i] : 60;
             step_put(&t->step[i], ST_NOTE, i == 8u ? SF_ACCENT : 0u, 1, &n);
         }
         (void)note_set_len(t, 0, 2);
-        (void)note_set_len(t, 4, 4);
+        (void)note_set_len10(t, 4, 37);
+        (void)note_set_len10(t, 12, 5);
         ui.cursor = 4; ui.hot_col = 2; ui.hot_t = 30;
         break;
     case S_ROLL_HIGH:

@@ -695,6 +695,22 @@ static __attribute__((noinline)) void rec_hold_poly(track_t *t, uint32_t idx, ui
     if (chg && len > 1u)
         st_hold_off(seq_wr(t, (idx + 1u) % len), po, np);
 }
+/* FINE LEN, recorded: a note let go in step `at` (the one playing), `from` samples after its start where it began (0:
+ * carried into it): its tenths there as played (a whole step: none; recorded as played, QUANTIZE says how it plays) */
+static __attribute__((noinline)) void rec_fine(track_t *t, uint32_t at, int32_t from)
+{
+    uint32_t cur = step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx);
+    int32_t f;
+    if (t->seq_pos >= 0x7FFFFFFFu || !cur)
+        return;
+    f = ((int32_t)t->seq_pos - from) * 10 / (int32_t)cur;   /* (a tenth begun: the note sounds into it) */
+    f += ((int32_t)t->seq_pos - from) * 10 % (int32_t)cur ? 1 : 0;
+    (void)fine_raw(t, at, f < 1 ? 1u : f >= 10 ? 0u : (uint32_t)f);
+}
+static int32_t rec_from(const track_t *t, uint32_t at)   /* where step at's notes began: its NUDGE */
+{
+    return step_nudge(seq_at(t, at)) * (int32_t)div_samples((uint32_t)t->p[P_SDIV]) / NUDGE_DIV;
+}
 /* (overlaps) POLY note let go (its hold k): early in the step it was carried on into, not there (that step without it) */
 static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note)
 {
@@ -716,7 +732,10 @@ static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note
             ;
         if (j < rp[i].pvn)
             rp[i].pv[j] = rp[i].pv[--rp[i].pvn];
-    }
+    } else if ((rp[i].cm >> k) & 1u)
+        rec_fine(t, t->seq_idx, 0);                 /* (FINE LEN: let go late in it) */
+    else if (rp[i].st[k] == t->seq_idx)
+        rec_fine(t, t->seq_idx, rec_from(t, t->seq_idx));   /* (in its own step) */
     rh_drop(t, k);
 }
 
@@ -735,7 +754,7 @@ static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note
 static volatile uint8_t rec_wipe_req;               /* bit per track (main loop: its pages' records) */
 static __attribute__((noinline)) void rec_wipe(track_t *t)
 {
-    uint32_t k = trk_index(t) % NTRK, j;
+    uint32_t k = trk_index(t) % NTRK, j, n;
     for (j = 0; j < NSTEP; j++) {
         memset(&t->step[j], 0, sizeof t->step[j]);
         t->step[j].time = ST_REST;
@@ -747,6 +766,12 @@ static __attribute__((noinline)) void rec_wipe(track_t *t)
             pgr[k].dirty |= (uint16_t)(1u << j);
         }
     rec_wipe_req |= (uint8_t)(1u << k);
+    for (j = n = 0; j < motion.count; j++)             /* (its FINE LENs too) */
+        if (motion.event[j].param != MOTION_FINE || MP_TRK(&motion.event[j]) != k)
+            motion.event[n++] = motion.event[j];
+    for (j = n; j < motion.count; j++)
+        memset(&motion.event[j], 0, sizeof motion.event[j]);
+    motion.count = (uint8_t)n;
 }
 static uint8_t rec_live;                            /* (Dah) rec_note: a key played (input_on, the count-in), not the ARP */
 static void rec_note(track_t *t, uint32_t note, uint32_t vel)
@@ -923,6 +948,10 @@ static void rec_release(track_t *t, uint32_t note)
     if (t->rh_ties && t->seq_idx == t->rh_last &&
         t->seq_pos < step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx) / 2u)
         *seq_wr(t, t->rh_last) = t->rh_bak;         /* released early in it: not held into this step */
+    else if (t->rh_ties && t->seq_idx == t->rh_last)
+        rec_fine(t, t->rh_last, 0);                 /* (FINE LEN: late in it, its tenths) */
+    else if (!t->rh_ties && t->seq_idx == t->rh_start)
+        rec_fine(t, t->rh_start, rec_from(t, t->rh_start));
 }
 
 /* a note into armed track t in the count-in's last eighth: kept for step 1 (cin_flush); once each, 4 per track */
@@ -1383,6 +1412,7 @@ static __attribute__((noinline)) uint32_t seq_goes_on(const track_t *t, const st
     }
     return m;
 }
+static uint32_t seq_fine(const track_t *t, uint32_t idx, uint32_t period, uint32_t gate);
 static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint32_t idx, uint32_t period, uint32_t skip)
 {
     uint32_t i, j, gate = period * (uint32_t)t->p[P_SGATE] / 128u;
@@ -1392,7 +1422,7 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     uint32_t next_tie = st_kind(seq_at(t, (idx + 1u) % len)) == ST_TIE;
     uint32_t hits = step_ratchet(s);
     uint8_t nn[4 + NLANE], vv[4 + NLANE];           /* the notes it plays: its notes, then its hits */
-    uint32_t m = 0, sk = 0, sl, over, cm = skip & SEQ_REP ? 0u : st_cont(s), kin = 0, nz = 0, late = 0;
+    uint32_t m = 0, sk = 0, sl, over, cm = skip & SEQ_REP ? 0u : st_cont(s), kin = 0, nz = 0, late = 0, fo;
     const step_t *nx;
     /* QNT SEQ: the step's notes (not the lane hits) snap to the scale as they play; never on a drum kit, the slices
      * or another engine that maps the keys itself. SEQ+T (#218): moved by TRN first, as the keys are. seq_notes keeps
@@ -1409,8 +1439,16 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
     }
     if (st_kind(s) == ST_TIE) {
         if (t->seq_n) {
+            uint32_t fine = next_tie ? 0u : seq_fine(t, idx, period, gate + period / 2u);
             t->seq_off = gate + period / 2u;
             nx = seq_next_step(t, idx, len);
+            if (fine) {                             /* FINE LEN: what ends here ends at its tenths (no hold on, no
+                                                     * slide out); what the step after says goes on, goes on */
+                t->seq_off = fine;
+                t->seq_hold = t->tie_over = 0;
+                t->seq_keep = (uint8_t)(nx && st_cont(nx) ? seq_goes_on(t, nx, qseq, qtrn) : 0u);
+                return;
+            }
             if (nx && st_cont(nx) && !(s->flags & SF_SLIDE) && !next_tie) {   /* (overlaps) into a step that says
                                                          * which go on: those, the others end at the gate */
                 t->seq_hold = t->tie_over = 0;
@@ -1506,6 +1544,12 @@ static __attribute__((noinline)) void seq_step(track_t *t, const step_t *s, uint
         }
     t->seq_off = gate;
     t->seq_hold = hits == 1u && ((s->flags & SF_SLIDE) != 0 || next_tie);   /* next step a TIE: keep the notes to it */
+    if (hits == 1u && !next_tie && !(skip & SEQ_REP) && (fo = seq_fine(t, idx, period, gate)) != 0u) {
+        t->seq_off = fo;                            /* FINE LEN: its notes ending here (those that went on into it too)
+                                                     * at its tenths, from where it plays (as the GATE); no slide out */
+        t->seq_hold = 0;
+        late = 0;
+    }
     nx = !t->seq_hold && hits == 1u ? seq_next_step(t, idx, len) : 0;   /* (overlaps) the next step's: they go on */
     t->seq_keep = (uint8_t)((nx && st_cont(nx) ? seq_goes_on(t, nx, qseq, qtrn) : 0u) | (hits == 1u ? late & 15u : 0u) << 4);
 }
@@ -1654,6 +1698,22 @@ static const motion_store_t *chain_motion(const track_t *t)
 {
     uint32_t s = chain.lane[trk_index(t)];
     return !chain.running ? ((seq_off >> trk_index(t)) & 1u ? 0 : &motion) : s != CHAIN_SILENT ? &chain.source[chain.cur].motion : 0;
+}
+
+/* FINE LEN (core.h MOTION_FINE): the note-off, in samples from where step idx plays, of the notes ending there when
+ * it has tenths: that much of its (swung) length; 0 none (the GATE's, gate, as before: every older pattern). QUANTIZE
+ * (P_SQNT) as for the NUDGE: ON the tenths not heard (whole steps, the GATE as ever), 25 / 50 / 75 % that much of the
+ * way to the GATE's off, OFF as set. Not inlined: once a step, off the audio ISR's loop */
+static __attribute__((noinline)) uint32_t seq_fine(const track_t *t, uint32_t idx, uint32_t period, uint32_t gate)
+{
+    const motion_store_t *m;
+    uint32_t f, x;
+    if (t->p[P_SQNT] == 1 || !(m = chain_motion(t)) || !(f = fine_at(m, trk_index(t), idx)))
+        return 0;
+    x = step_samples(t, period, idx) * f / 10u;
+    if (t->p[P_SQNT] >= 2)
+        x = (uint32_t)((int32_t)x + ((int32_t)gate - (int32_t)x) * (t->p[P_SQNT] - 1) / 4);
+    return x ? x : 1u;
 }
 
 /* step idx plays: its chance (the one roll, as seq_step made it: a step that does not play applies no lock), the

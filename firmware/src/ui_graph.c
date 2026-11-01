@@ -298,10 +298,22 @@ static void pr_bar(int32_t n, int acc, int32_t x, int32_t w, uint16_t c, int32_t
     else
         pr_split(x, y + 1, w, PR_RH - 2, c, hits);
 }
+/* FINE LEN (core.h MOTION_FINE) as the roll draws it: px into a column of w where the notes ending on step si end (from
+ * where it plays: seq.c seq_fine's tenths, QUANTIZE's pull toward the whole step as the bar of a whole one ends), -1 none */
+static int32_t pr_fine(const track_t *t, uint32_t si, int32_t w)
+{
+    uint32_t f = t->p[P_SQNT] == 1 ? 0u : fine_at(&motion, trk_index(t), si);
+    int32_t x = (int32_t)f * w / 10;
+    if (!f)
+        return -1;
+    if (t->p[P_SQNT] >= 2)
+        x += (w - x) * (t->p[P_SQNT] - 1) / 4;
+    return x;
+}
 static void graph_roll(const track_t *t, uint16_t c)
 {
     uint32_t i, len = (uint32_t)t->p[P_SLEN], base = prv_base(t), nc = prv_cols(), ncol, mask = scale_mask(t), held = pr_held();
-    uint64_t locks = motion_lock_steps(trk_index(t), base);
+    uint64_t locks = motion_lock_steps(trk_index(t), base), fines = fine_steps(trk_index(t), base);
     int32_t r, ybot, gw, cw = (int32_t)(195u / nc), full = cv_split ? cv_split_h : (int32_t)cv_h;
     pr_rh = full >= 140 ? 6 : 5;                    /* (Dah: the roll to the panel's foot, its ruler over it) */
     pr_rows = (full - PR_Y0 - 4) / pr_rh;
@@ -376,7 +388,7 @@ static void graph_roll(const track_t *t, uint16_t c)
         uint32_t si = base + i, nx = (si + 1u) % len, j, k;
         const step_t *st;
         step_t nst;
-        int32_t x = prv_x(i), y = -10000, w = prv_x(i + 1u) - x, nd = 0, ny = -1;
+        int32_t x = prv_x(i), y = -10000, w = prv_x(i + 1u) - x, nd = 0, ny = -1, fe;
         uint32_t hits = 1u;
         uint16_t col = c;
         st = ui_st(t, si);
@@ -395,16 +407,30 @@ static void graph_roll(const track_t *t, uint16_t c)
             ;                                         /* (the note it slides into: the first starting there) */
         if (st_kind(&nst) == ST_NOTE && k < nst.n && k < 4u)
             ny = nst.note[k];
+        fe = (fines >> i) & 1u && (st_kind(st) != ST_NOTE || step_ratchet(st) == 1u) && st_kind(&nst) != ST_TIE ? pr_fine(t, si, w) : -1;
+        if (fe >= 0)                                  /* (FINE LEN: where its notes ending here end, as they play) */
+            fe += x + (st_kind(st) == ST_NOTE ? seq_nudge(t, st) * w / NUDGE_DIV : 0);
         for (j = 0; j < ps.n; j++) {                  /* each note: from its step (a TIE's, one going on: through the gap) */
             uint16_t cj = ps.src[j] == ui.cursor || si == ui.cursor ? T_ACCENT : c;
+            int32_t bx, bw, end = fe;
             if (!j)
                 col = cj;
-            if (ps.src[j] == si)
-                pr_bar(ps.note[j], ps.at[j] & 1u, x + nd + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, cj, &y, hits);
-            else                                      /* (Dah: moved as its start's NUDGE: one bar, no gap) */
-                pr_bar(ps.note[j], ps.at[j] & 1u, x - 1 + seq_nudge(t, ui_st(t, ps.src[j])) * w / NUDGE_DIV, w, cj, &y, 1u);
+            for (k = 0; end >= 0 && st_kind(&nst) == ST_NOTE && k < nst.n && k < 4u; k++)
+                if (nst.note[k] == ps.note[j] && ((st_cont(&nst) >> k) & 1u))
+                    end = -1;                         /* (it goes on into the next step) */
+            if (ps.src[j] == si) {
+                bx = x + nd + (w > 5 ? 2 : 1);
+                bw = w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1;
+            } else {                                  /* (Dah: moved as its start's NUDGE: one bar, no gap) */
+                bx = x - 1 + seq_nudge(t, ui_st(t, ps.src[j])) * w / NUDGE_DIV;
+                bw = w;
+            }
+            if (end >= 0)
+                bw = end - bx > 1 ? end - bx : 1;
+            pr_bar(ps.note[j], ps.at[j] & 1u, bx, bw, cj, &y, ps.src[j] == si ? hits : 1u);
         }
-        if ((ps.at[0] & 4u) && ny >= 0 && y >= PR_Y0 && y < ybot) {   /* (a ratcheted step never slides out) */
+        if (fe < 0 && (ps.at[0] & 4u) && ny >= 0 && y >= PR_Y0 && y < ybot) {   /* (a ratcheted step never slides out;
+                                                         * FINE LEN: nor one ending short) */
             int32_t x0 = x + w / 2, x1 = x + w + 2, xx, py = y;
             ny = clamp(pr_row_y(ny), PR_Y0, ybot - PR_RH);
             for (xx = x0; xx <= x1; xx++) {             /* (Dah) the slide as FL draws it: the note's bar bending into
@@ -788,6 +814,9 @@ static uint32_t steps_hash(const track_t *t)
         h = (h ^ (st->hit | (uint32_t)st->acc << 8 | (uint32_t)st->note[2] << 16 | (uint32_t)st->note[3] << 24)) * 16777619u;
         h = (h ^ (st->vel | (uint32_t)st->probability << 8)) * 16777619u;   /* (1.5.1: DETAIL, the marks) */
     }
+    for (i = 0; i < motion.count; i++)                  /* (FINE LEN: its bars' ends) */
+        if (motion.event[i].param == MOTION_FINE && MP_TRK(&motion.event[i]) == trk_index(t))
+            h = (h ^ (motion.event[i].place | (uint32_t)motion.event[i].value << 16)) * 16777619u;
     return h ^ pg_rev[trk_index(t) % NTRK] * 2654435761u;   /* (its other pages) */
 }
 
@@ -2918,12 +2947,16 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
                 cy[j] = hi > lo ? top + sh - nh - (src->note[j] - lo) * (sh - nh) / (hi - lo) : top + sh / 2 - 1;
             ncy = j;
         }
+        uint64_t fines = fine_steps(R->c % NTRK, p0);
         for (i = 0; i < nc && p0 + i < len; i++) {
             const step_t *st = ui_st(R->t, p0 + i);
-            int32_t bx = RK_SX + (int32_t)i * RK_SW / (int32_t)nc - ox;
+            int32_t bx = RK_SX + (int32_t)i * RK_SW / (int32_t)nc - ox, fw = -1;
             uint16_t under = bg;
             cw = RK_SX + (int32_t)(i + 1u) * RK_SW / (int32_t)nc - ox - bx - (sp > 3 ? 2 : 1);   /* (Dah: the steps
                                                          * spread over the row's width) */
+            if ((fines >> i) & 1u && st_kind(ui_st(R->t, (p0 + i + 1u) % len)) != ST_TIE &&
+                (fw = pr_fine(R->t, p0 + i, cw + 2)) >= 0)   /* (FINE LEN: its notes ending short) */
+                fw = fw > 1 ? fw : 1;
             if (i == R->ph) {                          /* the step playing: its column lit (Dah: no ring) */
                 under = ux_mix(bg, T_TEXT, 22);
                 cv_rect(bx - 1, top - 1, cw + 2, sh + 2, under);
@@ -2934,20 +2967,20 @@ static void rk_paint(const rk_row_t *R, int32_t ox)
                     for (j = 0; j < st->n && j < 4; j++) {
                         int32_t ny = hi > lo ? top + sh - nh - (st->note[j] - lo) * (sh - nh) / (hi - lo) : top + sh / 2 - 1;
                         if ((st_cont(st) >> j) & 1u)        /* (overlaps) one going on: carried, as a TIE's */
-                            cv_rect(bx - 1, ny, cw + 2, nh, ux_mix(under, tc, 55));
+                            cv_rect(bx - 1, ny, fw >= 0 ? fw : cw + 2, nh, ux_mix(under, tc, 55));
                         else
-                            cv_rect(bx, ny, cw, nh, acc && !R->mute ? T_TEXT : tc);
+                            cv_rect(bx, ny, fw >= 0 ? (fw - 1 > 1 ? fw - 1 : 1) : cw, nh, acc && !R->mute ? T_TEXT : tc);
                         cy[j] = ny;
                     }
                     ncy = j;
                 } else
-                    cv_rrect(bx, top + 1, cw, sh - 2, 2, acc && !R->mute ? T_TEXT : tc, under);
+                    cv_rrect(bx, top + 1, fw >= 0 && fw - 1 < cw ? (fw - 1 > 2 ? fw - 1 : 2) : cw, sh - 2, 2, acc && !R->mute ? T_TEXT : tc, under);
                 carry = 1;
                 continue;
             }
             if (st_kind(st) == ST_TIE && carry) {         /* carried on: fainter (the roll: each note at its height) */
                 for (j = 0; j < (roll ? ncy : 1); j++)
-                    cv_rect(bx - 1, roll ? cy[j] : top + sh / 2 - 1, cw + 2, roll ? nh : 2, ux_mix(under, tc, 55));
+                    cv_rect(bx - 1, roll ? cy[j] : top + sh / 2 - 1, fw >= 0 ? fw : cw + 2, roll ? nh : 2, ux_mix(under, tc, 55));
             } else
                 cv_rect(bx, top + sh - 1, cw, 1, T_LINE);
             carry = st_kind(st) == ST_TIE && carry;

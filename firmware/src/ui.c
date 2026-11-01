@@ -801,6 +801,70 @@ static uint32_t note_set_len(track_t *t, uint32_t i, uint32_t want)
     return got;
 }
 
+/* FINE LEN (core.h MOTION_FINE): a note's length in tenths of a step: its steps (note_len), the last one's tenths when
+ * it has some (a record of the motion store on it, shared by the notes ending there) */
+static uint32_t note_len10(const track_t *t, uint32_t i)
+{
+    uint32_t n = note_len(t, i), f = fine_at(&motion, trk_index(t), i + n - 1u);
+    return f ? (n - 1u) * 10u + f : n * 10u;
+}
+/* .. set to want (tenths, 1..): its steps (note_set_len), the tenths on the last (none on a whole length; the step it
+ * ended on before loses its own). The length it got, in tenths (no room for the record: whole, "AUTOMATION FULL") */
+static int notes_end(const track_t *t, uint32_t e)   /* a note (a hit) sounding at step e ends there */
+{
+    uint32_t len = ui_len(t), qn, k, j;
+    uint8_t q[4];
+    const step_t *s = ui_st(t, e), *nx;
+    step_t c;
+    if (e >= len || st_kind(s) == ST_REST || (st_kind(s) == ST_NOTE && !s->n && !s->hit))
+        return 0;
+    qn = pat_at(t, e, q);
+    c = *ui_st(t, (e + 1u) % len);                  /* (a copy: another page read after it would move it) */
+    nx = &c;
+    if (st_kind(nx) == ST_TIE)
+        return 0;
+    if (st_kind(s) == ST_NOTE && s->hit)
+        return 1;
+    for (k = 0; k < qn; k++) {
+        for (j = 0; st_kind(nx) == ST_NOTE && j < nx->n && j < 4u && (nx->note[j] != q[k] || !((st_cont(nx) >> j) & 1u)); j++)
+            ;
+        if (st_kind(nx) != ST_NOTE || j == nx->n || j == 4u)
+            return 1;
+    }
+    return 0;
+}
+static uint32_t note_set_len10(track_t *t, uint32_t i, uint32_t want)
+{
+    uint32_t w = (want + 9u) / 10u, n = note_len(t, i), got;
+    got = note_set_len(t, i, w ? w : 1u);
+    if (i + n - 1u != i + got - 1u && !notes_end(t, i + n - 1u))
+        (void)fine_put(t, i + n - 1u, 0);           /* (where it ended: kept for the notes still ending there) */
+    if (got != w || !(want % 10u)) {
+        (void)fine_put(t, i + got - 1u, 0);
+        return got * 10u;
+    }
+    if (fine_put(t, i + got - 1u, want % 10u))
+        return got * 10u;
+    return want;
+}
+/* (main loop, a frame) a FINE LEN no note ends at (page 0's steps, notes_end: an edit took the note away or on) goes: it
+ * would shorten the next note to end there */
+static void fine_prune(void)
+{
+    uint32_t i;
+    for (i = 0; !chain.running && i < motion.count; i++) {
+        const motion_event_t *e = &motion.event[i];
+        uint32_t k = MP_TRK(e), s = MP_STEP(e), len;
+        if (e->param != MOTION_FINE || s + 1u >= NSTEP)
+            continue;
+        len = (uint32_t)clamp(trk[k].p[P_SLEN], 1, LEN_MAX);
+        if (s >= len || len > NSTEP || notes_end(&trk[k], s))
+            continue;                               /* (past LEN: kept for it; long patterns: their own pages, kept) */
+        (void)fine_put(&trk[k], s, 0);
+        i--;
+    }
+}
+
 /* ------------------------------------------------------- the DRUM grid --- */
 /* SEQ > STEP on a DRUM track is the grid: 8 lanes x the 16 steps of a page. The white keys are the
  * steps of the page shown (a tap toggles the selected lane there), black keys 1..8 select the lane (and play
