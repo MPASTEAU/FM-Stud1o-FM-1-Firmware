@@ -281,7 +281,7 @@ land in `build/ui_new/`. With Node.js the web page tests run too, and with Emscr
 | --- | --- |
 | `tools/build.py` (`./build.sh`) | Builds the app, the update loader and the `.fwsc` package |
 | `tools/fm1_install.py` | Installs a package over USB-MIDI; `--info` identifies the device |
-| `tools/fm1_demo_projects.py` | `--build`: renders the eight demo songs (LO-FI, SHOWCASE, TIME, DARK, LONG CHORDS, SLOW, DEEP HOUSE, TRIP-HOP) as projects and verifies them; `--send`: writes them to the FM-1 (**replaces every project on the device**) |
+| `tools/fm1_demo_projects.py` | `--build`: renders the demo song (TRIP-HOP) as a project and verifies it; `--send`: writes it to the FM-1 (**replaces every project on the device**) |
 | `tools/fm1_sample_upload.py` | Loads WAV files into user sample slots USR1–USR3 |
 | `web/editor.html` | Felucca's Web MIDI editor, extended to eight tracks |
 
