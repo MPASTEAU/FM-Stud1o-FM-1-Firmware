@@ -401,8 +401,8 @@ static void graph_roll(const track_t *t, uint16_t c)
                 col = cj;
             if (ps.src[j] == si)
                 pr_bar(ps.note[j], ps.at[j] & 1u, x + nd + (w > 5 ? 2 : 1), w > 5 ? w - 3 : w - 1 > 0 ? w - 1 : 1, cj, &y, hits);
-            else
-                pr_bar(ps.note[j], ps.at[j] & 1u, x - 1, w, cj, &y, 1u);
+            else                                      /* (Dah: moved as its start's NUDGE: one bar, no gap) */
+                pr_bar(ps.note[j], ps.at[j] & 1u, x - 1 + seq_nudge(t, ui_st(t, ps.src[j])) * w / NUDGE_DIV, w, cj, &y, 1u);
         }
         if ((ps.at[0] & 4u) && ny >= 0 && y >= PR_Y0 && y < ybot) {   /* (a ratcheted step never slides out) */
             int32_t x0 = x + w / 2, x1 = x + w + 2, xx, py = y;

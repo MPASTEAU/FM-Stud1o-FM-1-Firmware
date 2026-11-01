@@ -561,6 +561,7 @@ static int fx_has_next(void);
 static int fx_on_add(void);                             /* (ui_graph_fx.c: CHAIN's row picked, + ADD) */                           /* (ui_input.c: an effect with a second page) */
 static void foot_hint(char *a, char *b);
 static uint32_t foot_del(void);
+static int roll_view_page(void);                      /* (ui_input.c) */
 static uint32_t foot_rename(void);
 /* (Dah) the band's keys on a page of its own (not HOME, FX, MIXER): what the old footer's first row said (OCT+ / OCT-,
  * REC DELETE, EDIT NAME, SONG's, the grid's KEYS), as keycaps; ha hb hold the words. Returns how many, ok a bit each */
@@ -613,6 +614,11 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
             nk++;
         }
         return nk;
+    }
+    if (roll_view_page()) {                             /* (Dah) the roll: OCT+ held, its VIEW (as AUTOMATION's) */
+        kh[0] = (khint_t){KC_OCTUP, "(HOLD) VIEW"};
+        *ok = 1u;
+        return 1u;
     }
     if (grid_on() && !detail_on()) {
         kh[0] = (khint_t){KC_KEYS, grid_write() ? "STEPS" : "PLAY"};

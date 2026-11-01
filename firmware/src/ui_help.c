@@ -37,7 +37,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
     {"SONG", "[REC]DELETE"},
     {"ARP", "[KEYS]CHORD[ARP]ARP 2"},
     {"ARP 2", "[ARP]ARP"},
-    {"STEP", "[KEYS]WRITE[EDIT]CLEAR"},   /* (1.5.1: SEQ to DETAIL; Dah: EDIT clears the step) */
+    {"STEP", "[KEYS]WRITE[OCT+]HOLD: VIEW"},   /* (1.5.1: SEQ to DETAIL; Dah: EDIT no longer clears: OCT+ held the VIEW) */
     {"MIXER", "[HOME]CLOCK"},
 };
 #define H_HOME "[HOME]HOLD: MENU"
