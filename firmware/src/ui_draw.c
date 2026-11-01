@@ -2529,7 +2529,7 @@ static void ui_draw_page(uint32_t counting)
         ui.hot_t--;
     {   /* (Dah) the HELP hint's time by the clock, ~16 ms a count: the device draws ~200 frames a second when little
          * changes (120 frames there: half a second, gone before read) */
-        static uint32_t help_ms;
+        static uint32_t help_ms __attribute__((section(".pool")));   /* (no .bss: its headroom) */
         if (ui.help_t && fm1_ms - help_ms >= 16u) {
             help_ms = fm1_ms;
             ui.help_t--;
