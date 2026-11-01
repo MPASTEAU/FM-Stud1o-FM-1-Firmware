@@ -2527,8 +2527,14 @@ static void ui_draw_page(uint32_t counting)
         ui.bpm_t--;
     if (ui.hot_t)
         ui.hot_t--;
-    if (ui.help_t)
-        ui.help_t--;
+    {   /* (Dah) the HELP hint's time by the clock, ~16 ms a count: the device draws ~200 frames a second when little
+         * changes (120 frames there: half a second, gone before read) */
+        static uint32_t help_ms;
+        if (ui.help_t && fm1_ms - help_ms >= 16u) {
+            help_ms = fm1_ms;
+            ui.help_t--;
+        }
+    }
     felucca_dbg.stage = 6;
     if (!home_bare())                                   /* (Dah: HOME has its own, a band) */
         draw_foot();
