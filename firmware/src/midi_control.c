@@ -324,10 +324,18 @@ static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint3
     midi_cc_set(t, id, value);
 }
 
+/* (Dah) a controller's transport (the MPK mini Plus's PLAY STOP REC: CC 117 118 119, 127 pressed), any channel: 1 PLAY,
+ * 2 STOP, 3 REC, for the main loop (ui_input.c midi_transport) */
+static volatile uint8_t midi_tp __attribute__((section(".pool")));
 static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
 {
     midi_channel_t *c = midi_channel(ch);
     uint32_t i, mask;
+    if (cc - 117u < 3u) {
+        if (value)
+            midi_tp = (uint8_t)(cc - 116u);
+        return;
+    }
     switch (cc) {
     case 1:
         c->wheel = (uint8_t)value;

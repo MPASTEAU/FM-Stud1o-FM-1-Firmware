@@ -2320,6 +2320,16 @@ static void ui_input(void)
     }
     if (rec == BT_TAP && !ui.menu && !ui.confirm && !name_on())   /* REC pressed in another layer (REC alone: */
         rec_tap();                                      /* its layer's tap); not a dialog or NAME (the menu: above) */
+    if (midi_tp) {                                      /* (Dah) a controller's PLAY / STOP / REC (midi_control.c) */
+        uint32_t m = midi_tp;
+        midi_tp = 0;
+        if (m == 1u && !song.playing && !chain_busy() && !seq_counting())
+            transport_req = 1;
+        else if (m == 2u && (song.playing || chain_busy() || seq_counting()))
+            transport_req = 2;
+        else if (m == 3u && !ui.confirm && !name_on())
+            rec_tap();
+    }
     if (ui.menu) {                                      /* (Dah) PLAY plays and stops, as in a layer (HOME: above) */
         if (ui.save_t0)
             ui.save_t0 |= 2u;
