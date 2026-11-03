@@ -267,7 +267,9 @@ static int route_test(void)
 
     midi_test_reset(); song.sel = 2; song.g[G_ROUTE] = 1; trk[2].p[P_VOICE] = V_POLY; trk[2].p[P_SUS] = 127; events_block(CTL);
     queued(0x90, 60, 100, 1); queued(0x98, 62, 100, 2); queued(0x99, 64, 100, 1); queued(0x9F, 65, 100, 2);
-    bad += check("SEL: channels 1, 9, 10, 16 all play the selected track", gate_note(&trk[2], 60) && gate_note(&trk[2], 62) && gate_note(&trk[2], 64) && gate_note(&trk[2], 65) && !gate_note(&trk[0], 60) && midi_owners[2] == 4u);
+    bad += check("SEL: channels 1, 9, 16 play the selected track; 10 (Dah: the pads) the first DRUM track, the selected one not a kit",
+                 gate_note(&trk[2], 60) && gate_note(&trk[2], 62) && !gate_note(&trk[2], 64) && gate_note(&trk[2], 65) &&
+                 !gate_note(&trk[0], 60) && midi_owners[2] == 3u && drum_track(&trk[3]) && midi_owners[3] == 1u);
     queued(0xEF, 127, 127, 1); queued(0xB9, 1, 66, 2); queued(0xD8, 33, 0, 1);
     bad += check("SEL: bend and CC1 from channels 9..16 are taken (the bend the selected track's)", midi_bend_target[2] == 512 && midi_ch[9].wheel == 66);
     queued(0xB8, 64, 127, 1); queued(0x88, 62, 0, 2);

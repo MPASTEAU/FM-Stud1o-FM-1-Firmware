@@ -132,6 +132,14 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
     uint32_t id = midi_notes[ch][note] & 0x7Fu;
     if (vel) {
         track_t *t = midi_track(ch);
+        uint32_t i;
+        if (ch == 9u && midi_slot(ch) < 0 && !drum_track(t))   /* (Dah) SEL: channel 10's notes (a controller's pads)
+                                                         * play the first DRUM track when the one selected is not one */
+            for (i = 0; i < trk_count(); i++)
+                if (drum_track(&trk[i])) {
+                    t = &trk[i];
+                    break;
+                }
         /* Repeated notes replace the previous press, including a pedal-held one. */
         if (id)
             midi_release(ch, note);
@@ -140,7 +148,9 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
             midi_hint = (uint8_t)(trk_index(t) + 1u);
         midi_seen |= (uint8_t)(1u << trk_index(t));   /* (1.5.5: only noted; the UI does the rest) */
         c->targets |= (uint8_t)(1u << trk_index(t));
-        midi_play(t, ch, note, vel);
+        /* (Dah) channel 10's notes 36..43 (a controller's eight pads, as an MPK's) onto a DRUM track: the eight lanes
+         * in their order (BD SD CP CH OH TM RS CB), pad by pad, as the grid's rows */
+        midi_play(t, ch, ch == 9u && drum_track(t) && note - 36u < 8u ? DRUM_LANE_NOTE[note - 36u] : note, vel);
         midi_notes[ch][note] = (uint8_t)(trk_index(t) + 1u);
         midi_owners[trk_index(t)]++;
         c->owned[trk_index(t)]++;
