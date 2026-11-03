@@ -126,6 +126,20 @@ static void midi_play(track_t *t, uint32_t ch, uint32_t note, uint32_t vel)
     }
 }
 
+/* (Dah) channel 10's notes onto a DRUM track: a controller's eight pads, the eight lanes in their order (BD SD CP CH
+ * OH TM RS CB, the grid's rows): 36..43 (most), or the MPK mini Plus's 48 50 51 53 55 56 58 60 (its pads, bottom row
+ * first); another note its GM piece */
+static uint32_t midi_pad(uint32_t note)
+{
+    static const uint8_t MPK[8] = {48, 50, 51, 53, 55, 56, 58, 60};
+    uint32_t i;
+    if (note - 36u < 8u)
+        return DRUM_LANE_NOTE[note - 36u];
+    for (i = 0; i < 8u; i++)
+        if (MPK[i] == note)
+            return DRUM_LANE_NOTE[i];
+    return note;
+}
 static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
 {
     midi_channel_t *c = midi_channel(ch);
@@ -148,9 +162,7 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
             midi_hint = (uint8_t)(trk_index(t) + 1u);
         midi_seen |= (uint8_t)(1u << trk_index(t));   /* (1.5.5: only noted; the UI does the rest) */
         c->targets |= (uint8_t)(1u << trk_index(t));
-        /* (Dah) channel 10's notes 36..43 (a controller's eight pads, as an MPK's) onto a DRUM track: the eight lanes
-         * in their order (BD SD CP CH OH TM RS CB), pad by pad, as the grid's rows */
-        midi_play(t, ch, ch == 9u && drum_track(t) && note - 36u < 8u ? DRUM_LANE_NOTE[note - 36u] : note, vel);
+        midi_play(t, ch, ch == 9u && drum_track(t) ? midi_pad(note) : note, vel);
         midi_notes[ch][note] = (uint8_t)(trk_index(t) + 1u);
         midi_owners[trk_index(t)]++;
         c->owned[trk_index(t)]++;
