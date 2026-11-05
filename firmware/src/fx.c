@@ -311,7 +311,7 @@ static volatile uint8_t live_mreq[NTRK] __attribute__((section(".pool")));
 static int32_t trk_lvl(const track_t *t)
 {
     int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], v = 100 - (int32_t)live_cut[(uint32_t)(t - trk) % NTRK];
-    return v >= 100 ? lvl : lvl * v * v / 10000;
+    return v >= 100 ? lvl : (lvl * ((v * v * 26844) >> 16)) >> 12;   /* (v * v Q12: 100 % 4096, no division) */
 }
 #include "perform.c"                                 /* the FX hold layer's effects (the master) */
 #include "click.c"                                   /* the metronome's click (after the master: audio.c) */

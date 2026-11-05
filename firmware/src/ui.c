@@ -128,6 +128,10 @@ enum { HV_TRACKS, HV_SCOPE, HV_LEVELS, HV_COUNT };   /* (Dah: TRACKS first, the 
 /* (Dah) LIVE: HOME's third page (HOME, MIXER, LIVE: home_tap), drawn on HOME's frame (ui.home set): HOME's four knobs,
  * the selected track's LIVE volume and MUTE, its pattern playing; the panel's keys its own (ui_input.c live_keys) */
 static uint8_t live_f __attribute__((section(".pool")));   /* (no .bss: its headroom) */
+/* (Dah) LIVE MODE: PLAY held 0.7 s turns it on or off (playing too), PLAY started from LIVE turns it on: the keys are
+ * LIVE's on every page (ui_input.c live_keys), PLAY blinks */
+static uint8_t live_mode __attribute__((section(".pool")));
+static uint32_t play_t0 __attribute__((section(".pool")));   /* PLAY's press time (ui_input.c btn_hold) */
 static int live_on(void);                            /* (below: ui.home and live_f) */
 static int home_tracks(void) { return !live_f && (ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS); }
 static int home_levels(void) { return !live_f && ui_home_view == HV_LEVELS; }

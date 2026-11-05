@@ -385,6 +385,13 @@ static void con_exec(const char *p)
         con_crash();
     else if (con_word(&p, "inp"))
         con_inp();
+    else if (con_word(&p, "mlog")) {                  /* (Dah) MIDI IN (TRS)'s last messages, oldest first */
+        uint32_t i, n = um_logn;
+        for (i = n > 16u ? n - 16u : 0u; i < n; i++) {
+            con_hex(um_log[i & 15u], 6);
+            con_puts("\r\n");
+        }
+    }
     else if (con_word(&p, "params"))
         con_params();
 #if FELUCCA_PROF

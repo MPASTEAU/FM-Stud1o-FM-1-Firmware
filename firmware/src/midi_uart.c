@@ -18,6 +18,9 @@ static struct {
     volatile uint32_t bytes, drops, msgs;          /* TIMER5 writes; read-only CDC diagnostics */
     uint8_t st, need, got, d0, sysex;
 } um;
+static uint32_t um_log[16] __attribute__((section(".pool")));   /* (Dah) the last channel messages in, for the console's
+                                                                  * "mlog" (status, data 1, data 2) */
+static uint32_t um_logn __attribute__((section(".pool")));
 
 static void uart_midi_init(void)                   /* before timer5_start(): PORTH RMW */
 {
@@ -58,6 +61,7 @@ static void um_byte(uint32_t b)
         uint32_t d1 = um.need == 2u ? um.d0 : b, d2 = um.need == 2u ? b : 0u;
         uint32_t pkt = (um.st >> 4) | (uint32_t)um.st << 8 | d1 << 16 | d2 << 24;
         um.got = 0;
+        um_log[um_logn++ & 15u] = pkt >> 8;
         if (midi_enqueue(pkt, 2u)) {
             um.msgs++;
         } else {

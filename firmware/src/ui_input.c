@@ -497,6 +497,8 @@ static void ui_leds(void)
         led_put(nd, panel.btn[k], 1);
     if (song.playing || seq_counting())                 /* playing: PLAY's green, its own LED dark in every mode */
         led_clear(nd, panel.btn[B_PLAY]);
+    if (live_mode)                                      /* (Dah) LIVE MODE: PLAY blinks (~1 Hz) */
+        led_put(nl, panel.btn[B_PLAY], (int)((fm1_ms >> 9) & 1u));
     for (c = 0; c < FM1_NCOL; c++) {
         if (mode == LEDS_INV) {                         /* INV: the active ones dark, the rest lit (1.5.6, #212: */
             iv[c] = (uint8_t)(nd[c] & ~nl[c]);          /* INV LO / HI: at the steady mid level, below) */
@@ -2226,7 +2228,7 @@ static void ui_input(void)
         ui.msg_t = 0;
         ui.msg2[0] = 0;
     }
-    uint32_t home, rec, save;
+    uint32_t home, rec, save, play;
     uint32_t oct, oct_plain;
     uint32_t lay, combo = 0, lytap, lkeys, glo, kq = 0;
     int32_t s, sel = 0, ks[4] = {0, 0, 0, 0}, qs = 0;
@@ -2269,6 +2271,7 @@ static void ui_input(void)
             ui.home_t0 |= 2u;                           /* (HOME still held: no tap, no hold) */
     }
     home = btn_hold(&ui.home_t0, B_HOME, now, 1);
+    play = btn_hold(&play_t0, B_PLAY, now, !ui.menu && !ui.confirm && !name_on());   /* (Dah: tap on release, held LIVE) */
     rec = btn_hold(&ui.rec_t0, B_REC, now, 0);          /* (a tap; held, the REC layer: ui_layer.c) */
     if (ui.menu && !ui.confirm && ((pressed >> panel.btn[B_REC]) & 1u)) {   /* (Dah) REC in the menu: as in a layer, it */
         rec_tap();                                      /* arms / disarms (on the press: no REC layer here) */
@@ -2389,8 +2392,11 @@ static void ui_input(void)
     if (midi_tp) {                                      /* (Dah) a controller's PLAY / STOP / REC (midi_control.c) */
         uint32_t m = midi_tp;
         midi_tp = 0;
-        if (m == 1u && !song.playing && !chain_busy() && !seq_counting())
+        if (m == 1u && !song.playing && !chain_busy() && !seq_counting()) {
             transport_req = 1;
+            if (live_on())
+                live_mode = 1;                          /* (started from LIVE, as PLAY) */
+        }
         else if (m == 2u && (song.playing || chain_busy() || seq_counting()))
             transport_req = 2;
         else if (m == 3u && !ui.confirm && !name_on())
@@ -2405,6 +2411,8 @@ static void ui_input(void)
             else
                 transport_req = 1;
         }
+        if (play_t0)
+            play_t0 |= 2u;                              /* (acted on the press: no tap) */
         ui.pg_down = 0;
         if (!ui.home_t0)
             menu_input(oct);
@@ -2413,6 +2421,8 @@ static void ui_input(void)
     if (name_on() && !ui.confirm) {                     /* NAME: the keys type, KNOB 1 / 2, OCT+ / OCT- (ui_name.c); */
         if (ui.save_t0)                                 /* SAVE does nothing */
             ui.save_t0 |= 2u;
+        if (play_t0)
+            play_t0 |= 2u;
         if (((pressed >> panel.btn[B_PLAY]) & 1u) && (song.playing || chain_busy() || seq_counting()))
             transport_req = 2;                          /* PLAY stops a transport started meanwhile (MIDI Start, the
                                                          * editor) so the name can be saved; it never starts one */
@@ -2516,6 +2526,28 @@ static void ui_input(void)
         layer_tap(lytap);                               /* on every page since 1.2, its tap the SEQ pages) */
     if (home == BT_TAP)                                 /* HOME acts on release: a hold opens the menu */
         home_tap();
+    if (play == BT_TAP) {                               /* (Dah) PLAY acts on release: held, LIVE MODE */
+        if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
+            transport_req = 2;
+        else if (!ui.home && cur_page()->graph == GR_SONG)
+            chain_play_ui();                            /* (PLAY elsewhere plays the pattern) */
+        else {
+            transport_req = 1;
+            if (live_on())
+                live_mode = 1;                          /* (started from LIVE: LIVE MODE) */
+        }
+    } else if (play == BT_HOLD) {
+        live_mode = (uint8_t)!live_mode;
+        if (!live_mode) {                               /* (off: every track unmuted, the LIVE volumes bypassed) */
+            for (id = 0; id < NTRK; id++) {
+                live_mreq[id] = 0;
+                live_cut[id] = 0;
+                trk[id].p[P_MUTE] = 0;
+            }
+        }
+        ui_message(live_mode ? "LIVE MODE ON" : "LIVE MODE OFF");
+        ui.force = 1;
+    }
     cursor_fix();                                       /* LEN may have changed (knob, editor, load) */
     for (id = 0; id < 14u; id++) {
         if (!((pressed >> id) & 1u))
@@ -2524,14 +2556,8 @@ static void ui_input(void)
         switch (b) {
         case B_PLAY:
             if (layer_play())                           /* (GLO held: RESTART) */
-                break;
-            if (song.playing || chain_busy() || seq_counting())   /* (a count-in: PLAY stops it) */
-                transport_req = 2;
-            else if (!ui.home && cur_page()->graph == GR_SONG)
-                chain_play_ui();                        /* (PLAY elsewhere plays the pattern) */
-            else
-                transport_req = 1;
-            break;
+                play_t0 |= 2u;                          /* (no tap after) */
+            break;                                      /* (Dah: else its tap, on release: above) */
         case B_SEQ:
         case B_REC:                                     /* tap: above; held, its layer (ui_layer.c) */
         case B_SAVE:
@@ -2587,7 +2613,7 @@ static void ui_input(void)
     }
     song.grid = (uint8_t)keys_mode();                 /* (seq.c: the keys are the grid's) */
 #if FELUCCA_SLICE
-    if (notes && slice_page_on())                       /* SLICES: a key picks the slice it plays */
+    if (notes && song.grid != 4u && slice_page_on())    /* SLICES: a key picks the slice it plays */
         slice_keys_pick(notes);
 #endif
     lock_keys();                                        /* (a grid key on a hit let go: the hit goes) */

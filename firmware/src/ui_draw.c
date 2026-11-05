@@ -453,7 +453,7 @@ static void head_title(char *ti)
     else if (ui.layer)
         str_cpy(ti, layer_head(), 20);
     else if (ui.home)
-        str_cpy(ti, live_on() ? "LIVE" : "HOME", 20);
+        str_cpy(ti, live_on() ? (live_mode ? "LIVE ON" : "LIVE") : "HOME", 20);
     else
         page_title(ti);
 }
@@ -642,7 +642,7 @@ static void home_foot(void)
                                      {{KC_FX, "NEXT"}},                          /* .. with a second page */
                                      {{KC_OCTDN, "(HOLD) DEL"}},       /* (Dah) MIXER: OCT- held deletes the (last) track.
                                                          * Never SELECT, ALGORITHM, PRESETS or a knob: the cards say them */
-                                     {{KC_PRESETS, "LIVE VOLUME"}, {KC_HOME, "HOME"}}};   /* (Dah) LIVE */
+                                     {{KC_PRESETS, "VOLUME"}, {KC_PLAY, "(HOLD) LIVE"}}};   /* (Dah) LIVE */
     uint32_t hk = live_on() ? 6u : ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
                   cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
@@ -1381,7 +1381,7 @@ static void draw_foot_in(void)
     int32_t x;
     sound_name(t, pn);
     if (ui.home)
-        str_cpy(ti, live_on() ? "LIVE" : "HOME", sizeof ti);
+        str_cpy(ti, live_on() ? (live_mode ? "LIVE ON" : "LIVE") : "HOME", sizeof ti);
     else                                               /* page title + number in its family: "ENV DEST 2/2" */
         page_title(ti);
     str_cpy(s, ename, sizeof s);

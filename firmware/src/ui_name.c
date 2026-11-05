@@ -61,7 +61,8 @@ static void name_close(void)
  * reads song.grid) */
 static uint32_t keys_mode(void)                       /* (Dah: 4 LIVE, the keys its own, none sounds) */
 {
-    return name_on() ? 2u : grid_write() ? 1u : song_keys_on() ? 3u : live_on() && !ui.menu && !ui.confirm ? 4u : 0u;
+    return name_on() ? 2u : (live_mode || live_on()) && !ui.menu && !ui.confirm ? 4u : grid_write() ? 1u :
+           song_keys_on() ? 3u : 0u;
 }
 
 static const char *nm_group(uint32_t p)                /* white key place p's characters */
