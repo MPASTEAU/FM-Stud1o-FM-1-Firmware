@@ -303,14 +303,17 @@ static uint32_t motion_clear_locks(track_t *t, uint32_t step)
 }
 /* (Dah) automation and locks only on HOME's four knobs of the track (ASSIGN's, else the engine's): another parameter
  * turned while recording records nothing, and a record of one (an older project's) plays nothing */
+static uint32_t home_knob_id(const track_t *t, uint32_t j)    /* HOME's knob j (0..3) of t: its P_* id */
+{
+    uint32_t a = trkx[trk_index(t) % NTRK].home[j];
+    return a && a <= P_COUNT ? a - 1u : ENGINES[t->eng_req % NENGINES]->knob[j];
+}
 static int motion_home_id(const track_t *t, uint32_t id)
 {
-    uint32_t k = trk_index(t) % NTRK, j, a;
-    for (j = 0; j < 4u; j++) {
-        a = trkx[k].home[j];
-        if ((a && a <= P_COUNT ? a - 1u : ENGINES[t->eng_req % NENGINES]->knob[j]) == id)
+    uint32_t j;
+    for (j = 0; j < 4u; j++)
+        if (home_knob_id(t, j) == id)
             return 1;
-    }
     return 0;
 }
 static int motion_capture(track_t *t, uint32_t id, int16_t value)

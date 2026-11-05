@@ -310,6 +310,10 @@ static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint3
     uint32_t i, id = 0xFFFFu, e;
     if (midi_learned(cc, value))                /* (a learned CC is the user's: not the map's) */
         return;
+    if (cc - 74u < 4u) {                        /* (Dah) the MPK mini Plus's K5..K8: HOME's four knobs (not CC74 75's map) */
+        midi_cc_set(t, home_knob_id(t, cc - 74u), value);
+        return;
+    }
     for (i = 0; i < NELEM(MIDI_CC_MAP); i++)
         if (MIDI_CC_MAP[i][0] == cc)
             id = MIDI_CC_MAP[i][1];
