@@ -1304,18 +1304,25 @@ static void seq_start(void)
     perf_start();                                  /* perform.c: its 1/16 grid too */
 }
 
-/* (Dah) a step's note on / off: through the track's ARP when it runs (the sequence feeds it as the keys do) */
+/* (Dah) a step's note on / off: through the track's ARP when it runs (the sequence feeds it as the keys do); not
+ * while it records (rec_on): the ARP then plays the keys only, or it would record over the steps feeding it what it
+ * plays of them. seq_arp: the track's step notes went into its ARP (their note-off goes the same way) */
+static uint8_t seq_arp __attribute__((section(".pool")));
 static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *nn, uint32_t m, uint32_t mute);
 static void seq_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
-    if (t->p[P_AMODE])
+    uint32_t b = 1u << (trk_index(t) & 7u);
+    if (t->p[P_AMODE] && !rec_on(t)) {
+        seq_arp |= (uint8_t)b;
         arp_add(t, note);
-    else
+    } else {
+        seq_arp &= (uint8_t)~b;
         trk_note_on(t, note, vel);
+    }
 }
 static void seq_note_off(track_t *t, uint32_t note)
 {
-    if (t->p[P_AMODE])
+    if ((seq_arp >> (trk_index(t) & 7u)) & 1u)
         arp_remove(t, note);
     else
         trk_note_off(t, note);
