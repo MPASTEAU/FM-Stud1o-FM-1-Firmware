@@ -593,7 +593,7 @@ static int cc_map_test(void)
     static const struct { uint8_t cc; uint8_t id; } COMMON[] = {
         {5, P_GLIDE}, {7, P_LEVEL}, {72, P_REL}, {73, P_ATK}, {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
     };
-    int bad = 0, ok = 1; uint32_t i, e; int16_t before[P_COUNT];
+    int bad = 0, ok = 1; uint32_t i, e, j; int16_t before[P_COUNT];
     midi_test_reset();
     bad += check("power-on parts: ANALOG, FM6, LOFI, DRUM", trk[0].eng_req == 0u && trk[1].eng_req == ENGI_FM6 &&
                  trk[2].eng_req == 3u && trk[3].eng_req == ENGI_DRUM);
@@ -616,12 +616,23 @@ static int cc_map_test(void)
         for (i = 0; i < 4u; i++) {
             uint32_t id = home_knob_id(&trk[e], i);
             const param_desc_t *d = param_desc_of(eng_idx(trk[e].eng_req), id);
-            queued(0xB0 | e, 74 + i, 127, 1);
-            ok &= trk[e].p[id] == d->max;
-            queued(0xB0 | e, 74 + i, 0, 1);
+            int16_t v0 = trk[e].p[id];
+            uint32_t c;
+            if (d->max - d->min < 8)
+                continue;
+            queued(0xB0 | e, 74 + i, d->max > v0 && v0 - d->min < (d->max - d->min) / 2 ? 127 : 0, 1);
+            ok &= trk[e].p[id] == v0;           /* (pickup: far from the value, no jump) */
+            for (c = 0; c <= 127u; c++)
+                queued(0xB0 | e, 74 + i, c, 1);
+            ok &= trk[e].p[id] == d->max;       /* (swept through it: taken) */
+            for (c = 127; c-- > 0;)
+                queued(0xB0 | e, 74 + i, c, 1);
             ok &= trk[e].p[id] == d->min;
         }
-    bad += check("CC74..77: HOME's four knobs of the channel's track, 0..127 over their range", ok);
+    bad += check("CC74..77: HOME's four knobs of the channel's track, with pickup, 0..127 over their range", ok);
+    trk[0].p[home_knob_id(&trk[0], 0)] = 10;    /* moved elsewhere: lost until reached again */
+    queued(0xB0, 74, 120, 1);
+    bad += check("  the value moved elsewhere: the knob waits to reach it", trk[0].p[home_knob_id(&trk[0], 0)] == 10);
     memcpy(before, trk[1].p, sizeof before); queued(0xB1, 71, 99, 1);
     bad += check("CC71 on FM6 (no resonance): ignored", !memcmp(before, trk[1].p, sizeof before));
     for (e = 0, ok = 1; e < NENGINES; e++) {   /* the table names a continuous EDIT value of every engine */
@@ -655,14 +666,18 @@ static int cc_map_test(void)
     song.rec = 1; seq_start(); events_block(CTL);
     i = home_knob_id(&trk[0], 0); e = (uint32_t)trk[0].p[i];
     queued(0xB0, 74, 127, 1);
+    for (j = 127; j-- > 0 && !motion.count;)       /* (pickup: down to the value) */
+        queued(0xB0, 74, j, 1);
     bad += check("armed and playing: CC74 records a motion event of HOME's knob 1 on the selected track", motion.count == 1u &&
                  motion.event[0].param == i && (motion.event[0].place >> 6) == 0u);
-    queued(0xB1, 74, 127, 1);
+    for (j = 0; j <= 127u; j++)
+        queued(0xB1, 74, j, 1);
     bad += check("  another track (channel 2, not selected): not recorded", motion.count == 1u);
     seq_stop(); events_block(CTL);
     bad += check("  stopped: the patch's own value comes back", trk[0].p[i] == (int16_t)e);
     song.rec = 0;
-    queued(0xB0, 74, 127, 1);
+    for (j = 0; j <= 127u; j++)
+        queued(0xB0, 74, j, 1);
     bad += check("not armed: the CC is the new value, no event", trk[0].p[i] != (int16_t)e && motion.count == 1u);
     return bad;
 }

@@ -305,13 +305,47 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
     return hit;
 }
 
+/* (Dah) CC74..77, the MPK mini Plus's K5..K8: HOME's four knobs of t, with pickup: a knob takes the parameter only once
+ * it reaches (or crosses) the parameter's value, so an endless knob's own idea of it makes no jump; lost again when the
+ * value moves elsewhere (the FM-1's knob, a preset, another track or HOME knob) */
+static struct { uint8_t last, on, k, id; int16_t v; } mpk_k[4] __attribute__((section(".pool")));
+static void __attribute__((noinline)) midi_home_knob(track_t *t, uint32_t j, uint32_t value)
+{
+    uint32_t id = home_knob_id(t, j), k = trk_index(t);
+    const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
+    int32_t span = d->max - d->min, cur, a, b;
+    if (span <= 0 || id >= P_COUNT)
+        return;
+    if (mpk_k[j].k != k || mpk_k[j].id != id) {
+        mpk_k[j].k = (uint8_t)k;
+        mpk_k[j].id = (uint8_t)id;
+        mpk_k[j].last = 0;
+        mpk_k[j].on = 0;
+    }
+    if (!mpk_k[j].on || t->p[id] != mpk_k[j].v) {
+        cur = ((t->p[id] - d->min) * 127 + span / 2) / span;
+        a = (int32_t)value - cur;
+        b = mpk_k[j].last ? (int32_t)mpk_k[j].last - 1 - cur : a;
+        mpk_k[j].last = (uint8_t)(value + 1u);
+        mpk_k[j].on = 0;
+        if (a > 2 || a < -2) {
+            if ((a > 0) == (b > 0) && b)
+                return;                         /* (not reached nor crossed yet) */
+        }
+        mpk_k[j].on = 1;
+    }
+    mpk_k[j].last = (uint8_t)(value + 1u);
+    midi_cc_set(t, id, value);
+    mpk_k[j].v = t->p[id];
+}
+
 static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint32_t value)
 {
     uint32_t i, id = 0xFFFFu, e;
     if (midi_learned(cc, value))                /* (a learned CC is the user's: not the map's) */
         return;
     if (cc - 74u < 4u) {                        /* (Dah) the MPK mini Plus's K5..K8: HOME's four knobs (not CC74 75's map) */
-        midi_cc_set(t, home_knob_id(t, cc - 74u), value);
+        midi_home_knob(t, cc - 74u, value);
         return;
     }
     for (i = 0; i < NELEM(MIDI_CC_MAP); i++)
