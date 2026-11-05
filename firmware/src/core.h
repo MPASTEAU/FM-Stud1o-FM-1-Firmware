@@ -481,6 +481,11 @@ static trkx_t trkx[NTRK];
 /* (Dah) the MPK mini Plus's K1..K4 (CC70..73) turned: a count each, from the ISR (midi_control.c midi_cc_map) to
  * KNOB 1..4 (panel.c panel_enc) */
 static volatile int32_t midi_kt[4] __attribute__((section(".pool")));
+/* (Dah) MIDI IN's note-ons on the selected (not DRUM) track, for STEP's step entry (ui_input.c seq_entry): the ISR
+ * writes (midi_ent_w), the main loop reads (midi_ent_r) */
+static uint8_t midi_ent[8] __attribute__((section(".pool")));
+static volatile uint32_t midi_ent_w __attribute__((section(".pool")));
+static uint32_t midi_ent_r __attribute__((section(".pool")));
 /* the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and
  * mutes on F3..B3 and the black keys 1..4): the selected track's, 1..4 or 5..8 */
 static inline uint32_t trk_bank(void) { return (uint32_t)song.sel & ~3u; }

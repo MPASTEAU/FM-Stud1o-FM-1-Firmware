@@ -163,6 +163,8 @@ static void midi_note_event(uint32_t ch, uint32_t note, uint32_t vel)
         midi_seen |= (uint8_t)(1u << trk_index(t));   /* (1.5.5: only noted; the UI does the rest) */
         c->targets |= (uint8_t)(1u << trk_index(t));
         midi_play(t, ch, ch == 9u && drum_track(t) ? midi_pad(note) : note, vel);
+        if (t == TSEL && !drum_track(t))
+            midi_ent[midi_ent_w++ & 7u] = (uint8_t)note;   /* (Dah: for STEP's step entry) */
         midi_notes[ch][note] = (uint8_t)(trk_index(t) + 1u);
         midi_owners[trk_index(t)]++;
         c->owned[trk_index(t)]++;

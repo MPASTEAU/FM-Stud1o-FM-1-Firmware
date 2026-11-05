@@ -1831,42 +1831,48 @@ static void entry_write(track_t *t, int single)
             st_set_cont(st, st_cont(st) & ~(1u << j));
     }
 }
+static void entry_note(track_t *t, uint32_t note)     /* one key (or MIDI note) of the gesture onto the cursor step */
+{
+    uint8_t ch[CHORD_MAX];
+    int32_t r;
+    uint16_t mask;
+    uint32_t n, i, j;
+    if (!ui.entry_open) {
+        ui.entry_open = 1;
+        follow_hold();                                /* (1.6, #242) */
+        ent.keys = ent.n = 0;
+        ent.orig = *ed_st(t, ui.cursor);
+        ent.cn = (uint8_t)entry_carried(t, &ent.orig, ent.cx);
+        for (i = 0, ent.run = 1; i < ent.cn; i++)
+            if ((j = note_run(t, ui.cursor, ent.cx[i], ent.cx[i])) > ent.run)
+                ent.run = (uint16_t)j;
+    }
+    n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root; Dah: MONO keys add as POLY's) */
+    ent.keys++;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < ent.n && ent.note[j] != ch[i]; j++)
+            ;
+        if (j == ent.n && ent.n < 4u)
+            ent.note[ent.n++] = ch[i];
+    }
+    entry_write(t, ent.keys == 1u && n == 1u);
+    last_note = (uint8_t)note;
+}
+/* (Dah) MIDI IN's notes too (midi_ent: the selected track's), one gesture with the keys while any is held */
 static void seq_entry(uint32_t pressed)
 {
     track_t *t = TSEL;
-    uint32_t k;
+    uint32_t k, note;
     for (k = 0; k < 27u; k++) {
-        uint8_t ch[CHORD_MAX];
-        int32_t r;
-        uint16_t mask;
-        uint32_t note, n, i, j;
         if (!((pressed >> k) & 1u))
             continue;
         note = kb_map(t, k);
-        if (note == KB_SILENT)
-            continue;
-        if (!ui.entry_open) {
-            ui.entry_open = 1;
-            follow_hold();                                /* (1.6, #242) */
-            ent.keys = ent.n = 0;
-            ent.orig = *ed_st(t, ui.cursor);
-            ent.cn = (uint8_t)entry_carried(t, &ent.orig, ent.cx);
-            for (i = 0, ent.run = 1; i < ent.cn; i++)
-                if ((j = note_run(t, ui.cursor, ent.cx[i], ent.cx[i])) > ent.run)
-                    ent.run = (uint16_t)j;
-        }
-        n = chord_make(t, note, ch, &r, &mask);        /* (CHRD OFF, a kit: the note alone; MONO: the root; Dah: MONO keys add as POLY's) */
-        ent.keys++;
-        for (i = 0; i < n; i++) {
-            for (j = 0; j < ent.n && ent.note[j] != ch[i]; j++)
-                ;
-            if (j == ent.n && ent.n < 4u)
-                ent.note[ent.n++] = ch[i];
-        }
-        entry_write(t, ent.keys == 1u && n == 1u);
-        last_note = (uint8_t)note;
+        if (note != KB_SILENT)
+            entry_note(t, note);
     }
-    if (ui.entry_open && !(fm1_in.notes & ~kb_layer))
+    for (; midi_ent_r != midi_ent_w; midi_ent_r++)
+        entry_note(t, midi_ent[midi_ent_r & 7u]);
+    if (ui.entry_open && !(fm1_in.notes & ~kb_layer) && !midi_owners[song.sel % NTRK])
         ui.entry_open = 0;                              /* (Dah: the cursor stays: KNOB 1 moves it) */
 }
 
@@ -2617,6 +2623,9 @@ static void ui_input(void)
         slice_keys_pick(notes);
 #endif
     lock_keys();                                        /* (a grid key on a hit let go: the hit goes) */
+    if (!(song.seq_mode && cur_page()->graph == GR_ROLL && !song.grid && (song.rec >> song.sel) & 1u &&
+          !live_rec_sel() && !chain_busy()))
+        midi_ent_r = midi_ent_w;                        /* (Dah) MIDI notes step-enter on STEP, armed and stopped only */
     if (song.grid == 4u) {
         live_keys(notes);
     } else if (song.grid == 3u) {
