@@ -591,7 +591,7 @@ static int follow_test(void)
 static int cc_map_test(void)
 {
     static const struct { uint8_t cc; uint8_t id; } COMMON[] = {
-        {5, P_GLIDE}, {7, P_LEVEL}, {72, P_REL}, {73, P_ATK}, {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
+        {5, P_GLIDE}, {7, P_LEVEL}, {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
     };
     int bad = 0, ok = 1; uint32_t i, e, j; int16_t before[P_COUNT];
     midi_test_reset();
@@ -605,13 +605,18 @@ static int cc_map_test(void)
         queued(0xB0, COMMON[i].cc, 37, 1);
         ok &= trk[0].p[COMMON[i].id] == 37;
     }
-    bad += check("CC5 7 72 73 91 93 94: GLIDE LEVEL REL ATK REV CHO DLY, 0..127 over their range", ok);
+    bad += check("CC5 7 91 93 94: GLIDE LEVEL REV CHO DLY, 0..127 over their range", ok);
     queued(0xB0, 10, 0, 1); ok = trk[0].p[P_PAN] == -64;
     queued(0xB0, 10, 127, 1); ok &= trk[0].p[P_PAN] == 63;
     queued(0xB0, 10, 64, 1); ok &= trk[0].p[P_PAN] == 0;
     bad += check("CC10 PAN: 0 left, 64 centre, 127 right", ok);
-    queued(0xB0, 71, 0, 1);
-    bad += check("CC71 on ANALOG: RES", trk[0].p[P_E5] == 0);
+    for (i = 0; i < 4u; i++)                       /* (Dah) CC70..73, the MPK mini Plus's K1..K4: KNOB 1..4 turned */
+        (void)panel_enc(EN_K1 + i);
+    memcpy(before, trk[0].p, sizeof before);
+    queued(0xB0, 71, 60, 1); queued(0xB0, 71, 63, 1); queued(0xB0, 73, 10, 1); queued(0xB0, 73, 8, 1);
+    ok = !memcmp(before, trk[0].p, sizeof before) && panel_enc(EN_K1) == 0 && panel_enc(EN_K2) == 3 &&
+         panel_enc(EN_K3) == 0 && panel_enc(EN_K4) == -2 && panel_enc(EN_K2) == 0;
+    bad += check("CC70..73: KNOB 1..4's detents (the first value of each: none), no parameter set", ok);
     for (e = 0, ok = 1; e < 4u; e++)               /* (Dah) CC74..77, the MPK mini Plus's K5..K8: HOME's knobs */
         for (i = 0; i < 4u; i++) {
             uint32_t id = home_knob_id(&trk[e], i);
@@ -633,20 +638,6 @@ static int cc_map_test(void)
     trk[0].p[home_knob_id(&trk[0], 0)] = 10;    /* moved elsewhere: lost until reached again */
     queued(0xB0, 74, 120, 1);
     bad += check("  the value moved elsewhere: the knob waits to reach it", trk[0].p[home_knob_id(&trk[0], 0)] == 10);
-    memcpy(before, trk[1].p, sizeof before); queued(0xB1, 71, 99, 1);
-    bad += check("CC71 on FM6 (no resonance): ignored", !memcmp(before, trk[1].p, sizeof before));
-    for (e = 0, ok = 1; e < NENGINES; e++) {   /* the table names a continuous EDIT value of every engine */
-        uint32_t m = MIDI_CC_ENG[e], k;
-        for (k = 0; k < 2u; k++) {
-            uint32_t n = (m >> (k ? 0 : 4)) & 15u;
-            const param_desc_t *d = n ? &ENGINES[e]->edit[n - 1u] : 0;
-            ok &= n <= 8u && (!d || (d->fmt != F_ENUM && d->max - d->min >= 24));
-        }
-    }
-    bad += check("every engine's CC74 / CC71 target is a continuous EDIT value (or none)", ok);
-    trk[2].eng_req = trk[2].engine = 7u;               /* WHEEL: no brightness, no resonance */
-    memcpy(before, trk[2].p, sizeof before); queued(0xB2, 71, 3, 1);
-    bad += check("CC71 on WHEEL: ignored", !memcmp(before, trk[2].p, sizeof before));
     memcpy(before, trk[0].p, sizeof before);
     queued(0xB0, 121, 0, 1);
     bad += check("CC121 resets no mapped parameter (RP-015)", !memcmp(before, trk[0].p, sizeof before));

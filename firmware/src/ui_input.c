@@ -287,7 +287,7 @@ static uint32_t step_leds(void)
  * dark; 0: the keys held and the notes playing, over the idle glow */
 static int keys_own(void)
 {
-    return (name_on() && !ui.menu) || ui.layer || grid_write()
+    return (name_on() && !ui.menu) || ui.layer || grid_write() || song.grid == 4u
 #if FELUCCA_SLICE
            || (!ui.menu && !name_on() && slice_page_on())
 #endif
@@ -377,6 +377,42 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
     return c;
 }
 
+/* (Dah) LIVE's keys (live_keys): the black keys of the project's tracks glow, the selected one's lit, the volume's two
+ * glow, MUTE breathes while the track is muted and blinks while a change waits for the pattern's start; the white keys
+ * the selected track's pattern a page of 16 at a time (the one playing): the step playing lit, the steps with notes or
+ * hits at the mid level. Lit (the return), *br breathing, *g glowing, *mid the mid level */
+static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
+{
+    const track_t *t = TSEL;
+    uint32_t k, p, m = 0, len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), i = song.sel % NTRK;
+    uint32_t pg = song.playing && t->seq_idx < len ? t->seq_idx / 16u : 0u;
+    uint32_t ph = song.playing && t->seq_idx < len ? t->seq_idx % 16u : 0xFFu;
+    *br = *g = *mid = 0;
+    for (k = 0; k < 27u; k++) {
+        p = key_place(k);
+        if (key_black(k)) {
+            if (p < NTRK) {
+                m |= (uint32_t)(p == i) << k;
+                *g |= (uint32_t)(p < trk_count()) << k;
+            } else if (p < NTRK + 2u) {
+                *g |= 1u << k;
+            } else if (live_mreq[i]) {
+                m |= (uint32_t)((fm1_ms >> 7) & 1u) << k;   /* (waiting: ~4 Hz) */
+                *g |= 1u << k;
+            } else if (t->p[P_MUTE]) {
+                *br |= 1u << k;
+            } else {
+                *g |= 1u << k;
+            }
+        } else if (pg * 16u + p < len) {
+            const step_t *st = ui_st(t, pg * 16u + p);
+            m |= (uint32_t)(p == ph) << k;
+            *mid |= (uint32_t)step_on(st) << k;
+        }
+    }
+    return m;
+}
+
 /* The LEDs: lit = active (the page's family, PLAY / REC running, the keys held or playing, a map's keys), the ARP
  * beat flashes, the ones that can be pressed breathe (#119: the open layer's button, OCT+ when it would act, a
  * layer's keys; dark .. ~60 % of lit and back, hal/fm1_input.h fm1_led_breath, in every mode: never a hard blink in
@@ -443,6 +479,8 @@ static void ui_leds(void)
         keys_map = 1;
     }
     beat = 0;                                           /* (Dah: no beats of the grid brighter) */
+    if (song.grid == 4u && !ui.layer)                   /* (Dah) LIVE: its own picture */
+        c = live_leds(&br, &g, &beat);
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
     for (k = 0; k < 27u; k++) {
         uint32_t in = (sc >> k) & 1u, rt = (sr >> k) & 1u, idle = !((c >> k) & 1u);
@@ -596,6 +634,34 @@ static void song_add(void)
     }
     chain_config.count = (uint8_t)(n + 1u);
     ui.song_row = (uint8_t)n;
+}
+/* (Dah) LIVE's keys (song.grid 4: none sounds; MIDI IN plays on): black keys 1..8 pick tracks 1..8 (the project's), the
+ * 9th the selected track's volume to 0 %, the 10th to 100 %, the 11th (the last) its MUTE on or off: at once stopped,
+ * playing at its pattern's start (seq.c; pressed again before it: dropped) */
+static void live_vol(int32_t v)
+{
+    v = clamp(v, 0, 100);
+    live_cut[song.sel % NTRK] = (uint8_t)(100 - v);
+}
+static void live_keys(uint32_t notes)
+{
+    uint32_t k, p, i = song.sel % NTRK;
+    for (k = 0; k < 27u; k++) {
+        if (!((notes >> k) & 1u) || !key_black(k))
+            continue;
+        p = key_place(k);
+        if (p < NTRK)
+            track_select(p);
+        else if (p == NTRK)
+            live_vol(0);
+        else if (p == NTRK + 1u)
+            live_vol(100);
+        else if (song.playing || chain_busy())
+            live_mreq[i] = (uint8_t)!live_mreq[i];
+        else
+            TSEL->p[P_MUTE] = (int16_t)!TSEL->p[P_MUTE];
+        ui.force = 1;
+    }
 }
 /* SONG's keys (song.grid 3; Dah: key k pattern k + 1, the track's ones glowing, the cell's lit) set the selected cell's slot (on + ADD it
  * adds the section first: a copy of the one before, the first with every track on that slot) */
@@ -2525,7 +2591,9 @@ static void ui_input(void)
         slice_keys_pick(notes);
 #endif
     lock_keys();                                        /* (a grid key on a hit let go: the hit goes) */
-    if (song.grid == 3u) {
+    if (song.grid == 4u) {
+        live_keys(notes);
+    } else if (song.grid == 3u) {
         song_keys(notes);
     } else if (song.grid) {
         grid_keys(notes);
@@ -2577,7 +2645,7 @@ static void ui_input(void)
                 dn_ms = fm1_ms | 1u;
             else if (!oct_dn_used && (int32_t)(fm1_ms - dn_ms) >= 500) {
                 oct_dn_used = 1;
-                if (ui.home || cur_page()->graph == GR_TRK) {   /* (Dah) MIXER, HOME: OCT- held, the track picked
+                if ((ui.home && !live_on()) || cur_page()->graph == GR_TRK) {   /* (Dah) MIXER, HOME (not LIVE): OCT- held, the track picked
                                                          * deleted (asked; any one, the ones after it one down) */
                     if (song.playing || chain_busy()) ui_message("STOP FIRST");
                     else if (trk_count() <= 1u) ui_message("ONE TRACK AT LEAST");
@@ -2614,7 +2682,9 @@ static void ui_input(void)
         chain_seek_req = 0;
     }
     if (!lay && (s = panel_enc(EN_PRESET)) != 0) {
-        if (mx_master)
+        if (live_on())
+            live_vol(100 - (int32_t)live_cut[song.sel % NTRK] + accel(EN_PRESET, s, 100));   /* (Dah) LIVE: the volume */
+        else if (mx_master)
             cards_say("MASTER: FX ONLY", "TURN \x02" "ALGORITHM\nFOR A TRACK");              /* (Dah: no sound to load there) */
         else if (detail_on() && !chain_busy())
             cursor_move(ui.cursor + s);                 /* (DETAIL: the cursor, its KNOB 1 CHANCE) */

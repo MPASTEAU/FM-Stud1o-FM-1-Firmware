@@ -2223,15 +2223,7 @@ static void fl_row(uint32_t kind, uint32_t i, uint32_t n, const uint8_t *nums, i
         cv_free_text(ex, sy, &AF_S, fl_fx_note(i), T_MID, bg, 222 - ex);
         return;
     }
-    if ((kind == FL_SND || kind == FL_TRK) && dq < 128u && text_w(&AF_B, nm) <= 222 - nx) {
-        const char *q = nm;
-        while (*q && glyph_at(&AF_B, fold(&AF_B, (uint8_t)*q)) >= 0)
-            q++;
-        if (!*q) {                                      /* (Dah) the sound / track in the middle: M's face larger (B) */
-            cv_text_on(nx, y + CAP_IN(B, h), &AF_B, nm, ink, bg);
-            return;
-        }
-    }
+    (void)dq;                                           /* (Dah: the middle row's name no longer in B: the flash's room, LIVE) */
     cv_free_text(nx, ty, f, nm, ink, bg, 222 - nx);
 }
 static uint32_t fl_sig(void)                           /* what the full list shows */
@@ -2875,8 +2867,15 @@ static void rk_view(const track_t *t, int sel, uint32_t *p0, uint32_t *ph)
 #define RK_RH 14                                       /* (Dah) the step ruler over the rows */
 static int rk_sel(void) { return !mx_master && song.sel < trk_count() ? (int)song.sel : -1; }
 /* row c's top (panel y) and height (the gap under it not counted) */
+#define LV_RH 34                                        /* (Dah) LIVE: its pattern's row (draw_live) */
+#define LV_LH 13                                        /* .. the black keys' line over it */
 static void rk_geo(uint32_t c, int32_t *y, int32_t *h)
 {
+    if (live_on()) {                                    /* (Dah) LIVE: the selected track's row alone, at the foot */
+        *y = (int32_t)(graph_y() + graph_h()) - LV_RH;
+        *h = LV_RH - 1;
+        return;
+    }
     int32_t tot = (int32_t)graph_h() - RK_RH, p = tot / (int32_t)NTRK, yy = (int32_t)c * p;
     *y = (int32_t)graph_y() + RK_RH + yy;
     *h = p - 1;                                         /* (the rows alike; what is left under the last: BG) */
@@ -3133,6 +3132,82 @@ static void rack_ruler(void)
         cv_text(x0, 4 - AF_S_CAP_Y, &AF_S, b, T_ACCENT);
     }
     cv_blit(3, graph_y());
+}
+/* (Dah) LIVE (ui.c live_on): under HOME's four knobs two boxes, the selected track's LIVE volume (ui_input.c live_keys:
+ * the PRESETS knob, black keys 9 / 10; grey when muted) and its MUTE (red when muted, blinking while a change waits for
+ * the pattern's start); a line under them what the black keys do (1..8 the tracks, the selected lit; 0 %, 100 %, MUTE);
+ * at the foot the track's pattern as HOME's rack shows it, the step playing moving (rack_row) */
+static void draw_live(void)
+{
+    static uint32_t bsig __attribute__((section(".pool"))), ksig __attribute__((section(".pool")));
+    const track_t *t = TSEL;
+    uint32_t k = song.sel % NTRK, vol = 100u - live_cut[k], mute = t->p[P_MUTE] != 0, pend = live_mreq[k] != 0;
+    uint32_t blink = pend && ((fm1_ms >> 8) & 1u), i, sig, n = trk_count();
+    int32_t y0 = (int32_t)graph_y(), h = (int32_t)graph_h(), bh = h - LV_RH - LV_LH - 5, w = 115, by;
+    uint16_t tc = ux.trk[k], bg, ink;
+    char b[16];
+    if (ui.force) {
+        lcd_fill(0, y0, 240, h, T_BG);
+        for (i = 0; i < NTRK; i++)
+            ts.meter[i] = 0;
+    }
+    sig = vol + mute * 128u + pend * 256u + blink * 512u + k * 1024u + (uint32_t)bh * 8192u + tc * 2654435761u + ux.gen;
+    if (ui.force || sig != bsig) {
+        bsig = sig;
+        cv_begin(234, (uint32_t)bh + 2u, T_BG);
+        cv_oy = 0;
+        bg = mute ? T_SURF : ux_mix(T_SURF, tc, 16);   /* the volume: grey while muted */
+        ink = mute ? T_DIM : T_TEXT;
+        cv_rrect(0, 0, w, bh, 5, bg, T_BG);
+        cv_text_in(0, 6 - AF_S_CAP_Y, w, &AF_S, "LIVE VOLUME", mute ? T_DIM : T_MID, bg);
+        fmt_int(b, (int32_t)vol);
+        by = HALF_UP(bh - AF_L_CAP_H) - AF_L_CAP_Y - 2;
+        {                                               /* (the figures in L, the % in M on their baseline) */
+            int32_t pw = text_w(&AF_M, "%"), x = HALF_UP(w - text_w(&AF_L, b) - pw - 2);
+            x = cv_text_on(x, by, &AF_L, b, ink, bg);
+            cv_text_on(x + 2, by + AF_L_CAP_Y + AF_L_CAP_H - AF_M_CAP_Y - AF_M_CAP_H, &AF_M, "%", ink, bg);
+        }
+        cv_rect(10, bh - 22, w - 20, 3, T_LINE);
+        cv_rect(10, bh - 22, (w - 20) * (int32_t)vol / 100, 3, mute ? T_DIM : tc);
+        cv_text_in(0, bh - 12 - AF_S_CAP_Y, w, &AF_S, "PLAY / STOP: 100%", T_DIM, bg);
+        bg = mute ? T_REC : ux_mix(T_SURF, tc, 16);    /* the MUTE: red while muted */
+        if (blink)
+            bg = mute ? ux_mix(T_SURF, tc, 16) : T_REC;
+        ink = bg == T_REC ? T_INK : T_TEXT;
+        cv_rrect(119, 0, w, bh, 5, bg, T_BG);
+        b[0] = 'T';
+        b[1] = (char)('1' + k);
+        b[2] = 0;
+        cv_text_in(119, 6 - AF_S_CAP_Y, w, &AF_S, b, bg == T_REC ? T_INK : tc, bg);
+        cv_text_in(119, by, w, &AF_L, mute ? "MUTED" : "ON", ink, bg);
+        cv_text_in(119, bh - 12 - AF_S_CAP_Y, w, &AF_S, pend ? (mute ? "UNMUTE AT END" : "MUTE AT END") : "",
+                   ink, bg);
+        cv_blit(3, (uint32_t)y0);
+    }
+    sig = n + k * 16u + mute * 256u + (uint32_t)bh * 4096u + tc * 2654435761u + ux.gen;
+    if (ui.force || sig != ksig) {                     /* the black keys, left to right: 11 cells */
+        static const char *const KL[3] = {"0%", "100", "MUTE"};
+        int32_t cw, x;
+        ksig = sig;
+        cv_begin(234, LV_LH, T_BG);
+        cv_oy = 0;
+        for (i = 0; i < 11u; i++) {
+            x = i < NTRK ? (int32_t)i * 17 : 136 + (int32_t)(i - NTRK) * 33;   /* (the tracks' 17 px, the rest 33) */
+            cw = (i < NTRK ? 17 : 33) - 2;
+            bg = i == k ? tc : i < n ? T_RAISE : i >= NTRK ? (i == 10u && mute ? T_REC : T_RAISE) : T_BG;
+            ink = i == k || bg == T_REC ? T_INK : i < n || i >= NTRK ? T_TEXT : T_DIM;
+            cv_rrect(x, 0, cw, LV_LH, 3, bg, T_BG);
+            if (i < NTRK) {
+                b[0] = (char)('1' + i);
+                b[1] = 0;
+            } else {
+                str_cpy(b, KL[i - NTRK], sizeof b);
+            }
+            cv_text_in(x, CAP_IN(S, LV_LH), cw, &AF_S, b, ink, bg);
+        }
+        cv_blit(3, (uint32_t)(y0 + bh + 3));
+    }
+    rack_row(k);
 }
 static void draw_home_tracks(void)
 {
@@ -3559,6 +3634,10 @@ static void draw_graph_in(void)
         ov = now;
         if (now)
             goto lists;
+    }
+    if (live_on()) {                                 /* (Dah) LIVE */
+        draw_live();
+        return;
     }
     if (ui.home && home_tracks()) {                  /* MENU > HOME TRACKS (1.3) */
         draw_home_tracks();

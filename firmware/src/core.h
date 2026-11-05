@@ -429,7 +429,8 @@ typedef struct {
     int16_t g[G_COUNT];
     uint8_t playing, seq_mode;
     uint8_t grid;                /* 1: the keys are the DRUM grid (ui.c grid_on): only the lane keys play (seq.c);
-                                  * 2: NAME (ui_name.c): no key plays; 3: SONG, A..D are its (seq.c song_key) */
+                                  * 2: NAME (ui_name.c): no key plays; 3: SONG, A..D are its (seq.c song_key);
+                                  * 4: (Dah) LIVE (ui_input.c live_keys): no key plays */
     uint8_t rec;                 /* live recording armed: bit per track */
     uint8_t sel;                 /* selected track 0..NTRK-1: keys, pages, editor */
     int8_t octave;
@@ -477,6 +478,9 @@ typedef struct {
 } trkx_t;
 #define TRKX_V2 20u                      /* (Dah) the extras' size before tap and home */
 static trkx_t trkx[NTRK];
+/* (Dah) the MPK mini Plus's K1..K4 (CC70..73) turned: a count each, from the ISR (midi_control.c midi_cc_map) to
+ * KNOB 1..4 (panel.c panel_enc) */
+static volatile int32_t midi_kt[4] __attribute__((section(".pool")));
 /* the bank of four tracks shown where four are (MIXER, HOME LEVELS, SONG's lanes, the layers' solos and
  * mutes on F3..B3 and the black keys 1..4): the selected track's, 1..4 or 5..8 */
 static inline uint32_t trk_bank(void) { return (uint32_t)song.sel & ~3u; }

@@ -125,8 +125,12 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
                                                          * transport (OFF, the default: armed, it waits for PLAY) */
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && LEDS_INV_LV - 1u < 2u ? LEDS_INV_LV : 0u; }
 enum { HV_TRACKS, HV_SCOPE, HV_LEVELS, HV_COUNT };   /* (Dah: TRACKS first, the default) */
-static int home_tracks(void) { return ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS; }
-static int home_levels(void) { return ui_home_view == HV_LEVELS; }
+/* (Dah) LIVE: HOME's third page (HOME, MIXER, LIVE: home_tap), drawn on HOME's frame (ui.home set): HOME's four knobs,
+ * the selected track's LIVE volume and MUTE, its pattern playing; the panel's keys its own (ui_input.c live_keys) */
+static uint8_t live_f __attribute__((section(".pool")));   /* (no .bss: its headroom) */
+static int live_on(void);                            /* (below: ui.home and live_f) */
+static int home_tracks(void) { return !live_f && (ui_home_view == HV_TRACKS || ui_home_view == HV_LEVELS); }
+static int home_levels(void) { return !live_f && ui_home_view == HV_LEVELS; }
 enum { RP_CLICK, RP_LEVEL, RP_COUNTIN };
 static uint32_t rp_get(uint32_t f)                     /* a field as the MENU steps it: 0..2 */
 {
@@ -241,6 +245,7 @@ static struct {
     volatile uint8_t mpc[NTRK];  /* MIDI Program Change per track, 0x80 | program, 0 none (midi_control.c mpc_io: here
                                   * for the same reason as ml.io; midi_pc_poll) */
 } ui;
+static int live_on(void) { return ui.home && live_f; }
 
 enum { CF_NONE, CF_OVR_PROJ, CF_OVR_USER,
        CF_DEL_ROW, CF_INIT_SOUND, CF_CLEAR_PAT, CF_ERASE_USER, CF_ERASE_PROJ, CF_CLEAN_SOUND,
@@ -1139,6 +1144,7 @@ static void open_family(uint32_t fam)
 static void go_home(void)
 {
     ui.home = 1;
+    live_f = 0;
     ui.entry_open = 0;
     ui.hot_t = 0;
     song.seq_mode = 0;
@@ -1146,17 +1152,22 @@ static void go_home(void)
     help_start();
 }
 
-/* HOME tapped (1.2): HOME -> MIXER (up to 1.1.5 GLO's first page) -> CLOCK (up to 1.1.5 GLO > GLOBAL) -> HOME; from any
+/* HOME tapped (1.2): HOME -> MIXER -> LIVE (Dah) -> HOME; from any
  * other page HOME. HOME's pages are FAM_TRK's, in PAGES order, always from the first (none remembered). Held: the menu
  * (ui_input) */
 static void home_tap(void)
 {
     uint32_t i = ui.page + 1u;
-    if (ui.home) {
+    if (live_on()) {
+        go_home();                                    /* (Dah) LIVE: HOME again */
+    } else if (ui.home) {
         ui.fam_last[FAM_TRK] = 0;                     /* (open_family: the family's first, the MIXER) */
         open_family(FAM_TRK);
     } else if (cur_page()->fam == FAM_TRK && i < NPAGES && PAGES[i].fam == FAM_TRK) {
         open_family(FAM_TRK);                         /* (on HOME's page again: the next one) */
+    } else if (cur_page()->fam == FAM_TRK) {
+        go_home();                                    /* (Dah) after the MIXER: LIVE */
+        live_f = 1;
     } else {
         go_home();
     }

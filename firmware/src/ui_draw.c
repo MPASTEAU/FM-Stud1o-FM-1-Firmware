@@ -453,7 +453,7 @@ static void head_title(char *ti)
     else if (ui.layer)
         str_cpy(ti, layer_head(), 20);
     else if (ui.home)
-        str_cpy(ti, "HOME", 20);
+        str_cpy(ti, live_on() ? "LIVE" : "HOME", 20);
     else
         page_title(ti);
 }
@@ -635,14 +635,15 @@ static void home_foot(void)
     int32_t y0 = 240 - HOME_FOOT_H, x, w;
     uint32_t sig, n, ok = 0, i;
     khint_t kh[3];
-    static const khint_t KH[5][2] = {{{KC_OCTDN, "(HOLD) DEL"}, {KC_OCTUP, "(HOLD) VIEW"}},   /* HOME (Dah: OCT- held the track out; OCT+ held the VIEW;
+    static const khint_t KH[6][2] = {{{KC_OCTDN, "(HOLD) DEL"}, {KC_OCTUP, "(HOLD) VIEW"}},   /* HOME (Dah: OCT- held the track out; OCT+ held the VIEW;
                                                                           * as the keys sit, OCT- left) */
                                      {{KC_FX, "OPEN"}, {KC_REC, "DEL"}},         /* FX > CHAIN: the effect picked */
                                      {{KC_FX, "CHAIN"}},                         /* an effect's page (FX: back) */
                                      {{KC_FX, "NEXT"}},                          /* .. with a second page */
-                                     {{KC_OCTDN, "(HOLD) DEL"}}};      /* (Dah) MIXER: OCT- held deletes the (last) track.
+                                     {{KC_OCTDN, "(HOLD) DEL"}},       /* (Dah) MIXER: OCT- held deletes the (last) track.
                                                          * Never SELECT, ALGORITHM, PRESETS or a knob: the cards say them */
-    uint32_t hk = ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
+                                     {{KC_PRESETS, "LIVE VOLUME"}, {KC_HOME, "HOME"}}};   /* (Dah) LIVE */
+    uint32_t hk = live_on() ? 6u : ui.home ? 0u : cur_page()->graph == GR_TRK ? 4u : cur_page()->fam != FAM_FX ? 5u :
                   cur_page()->id[0] == P_FXORD ? 1u : fx_has_next() ? 3u : 2u;
     if (mx_master)
         str_cpy(pn, "FX", sizeof pn);
@@ -656,10 +657,10 @@ static void home_foot(void)
     } else if (!hk && help && (n = help_parse(help, kh, hp, sizeof hp)) != 0u) {   /* (Dah) HOME entered, HELP ON: its
                                                          * hint a while (the tempo, the MENU), then its keys */
         ok = 7u;
-    } else if (hk < 5u) {
-        kh[0] = KH[hk][0];
-        kh[1] = KH[hk][1];
-        n = hk <= 1u ? 2u : 1u;                         /* (Dah: no SELECT PAT anywhere) */
+    } else if (hk < 5u || hk == 6u) {
+        kh[0] = KH[hk == 6u ? 5u : hk][0];
+        kh[1] = KH[hk == 6u ? 5u : hk][1];
+        n = hk <= 1u || hk == 6u ? 2u : 1u;                         /* (Dah: no SELECT PAT anywhere) */
         ok = 3u;
     } else if (ui.ml.on && !act_cols()) {               /* (MIDI LEARN: its line) */
         ml_line(ln);
@@ -1380,7 +1381,7 @@ static void draw_foot_in(void)
     int32_t x;
     sound_name(t, pn);
     if (ui.home)
-        str_cpy(ti, "HOME", sizeof ti);
+        str_cpy(ti, live_on() ? "LIVE" : "HOME", sizeof ti);
     else                                               /* page title + number in its family: "ENV DEST 2/2" */
         page_title(ti);
     str_cpy(s, ename, sizeof s);

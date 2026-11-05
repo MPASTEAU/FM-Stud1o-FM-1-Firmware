@@ -1222,7 +1222,7 @@ static void keyboard_block(void)
     }
     lay = (fm1_in.buttons & kb_mask) || kb_lock;  /* (#83: kb_lock, a layer locked open with no button held) */
     fx = (fm1_in.buttons & perf_mask) || (kb_lock & 2u);
-    mute = song.grid == 2u || kb_master ? ~0u : song.grid == 3u ? SONG_KEYS : 0u;   /* the keys that never sound here */
+    mute = song.grid == 2u || song.grid == 4u || kb_master ? ~0u : song.grid == 3u ? SONG_KEYS : 0u;   /* the keys that never sound here */
     for (k = 0; k < 27u; k++) {
         if (!((ch >> k) & 1u))
             continue;
@@ -1266,9 +1266,21 @@ static void keyboard_block(void)
 }
 
 /* -------------------------------------------------------- sequencer --- */
+static void live_reset(void)                       /* (Dah) LIVE: PLAY and STOP: its volumes back, the MUTEs asked done */
+{
+    uint32_t i;
+    for (i = 0; i < NTRK; i++) {
+        live_cut[i] = 0;
+        if (live_mreq[i]) {
+            live_mreq[i] = 0;
+            trk[i].p[P_MUTE] = (int16_t)!trk[i].p[P_MUTE];
+        }
+    }
+}
 static void seq_start(void)
 {
     uint32_t i;
+    live_reset();
     motion_begin();
     chain_start();
     for (i = 0; i < NTRK; i++) {                   /* every track from its step 0, together */
@@ -1343,6 +1355,7 @@ static void seq_stop(void)
 {
     uint32_t i;
     song.playing = 0;
+    live_reset();
     cin_left = 0;                                  /* (a count-in: cancelled, nothing recorded) */
     cin_flush = 0;
     memset(cin_n, 0, sizeof cin_n);
@@ -1882,6 +1895,10 @@ static void seq_tick(track_t *t, uint32_t n)
             t->arp_pos = 0xFFFFFFF;
             t->arp_idx = 0xFFFFFFFFu;
             t->arp_walk = 0;
+            if (live_mreq[(uint32_t)(t - trk) % NTRK]) {   /* (Dah) LIVE: a MUTE asked for, on the pattern's start */
+                live_mreq[(uint32_t)(t - trk) % NTRK] = 0;
+                t->p[P_MUTE] = (int16_t)!t->p[P_MUTE];
+            }
         }
         seq_enter(t, top, len);
         if (t->p[P_SQNT] == 1 && !t->nd_fired)

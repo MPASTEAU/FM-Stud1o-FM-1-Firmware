@@ -425,7 +425,7 @@ static __attribute__((noinline)) void perf_pre(const int32_t *ml, const int32_t 
 static __attribute__((noinline)) void perf_throw(const track_t *t, const int32_t *b, int32_t *sd, int32_t *sr, uint32_t n)
 {
     uint32_t i;
-    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127];
+    int32_t lvl = trk_lvl(t);
     int32_t rg = 32766 - t->p[P_REV] * 258, dg = 32766 - t->p[P_DLY] * 258;   /* full (127 * 258) less its own */
     int32_t rw = pf.rw, ew = pf.ew, r1 = pf.rw1, e1 = pf.ew1;
     for (i = 0; i < n; i++) {

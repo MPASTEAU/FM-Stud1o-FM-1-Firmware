@@ -230,23 +230,11 @@ static int midi_track_held(uint32_t track)
 
 /* The standard CC map (#103): always on, these CCs only, on the track the channel plays (ROUT as notes). A CC
  * sets its parameter as a knob would, 0..127 over the parameter's range (64: the middle of a bipolar one), and
- * AUTOMATION records it as a knob move (motion_capture: the selected track, armed and playing). CC74 / CC71 are
- * the engine's own brightness / resonance (MIDI_CC_ENG); an engine without one ignores them. CC121 resets none
- * of them (RP-015: they are the sound's) */
-#define MCC_CUT 0xFEu
-#define MCC_RES 0xFFu
+ * AUTOMATION records it as a knob move (motion_capture: the selected track, armed and playing). CC121 resets none
+ * of them (RP-015: they are the sound's). (Dah) CC70..77 are the MPK mini Plus's K1..K8 (midi_cc_map): no longer
+ * the map's CC71..75 (RES REL ATK CUT DEC) */
 static const uint8_t MIDI_CC_MAP[][2] = {
-    {5, P_GLIDE}, {7, P_LEVEL}, {10, P_PAN}, {71, MCC_RES}, {72, P_REL}, {73, P_ATK}, {74, MCC_CUT}, {75, P_DEC},
-    {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
-};
-/* per engine (ENGINES[] order): CC74's E index + 1 in the high nibble, CC71's in the low one, 0 = none */
-static const uint8_t MIDI_CC_ENG[NENGINES] = {
-    0x56, 0x00, 0x30, 0x80, 0x50, 0x07, 0x67, 0x00,   /* ANALOG CUT RES, -, PHASE DCW, LOFI TONE, SAMPLE CUT, VOICE Q,
-                                                       * TRIO CUT RES, WHEEL - */
-    0x80, 0x30, 0x30, 0x34, 0x30,                     /* GRAIN TONE, PHYS BRIT, DRUM TONE, NOISE FREQ RES, FM6 MLVL */
-#if FELUCCA_SLICE
-    0x80,                                             /* SLICE TONE */
-#endif
+    {5, P_GLIDE}, {7, P_LEVEL}, {10, P_PAN}, {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
 };
 /* a CC sets parameter id of track t as a knob would: 0..127 over its range */
 static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)
@@ -341,9 +329,17 @@ static void __attribute__((noinline)) midi_home_knob(track_t *t, uint32_t j, uin
 
 static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint32_t value)
 {
-    uint32_t i, id = 0xFFFFu, e;
+    uint32_t i, id = 0xFFFFu;
     if (midi_learned(cc, value))                /* (a learned CC is the user's: not the map's) */
         return;
+    if (cc - 70u < 4u) {                        /* (Dah) the MPK mini Plus's K1..K4: the page's KNOB 1..4, turned */
+        static uint8_t last[4] __attribute__((section(".pool")));   /* (the CC's value + 1, 0: none yet) */
+        uint32_t j = cc - 70u;
+        if (last[j])
+            midi_kt[j] += (int32_t)value - (int32_t)(last[j] - 1u);
+        last[j] = (uint8_t)(value + 1u);
+        return;
+    }
     if (cc - 74u < 4u) {                        /* (Dah) the MPK mini Plus's K5..K8: HOME's four knobs (not CC74 75's map) */
         midi_home_knob(t, cc - 74u, value);
         return;
@@ -351,18 +347,11 @@ static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint3
     for (i = 0; i < NELEM(MIDI_CC_MAP); i++)
         if (MIDI_CC_MAP[i][0] == cc)
             id = MIDI_CC_MAP[i][1];
-    if (id >= MCC_CUT) {
-        if (id == 0xFFFFu)
-            return;
-        e = MIDI_CC_ENG[eng_idx(t->eng_req)] >> (id == MCC_CUT ? 4 : 0) & 15u;
-        if (!e)
-            return;
-        id = P_E0 + e - 1u;
-    }
-    midi_cc_set(t, id, value);
+    if (id != 0xFFFFu)
+        midi_cc_set(t, id, value);
 }
 
-/* (Dah) a controller's transport (the MPK mini Plus's PLAY STOP REC: CC 117 118 119, 127 pressed), any channel: 1 PLAY,
+/* (Dah) a controller's transport (the MPK mini Plus's STOP PLAY REC: CC 117 118 119, 127 pressed), any channel: 1 PLAY,
  * 2 STOP, 3 REC, for the main loop (ui_input.c midi_transport) */
 static volatile uint8_t midi_tp __attribute__((section(".pool")));
 static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
@@ -371,7 +360,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
     uint32_t i, mask;
     if (cc - 117u < 3u) {
         if (value)
-            midi_tp = (uint8_t)(cc - 116u);
+            midi_tp = (uint8_t)(cc == 117u ? 2u : cc == 118u ? 1u : 3u);
         return;
     }
     switch (cc) {

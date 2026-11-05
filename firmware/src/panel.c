@@ -57,9 +57,17 @@ static uint32_t panel_btn_of(uint32_t matrix_id)        /* label of a matrix but
 
 /* steps of a role, + = clockwise */
 static uint8_t panel_moved;                     /* a knob turned since ui.c scr_input last looked (SCREEN OFF) */
+/* (Dah) the MPK mini Plus's K1..K4 (CC70..73, midi_control.c midi_cc_map): their moves as KNOB 1..4's detents, one a
+ * step of the CC, whatever the page (the ISR counts on, the main loop takes what came since: one writer each) */
+static int32_t midi_kseen[4] __attribute__((section(".pool")));
 static int32_t panel_enc(uint32_t role)
 {
     int32_t s = fm1_enc_take(panel.enc[role]) * panel.dir[role];
+    if (role - EN_K1 < 4u) {
+        int32_t t = midi_kt[role - EN_K1];
+        s += t - midi_kseen[role - EN_K1];
+        midi_kseen[role - EN_K1] = t;
+    }
     if (s)
         panel_moved = 1;
     return s;

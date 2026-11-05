@@ -46,6 +46,7 @@ static const struct { const char *title, *hint; } HELP_PAGE[] = {
 };
 #define H_HOME "[OCT+]+SELECT: BPM[HOME]HOLD: MENU"   /* (Dah: the tempo, OCT+ held and SELECT turned) */
 #define H_LEVELS "[HOME]MIXER"
+#define H_LIVE "[PRESETS]LIVE VOLUME[HOME]HOME"   /* (Dah) LIVE: the PRESETS knob its volume */
 #define H_GRID "[REC]STEPS[SEQ]RATCH"
 /* a layer's (LAYER_*): what its footer (LAYERS[].foot) does not say, after it where it fits */
 static const char *const HELP_LAYER[LAYER_N] = {
@@ -59,7 +60,7 @@ static const char *help_page(void)
     uint32_t i;
     const char *t;
     if (ui.home)
-        return home_levels() ? H_LEVELS : H_HOME;
+        return live_on() ? H_LIVE : home_levels() ? H_LEVELS : H_HOME;
     if (grid_on() && !detail_on())
         return H_GRID;
     t = cur_page()->title;
