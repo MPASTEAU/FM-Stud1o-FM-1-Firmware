@@ -1858,7 +1858,9 @@ static void entry_note(track_t *t, uint32_t note)     /* one key (or MIDI note) 
     entry_write(t, ent.keys == 1u && n == 1u);
     last_note = (uint8_t)note;
 }
-/* (Dah) MIDI IN's notes too (midi_ent: the selected track's), one gesture with the keys while any is held */
+/* (Dah) MIDI IN's notes too (midi_ent: the selected track's), one gesture with the keys while any is held, and
+ * 0.6 s after the last one: a controller's ARP (its notes one by one) writes its chord, not note after note */
+static uint32_t ent_mt __attribute__((section(".pool")));
 static void seq_entry(uint32_t pressed)
 {
     track_t *t = TSEL;
@@ -1870,9 +1872,9 @@ static void seq_entry(uint32_t pressed)
         if (note != KB_SILENT)
             entry_note(t, note);
     }
-    for (; midi_ent_r != midi_ent_w; midi_ent_r++)
+    for (; midi_ent_r != midi_ent_w; midi_ent_r++, ent_mt = fm1_ms)
         entry_note(t, midi_ent[midi_ent_r & 7u]);
-    if (ui.entry_open && !(fm1_in.notes & ~kb_layer) && !midi_owners[song.sel % NTRK])
+    if (ui.entry_open && !(fm1_in.notes & ~kb_layer) && !midi_owners[song.sel % NTRK] && fm1_ms - ent_mt > 600u)
         ui.entry_open = 0;                              /* (Dah: the cursor stays: KNOB 1 moves it) */
 }
 

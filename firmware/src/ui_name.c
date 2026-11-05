@@ -59,9 +59,9 @@ static void name_close(void)
 }
 /* the keys: 2 = NAME's (silent), 1 = the DRUM grid, 3 = SONG's A..D (ui.c song_keys_on), 0 = notes (seq.c keyboard_block
  * reads song.grid) */
-static uint32_t keys_mode(void)                       /* (Dah: 4 LIVE, the keys its own, none sounds) */
+static uint32_t keys_mode(void)                       /* (Dah: 4 LIVE, the keys its own, none sounds; LIVE MODE on the SEQ pages: the notes, to record) */
 {
-    return name_on() ? 2u : (live_mode || live_on()) && !ui.menu && !ui.confirm ? 4u : grid_write() ? 1u :
+    return name_on() ? 2u : (live_mode && !song.seq_mode || live_on()) && !ui.menu && !ui.confirm ? 4u : grid_write() ? 1u :
            song_keys_on() ? 3u : 0u;
 }
 
