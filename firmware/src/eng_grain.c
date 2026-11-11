@@ -38,8 +38,8 @@
  * (gr_part_t, in the part's engine memory: engines.c eng_mem), the random numbers outside it (gr_rng: they run on
  * over notes and engine switches); per voice s[0] the zone, s[1] the countdown to the next grain,
  * s[2] the low-pass, voice_t's phases are unused. */
-#define GR_POLY 3                /* voices per part */
-#define GR_NG 12                 /* grains per part */
+#define GR_POLY 8                /* voices per part (Dah: 8, as the others; was 3) */
+#define GR_NG 16                 /* grains per part (Dah: 16 for 8 voices; was 12) */
 #define GR_SEG_LOG2 8
 #define GR_SEG (1u << GR_SEG_LOG2)   /* seek index interval, source samples */
 #define GR_NIDX 1024             /* seek index entries per part (sized for the retired PERC: 1001; it keeps user slots room) */
@@ -70,7 +70,7 @@ static const int16_t GR_HANN[257] = {
 };
 /* grain level by overlap (grains sounding at once on average): 1 / sqrt(n), Q15 */
 static const int16_t GR_NORM[GR_NG + 1] = {32767, 32767, 23170, 18918, 16384, 14654, 13377,
-                                           12385, 11585, 10922, 10362, 9880, 9459};
+                                           12385, 11585, 10922, 10362, 9880, 9459, 9088, 8757, 8460, 8192};
 
 typedef struct {
     const smp_zone_t *z;
