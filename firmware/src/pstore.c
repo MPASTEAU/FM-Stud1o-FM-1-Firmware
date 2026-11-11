@@ -15,7 +15,10 @@
  * (projfs.c) keeps the heap and each track's number; the SONG's sections name a number per track. */
 #define PS_NUM 32u                                      /* patterns a track, 1..PS_NUM */
 #define PS_HEAP 8192u
-#define PS_PAT_MAX (10u + 1u + NSTEP * 11u + 1u + MOTION_MAX * 3u + 1u)   /* a pattern at most (overlaps: 11 a step) */
+#define PS_PAT_MAX (10u + 1u + NSTEP * 11u + 1u + MOTION_MAX * 3u + 1u + 1u + PS_NARP)   /* a pattern at most (overlaps: 11 a
+                                                         * step) */
+#define PS_NARP 8u                                      /* (Dah) its ARP: P_AMODE .. P_AORDER (ps_encode) */
+#define PS_ARP 0xA8u
 static uint8_t ps_heap[PS_HEAP] __attribute__((section(".pool")));
 static uint8_t ps_buf[PS_PAT_MAX] __attribute__((section(".pool")));   /* one pattern on its way */
 static uint32_t ps_used;
@@ -535,6 +538,9 @@ static uint32_t ps_encode(const track_t *t, uint8_t *b)
     }
     b[at] = (uint8_t)n;
     b[pos++] = (uint8_t)((motion.on >> k) & 1u);       /* (its automation PLAY: it goes with the pattern) */
+    b[pos++] = PS_ARP;                                  /* (Dah) its ARP too (a pattern before it: the track's stays) */
+    for (i = 0; i < PS_NARP; i++)
+        b[pos++] = (uint8_t)t->p[P_AMODE + i];
     return pos;
 }
 /* b[0..n-1] onto track t (steps, timing, automation); 0 = not a pattern (the track as it was, empty) */
@@ -566,6 +572,9 @@ static int ps_decode(track_t *t, const uint8_t *b, uint32_t n)
         const param_desc_t *d = &TP[PS_TIMING[i]];
         t->p[PS_TIMING[i]] = (int16_t)clamp(tv[i], d->min, d->max);
     }
+    if (pos + 2u + PS_NARP <= n && b[pos + 1u] == PS_ARP)   /* (Dah) its ARP */
+        for (i = 0; i < PS_NARP; i++)
+            t->p[P_AMODE + i] = (int16_t)clamp((int8_t)b[pos + 2u + i], TP[P_AMODE + i].min, TP[P_AMODE + i].max);
     motion_unguard(f);
     if (motion_replace_track(t, &ps_m))                   /* (no room in the shared store: the pattern without its automation) */
         motion_clear(t);
@@ -582,7 +591,7 @@ static int ps_empty(uint32_t k)                         /* (Dah) track k's steps
     for (i = 1; i < NPAGE; i++)                         /* (its other pages: none) */
         if (ps_find(k % NTRK, PS_PG(ps_num(k), i)) >= 0)
             return 0;
-    return motion_count(t) == 0u && t->p[P_SLEN] <= NSTEP;
+    return motion_count(t) == 0u && t->p[P_SLEN] <= NSTEP && !t->p[P_AMODE];   /* (Dah: an ARP on: kept) */
 }
 static int ps_store(uint32_t k)
 {
