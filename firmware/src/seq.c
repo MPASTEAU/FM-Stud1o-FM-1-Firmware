@@ -1034,9 +1034,18 @@ static void input_off(track_t *t, uint32_t note)
             if (cin_note[i][k] == note)
                 cin_up[i] |= (uint8_t)(1u << k);
     }
-    rec_release(t, note);
-    arp_remove(t, note);                            /* both: the note may have started in the */
-    trk_note_off(t, note);                          /* other mode (ARP switched while held) */
+    {
+        uint32_t i, back = t->mono_note == note && rec_on(t) && !t->p[P_AMODE] && trk_vmode(t) != V_POLY;
+        for (i = 0; back && i < t->rh_n && t->rh_note[i] != note; i++)
+            ;
+        back = back && i < t->rh_n;                 /* (Dah) the recorded note sounding let go .. */
+        rec_release(t, note);
+        arp_remove(t, note);                        /* both: the note may have started in the */
+        trk_note_off(t, note);                      /* other mode (ARP switched while held) */
+        if (back && t->mono_note && t->mono_note != note)
+            rec_note(t, t->mono_note, t->v[0].vel ? t->v[0].vel : 100u);   /* .. a key still held sounds again (MONO,
+                                                     * LEGATO: the one under a slide): recorded from here, held */
+    }
 }
 
 /* the effect of key k in the FX layer (PF_N none): the white keys F3 .. G5 the map's (perf_map: the settings,
