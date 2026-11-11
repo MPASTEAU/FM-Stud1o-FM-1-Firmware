@@ -16,7 +16,6 @@ static uint32_t graph_arch_sig(void);              /* (SAVE > FILE's projects, b
 #include "ui_fm6op.c"                                /* EDIT > OPERATOR, OP ENV, OPERATOR 2: FM6's operators (their charts below) */
 #include "ui_drumlane.c"                             /* EDIT > DESIGN, DESIGN 2, SYN TONE .. SYN METAL: DRUM's lanes
                                                      * (the list below) */
-#include "ui_lfodraw.c"                              /* LFO DRAW, CURVE: the track's extras */
 #include "ui_pattern.c"                              /* SAVE > PATTERN: a track's patterns */
 
 /* Matches voice.c: attack is linear, decay and release are exponential
@@ -83,31 +82,6 @@ static void graph_lfo(const track_t *t, uint16_t c)
         cv_rect(PANEL_X0 + (int32_t)((t->lfo_ph - ph) / (0xFFFFFFFFu / PANEL_W)), cy - a - 4, 1, 2 * a + 8, T_ACCENT);
 }
 
-/* LFO DRAW's panel: the 16 points as bars from the middle line (the point picked in the colour, the others
- * fainter, a mark under it), the drawn cycle over them (as the LFO plays it: lfo_wave DRAW, stepped or joined; TEXT
- * while WAVE plays it, MID while not) */
-static void graph_ldraw(const track_t *t, uint16_t c)
-{
-    const trkx_t *x = &trkx[(uint32_t)(t - trk) % NTRK];
-    int32_t cy = graph_ht / 2, a = 40 * graph_ht / 100, cw = PANEL_W / (int32_t)LDRAW_N, i, py = cy;
-    uint16_t dim = ux_mix(T_SURF, c, 30);
-    cv_rect(PANEL_X0, cy, PANEL_W, 1, T_RAISE);
-    for (i = 0; i < (int32_t)LDRAW_N; i++) {
-        int32_t x0 = PANEL_X0 + i * cw + 1, y = cy - x->draw[i] * a / 64, top = y < cy ? y : cy, h = y < cy ? cy - y : y - cy;
-        if (h)
-            cv_rect(x0, top, cw - 2, h, (uint32_t)i == xp_point % LDRAW_N ? c : dim);
-        if ((uint32_t)i == xp_point % LDRAW_N)
-            cv_rect(x0, cy + a + 4, cw - 2, 2, T_TEXT);
-    }
-    for (i = 0; i < PANEL_W; i++) {                  /* (the drawing, whatever WAVE plays) */
-        int32_t y = cy - ldraw_at(x, (uint32_t)i * (0xFFFFFFFFu / PANEL_W)) * a / 32768;
-        if (i)
-            cv_line_t(PANEL_X0 + i - 1, py, PANEL_X0 + i, y, t->p[P_LWAVE] == 5 ? T_TEXT : T_MID, 2);
-        py = y;
-    }
-    if (t->p[P_LWAVE] == 5 && lfo_live(t))           /* (Dah) where the LFO is now: a bar, a note sounding only */
-        cv_rect(PANEL_X0 + (int32_t)(t->lfo_ph / (0xFFFFFFFFu / PANEL_W)), cy - a - 2, 1, 2 * a + 4, T_ACCENT);
-}
 /* step bar x of step i of a 16-step row: 4 groups, as the footer (9 px bars, 13 px apart, 4 px between groups),
  * the row centred: x 12 .. 228 */
 static int32_t bar_x(uint32_t i) { return 12 + (int32_t)(i % 16u) * 13 + (int32_t)(i % 16u / 4u) * 4; }
@@ -1579,9 +1553,9 @@ static uint32_t graph_signature(void)
     if (strip_kind() == SK_TITLE)                    /* MENU > LARGE: the page's title (its engine, its number) */
         return h ^ 0x5A17u;
     if (pg->graph == GR_NONE || pg->graph == GR_ARP || pg->fam == FAM_FX || pg->graph == GR_SCALE || pg->graph == GR_CHORD ||
-        ((pg->graph == GR_LFO || pg->graph == GR_LDRAW) && lfo_live(TSEL))) h ^= ui.frame / 2u;   /* (Dah: the LFO's
+        (pg->graph == GR_LFO && lfo_live(TSEL))) h ^= ui.frame / 2u;   /* (Dah: the LFO's
                                                          * bar moves while a note sounds) */
-    if (pg->graph == GR_LFO || pg->graph == GR_LDRAW)
+    if (pg->graph == GR_LFO)
         h ^= (uint32_t)lfo_live(TSEL) * 0x2F1Du;
     if (pg->graph == GR_ROLL && (song.playing || prv.on))   /* (Dah: the playhead gliding; the VIEW) */
         h ^= ui.frame * 2654435761u + prv.zoom * 7u + (uint32_t)prv.at * 131u + prv.nofollow * 3u;   /* (Dah: FX's: live) */
@@ -1626,9 +1600,6 @@ static uint32_t graph_signature(void)
     if ((pg->scope == SC_ENGINE || fop_page(pg->graph)) && t->eng_req % NENGINES == ENGI_FM6)   /* the patch (PAT's algorithm,
                                                      * levels, FB; the operator pages: the operator, the stage) */
         h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (fop_op + 1u) * 40503u + (fop_stg + 1u) * 7919u;
-    if (xp_page(pg->graph))                          /* LFO DRAW: the track's points, the one picked */
-        h ^= fnv(2166136261u, &trkx[(t - trk) % NTRK], sizeof(trkx_t)) * 31u + (xp_point + 1u) * 7919u + (xp_shape + 1u) * 131u +
-             (uint32_t)t->p[P_LWAVE] * 104729u;
     if (dln_page(pg->graph))                         /* DESIGN: the lanes' values, the lane picked */
         h ^= (fm6_pgen[(t - trk) % NTRK] + 1u) * 2246822519u + (ui.lane + 1u) * 40503u + (uint32_t)t->eng_req * 389u;
     if (pg->scope == SC_ENGINE && ENGINES[t->eng_req % NENGINES] == &ENG_SAMPLE) h ^= sample_wave.pos * 13u + sample_wave.key;
@@ -3698,9 +3669,6 @@ lists:
             break;
         case GR_LFO:
             graph_lfo(t, c);
-            break;
-        case GR_LDRAW:
-            graph_ldraw(t, c);
             break;
         case GR_ROLL:
             cv_oy = 0;

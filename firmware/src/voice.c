@@ -12,42 +12,15 @@
  * declicks it); one of the part's own is restarted in place, as before. Extra UNISON
  * voices only start when there is room. */
 static uint32_t vage;                                   /* voice ages: one clock for every part */
-/* LFO DRAW's template k over the 16 points (ui_lfodraw.c N_XSHAPE: SIN TRI SAW RAMP SQR PULSE WOB STEPS) */
-static void ldraw_template(int8_t *d, uint32_t k)
+static void trkx_defaults(trkx_t *x)              /* a track's extras at power-on: CURVE STEP (Dah: LFO DRAW gone; its
+                                                     * bytes kept for the formats) */
 {
     static const int8_t SIN16[LDRAW_N] = {0, 24, 45, 58, 63, 58, 45, 24, 0, -24, -45, -58, -63, -58, -45, -24};
-    uint32_t i;
-    for (i = 0; i < LDRAW_N; i++) {
-        int32_t v;
-        switch (k) {
-        case 1: v = i < 8u ? -63 + (int32_t)i * 18 : 63 - (int32_t)(i - 8u) * 18; break;   /* TRI */
-        case 2: v = 63 - (int32_t)i * 126 / 15; break;                                   /* SAW (down) */
-        case 3: v = -63 + (int32_t)i * 126 / 15; break;                                  /* RAMP (up) */
-        case 4: v = i < 8u ? 63 : -63; break;                                            /* SQR */
-        case 5: v = i < 4u ? 63 : -63; break;                                            /* PULSE: a quarter */
-        case 6: v = (int32_t)SIN16[(i * 2u) & 15u] * (16 - (int32_t)i) / 16; break;      /* WOB: two, fading */
-        case 7: v = -63 + (int32_t)(i / 4u) * 42; break;                                  /* STEPS: four */
-        default: v = SIN16[i]; break;                                                    /* SIN */
-        }
-        d[i] = (int8_t)clamp(v, -64, 63);
-    }
-}
-static void trkx_defaults(trkx_t *x)              /* a track's extras at power-on: SIN joined, CURVE STEP */
-{
     memset(x, 0, sizeof *x);
-    ldraw_template(x->draw, 0);
+    memcpy(x->draw, SIN16, sizeof SIN16);
     x->smooth = 1;
 }
 /* LFO WAVE DRAW at phase ph: x's 16 points, stepped or joined (Q15) */
-static int32_t ldraw_at(const trkx_t *x, uint32_t ph)
-{
-    uint32_t i = ph >> 28;
-    int32_t a = clamp(x->draw[i] * 520, -32767, 32767), b;
-    if (!x->smooth)
-        return a;
-    b = clamp(x->draw[(i + 1u) & (LDRAW_N - 1u)] * 520, -32767, 32767);
-    return a + (((b - a) * (int32_t)((ph >> 16) & 0xFFFu)) >> 12);
-}
 static int32_t lfo_wave(track_t *t, uint32_t ph)
 {
     switch (t->p[P_LWAVE]) {
@@ -59,8 +32,6 @@ static int32_t lfo_wave(track_t *t, uint32_t ph)
         return ph < 0x80000000u ? 32767 : -32767;
     case 4:
         return (int32_t)(t->lfo_rnd >> 16) - 32768;
-    case 5:                                             /* DRAW: the track's 16 points */
-        return ldraw_at(&trkx[(uint32_t)(t - trk) % NTRK], ph);
     default:
         return osc_sine(ph);
     }

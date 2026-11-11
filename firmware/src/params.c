@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Parameter descriptors, formatting and the page table. */
-static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H", "DRAW"};   /* (DRAW, ui_lfodraw.c) */
+static const char *const N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};   /* (Dah: DRAW and its page gone) */
 /* LFO 2 (1.2, #154). SYNC: OFF (RATE), or one cycle per note value of the tempo, longest first (LSYNC_DIV: its N_DIV);
  * TRIG: NOTE restarts it at PHS on a fresh phrase (as before), FREE never; POL: BI -1..+1 (as before), UNI 0..+1 */
 static const char *const N_LSYNC[] = {"OFF", "4BAR", "2BAR", "1/1", "1/2", "1/4", "1/8", "8T", "1/16", "16T", "1/32"};
@@ -495,7 +495,6 @@ static const page_t PAGES[] = {
                                                                              * 1.5: ESYNC, ENV's times as note values */
     {"LFO", FAM_LFO, SC_TRACK, GR_LFO, {P_LRATE, P_LWAVE, P_LPHASE, P_LFADE}},
     {"LFO 2", FAM_LFO, SC_TRACK, GR_LFO, {P_LSYNC, P_LTRIG, P_LPOL, 0xFF}},   /* 1.2: SYNC TRIG POL */
-    {"LFO DRAW", FAM_LFO, SC_TRACK, GR_LDRAW, {0xFF, 0xFF, 0xFF, 0xFF}},   /* POINT VALUE SHAPE SMOOTH */
     {"LFO DEST", FAM_LFO, SC_TRACK, GR_NONE, {P_LD_PIT, P_LD_FLT, P_LD_SHP, P_LD_AMP}},
     /* (Dah) FX: CHAIN first, its effects as a list (KNOB 1 the row, KNOB 2 its type, KNOB 3 moves it; OCT+ its page, or
      * adds one; REC takes it out); then a page each, its own picture live (ui_graph_fx.c). (FX's overview page and its

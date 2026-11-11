@@ -24,7 +24,7 @@ SIZE_FILES = ["ui.c", "favorites.c", "menu_items.c", "icons.c", "ui_graph.c", "u
               "panel.c", "lcd.c", "gfx.c", "ota.c", "ota_hw.c", "up_fm6.c", "slice_store.c", "params.c", "editor_fm6.c",
               "ui_layer.c", "ui_name.c", "ui_slice.c", "ui_events.c", "main.c", "libc.c", "storage_hw.c", "engines.c", "fm4_convert.c",
               # (Dah) the UI files added since
-              "ui_drumlane.c", "ui_fm6op.c", "ui_graph_eq.c", "ui_graph_fx.c", "ui_graph_more.c", "ui_help.c", "ui_lfodraw.c",
+              "ui_drumlane.c", "ui_fm6op.c", "ui_graph_eq.c", "ui_graph_fx.c", "ui_graph_more.c", "ui_help.c",
               "ui_pattern.c", "ui_tools.c", "projfs.c", "pstore.c", "editor_learn.c", "editor_palette.c", "midi_learn.c",
               "category.c"]
 # (Dah) the sound files' cold code: once a note, a hit or a load (not a sample's), main loop only: for size too

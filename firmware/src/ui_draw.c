@@ -1816,16 +1816,6 @@ static void draw_columns_in(void)
         }
         return;
     }
-    if (xp_page(cur_page()->graph)) {                    /* LFO DRAW, CURVE: the track's extras (ui_lfodraw.c) */
-        for (c = 0; c < 4u; c++) {
-            const char *lb, *u;
-            int32_t r;
-            uint32_t ic;
-            int on = xp_card(c, &lb, val, &u, &r, &ic);
-            draw_column(c, lb, val, u, on ? VAL(c) : T_DIM, r, lb[0] ? ic : ICON_NONE);
-        }
-        return;
-    }
     if (dln_page(cur_page()->graph)) {                   /* DRUM: LANE, then three of its values (ui_drumlane.c) */
         for (c = 0; c < 4u; c++) {
             const char *lb, *u;

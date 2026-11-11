@@ -1496,10 +1496,6 @@ static void edit_param(uint32_t slot, int32_t steps)
         dln_knob(slot, steps);
         return;
     }
-    if (xp_page(pg->graph)) {                            /* LFO DRAW, CURVE (ui_lfodraw.c) */
-        xp_knob(slot, steps);
-        return;
-    }
     if (pg->graph == GR_CHORD && TSEL->p[P_CHRD] == CH_MATCH && slot >= 2u) {   /* (Dah) MATCH: KNOB 3 COLOR, 4 NOTES */
         trkx_t *x = &trkx[song.sel % NTRK];
         uint32_t v = slot == 2u ? x->rsv & 3u : (x->rsv >> 2) & 3u;
@@ -2858,8 +2854,7 @@ static void ui_input(void)
         }
         if (ui.home || pg->scope == SC_STEP || pg->scope == SC_TRK || page_desc(pg, k, &hv) ||
             (pg->graph == GR_USER && k == 0u)
-            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph) || dln_page(pg->graph) ||
-            (xp_page(pg->graph) && xp_field(k) != XP_NONE)) {   /* (not an empty
+            || pg->graph == GR_SONG || (pg->graph == GR_SLICES && k < 2u) || fop_page(pg->graph) || dln_page(pg->graph)) {   /* (not an empty
                                                                                                           * column) */
             ui.hot_col = (uint8_t)k;
             ui.hot_t = 40;
