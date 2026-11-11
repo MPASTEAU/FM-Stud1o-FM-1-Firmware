@@ -380,6 +380,7 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
 /* (Dah) LIVE's keys (live_keys): the black keys of the project's tracks glow, the selected one's lit, the volume's two
  * glow, MUTE breathes while the track is muted and blinks while a change waits for the pattern's start; the white keys
  * the project's patterns (ps_list_all), one a key: they glow, the one playing lit. Lit (the return), *br breathing, *g glowing, *mid the mid level */
+static uint8_t live_pat __attribute__((section(".pool")));   /* (Dah) LIVE: the pattern asked, waiting (0 none) */
 static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
 {
     const track_t *t = TSEL;
@@ -403,7 +404,7 @@ static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
                 *g |= 1u << k;
             }
         } else if (p < n) {
-            m |= (uint32_t)(nums[p] == cur) << k;
+            m |= (uint32_t)(nums[p] == cur || (nums[p] == live_pat && ((fm1_ms >> 7) & 1u))) << k;   /* (asked: ~4 Hz) */
             *g |= 1u << k;
         }
     }
@@ -638,6 +639,22 @@ static void song_add(void)
  * 9th the selected track's volume to 0 %, the 10th to 100 %, the 11th (the last) its MUTE on or off: at once stopped,
  * playing at its pattern's start (seq.c; pressed again before it: dropped); white key n pattern n of the project's, on
  * every track at once (not GLO's track by track) */
+static void live_pat_poll(void)                         /* (main loop) it, once the selected track's last step plays */
+{
+    const track_t *t = TSEL;
+    uint32_t len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX);
+    if (!live_pat)
+        return;
+    if (!song.playing || chain_busy()) {
+        live_pat = 0;
+        return;
+    }
+    if (t->seq_idx % len != len - 1u)
+        return;
+    if (pattern_go_all(live_pat))
+        ui_message("MEMORY FULL");
+    live_pat = 0;
+}
 static void live_vol(int32_t v)
 {
     v = clamp(v, 0, 100);
@@ -650,9 +667,15 @@ static void live_keys(uint32_t notes)
         if (!((notes >> k) & 1u))
             continue;
         p = key_place(k);
-        if (!key_black(k)) {                            /* (a white key: its pattern, every track's: pattern_go_all) */
+        if (!key_black(k)) {                            /* (a white key: its pattern, every track's: pattern_go_all;
+                                                         * playing, at the selected track's pattern end: live_pat_poll;
+                                                         * pressed again before it: dropped) */
             uint8_t nums[PS_NUM];
-            if (p < ps_list_all(nums) && pattern_go_all(nums[p]))
+            if (p >= ps_list_all(nums))
+                continue;
+            if (song.playing && !chain_busy())
+                live_pat = live_pat == nums[p] || nums[p] == ps_num(song.sel) ? 0u : nums[p];
+            else if (pattern_go_all(nums[p]))
                 ui_message("MEMORY FULL");
         } else if (p < NTRK)
             track_select(p);
@@ -2626,6 +2649,7 @@ static void ui_input(void)
         ml_oct(oct);
     }
     song.grid = (uint8_t)keys_mode();                 /* (seq.c: the keys are the grid's) */
+    live_pat_poll();
 #if FELUCCA_SLICE
     if (notes && song.grid != 4u && slice_page_on())    /* SLICES: a key picks the slice it plays */
         slice_keys_pick(notes);
