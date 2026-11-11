@@ -885,11 +885,9 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
             off = rp[i].gnd;                            /* (the first key's time) */
             if (m)
                 st_cut(t, seq_wr, idx, len, m);
-            if (trk_vmode(t) == V_POLY) {
-                for (j = 0; j < rp[i].gn; j++)
-                    rec_poly(t, seq_wr(t, idx), idx, next, rp[i].gnote[j], vel, off, len);
-                return;
-            }
+            for (j = 0; j < rp[i].gn; j++)
+                rec_poly(t, seq_wr(t, idx), idx, next, rp[i].gnote[j], vel, off, len);
+            return;
         } else {
             rp[i].gi = (uint8_t)(idx + 1u);
             rp[i].gk = 1;
@@ -901,8 +899,6 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
                     ;
                 if (m == 1u << j && s->note[j] == note) {   /* that note alone: out */
                     st_cut(t, seq_wr, idx, len, m);
-                    if (trk_vmode(t) != V_POLY)
-                        t->rh_n = 0;                    /* (a MONO hold elsewhere ends, as another note would end it) */
                     return;
                 }
                 st_cut(t, seq_wr, idx, len, m);         /* other notes: replaced */
@@ -910,26 +906,9 @@ static void rec_note(track_t *t, uint32_t note, uint32_t vel)
         }
         s = seq_wr(t, idx);
     }
-    if (trk_vmode(t) == V_POLY) {
-        rec_poly(t, s, idx, next, note, vel, off, len);
-        return;
-    }
-    rp[trk_index(t) % NTRK].poly = 0;
-    s->n = 1;                                       /* a fresh step of this note (one a step) */
-    s->note[0] = (uint8_t)note;
-    s->flags = vel > 110 ? SF_ACCENT : 0u;
-    s->vel = (uint8_t)vel;
-    step_set_nudge(s, off);
-    s->time = ST_NOTE;
-    if (!t->rh_n || t->rh_start != idx) {           /* a new hold (one in another step ends) */
-        t->rh_n = 0;
-        t->rh_start = (uint8_t)idx;
-        t->rh_ties = 0;
-    }
-    for (k = 0; k < t->rh_n && t->rh_note[k] != note; k++)
-        ;
-    if (k == t->rh_n && t->rh_n < 4u)
-        t->rh_note[t->rh_n++] = (uint8_t)note;      /* a chord: held until its last key is up */
+    rec_poly(t, s, idx, next, note, vel, off, len);   /* (Dah) every voice mode: the keys as played, each note its
+                                                     * own hold beside the others (MONO, LEGATO: they play back as
+                                                     * played, the slides the same) */
 }
 
 /* the sequencer enters step idx (before playing it): a recorded note still held ties into it */
@@ -1007,7 +986,6 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
     cin_up[i] &= (uint8_t)~(1u << k);
 }
 
-static uint8_t rec_back[NTRK] __attribute__((section(".pool")));   /* (Dah) input_off: the note to record from the next step */
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
     last_note = (uint8_t)note;
@@ -1036,25 +1014,9 @@ static void input_off(track_t *t, uint32_t note)
             if (cin_note[i][k] == note)
                 cin_up[i] |= (uint8_t)(1u << k);
     }
-    {
-        uint32_t i, back = t->mono_note == note && rec_on(t) && !t->p[P_AMODE] && trk_vmode(t) != V_POLY, own;
-        for (i = 0; back && i < t->rh_n && t->rh_note[i] != note; i++)
-            ;
-        back = back && i < t->rh_n;                 /* (Dah) the recorded note sounding let go .. */
-        own = !t->rh_ties && t->rh_start == t->seq_idx % (t->p[P_SLEN] > 0 ? (uint32_t)t->p[P_SLEN] : 1u);
-        rec_release(t, note);
-        arp_remove(t, note);                        /* both: the note may have started in the */
-        trk_note_off(t, note);                      /* other mode (ARP switched while held) */
-        rec_back[trk_index(t) % NTRK] = 0;
-        if (back && t->mono_note && t->mono_note != note) {   /* .. a key still held sounds again (MONO, LEGATO: the one
-                                                     * under a slide): recorded, held, from here or (let go in the step
-                                                     * it started in: that step its) from the next (seq_enter) */
-            if (own)
-                rec_back[trk_index(t) % NTRK] = t->mono_note;
-            else
-                rec_note(t, t->mono_note, t->v[0].vel ? t->v[0].vel : 100u);
-        }
-    }
+    rec_release(t, note);
+    arp_remove(t, note);                            /* both: the note may have started in the */
+    trk_note_off(t, note);                          /* other mode (ARP switched while held) */
 }
 
 /* the effect of key k in the FX layer (PF_N none): the white keys F3 .. G5 the map's (perf_map: the settings,
@@ -1885,11 +1847,6 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
     if (top)
         rp[i].pvn = 0;                              /* (PLAY: nothing before step 1) */
     rec_hold(t, t->seq_idx, len);
-    if (rec_back[i]) {                              /* (Dah) the held note back under a slide: from this step */
-        if (rec_on(t) && t->mono_note == rec_back[i] && trk_vmode(t) != V_POLY)
-            rec_note(t, rec_back[i], t->v[0].vel ? t->v[0].vel : 100u);
-        rec_back[i] = 0;
-    }
     memcpy(q, rp[i].pv, 4);
     rp[i].pvn = (uint8_t)pat_after(seq_at(t, t->seq_idx), q, rp[i].pvn, rp[i].pv);   /* (overlaps: what it sounds) */
 }

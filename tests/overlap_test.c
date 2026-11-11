@@ -327,15 +327,14 @@ static int t_project(uint32_t len, uint32_t a)
     bad += check("  .. played: A and B each their own", span(&heard[0], a, a + 8u, 1u) && span(&heard[1], a + 3u, a + 12u, 1u));
     return bad;
 }
-/* MONO: B ends A (one note a step), as before */
+/* MONO: (Dah) the keys as played, as POLY: A held on beside B (the voice plays them as it did live) */
 static int t_mono(void)
 {
     track_t *t = setup(16);
     t->p[P_VOICE] = V_MONO;
     record(t, 0, 8, 3, 12);
-    return check("MONO: B (step 4) ends A's hold: A 1..3, B 4..12, no notes going on",
-                 note_len(t, 0) == 3u && ui_st(t, 3)->n == 1u && has(ui_st(t, 3), NB, 0) && note_len(t, 3) == 9u &&
-                 !st_cont(ui_st(t, 8)));
+    return check("MONO: the keys as played: A 1..8 going on beside B, B 4..12",
+                 note_len(t, 0) == 8u && has(ui_st(t, 3), NA, 1) && has(ui_st(t, 3), NB, 0) && note_len(t, 3) == 9u);
 }
 
 /* (Dah) REC MODE REPLACE: recording on through three passes of the pattern: pass 1 plays A, pass 2 plays B (its first note
