@@ -173,7 +173,7 @@ static const param_desc_t TP[P_COUNT] = {
     [P_LSYNC] = PE("SYNC", N_LSYNC, 0),
     [P_LTRIG] = PE("TRIG", N_LTRIG, 0),
     [P_LPOL] = PE("POL", N_LPOL, 0),
-    [P_SQNT] = PE("QNTZ", N_QNT, 0),              /* (Dah) OFF by default: the steps as played (their NUDGE); ON every step on its start (as before 1.2), 2..4 a strength */
+    [P_SQNT] = PE("QNTZ", N_QNT, 3),              /* (Dah) 50 % by default (one for every track: ui_tools.c qz_all); was OFF: the steps as played (their NUDGE); ON every step on its start (as before 1.2), 2..4 a strength */
     [P_SPRD] = PD("SPRD", F_PCT, -64, 127, 0),     /* #148: 0 = every voice on PAN, as before (fx.c mix_spread); Dah: as FL's
                                                  * STEREO SEPARATION, below 0 merged (no voice spread: the same) */
     /* the INSERT (1.5, fx.c track_insert): TYPE OFF = as before. A B C as the editor protocol names them; the device
@@ -238,7 +238,7 @@ static const param_desc_t GP[G_COUNT] = {
     [G_SYNC] = PE("SYNC", N_DASH, 0),
     /* MIDI IN's routing, edited on MENU > MIDI > MIDI IN (1.2: menu_items.c MI_MIDIIN; up to 1.1.5 GLO > SYSTEM ROUT),
      * stored with the project as before. (was "--": stored 0 = CH1-4, as MIDI IN always was) */
-    [G_ROUTE] = PE("ROUT", N_ROUTE, 0),
+    [G_ROUTE] = PE("ROUT", N_ROUTE, 1),          /* (Dah) SEL by default */
     [G_INFO] = PD("CPU", F_INT, 0, 0, 0),
     [G_SLOT] = PD("SLOT", F_INT, 1, 4, 1),
     [G_NAME] = PE("NAME", N_DASH, 0),

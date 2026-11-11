@@ -45,9 +45,9 @@ static int lfo(void)
     double worst = 0;
     ui_power_on();
     t = &trk[0];
-    bad += check("LFO 2 defaults: SYNC OFF, TRIG NOTE, POL BI (as before 1.2); QUANTIZE OFF (Dah: the steps as played)",
-                 !TP[P_LSYNC].def && !TP[P_LTRIG].def && !TP[P_LPOL].def && TP[P_SQNT].def == 0 && !t->p[P_LSYNC] &&
-                 !t->p[P_LTRIG] && !t->p[P_LPOL] && t->p[P_SQNT] == 0);
+    bad += check("LFO 2 defaults: SYNC OFF, TRIG NOTE, POL BI (as before 1.2); QUANTIZE 50 % (Dah)",
+                 !TP[P_LSYNC].def && !TP[P_LTRIG].def && !TP[P_LPOL].def && TP[P_SQNT].def == 3 && !t->p[P_LSYNC] &&
+                 !t->p[P_LTRIG] && !t->p[P_LPOL] && t->p[P_SQNT] == 3);
     for (i = 0; i < 128u; i += 7u) {                 /* SYNC OFF: RATE's table, the value as before */
         uint32_t ph = 0x12345678u;
         t->p[P_LRATE] = (int16_t)i;

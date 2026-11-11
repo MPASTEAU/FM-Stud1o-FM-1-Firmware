@@ -379,14 +379,12 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
 
 /* (Dah) LIVE's keys (live_keys): the black keys of the project's tracks glow, the selected one's lit, the volume's two
  * glow, MUTE breathes while the track is muted and blinks while a change waits for the pattern's start; the white keys
- * the selected track's pattern a page of 16 at a time (the one playing): the step playing lit, the steps with notes or
- * hits at the mid level. Lit (the return), *br breathing, *g glowing, *mid the mid level */
+ * the project's patterns (ps_list_all), one a key: they glow, the one playing lit. Lit (the return), *br breathing, *g glowing, *mid the mid level */
 static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
 {
     const track_t *t = TSEL;
-    uint32_t k, p, m = 0, len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), i = song.sel % NTRK;
-    uint32_t pg = song.playing && t->seq_idx < len ? t->seq_idx / 16u : 0u;
-    uint32_t ph = song.playing && t->seq_idx < len ? t->seq_idx % 16u : 0xFFu;
+    uint8_t nums[PS_NUM];
+    uint32_t k, p, m = 0, i = song.sel % NTRK, n = ps_list_all(nums), cur = ps_num(song.sel);
     *br = *g = *mid = 0;
     for (k = 0; k < 27u; k++) {
         p = key_place(k);
@@ -404,10 +402,9 @@ static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
             } else {
                 *g |= 1u << k;
             }
-        } else if (pg * 16u + p < len) {
-            const step_t *st = ui_st(t, pg * 16u + p);
-            m |= (uint32_t)(p == ph) << k;
-            *mid |= (uint32_t)step_on(st) << k;
+        } else if (p < n) {
+            m |= (uint32_t)(nums[p] == cur) << k;
+            *g |= 1u << k;
         }
     }
     return m;
@@ -639,7 +636,8 @@ static void song_add(void)
 }
 /* (Dah) LIVE's keys (song.grid 4: none sounds; MIDI IN plays on): black keys 1..8 pick tracks 1..8 (the project's), the
  * 9th the selected track's volume to 0 %, the 10th to 100 %, the 11th (the last) its MUTE on or off: at once stopped,
- * playing at its pattern's start (seq.c; pressed again before it: dropped) */
+ * playing at its pattern's start (seq.c; pressed again before it: dropped); white key n pattern n of the project's, on
+ * every track at once (not GLO's track by track) */
 static void live_vol(int32_t v)
 {
     v = clamp(v, 0, 100);
@@ -649,10 +647,14 @@ static void live_keys(uint32_t notes)
 {
     uint32_t k, p, i = song.sel % NTRK;
     for (k = 0; k < 27u; k++) {
-        if (!((notes >> k) & 1u) || !key_black(k))
+        if (!((notes >> k) & 1u))
             continue;
         p = key_place(k);
-        if (p < NTRK)
+        if (!key_black(k)) {                            /* (a white key: its pattern, every track's: pattern_go_all) */
+            uint8_t nums[PS_NUM];
+            if (p < ps_list_all(nums) && pattern_go_all(nums[p]))
+                ui_message("MEMORY FULL");
+        } else if (p < NTRK)
             track_select(p);
         else if (p == NTRK)
             live_vol(0);
@@ -1553,6 +1555,10 @@ static void edit_param(uint32_t slot, int32_t steps)
                                                          * REC takes it out), its type or amount at its least */
         v = 1;
         ui_message("REMOVE IT IN CHAIN");
+    }
+    if (vp == &TSEL->p[P_SLEN] && steps) {              /* (Dah) LEN: 16 32 64 128 256 only, one a detent */
+        for (v = 16; v < LEN_MAX && (steps > 0 ? v <= *vp : v * 2 < *vp); v *= 2)
+            ;
     }
     *vp = (int16_t)v;
     if (vp >= TSEL->p && vp < TSEL->p + P_COUNT) {      /* (Dah: a track's value, a send on a global page too) */

@@ -754,7 +754,7 @@ static void layer_reset(uint32_t l)
     } else {
         for (k = P_SLEN; k <= P_SGATE; k++)
             TSEL->p[k] = TP[k].def;
-        TSEL->p[P_SQNT] = TP[P_SQNT].def;
+        qz_all(TP[P_SQNT].def);
     }
     ui_message("SETTINGS RESET");
     ui.force = 1;

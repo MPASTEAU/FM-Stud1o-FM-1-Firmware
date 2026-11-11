@@ -1852,7 +1852,7 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
         t->cond_loop = (uint8_t)(top || t->cond_loop + 1u >= COND_LOOPS ? 0u : t->cond_loop + 1u);
         rp[i].pass = (uint8_t)(top ? 0u : rp[i].pass + 1u);   /* (Dah: REC MODE REPLACE's passes) */
         if (top)
-            rp[i].took = 0;
+            rp[i].took = 0xFF;                       /* (the pass from PLAY takes again too) */
     }
     if (loop_cue && i == song.sel && ((song.rec >> i) & 1u) && !chain.running) {   /* (Dah) REC's LOOP CUE: the last
                                                      * three beats of the selected track's pattern a blip each, going

@@ -291,7 +291,7 @@ static int route_block_test(void)
 {
     static const char *const NAME[6] = {"CH1-8", "SEL", "CH5-8", "CH9-12", "CH13-16", "TRACK"};
     int bad = 0, ok = 1; uint32_t r, ch, i;
-    ok = GP[G_ROUTE].max == 5 && GP[G_ROUTE].def == 0 && ROUTE_TRACK == 5;
+    ok = GP[G_ROUTE].max == 5 && GP[G_ROUTE].def == 1 && ROUTE_TRACK == 5;
     for (r = 0; r < 6u; r++) ok &= str_eq(GP[G_ROUTE].names[r], NAME[r]);
     bad += check("ROUT: CH1-4 SEL (stored 0 1, as before), CH5-8 CH9-12 CH13-16 appended, 1.5.5 TRACK", ok);
     for (r = 2; r <= 4u; r++) {

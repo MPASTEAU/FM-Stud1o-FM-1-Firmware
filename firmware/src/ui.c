@@ -1757,6 +1757,8 @@ static void track_add(void)
     if (k >= NTRK)
         return;
     track_reset(k);
+    if (k)
+        trk[k].p[P_SQNT] = trk[0].p[P_SQNT];           /* (Dah: QUANTIZE, one for every track) */
     song.ntrk = (uint8_t)(k + 1u);
     track_select(k);
     ui_message("TRACK ADDED");

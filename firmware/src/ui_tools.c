@@ -20,9 +20,15 @@ static uint32_t qz_rank(const track_t *t)
         ;
     return o < 5u ? o : 0u;
 }
+static void qz_all(int32_t v)                           /* (Dah) QUANTIZE is every track's: one setting for all */
+{
+    uint32_t k;
+    for (k = 0; k < NTRK; k++)
+        trk[k].p[P_SQNT] = (int16_t)v;
+}
 static void qz_turn(track_t *t, int32_t s)
 {
-    t->p[P_SQNT] = (int16_t)QZ_ORD[clamp((int32_t)qz_rank(t) + (s > 0 ? 1 : -1), 0, 4)];
+    qz_all(QZ_ORD[clamp((int32_t)qz_rank(t) + (s > 0 ? 1 : -1), 0, 4)]);
     ui_say("QUANTIZE ", N_QNT[clamp(t->p[P_SQNT], 0, 4)]);
 }
 /* the steps inside LEN with a NUDGE (a note step) */
@@ -33,27 +39,33 @@ static uint32_t qz_nudged(const track_t *t)
         n += step_nudge(ui_st(t, i)) != 0 && st_kind(ui_st(t, i)) == ST_NOTE;
     return n;
 }
-/* OCT+ APPLY: each NUDGE as it plays now written, QUANTIZE OFF; 0 = nothing to do (said why) */
+/* OCT+ APPLY: each NUDGE as it plays now written, QUANTIZE OFF; 0 = nothing to do (said why). (Dah) Every track's,
+ * QUANTIZE being one for all */
 static int qz_apply(track_t *t)
 {
-    uint32_t len = tl_len(t), i, n = 0;
+    uint32_t len, i, n = 0, k, any = 0;
     char b[24];
     if (!t->p[P_SQNT]) {
         ui_message("QUANTIZE IS OFF");
         return 0;
     }
-    if (!qz_nudged(t)) {
+    for (k = 0; k < trk_count(); k++)
+        any |= trk[k].p[P_SQNT] && qz_nudged(&trk[k]);
+    if (!any) {
         ui_message("NOTHING TO QUANTIZE");
         return 0;
     }
-    for (i = 0; i < len; i++) {
-        int32_t v = step_nudge(ui_st(t, i));
-        if (!v)
-            continue;
-        step_set_nudge(ed_st(t, i), t->p[P_SQNT] == 1 ? 0 : v * (5 - t->p[P_SQNT]) / 4);
-        n++;
+    for (k = 0; k < trk_count(); k++) {
+        t = &trk[k];
+        for (i = 0, len = tl_len(t); t->p[P_SQNT] && i < len; i++) {
+            int32_t v = step_nudge(ui_st(t, i));
+            if (!v)
+                continue;
+            step_set_nudge(ed_st(t, i), t->p[P_SQNT] == 1 ? 0 : v * (5 - t->p[P_SQNT]) / 4);
+            n++;
+        }
     }
-    t->p[P_SQNT] = 0;
+    qz_all(0);
     str_cpy(b, "QUANTIZED ", sizeof b);
     fmt_int(b + str_len(b), (int32_t)n);
     str_cpy(b + str_len(b), " STEPS", sizeof b - str_len(b));
