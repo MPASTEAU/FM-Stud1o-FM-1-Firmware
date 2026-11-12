@@ -316,12 +316,13 @@ static void __attribute__((noinline)) midi_home_knob(track_t *t, uint32_t j, uin
         cur = ((t->p[id] - d->min) * 127 + span / 2) / span;
         a = (int32_t)value - cur;
         b = mpk_k[j].last ? (int32_t)mpk_k[j].last - 1 - cur : a;
-        mpk_k[j].last = (uint8_t)(value + 1u);
         mpk_k[j].on = 0;
-        if ((a > 2 || a < -2) && value - 1u < 126u) {   /* (Dah: at its end, 0 or 127, it takes it: a knob there
-                                                     * already could never reach a value past it) */
-            if ((a > 0) == (b > 0) && b)
+        if ((a > 2 || a < -2) && (value - 1u < 126u || !mpk_k[j].last)) {   /* (Dah: turned to its end, 0 or 127,
+                                                     * it takes it: there it could never reach a value past it) */
+            if ((a > 0) == (b > 0) && b) {
+                mpk_k[j].last = (uint8_t)(value + 1u);
                 return;                         /* (not reached nor crossed yet) */
+            }
         }
         mpk_k[j].on = 1;
     }

@@ -215,7 +215,6 @@ static void ui_power_on(void)
     memset(&song, 0, sizeof song);
     for (i = 0; i < NTRK; i++)                    /* (the tracks' extras as at power-on) */
         trkx_defaults(&trkx[i]);
-    xp_point = xp_shape = 0;
     mix_solo = 0;                                 /* (Dah: MIXER's SOLO, none at power-on) */
     ps_reset();
     memset(eng_mem, 0, sizeof eng_mem); memset(eng_mem_s, 0, sizeof eng_mem_s);   /* (.bss at power-on: the engines' regions) */

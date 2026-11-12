@@ -486,7 +486,7 @@ static int menus_alike(void)
     turn(EN_K1, 5);
     ok &= lys.sq_row == 2u;                             /* (a step a turn, as the MENU's) */
     for (i = 0; i < 5u; i++) turn(EN_K1, 1);
-    ok &= lys.sq_row == 5u;                             /* (the last, REC MODE: it stops) */
+    ok &= lys.sq_row == 4u;                             /* (the last, REC MODE: it stops; Dah: REC STARTS PLAY gone) */
     press(B_LFO);
     ok &= !ui.layer;
     bad += check("  REC's list: KNOB 1 the row (gliding), stops at the last; another button closes it", ok);
@@ -511,6 +511,7 @@ static track_t *rule_setup(void)
 {
     track_t *t;
     ui_power_on();
+    rp_put(RP_COUNTIN, 0);                              /* (Dah: COUNT-IN OFF, NOTE the default: PLAY at once) */
     t = TSEL;
     t->p[P_VOICE] = V_POLY;
     track_defaults_steps(t);
@@ -624,12 +625,11 @@ static void ce_listen(track_t *t, const uint32_t *nt, ce_t *h, uint32_t nn)   /*
     uint32_t va[NVOICE], i, j, b, loops = 0, last = 0;
     uint8_t vg[NVOICE];
     memset(h, 0, nn * sizeof *h);
-    transport_req = 1;
-    blocks(1);
-    for (i = 0; i < NVOICE; i++) {
+    for (i = 0; i < NVOICE; i++) {                      /* (before PLAY: step 1 may sound in its first block) */
         va[i] = t->v[i].age;
         vg[i] = 0;
     }
+    transport_req = 1;
     for (b = 0; b < 40000u && loops < 1u; b++) {
         blocks(1);
         if (t->seq_idx < last)
@@ -812,16 +812,16 @@ static int rec_rows(void)
     int bad = 0, ok;
     ui_power_on();
     frame();
-    ok = ly_rows(LAYER_REC) == 6u && rl_get(4) == 1u && rl_get(5) == 0u && loop_cue && !rec_replace &&
-         str_eq(rl_name(5, 0), "OVERDUB") && str_eq(rl_name(5, 1), "REPLACE") && str_eq(REC_RL[4], "LOOP CUE");
-    rec_set(4, 0);
-    rec_set(5, 1);
+    ok = ly_rows(LAYER_REC) == 5u && rl_get(3) == 1u && rl_get(4) == 0u && loop_cue && !rec_replace &&
+         str_eq(rl_name(4, 0), "OVERDUB") && str_eq(rl_name(4, 1), "REPLACE") && str_eq(REC_RL[3], "LOOP CUE");
+    rec_set(3, 0);
+    rec_set(4, 1);
     frame();
-    ok &= rl_get(4) == 0u && rl_get(5) == 1u && !loop_cue && rec_replace;
+    ok &= rl_get(3) == 0u && rl_get(4) == 1u && !loop_cue && rec_replace;
     menu_put(MI_LEDS, LEDS_ROWS - 1u);                  /* (LEDS INV HI: its level beside them) */
     menu_put(MI_LEDS, 0);
     frame();
-    ok &= rl_get(4) == 0u && rl_get(5) == 1u;
+    ok &= rl_get(3) == 0u && rl_get(4) == 1u;
     bad += check("REC layer: LOOP CUE ON, REC MODE OVERDUB by default; OFF / REPLACE set, kept through MENU > LEDS", ok);
     ui_leds_inv &= (uint8_t)~REC_BITS;
     frame();

@@ -219,7 +219,7 @@ static void arp_fresh(track_t *t, int32_t mode, int32_t oct, const uint8_t *note
 {
     uint32_t i;
     if (t->arp_note)
-        arp_off(t);
+        arp_silence(t);
     t->nheld = 0; t->arp_phys = 0;
     t->p[P_AMODE] = (int16_t)mode; t->p[P_AOCT] = (int16_t)oct; t->p[P_APROB] = 127;
     for (i = 0; i < n; i++)
@@ -243,7 +243,7 @@ static int arp_new_modes(void)
     static const uint8_t CEG[3] = {60, 64, 67}, CEGB[4] = {60, 64, 67, 71}, GCE[3] = {67, 60, 64};
     static const uint8_t FIVE[5] = {60, 64, 67, 71, 74};
     int bad = 0, ok;
-    uint32_t i, k;
+    uint32_t i, k, j;
     uint8_t a[32], b[32];
     track_t *t;
     ui_power_on();
@@ -384,21 +384,27 @@ static int arp_new_modes(void)
     t->p[P_AMODE] = AM_REPEAT;
     ok &= arp_plays(t, (const uint8_t[]){67}, 1);      /* (CHORD's other notes ended) */
     bad += check("ARP REPEAT switched to THUMB and back, CHORD to REPEAT: each plays its own", ok);
-    /* recording: CHORD writes its notes into one step, as the keys' chords (POLY) */
+    /* (Dah) recording with the ARP on: the keys held (C E G, one step), never what the ARP plays of them */
     song.sel = 0; song.rec = 1;
     t->p[P_VOICE] = V_POLY;
     for (i = 0; i < NSTEP; i++)
         t->step[i] = (step_t){0};
     seq_start();
     seq_tick(t, CTL);
-    arp_fresh(t, AM_CHORD, 1, CEG, 3);
-    t->arp_pos = 0xFFFFFFF;
-    arp_tick(t, CTL);
-    for (i = 0, k = 0; i < NSTEP; i++)
+    arp_fresh(t, AM_UP, 1, CEG, 0);
+    input_on(t, 60, 100); input_on(t, 64, 100); input_on(t, 67, 100);
+    for (i = 0; i < 8u; i++) {
+        arp_tick(t, CTL * 4u);
+        seq_tick(t, CTL * 4u);
+    }
+    input_off(t, 60); input_off(t, 64); input_off(t, 67);
+    for (i = 0, k = 0, j = 0; i < NSTEP; i++) {
         k += t->step[i].n == 3u && t->step[i].note[0] == 60 && t->step[i].note[1] == 64 && t->step[i].note[2] == 67;
+        j += st_kind(&t->step[i]) == ST_NOTE && t->step[i].n;
+    }
     seq_stop();
     song.rec = 0;
-    bad += check("ARP CHORD recorded: C E G into one step", k == 1u);
+    bad += check("ARP on, recorded: the keys' C E G into one step, nothing of what the ARP played", k == 1u && j == 1u);
     arp_fresh(t, AM_OFF, 1, CEG, 0);
     return bad;
 }

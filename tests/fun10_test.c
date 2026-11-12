@@ -227,7 +227,7 @@ static int nudge(void)
     t->seq_pos = P16 - P16 / 4u;                     /* 1/4 before step 2 */
     input_on(t, 65, 100);
     input_off(t, 65);
-    ok &= t->step[1].note[0] == 65u && step_nudge(&t->step[1]) == -4;
+    ok &= t->step[1].note[0] == 65u && step_nudge(&t->step[1]) == 0;   /* (Dah: early, onto the step) */
     t->seq_pos = P16 / 16u + 40u;                    /* just past 1/16: rounds to it */
     t->seq_idx = 4;
     input_on(t, 66, 100);
@@ -242,7 +242,7 @@ static int nudge(void)
     input_off(t, 69);
     ok &= t->step[4].n == 2u && step_nudge(&t->step[4]) == 1;
     seq_stop();
-    bad += check("REC: a note's time in its fresh step (+3/16, -4/16 into the next, rounded); a chord keeps the first's", ok);
+    bad += check("REC: a note's time in its fresh step (+3/16; early, on the next: 0; rounded); a chord keeps the first's", ok);
     t = seq1(1);
     song.sel = 0; song.rec = 1;
     t->p[P_SSWING] = 100;                            /* even steps 1.4 x: a note just before the middle */
