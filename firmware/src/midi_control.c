@@ -297,7 +297,7 @@ static int __attribute__((noinline)) midi_learned(uint32_t cc, uint32_t value)
 
 /* (Dah) CC74..77, the MPK mini Plus's K5..K8: HOME's four knobs of t, with pickup: a knob takes the parameter only once
  * it reaches (or crosses) the parameter's value, so an endless knob's own idea of it makes no jump; lost again when the
- * value moves elsewhere (the FM-1's knob, a preset, another track or HOME knob) */
+ * value moves elsewhere (the FM-1's knob, a preset, another track or HOME knob). At its end (0, 127) it takes it at once */
 static struct { uint8_t last, on, k, id; int16_t v; } mpk_k[4] __attribute__((section(".pool")));
 static void __attribute__((noinline)) midi_home_knob(track_t *t, uint32_t j, uint32_t value)
 {
@@ -318,7 +318,8 @@ static void __attribute__((noinline)) midi_home_knob(track_t *t, uint32_t j, uin
         b = mpk_k[j].last ? (int32_t)mpk_k[j].last - 1 - cur : a;
         mpk_k[j].last = (uint8_t)(value + 1u);
         mpk_k[j].on = 0;
-        if (a > 2 || a < -2) {
+        if ((a > 2 || a < -2) && value - 1u < 126u) {   /* (Dah: at its end, 0 or 127, it takes it: a knob there
+                                                     * already could never reach a value past it) */
             if ((a > 0) == (b > 0) && b)
                 return;                         /* (not reached nor crossed yet) */
         }
