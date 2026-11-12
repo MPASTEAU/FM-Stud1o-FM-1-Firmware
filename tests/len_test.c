@@ -316,28 +316,23 @@ static int t_page(void)
 }
 static int t_quantize(void)
 {
-    int bad = 0;
-    track_t *t = one(16, 0, NA, 30);                     /* (whole: the reference) */
+    int bad = 0;                                         /* (Dah) QUANTIZE moves the starts only: the lengths as set */
+    track_t *t = one(16, 0, NA, 23);
     t->p[P_SQNT] = 1;
     listen(t, 4u * S);
-    memcpy(ev0, ev, sizeof ev);
-    nev0 = nev;
-    t = one(16, 0, NA, 23);
-    t->p[P_SQNT] = 1;
-    listen(t, 4u * S);
-    bad += check("QUANTIZE ON: LEN 2.3 plays as 3 whole steps (every on / off the same)", same_events(ev, nev, ev0, nev0));
+    bad += check("QUANTIZE ON: LEN 2.3 plays as 2.3 (the length kept)", heard_at(&heard[0], 0, 2u * S + 3u * S / 10u));
     t = one(16, 0, NA, 23);
     t->p[P_SQNT] = 3;
     listen(t, 4u * S);
-    bad += check("QUANTIZE 50 %: half way from 2.3 to the GATE's end (3): off at 2.65", heard_at(&heard[0], 0, 2u * S + 65u * S / 100u));
+    bad += check("QUANTIZE 50 %: LEN 2.3 plays as 2.3", heard_at(&heard[0], 0, 2u * S + 3u * S / 10u));
     t = one(16, 0, NA, 5);
     t->p[P_SQNT] = 2;
     listen(t, 2u * S);
-    bad += check("QUANTIZE 25 %: LEN 0.5 a quarter of the way to GATE 50 %: 0.5", heard_at(&heard[0], 0, S / 2u));
+    bad += check("QUANTIZE 25 %: LEN 0.5 plays as 0.5", heard_at(&heard[0], 0, S / 2u));
     t = one(16, 0, NA, 1);
     t->p[P_SQNT] = 4;
     listen(t, 2u * S);
-    bad += check("QUANTIZE 75 %: LEN 0.1 three quarters of the way to GATE 50 %: 0.4", heard_at(&heard[0], 0, 4u * S / 10u - 1u));
+    bad += check("QUANTIZE 75 %: LEN 0.1 plays as 0.1", heard_at(&heard[0], 0, S / 10u));
     return bad;
 }
 static int t_ui(void)

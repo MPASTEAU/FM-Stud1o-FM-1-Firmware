@@ -524,6 +524,9 @@ static void st_canon(step_t *s, const uint8_t *q, uint32_t qn)
  * step playing (as its steps say, chance and gate aside: seq_enter), what a TIE there carries on */
 static struct { uint8_t st[4], go, cm, pv[4], pvn, poly, pass, took, gi, gk, gn, gnote[4]; int8_t gnd; } rp[NTRK];   /* (Dah) pass: the loops since PLAY;
                                                      * took: the pass REPLACE last wiped for */
+/* (Dah) the holds' timing (in the pool: zeroed): sh, where hold k's note plays (QUANTIZE) less where it was played,
+ * samples; age, held so long; dl, let go: its end that much later (sh > 0: played early), 0 none */
+static struct { int32_t sh[4], age[4], dl[4]; } rq[NTRK] __attribute__((section(".pool")));
 /* (Dah) the notes m (bits of its notes) of NOTE step idx out, with their tails: the TIE after it made explicit with
  * what goes on there (none: a REST), every later step carrying one of them on without it (none left, no hit: a REST),
  * up to the first step that carries none of them on, so nothing is left going on or tied from them. at: the pattern's
@@ -577,12 +580,16 @@ static uint32_t st_starts(const step_t *s)
     return st_kind(s) == ST_NOTE ? ((1u << (s->n > 4u ? 4u : s->n)) - 1u) & ~st_cont(s) : 0u;
 }
 
+static int32_t seq_nudge(const track_t *t, const step_t *s);
 static void rh_drop(track_t *t, uint32_t k)        /* hold k ends */
 {
     uint32_t i = trk_index(t) % NTRK, j, lo = (1u << k) - 1u;
     for (j = k; j + 1u < t->rh_n; j++) {
         t->rh_note[j] = t->rh_note[j + 1u];
         rp[i].st[j] = rp[i].st[j + 1u];
+        rq[i].sh[j] = rq[i].sh[j + 1u];
+        rq[i].age[j] = rq[i].age[j + 1u];
+        rq[i].dl[j] = rq[i].dl[j + 1u];
     }
     rp[i].go = (uint8_t)((rp[i].go & lo) | (rp[i].go >> 1 & ~lo));
     rp[i].cm = (uint8_t)((rp[i].cm & lo) | (rp[i].cm >> 1 & ~lo));
@@ -639,6 +646,12 @@ static __attribute__((noinline)) void rec_poly(track_t *t, step_t *s, uint32_t i
     }
     t->rh_note[k] = (uint8_t)note;
     rp[i].st[k] = (uint8_t)idx;
+    rq[i].age[k] = rq[i].dl[k] = 0;
+    {   /* (Dah) where it plays: the step's start (the next one's: still to come) and its NUDGE as QUANTIZE plays it */
+        uint32_t period = div_samples((uint32_t)t->p[P_SDIV]), cur = step_samples(t, period, t->seq_idx);
+        int32_t q = seq_nudge(t, s) * (int32_t)period / NUDGE_DIV;
+        rq[i].sh[k] = q + (t->seq_pos >= 0x7FFFFFFFu ? 0 : next ? (int32_t)(cur - t->seq_pos) : -(int32_t)t->seq_pos);
+    }
     rp[i].go &= (uint8_t)~(1u << k);
     rp[i].cm &= (uint8_t)~(1u << k);
 }
@@ -681,33 +694,34 @@ static __attribute__((noinline)) void rec_hold_poly(track_t *t, uint32_t idx, ui
     if (chg && len > 1u)
         st_hold_off(seq_wr(t, (idx + 1u) % len), po, np);
 }
-/* FINE LEN, recorded: a note let go in step `at` (the one playing), `from` samples after its start where it began (0:
- * carried into it): its tenths there as played (a whole step: none; recorded as played, QUANTIZE says how it plays) */
-static __attribute__((noinline)) void rec_fine(track_t *t, uint32_t at, int32_t from)
+/* FINE LEN, recorded: a note let go in step `at` (the one playing), x samples of it sounding there (from the step's
+ * start: carried into it; else from its own start): its tenths there as played (a whole step: none; Dah: QUANTIZE
+ * moves its start, never its length) */
+static __attribute__((noinline)) void rec_fine(track_t *t, uint32_t at, int32_t x)
 {
     uint32_t cur = step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx);
     int32_t f;
     if (t->seq_pos >= 0x7FFFFFFFu || !cur)
         return;
-    f = ((int32_t)t->seq_pos - from) * 10 / (int32_t)cur;   /* (a tenth begun: the note sounds into it) */
-    f += ((int32_t)t->seq_pos - from) * 10 % (int32_t)cur ? 1 : 0;
+    x = x < 0 ? 0 : x;
+    f = x * 10 / (int32_t)cur;                      /* (a tenth begun: the note sounds into it) */
+    f += x * 10 % (int32_t)cur ? 1 : 0;
     (void)fine_raw(t, at, f < 1 ? 1u : f >= 10 ? 0u : (uint32_t)f);
 }
 static int32_t rec_from(const track_t *t, uint32_t at)   /* where step at's notes began: its NUDGE */
 {
     return step_nudge(seq_at(t, at)) * (int32_t)div_samples((uint32_t)t->p[P_SDIV]) / NUDGE_DIV;
 }
-/* (overlaps) POLY note let go (its hold k): early in the step it was carried on into, not there (that step without it) */
-static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note)
+/* (overlaps) POLY note let go (its hold k), (Dah) as long as it was held from where it plays (rp sh: played early, its
+ * end later, dl; late, earlier: pos): hardly into the step it was carried on into, not there (that step without it) */
+static __attribute__((noinline)) void rec_end_poly(track_t *t, uint32_t k)
 {
-    uint32_t i = trk_index(t) % NTRK, j, k;
+    uint32_t i = trk_index(t) % NTRK, j, note = t->rh_note[k];
+    int32_t pos = (int32_t)t->seq_pos + (rq[i].sh[k] < 0 ? rq[i].sh[k] : 0);
     step_t *s;
-    for (k = 0; k < t->rh_n && t->rh_note[k] != note; k++)
-        ;
-    if (k == t->rh_n)
-        return;
+    pos = pos < 0 ? 0 : pos;
     if (((rp[i].cm >> k) & 1u) &&
-        t->seq_pos < step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx) / 2u) {
+        (uint32_t)pos < step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx) / 10u) {   /* (not a tenth) */
         s = seq_wr(t, t->seq_idx);
         st_explicit(s, rp[i].pv, rp[i].pvn);
         for (j = 0; j < s->n && (s->note[j] != note || !((st_cont(s) >> j) & 1u)); j++)
@@ -719,10 +733,34 @@ static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note
         if (j < rp[i].pvn)
             rp[i].pv[j] = rp[i].pv[--rp[i].pvn];
     } else if ((rp[i].cm >> k) & 1u)
-        rec_fine(t, t->seq_idx, 0);                 /* (FINE LEN: let go late in it) */
+        rec_fine(t, t->seq_idx, pos);               /* (FINE LEN: its tenths in it) */
     else if (rp[i].st[k] == t->seq_idx)
-        rec_fine(t, t->seq_idx, rec_from(t, t->seq_idx));   /* (in its own step) */
+        rec_fine(t, t->seq_idx, rq[i].age[k] - (rq[i].sh[k] > 0 ? rq[i].sh[k] : 0));   /* (in its own step: as held) */
     rh_drop(t, k);
+}
+static __attribute__((noinline)) void rec_release_poly(track_t *t, uint32_t note)
+{
+    uint32_t i = trk_index(t) % NTRK, k;
+    for (k = 0; k < t->rh_n && t->rh_note[k] != note; k++)
+        ;
+    if (k == t->rh_n || rq[i].dl[k])
+        return;
+    if (rq[i].sh[k] > 0)
+        rq[i].dl[k] = rq[i].sh[k];                  /* (played early: it ends that much later) */
+    else
+        rec_end_poly(t, k);
+}
+/* (Dah) the holds' clocks, n samples on: the notes let go whose end has come end */
+static __attribute__((noinline)) void rec_age(track_t *t, uint32_t n)
+{
+    uint32_t i = trk_index(t) % NTRK, k;
+    for (k = 0; k < t->rh_n; k++) {
+        rq[i].age[k] += (int32_t)n;
+        if (rq[i].dl[k] && (rq[i].dl[k] -= (int32_t)n) <= 0) {
+            rq[i].dl[k] = 0;
+            rec_end_poly(t, k--);
+        }
+    }
 }
 
 /* live recording: the note goes into the nearest step, as swung (the one playing, or
@@ -949,9 +987,9 @@ static void rec_release(track_t *t, uint32_t note)
         t->seq_pos < step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), t->seq_idx) / 2u)
         *seq_wr(t, t->rh_last) = t->rh_bak;         /* released early in it: not held into this step */
     else if (t->rh_ties && t->seq_idx == t->rh_last)
-        rec_fine(t, t->rh_last, 0);                 /* (FINE LEN: late in it, its tenths) */
+        rec_fine(t, t->rh_last, (int32_t)t->seq_pos);   /* (FINE LEN: late in it, its tenths) */
     else if (!t->rh_ties && t->seq_idx == t->rh_start)
-        rec_fine(t, t->rh_start, rec_from(t, t->rh_start));
+        rec_fine(t, t->rh_start, (int32_t)t->seq_pos - rec_from(t, t->rh_start));
 }
 
 /* a note into armed track t in the count-in's last eighth: kept for step 1 (cin_flush); once each, 4 per track */
@@ -1727,18 +1765,16 @@ static const motion_store_t *chain_motion(const track_t *t)
 }
 
 /* FINE LEN (core.h MOTION_FINE): the note-off, in samples from where step idx plays, of the notes ending there when
- * it has tenths: that much of its (swung) length; 0 none (the GATE's, gate, as before: every older pattern). QUANTIZE
- * (P_SQNT) as for the NUDGE: ON the tenths not heard (whole steps, the GATE as ever), 25 / 50 / 75 % that much of the
- * way to the GATE's off, OFF as set. Not inlined: once a step, off the audio ISR's loop */
+ * it has tenths: that much of its (swung) length; 0 none (the GATE's, gate, as before: every older pattern). (Dah)
+ * Whatever QUANTIZE says: it moves the notes' starts, never their lengths. Not inlined: once a step, off the audio ISR's loop */
 static __attribute__((noinline)) uint32_t seq_fine(const track_t *t, uint32_t idx, uint32_t period, uint32_t gate)
 {
     const motion_store_t *m;
     uint32_t f, x;
-    if (t->p[P_SQNT] == 1 || !(m = chain_motion(t)) || !(f = fine_at(m, trk_index(t), idx)))
+    (void)gate;
+    if (!(m = chain_motion(t)) || !(f = fine_at(m, trk_index(t), idx)))
         return 0;
-    x = step_samples(t, period, idx) * f / 10u;
-    if (t->p[P_SQNT] >= 2)
-        x = (uint32_t)((int32_t)x + ((int32_t)gate - (int32_t)x) * (t->p[P_SQNT] - 1) / 4);
+    x = step_samples(t, period, idx) * f / 10u;     /* (Dah: QUANTIZE moves the starts only, the lengths as played) */
     return x ? x : 1u;
 }
 
@@ -1846,6 +1882,8 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
 static void seq_tick(track_t *t, uint32_t n)
 {
     uint32_t period, len, top;
+    if (t->rh_n && rp[trk_index(t) % NTRK].poly && song.playing)
+        rec_age(t, n);
     if (t->seq_n && !t->seq_hold) {
         if (t->seq_off > n)
             t->seq_off -= n;
