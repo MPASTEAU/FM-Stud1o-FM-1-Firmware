@@ -569,10 +569,11 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
 {
     *ok = 0;
     if (!ui.home && cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION, as STEP: OCT+ held the VIEW, EDIT clears */
-        kh[0] = (khint_t){KC_OCTUP, "(HOLD) VIEW"};
-        kh[1] = (khint_t){KC_EDIT, "CLEAR"};
-        *ok = 1u | (au_del_ready() ? 2u : 0u);
-        return 2u;
+        kh[0] = (khint_t){KC_OCTUP, "VIEW"};             /* (Dah: held, both; "(HOLD)" has no room with three) */
+        kh[1] = (khint_t){KC_OCTDN, "CLR LANE"};         /* (Dah: the lane cleared, asked) */
+        kh[2] = (khint_t){KC_EDIT, "CLEAR"};
+        *ok = 1u | (au_id(au_lane) != 0xFFu ? 2u : 0u) | (au_del_ready() ? 4u : 0u);
+        return 3u;
     }
     if (act_cols()) {
         uint32_t rn = foot_rename(), dl = foot_del(), nk;
