@@ -9,8 +9,8 @@
  * every channel the selected track; 1.2: CH5-8, CH9-12, CH13-16 as CH1-4 on those four channels (midi_base).
  * A note into an armed track (song.rec) while
  * the transport runs is recorded into its pattern, quantised to its (swung) steps, with its
- * held length as TIE steps (rec_note, rec_hold, rec_release). With the ARP on, the notes the arp
- * plays are recorded, not the keys held (what plays back is what was heard). A key or MIDI note plays a
+ * held length as TIE steps (rec_note, rec_hold, rec_release). (Dah) With the ARP on, the keys held
+ * are recorded, not what the arp plays: the steps play into the ARP again, its settings still free. A key or MIDI note plays a
  * chord when the track's CHRD is on (chord.c): its notes go through the same input as so many keys. */
 static const uint16_t SCALE_MASK[] = {
     0xFFF,                                   /* CHR */
@@ -236,13 +236,11 @@ static void arp_forget(track_t *t)               /* (its notes ended otherwise: 
 
 /* CHORD's notes. Not inlined: they run once an arp step, and kept out of the audio ISR's loop over the tracks
  * (tests/target_budget.py) */
-static __attribute__((noinline)) void arp_chord_off(track_t *t, int rec)   /* the other notes end */
+static __attribute__((noinline)) void arp_chord_off(track_t *t)   /* the other notes end */
 {
     uint32_t i;
     for (i = 0; i < 3u; i++)
         if (t->arp_ch[i]) {
-            if (rec)
-                rec_release(t, t->arp_ch[i]);
             trk_note_off(t, t->arp_ch[i]);
             t->arp_ch[i] = 0;
         }
@@ -261,8 +259,6 @@ static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list
             t->arp_note = (uint8_t)nt;
         else
             t->arp_ch[i - 1u] = (uint8_t)nt;
-        if (rec_on(t))
-            rec_note(t, nt, 100);
         trk_note_on(t, nt, 100);
     }
 }
@@ -270,20 +266,11 @@ static __attribute__((noinline)) void arp_chord(track_t *t, const uint32_t *list
 static void arp_silence(track_t *t)              /* the sounding arp note(s) end */
 {
     if (t->arp_ch[0] | t->arp_ch[1] | t->arp_ch[2])
-        arp_chord_off(t, 0);
+        arp_chord_off(t);
     trk_note_off(t, t->arp_note);
     t->arp_note = 0;
 }
 
-static void arp_off(track_t *t)                  /* the sounding arp note(s) end (a recorded one too) */
-{
-    if (t->arp_ch[0] | t->arp_ch[1] | t->arp_ch[2])
-        arp_chord_off(t, rec_on(t));
-    trk_note_off(t, t->arp_note);
-    if (rec_on(t))
-        rec_release(t, t->arp_note);
-    t->arp_note = 0;
-}
 
 /* the place in the note list (len notes) the step arp_idx plays (not inlined, as arp_chord); UP+8 adds its note */
 static __attribute__((noinline)) uint32_t arp_pick(track_t *t, uint32_t *list, uint32_t len)
@@ -403,13 +390,13 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
     uint32_t cnt, list[64], len, j;
     if (!(len = arp_list(t, list, &cnt))) {        /* (every key silent now: QNT WHITE's black keys) */
         if (t->arp_note)
-            arp_off(t);
+            arp_silence(t);
         return;
     }
     t->arp_idx++;
     j = t->p[P_AMODE] == AM_CHORD ? 0u : arp_pick(t, list, len);
     if (t->arp_note)
-        arp_off(t);
+        arp_silence(t);
     if ((uint32_t)(rng() & 127u) <= (uint32_t)t->p[P_APROB]) {
         t->arp_off = period * (uint32_t)t->p[P_AGATE] / 128u;
         if (t->p[P_AMODE] == AM_CHORD) {            /* CHORD: the first 4 notes, an octave up each step */
@@ -417,8 +404,6 @@ static __attribute__((noinline)) void arp_fire(track_t *t, uint32_t period)
             return;
         }
         t->arp_note = (uint8_t)list[j];
-        if (rec_on(t))
-            rec_note(t, t->arp_note, 100);           /* recording: what the arp plays */
         trk_note_on(t, t->arp_note, 100);
     }
 }
@@ -429,13 +414,13 @@ static void arp_step(track_t *t, uint32_t n, uint32_t gate_n)
     int32_t sw;
     if (t->arp_note) {
         if (t->arp_off <= gate_n)
-            arp_off(t);
+            arp_silence(t);
         else
             t->arp_off -= gate_n;
     }
     if (!t->p[P_AMODE] || !t->nheld) {
         if (!t->nheld && t->arp_note)
-            arp_off(t);
+            arp_silence(t);
         return;
     }
     period = div_samples((uint32_t)t->p[P_ARATE]);
@@ -973,7 +958,7 @@ static void rec_release(track_t *t, uint32_t note)
 static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t i = trk_index(t), k;
-    if (cin_left != 1u || cin_pos < click_beat_len() / 2u || !((song.rec >> i) & 1u) || t->p[P_AMODE])
+    if (cin_left != 1u || cin_pos < click_beat_len() / 2u || !((song.rec >> i) & 1u))
         return;
     for (k = 0; k < cin_n[i] && cin_note[i][k] != note; k++)
         ;
@@ -998,7 +983,7 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
     }
     if (cin_left)
         cin_keep(t, note, vel);
-    if (rec_on(t) && !t->p[P_AMODE]) {             /* (ARP on: arp_tick records its notes) */
+    if (rec_on(t)) {                                /* (Dah: ARP on too: the keys, the ARP plays them back) */
         rec_live = 1;
         rec_note(t, note, vel);
         rec_live = 0;
@@ -1279,6 +1264,7 @@ static void seq_start(void)
         t->rat_left = 0;
         t->nd_late = t->nd_early = ND_NONE;
         t->nd_fired = 0;
+        rp[i].pass = rp[i].took = 0xFF;             /* (Dah) REPLACE: a note before step 0 (COUNT-IN NOTE's) is pass 0 */
         if (t->p[P_LTRIG] && t->p[P_LSYNC])        /* LFO 2 FREE + SYNC: in time with the bars from PLAY */
             t->lfo_ph = (uint32_t)t->p[P_LPHASE] << 25;
     }
@@ -1291,15 +1277,14 @@ static void seq_start(void)
     perf_start();                                  /* perform.c: its 1/16 grid too */
 }
 
-/* (Dah) a step's note on / off: through the track's ARP when it runs (the sequence feeds it as the keys do); not
- * while it records (rec_on): the ARP then plays the keys only, or it would record over the steps feeding it what it
- * plays of them. seq_arp: the track's step notes went into its ARP (their note-off goes the same way) */
+/* (Dah) a step's note on / off: through the track's ARP when it runs (the sequence feeds it as the keys do; recording
+ * too: the keys are recorded, never what the ARP plays). seq_arp: the track's step notes went into its ARP (their note-off goes the same way) */
 static uint8_t seq_arp __attribute__((section(".pool")));
 static __attribute__((noinline)) uint32_t seq_chord_slide(track_t *t, uint8_t *nn, uint32_t m, uint32_t mute);
 static void seq_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
     uint32_t b = 1u << (trk_index(t) & 7u);
-    if (t->p[P_AMODE] && !rec_on(t)) {
+    if (t->p[P_AMODE]) {
         seq_arp |= (uint8_t)b;
         arp_add(t, note);
     } else {
@@ -1356,7 +1341,7 @@ static void seq_stop(void)
     if (song.g[G_CLOCK])                           /* external clock: the arp stops with the transport, */
         for (i = 0; i < NPART; i++)                /* its sounding note too (HOLD keeps the latched chord) */
             if (trk[i].arp_note)
-                arp_off(&trk[i]);
+                arp_silence(&trk[i]);
     for (i = 0; i < NTRK; i++) {
         seq_release(&trk[i]);
         trk[i].rh_n = 0;                           /* a recorded note held over the stop: as far as it got */
@@ -1837,9 +1822,9 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
     uint8_t q[4];
     if (!t->seq_idx) {
         t->cond_loop = (uint8_t)(top || t->cond_loop + 1u >= COND_LOOPS ? 0u : t->cond_loop + 1u);
+        if (top && rp[i].pass != 0xFFu)
+            rp[i].took = 0xFF;                       /* (the pass from the top takes again too; from PLAY: seq_start) */
         rp[i].pass = (uint8_t)(top ? 0u : rp[i].pass + 1u);   /* (Dah: REC MODE REPLACE's passes) */
-        if (top)
-            rp[i].took = 0xFF;                       /* (the pass from PLAY takes again too) */
     }
     if (loop_cue && i == song.sel && ((song.rec >> i) & 1u) && !chain.running) {   /* (Dah) REC's LOOP CUE: the last
                                                      * three beats of the selected track's pattern a blip each, going
