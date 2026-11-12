@@ -2246,7 +2246,13 @@ static void draw_countin(void)
     shown = sig;
     lcd_fill(0, H_HEAD, 240, 240 - H_HEAD, T_BG);
     ui.head_sig = ~0u;
-    seg_digit(70, H_HEAD + 18, 100, 160, 16, left ? left : 1u, T_REC);
+    if (left == CIN_WAIT) {                             /* (Dah) COUNT-IN NOTE: a note starts it */
+        cv_begin(240, 60, T_BG);
+        cv_text_in(0, 4, 240, &AF_L, "PLAY A NOTE", T_REC, T_BG);
+        cv_text_in(0, 40, 240, &AF_M, "TO START RECORDING", T_TEXT, T_BG);
+        cv_blit(0, 100);
+    } else
+        seg_digit(70, H_HEAD + 18, 100, 160, 16, left ? left : 1u, T_REC);
     {   /* PLAY stops it */
         int32_t x = HALF_UP(240 - kh_ink(KC_PLAY, "STOP"));
         cv_begin(240, KC_H + 2, T_BG);

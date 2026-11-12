@@ -13,6 +13,7 @@ enum { CLICK_OFF, CLICK_REC, CLICK_ON };
 static volatile uint8_t click_mode;         /* CLICK_*: when the beats click while the transport runs */
 static volatile uint8_t click_lvl = 1;      /* 0 LOW 1 MID 2 HIGH */
 static volatile uint8_t cin_bars;           /* COUNT-IN: 0 off, 1 or 2 bars */
+static volatile uint8_t cin_wait;           /* (Dah) COUNT-IN NOTE: PLAY armed waits for a note (seq.c CIN_WAIT) */
 static volatile uint8_t click_req;          /* seq.c: 1 a beat, 2 the bar's first, (Dah) 3..5 REC's LOOP CUE's three
                                              * blips going down, 6 its ping (the loop's start); the next block starts it */
 static volatile uint8_t loop_cue = 1, rec_replace;   /* (Dah) REC's layer: LOOP CUE ON, REC MODE REPLACE (ui.c rp_apply) */

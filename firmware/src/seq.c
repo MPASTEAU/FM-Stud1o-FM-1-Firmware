@@ -350,6 +350,7 @@ static volatile uint8_t cin_left, cin_total;    /* the count-in's beats still to
 static volatile uint32_t cin_pos;               /* samples into its beat playing */
 static uint8_t cin_flush;                       /* the count-in ended in this block: record what was kept */
 static uint8_t cin_note[NTRK][4], cin_vel[NTRK][4], cin_n[NTRK], cin_up[NTRK];   /* kept notes; cin_up bit k: let go */
+#define CIN_WAIT 0xFFu                          /* (Dah) cin_left: COUNT-IN NOTE, waiting for a note (input_on) */
 static int seq_counting(void) { return cin_left != 0u; }
 static uint32_t click_beat_len(void) { return 4u * div_samples(2); }   /* DIV 2: 1/16 */
 static int click_wanted(void)                  /* CLICK REC: while a track is armed (not in a song: no recording) */
@@ -986,9 +987,15 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
     cin_up[i] &= (uint8_t)~(1u << k);
 }
 
+static void seq_start(void);
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
     last_note = (uint8_t)note;
+    if (cin_left == CIN_WAIT && ((song.rec >> trk_index(t)) & 1u)) {   /* (Dah) COUNT-IN NOTE: this note starts it all,
+                                                     * recorded on step 1 */
+        cin_left = 0;
+        seq_start();
+    }
     if (cin_left)
         cin_keep(t, note, vel);
     if (rec_on(t) && !t->p[P_AMODE]) {             /* (ARP on: arp_tick records its notes) */
@@ -1942,10 +1949,10 @@ static track_t *midi_track(uint32_t ch)
 /* the count-in: its first beat now (accented) */
 static __attribute__((noinline)) void cin_begin(void)
 {
-    cin_total = cin_left = (uint8_t)(4u * cin_bars);
+    cin_total = cin_left = (uint8_t)(cin_wait ? CIN_WAIT : 4u * cin_bars);
     cin_pos = 0;
     memset(cin_n, 0, sizeof cin_n);
-    click_req = 2;
+    click_req = cin_left == CIN_WAIT ? 1u : 2u;
 }
 /* n samples on: a beat ends; the last one starts the sequencer (in this block, before seq_tick: step 0 with it) */
 static __attribute__((noinline)) void cin_block(uint32_t n)
@@ -2006,6 +2013,8 @@ static void click_tick(uint32_t adv)
  * ui_draw.c, swings on it; CLICK OFF it moves all the same) */
 static int32_t click_beat_now(void)
 {
+    if (cin_left == CIN_WAIT)
+        return -1;
     if (cin_left)
         return (int32_t)((uint32_t)(cin_total - cin_left) % 4u);
     if (!song.playing)
@@ -2037,14 +2046,18 @@ static void events_block(uint32_t n)
         midi_clock.mode = (uint8_t)clock_mode;
         midi_beat_samples = 0;
     }
-    if (cin_left && !clock_mode)
+    if (cin_left == CIN_WAIT && !clock_mode && (cin_pos += n) >= click_beat_len()) {   /* (Dah) waiting for a note: the
+                                                     * click keeps the tempo, every beat alike */
+        cin_pos -= click_beat_len();
+        click_req = 1;
+    } else if (cin_left && cin_left != CIN_WAIT && !clock_mode)
         cin_block(n);
     if (transport_req == 1u) {
         if (clock_mode)
             midi_clock_transport(0xFAu, fm1_ms);
         else if (cin_left)
             ;                                       /* counting in already (the UI's PLAY stops it: seq_counting) */
-        else if (cin_bars && song.rec && !song.playing && !chain.armed)
+        else if ((cin_bars || cin_wait) && song.rec && !song.playing && !chain.armed)
             cin_begin();                            /* recording from stop: the count-in first */
         else
             seq_start();

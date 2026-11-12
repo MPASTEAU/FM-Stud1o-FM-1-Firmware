@@ -145,7 +145,8 @@ static const char *const HOLD_N[4] = {"0.3 s", "0.4 s", "0.5 s", "0.6 s"};   /* 
 /* 1.1 (Discussion #131): the metronome (click.c) and the count-in (seq.c); ui.c ui_rec_prefs holds them */
 static const char *const CLICK_N[3] = {"OFF", "REC", "ON"};          /* REC: while a track is armed and playing */
 static const char *const CLKLVL_N[3] = {"LOW", "MID", "HIGH"};
-static const char *const COUNTIN_N[3] = {"OFF", "ON", "ON"};   /* (Dah) the countdown, a bar (2: 2 bars, stored before) */
+static const char *const COUNTIN_N[3] = {"OFF", "ON", "NOTE"};   /* (Dah) the countdown, a bar; NOTE: no countdown, the
+                                                         * first note played starts PLAY and the take (the default) */
 /* 1.1.5: SCREEN OFF (ui.c scr_*: the screen dark after this long without panel input; NEVER the default since 1.1.5.1) */
 static const char *const SCROFF_N[5] = {"NEVER", "5 MIN", "15 MIN", "30 MIN", "60 MIN"};
 /* ANIM (#46: OFF, values snap: ui_draw.c roll_note, ui_graph.c pr_follow; no power-on sweep, main.c boot_leds). 1.2
