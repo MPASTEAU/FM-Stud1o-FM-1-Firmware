@@ -1391,6 +1391,36 @@ static int roll_view_page(void)
     return !ui.home && !ui.menu && !ui.confirm && ((cur_page()->graph == GR_ROLL && !drum_track(TSEL) && !detail_on()) ||
                                                    cur_page()->graph == GR_EVENTS);   /* (Dah: AUTOMATION, the roll's VIEW) */
 }
+/* (Dah) LEN longer (old -> len): the steps added play the pattern again, its automation and FINE LENs too (as many as
+ * the MOTION_MAX leaves room for), when they are empty (what a shorter LEN hid stays) */
+static __attribute__((noinline)) void len_repeat(track_t *t, uint32_t old, uint32_t len)
+{
+    uint32_t i, j, k = trk_index(t) % NTRK, n, g;
+    for (i = old; i < len && i < LEN_MAX; i++) {
+        const step_t *s = ed_st(t, i);
+        if (st_kind(s) != ST_REST && (st_kind(s) != ST_NOTE || s->n || s->hit))
+            return;
+    }
+    for (i = old; i < len && i < LEN_MAX; i++)
+        *ed_st(t, i) = *ed_st(t, i % old);
+    g = motion_guard();
+    for (j = n = 0; j < motion.count; j++)             /* (what was there before: out) */
+        if (MP_TRK(&motion.event[j]) != k || MP_STEP(&motion.event[j]) < old || MP_STEP(&motion.event[j]) >= len)
+            motion.event[n++] = motion.event[j];
+    memset(motion.event + n, 0, (MOTION_MAX - n) * sizeof motion.event[0]);
+    motion.count = (uint8_t)n;
+    for (j = 0; j < n; j++) {
+        motion_event_t e = motion.event[j];
+        if (MP_TRK(&e) != k || MP_STEP(&e) >= old)
+            continue;
+        for (i = MP_STEP(&e) + old; i < len && i < LEN_MAX && motion.count < MOTION_MAX; i += old) {
+            e.place = MPLACE(k, i);
+            motion.event[motion.count++] = e;
+        }
+    }
+    RING_PUBLISH();
+    motion_unguard(g);
+}
 static void edit_param(uint32_t slot, int32_t steps)
 {
     int16_t *vp;
@@ -1578,6 +1608,8 @@ static void edit_param(uint32_t slot, int32_t steps)
     if (vp == &TSEL->p[P_SLEN] && steps) {              /* (Dah) LEN: 16 32 64 128 256 only, one a detent */
         for (v = 16; v < LEN_MAX && (steps > 0 ? v <= *vp : v * 2 < *vp); v *= 2)
             ;
+        if (v > *vp && *vp > 0)
+            len_repeat(TSEL, (uint32_t)*vp, (uint32_t)v);
     }
     *vp = (int16_t)v;
     if (vp >= TSEL->p && vp < TSEL->p + P_COUNT) {      /* (Dah: a track's value, a send on a global page too) */
