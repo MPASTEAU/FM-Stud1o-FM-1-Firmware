@@ -2152,24 +2152,10 @@ static uint32_t splash_ix(uint32_t i)              /* (Dah) pixel i's colour, th
 }
 static void draw_splash(void)
 {
-    uint32_t s, x, y = 0, px0 = (240u - SPLASH_W) / 2u, k = 0, left = 0, col = 0;
+    uint32_t s;   /* (Dah: no picture, its flash for LIVE's fades; the lines as the licence asks) */
     for (s = 0; s < 240u / SPL_STRIP; s++) {
         int32_t y0 = (int32_t)(s * SPL_STRIP);
         cv_begin(240, SPL_STRIP, T_BG);
-        for (; y < SPLASH_H && SPL_PY + (int32_t)y - y0 < SPL_STRIP; y++) {   /* the picture's rows in this strip, its runs
-                                                     * on (Dah: ui_splash.h's SPLASH_RLE) */
-            int32_t r = SPL_PY + (int32_t)y - y0;
-            for (x = 0; x < SPLASH_W; x++) {
-                if (!left && k < sizeof SPLASH_RLE) {
-                    col = SPLASH_RLE[k] >> 4;
-                    left = (SPLASH_RLE[k++] & 15u) + 1u;
-                }
-                if (left)
-                    left--;
-                if (r >= 0 && SPLASH_PAL[col] != SPLASH_PAL[0])   /* (colour 0: see-through, the BG shows) */
-                    cv_px[(uint32_t)r * 240u + px0 + x] = SPLASH_PAL[col];
-            }
-        }
         if (SPL_NAME_Y >= y0 && SPL_BASED_Y + AF_S.h <= y0 + SPL_STRIP) {
             {   /* (Dah: the name large, its "FM" and its "1" orange as the logo's leaves, the rest TEXT) */
                 const char *nm = SPLASH_LINES[0];

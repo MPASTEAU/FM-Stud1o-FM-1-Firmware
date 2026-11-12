@@ -308,9 +308,21 @@ static uint32_t div_samples(uint32_t div)
  * MUTE asked for there, done at the track's pattern start (seq.c seq_track) */
 static volatile uint8_t live_cut[NTRK] __attribute__((section(".pool")));
 static volatile uint8_t live_mreq[NTRK] __attribute__((section(".pool")));
+/* (Dah) LIVE's fades (seq.c lf_block), each track's: lf_arm bit 0 VOLUME FADE, bit 1 FILTER FADE asked (black keys 9,
+ * 10), the next phrase's start (the longest pattern's) starting them; lf_run the same, running (lf_in: up, from muted);
+ * lf_vc the volume's cut, lf_fc the filter's (0 none .. 128: all), as far as they went; lf_z the filter's states (two
+ * one-poles, 12 dB: the sum, the side) */
+static volatile uint8_t lf_arm[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t lf_run[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t lf_in[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t lf_vc[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t lf_fc[NTRK] __attribute__((section(".pool")));
+static int32_t lf_z[NTRK][4] __attribute__((section(".pool")));
 static int32_t trk_lvl(const track_t *t)
 {
-    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], v = 100 - (int32_t)live_cut[(uint32_t)(t - trk) % NTRK];
+    uint32_t k = (uint32_t)(t - trk) % NTRK;
+    int32_t lvl = LEVEL_Q12[t->p[P_LEVEL] & 127], v = 100 - (int32_t)live_cut[k];
+    v -= (v * lf_vc[k]) >> 7;
     return v >= 100 ? lvl : (lvl * ((v * v * 26844) >> 16)) >> 12;   /* (v * v Q12: 100 % 4096, no division) */
 }
 #include "perform.c"                                 /* the FX hold layer's effects (the master) */
@@ -1038,6 +1050,23 @@ static const uint16_t FX_ORDER[120] = {
     0x111A, 0x031A, 0x181A, 0x085A, 0x310A, 0x070A, 0x380A, 0x08CA};
 static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t->p[P_FXORD] < 120u ? (uint32_t)t->p[P_FXORD] : 0u]; }
 #include "fx_eq.c"                                      /* (Dah) the EQ, the chain's fourth unit */
+/* (Dah) the FILTER FADE on track k's samples b (s 0 the sum, 1 the side): 10 kHz (none) down to 30 Hz as lf_fc goes */
+static __attribute__((noinline)) void lf_filter(uint32_t k, int32_t *b, uint32_t n, uint32_t s)
+{
+    uint32_t i, c = lf_fc[k];
+    int32_t g, a, *z = &lf_z[k][2u * s];
+    if (!c) {
+        z[0] = z[1] = 0;
+        return;
+    }
+    g = (int32_t)EQ_G[(128u - c) * EQ_TOP >> 7];
+    a = (g << 2) / ((65536 + g) >> 8);              /* g / (1 + g), Q10 (a loud sum's difference: no overflow) */
+    for (i = 0; i < n; i++) {
+        z[0] += ((b[i] - z[0]) * a) >> 10;
+        z[1] += ((z[0] - z[1]) * a) >> 10;
+        b[i] = z[1];
+    }
+}
 #include "fx_comp.c"                                    /* (Dah) the COMPRESSOR, after the chain; the MASTER's */
 /* (Dah) the MASTER's chain (MIXER: the MASTER picked, FX): DIST and EQ in its ORDER, a track's parameters in mtrk's p[]
  * (MST_ID, the ones the project keeps: projfs.c), then its COMPRESSOR (G_MCOMP); the mix and the returns, left and
@@ -1164,6 +1193,8 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
         if (tp & 2u) dl = 0;
         if (tp & 4u) r = 0;
     }
+    lf_filter((uint32_t)(t - trk) % NTRK, b, n, 0);    /* (Dah: LIVE's FILTER FADE) */
+    lf_filter((uint32_t)(t - trk) % NTRK, d, n, 1);
     eq_tap(t, b, n);
     if (dv_unit >= DV_CHO && DV_ON(t, dv_unit))
         dv_level(b, n, 0);                              /* (Dah: a send's page: the track going there) */
@@ -1240,6 +1271,7 @@ static void fx_chain(track_t *t, int32_t *b, uint32_t n SM_DECL)
         comp_track(t, b, 0, n);                         /* (Dah) the COMPRESSOR, then the SIDECHAIN: always last */
     if (t->p[P_DKSRC] | duck_att[(uint32_t)(t - trk) % NPART])
         duck_part(t, b, n);
+    lf_filter((uint32_t)(t - trk) % NTRK, b, n, 0);    /* (Dah: LIVE's FILTER FADE) */
     eq_tap(t, b, n);
     if (dv_unit >= DV_CHO && DV_ON(t, dv_unit))
         dv_level(b, n, 0);                              /* (Dah: a send's page: the track going there) */

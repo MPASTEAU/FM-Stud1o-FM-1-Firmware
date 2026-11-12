@@ -1276,10 +1276,55 @@ static void keyboard_block(void)
 }
 
 /* -------------------------------------------------------- sequencer --- */
+/* (Dah) LIVE's fades (fx.c lf_*): a phrase the longest pattern (LEN x DIV) of the project's tracks, lf_lead; its start
+ * (lf_bound, seq_tick) starts those asked (a track playing: down, then MUTE at the next; muted: on again, up) and ends
+ * those running. lf_pos, lf_len: the phrase so far, its samples */
+static uint8_t lf_lead __attribute__((section(".pool"))), lf_bound __attribute__((section(".pool")));
+static uint32_t lf_pos __attribute__((section(".pool"))), lf_len __attribute__((section(".pool")));
+static void lf_end(uint32_t i)
+{
+    if (lf_run[i] && !lf_in[i])
+        trk[i].p[P_MUTE] = 1;
+    lf_run[i] = lf_in[i] = lf_vc[i] = lf_fc[i] = 0;
+}
+static __attribute__((noinline)) void lf_block(uint32_t n)
+{
+    uint32_t i, best = 0, l, c;
+    for (i = 0; i < trk_count(); i++)
+        if ((l = (uint32_t)clamp(trk[i].p[P_SLEN], 1, LEN_MAX) * div_samples((uint32_t)trk[i].p[P_SDIV])) > best) {
+            best = l;
+            lf_lead = (uint8_t)i;
+        }
+    if (lf_bound) {
+        lf_bound = 0;
+        lf_pos = 0;
+        lf_len = best ? best : 1u;
+        for (i = 0; i < NTRK; i++) {
+            lf_end(i);
+            if (lf_arm[i]) {
+                lf_run[i] = lf_arm[i];
+                lf_arm[i] = 0;
+                lf_in[i] = trk[i].p[P_MUTE] != 0;
+                trk[i].p[P_MUTE] = 0;
+            }
+        }
+    }
+    lf_pos += n;
+    c = lf_pos / ((lf_len >> 7) | 1u);
+    c = c > 128u ? 128u : c;
+    for (i = 0; i < NTRK; i++)
+        if (lf_run[i]) {
+            l = lf_in[i] ? 128u - c : c;            /* (the cut: up from all, down from none) */
+            lf_vc[i] = (uint8_t)(lf_run[i] & 1u ? l : 0u);
+            lf_fc[i] = (uint8_t)(lf_run[i] & 2u ? l : 0u);
+        }
+}
 static void live_reset(void)                       /* (Dah) LIVE: PLAY and STOP: its volumes back, the MUTEs asked done */
 {
     uint32_t i;
     for (i = 0; i < NTRK; i++) {
+        lf_run[i] = lf_arm[i] = 0;                  /* (a fade cut short: as it was, not muted) */
+        lf_end(i);
         live_cut[i] = 0;
         if (live_mreq[i]) {
             live_mreq[i] = 0;
@@ -1912,6 +1957,8 @@ static void seq_tick(track_t *t, uint32_t n)
             t->arp_pos = 0xFFFFFFF;
             t->arp_idx = 0xFFFFFFFFu;
             t->arp_walk = 0;
+            if ((uint32_t)(t - trk) == lf_lead)
+                lf_bound = 1;                       /* (Dah) LIVE's fades: the phrase's start */
             if (live_mreq[(uint32_t)(t - trk) % NTRK]) {   /* (Dah) LIVE: a MUTE asked for, on the pattern's start */
                 live_mreq[(uint32_t)(t - trk) % NTRK] = 0;
                 t->p[P_MUTE] = (int16_t)!t->p[P_MUTE];
@@ -2173,6 +2220,8 @@ static void events_block(uint32_t n)
     chain_tick(seq_n);
     for (i = 0; i < NTRK; i++)
         seq_tick(&trk[i], seq_n);
+    if (song.playing)
+        lf_block(seq_n);
     if (cin_flush)
         cin_record();
     if (song.playing)

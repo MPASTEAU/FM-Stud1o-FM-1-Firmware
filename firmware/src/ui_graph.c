@@ -3122,7 +3122,7 @@ static void draw_live(void)
         for (i = 0; i < NTRK; i++)
             ts.meter[i] = 0;
     }
-    sig = vol + mute * 128u + pend * 256u + blink * 512u + k * 1024u + (uint32_t)bh * 8192u + tc * 2654435761u + ux.gen;
+    sig = vol + mute * 128u + pend * 256u + blink * 512u + k * 1024u + (lf_arm[k] | lf_run[k] << 2) * 131071u + (uint32_t)bh * 8192u + tc * 2654435761u + ux.gen;
     if (ui.force || sig != bsig) {
         bsig = sig;
         cv_begin(234, (uint32_t)bh + 2u, T_BG);
@@ -3151,13 +3151,14 @@ static void draw_live(void)
         b[2] = 0;
         cv_text_in(119, 6 - AF_S_CAP_Y, w, &AF_S, b, bg == T_REC ? T_INK : tc, bg);
         cv_text_in(119, by, w, &AF_L, mute ? "MUTED" : "ON", ink, bg);
-        cv_text_in(119, bh - 12 - AF_S_CAP_Y, w, &AF_S, pend ? (mute ? "UNMUTE AT END" : "MUTE AT END") : "",
+        cv_text_in(119, bh - 12 - AF_S_CAP_Y, w, &AF_S, lf_run[k] ? "FADING" : lf_arm[k] ? "FADE NEXT PHRASE" :
+                   pend ? (mute ? "UNMUTE AT END" : "MUTE AT END") : "",
                    ink, bg);
         cv_blit(3, (uint32_t)y0);
     }
-    sig = n + k * 16u + mute * 256u + (uint32_t)bh * 4096u + tc * 2654435761u + ux.gen;
+    sig = n + k * 16u + mute * 256u + (uint32_t)bh * 4096u + tc * 2654435761u + ux.gen + (lf_arm[k] | lf_run[k] << 2) * 97u;
     if (ui.force || sig != ksig) {                     /* the black keys, left to right: 11 cells */
-        static const char *const KL[3] = {"0%", "100", "MUTE"};
+        static const char *const KL[3] = {"VOL", "FLT", "MUTE"};
         int32_t cw, x;
         ksig = sig;
         cv_begin(234, LV_LH, T_BG);
@@ -3165,8 +3166,9 @@ static void draw_live(void)
         for (i = 0; i < 11u; i++) {
             x = i < NTRK ? (int32_t)i * 17 : 136 + (int32_t)(i - NTRK) * 33;   /* (the tracks' 17 px, the rest 33) */
             cw = (i < NTRK ? 17 : 33) - 2;
-            bg = i == k ? tc : i < n ? T_RAISE : i >= NTRK ? (i == 10u && mute ? T_REC : T_RAISE) : T_BG;
-            ink = i == k || bg == T_REC ? T_INK : i < n || i >= NTRK ? T_TEXT : T_DIM;
+            bg = i == k || (i >= NTRK && i < 10u && ((lf_arm[k] | lf_run[k]) >> (i - NTRK) & 1u)) ? tc : i < n ? T_RAISE :
+                 i >= NTRK ? (i == 10u && mute ? T_REC : T_RAISE) : T_BG;   /* (Dah: a fade asked or running: lit) */
+            ink = bg == tc || bg == T_REC ? T_INK : i < n || i >= NTRK ? T_TEXT : T_DIM;
             cv_rrect(x, 0, cw, LV_LH, 3, bg, T_BG);
             if (i < NTRK) {
                 b[0] = (char)('1' + i);

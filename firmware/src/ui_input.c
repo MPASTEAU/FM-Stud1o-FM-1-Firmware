@@ -393,7 +393,9 @@ static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
             if (p < NTRK) {
                 m |= (uint32_t)(p == i) << k;
                 *g |= (uint32_t)(p < trk_count()) << k;
-            } else if (p < NTRK + 2u) {
+            } else if (p < NTRK + 2u) {                 /* (Dah) a fade: asked ~4 Hz, running lit */
+                uint32_t b = 1u << (p - NTRK);
+                m |= (uint32_t)((lf_run[i] & b) || ((lf_arm[i] & b) && ((fm1_ms >> 7) & 1u))) << k;
                 *g |= 1u << k;
             } else if (live_mreq[i]) {
                 m |= (uint32_t)((fm1_ms >> 7) & 1u) << k;   /* (waiting: ~4 Hz) */
@@ -679,10 +681,16 @@ static void live_keys(uint32_t notes)
                 ui_message("MEMORY FULL");
         } else if (p < NTRK)
             track_select(p);
-        else if (p == NTRK)
-            live_vol(0);
-        else if (p == NTRK + 1u)
-            live_vol(100);
+        else if (p < NTRK + 2u) {                       /* (Dah) VOLUME FADE, FILTER FADE: asked for the next phrase (again:
+                                                         * not); running: stopped, the track as it was */
+            uint8_t b = (uint8_t)(1u << (p - NTRK));
+            if (lf_run[i] & b) {
+                lf_run[i] &= (uint8_t)~b;
+                lf_vc[i] = (uint8_t)(lf_run[i] & 1u ? lf_vc[i] : 0u);
+                lf_fc[i] = (uint8_t)(lf_run[i] & 2u ? lf_fc[i] : 0u);
+            } else
+                lf_arm[i] ^= b;
+        }
         else if (song.playing || chain_busy())
             live_mreq[i] = (uint8_t)!live_mreq[i];
         else
@@ -883,8 +891,6 @@ static int rec_tap(void)                                /* 1: the arming changed
                                                          * stopped, at the cursor (CHORD ENTRY ADD: adding) */
         return 1;
     }
-    if ((song.rec & bit) && !song.playing && !seq_counting() && (ui_leds_inv & REC_PLAY))
-        transport_req = 1;                              /* (Dah: REC's PLAY ON only; OFF: armed, PLAY starts it) */
     if (!help_on())
         ;
     else if ((song.rec & bit) && grid_on())
