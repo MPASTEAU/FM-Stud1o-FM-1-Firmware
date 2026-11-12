@@ -2323,6 +2323,10 @@ static void confirm_text(char *a, char *b)
         str_cpy(a + str_len(a), "?", 2);
         up_name(k, b);                               /* the sound stored there */
         break;
+    case CF_CLR_LANE:                                /* (Dah) AUTOMATION, OCT- held */
+        str_cpy(a, "CLEAR LANE?", 24);
+        str_cpy(b, au_label(k % 4u), 24);
+        break;
     case CF_DEL_TRK:                                 /* (Dah) MIXER, OCT- held */
         str_cpy(a, "DELETE TRACK  ?", 24);
         a[13] = (char)('1' + k % NTRK);

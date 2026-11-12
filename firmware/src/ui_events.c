@@ -172,6 +172,22 @@ static void au_knob(uint32_t slot, int32_t s)
     if (r == 2)
         ui_message("AUTOMATION FULL");
 }
+static void au_clear_lane(void)                         /* (Dah) OCT- held, OCT+ (asked): the lane's points all out */
+{
+    track_t *t = TSEL;
+    uint32_t id = au_id(au_lane), f, i, n = 0, k = trk_index(t);
+    if (id == 0xFFu)
+        return;
+    f = motion_guard();
+    motion_restore(t);
+    for (i = 0; i < motion.count; i++)
+        if (MP_TRK(&motion.event[i]) != k || MOTION_ID(&motion.event[i]) != id)
+            motion.event[n++] = motion.event[i];
+    memset(motion.event + n, 0, (MOTION_MAX - n) * sizeof motion.event[0]);
+    motion.count = (uint8_t)n;
+    motion_unguard(f);
+    ui_message("LANE CLEARED");
+}
 static void au_clear(void)                              /* EDIT: the lane's point at the cursor (an event or a lock)
                                                          * out, the cursor on (as STEP's EDIT) */
 {

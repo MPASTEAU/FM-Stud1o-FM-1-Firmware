@@ -2496,6 +2496,8 @@ static void ui_input(void)
                 up_ui(0u, ui.confirm_trk);
             } else if (kind == CF_DEL_PAT) {       /* SAVE > PATTERN, REC */
                 pt_delete();
+            } else if (kind == CF_CLR_LANE) {          /* (Dah) AUTOMATION, OCT- held: the lane's points */
+                au_clear_lane();
             } else if (kind == CF_DEL_TRK) {           /* (Dah) MIXER / HOME, OCT- held: the track picked gone */
                 track_delete(ui.confirm_trk % NTRK);
             } else if (kind == CF_ADD_TRACK) {     /* one track more: its power-on sound, no steps */
@@ -2698,7 +2700,8 @@ static void ui_input(void)
         {                                               /* (Dah) SONG: OCT- held 0.5 s, a section added */
             static uint32_t dn_ms;
             int dn = ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && !ui.home && !ui.menu && !ui.confirm &&
-                     (cur_page()->graph == GR_SONG || cur_page()->graph == GR_TRK || cur_page()->graph == GR_FILE) &&
+                     (cur_page()->graph == GR_SONG || cur_page()->graph == GR_TRK || cur_page()->graph == GR_FILE ||
+                      cur_page()->graph == GR_EVENTS) &&
                      !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);
             dn |= ((fm1_in.buttons >> panel.btn[B_OCTDN]) & 1u) && !lay && ui.home && !ui.menu && !ui.confirm &&
                   !((fm1_in.buttons >> panel.btn[B_OCTUP]) & 1u);   /* (HOME too: the track deleted) */
@@ -2714,6 +2717,10 @@ static void ui_input(void)
                     else if (trk_count() <= 1u) ui_message("ONE TRACK AT LEAST");
                     else if (!ui.home && mx_master) ui_message("NOT THE MASTER");
                     else confirm_open(CF_DEL_TRK, song.sel);
+                } else if (cur_page()->graph == GR_EVENTS) {   /* (Dah) AUTOMATION: OCT- held, the lane cleared (asked) */
+                    if (chain_busy()) ui_message("STOP TO EDIT");
+                    else if (au_id(au_lane) == 0xFFu) ui_message("NOTHING TO CLEAR");
+                    else confirm_open(CF_CLR_LANE, au_lane);
                 } else if (cur_page()->graph == GR_FILE) {   /* (Dah) FILE: OCT- held, the project picked deleted (asked) */
                     if (transport_busy() || chain_busy()) ui_message("STOP FIRST");
                     else if (pfs_there(ui.fsel)) confirm_open(CF_DEL_ARCH, ui.fsel);
