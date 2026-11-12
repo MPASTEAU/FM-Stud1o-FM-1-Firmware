@@ -1702,6 +1702,8 @@ static void track_select(uint32_t i)
         return;
     if ((mix_solo >> (song.sel % NTRK)) & 1u)          /* (Dah) the track soloed: the SOLO goes along, the others normal */
         mix_solo = (uint8_t)(1u << (i % NTRK));
+    if ((song.rec >> (song.sel % NTRK)) & 1u)          /* (Dah) armed: REC goes along (playing on, the take on it) */
+        song.rec = (uint8_t)((song.rec & ~(1u << (song.sel % NTRK))) | 1u << (i % NTRK));
     oct_trk[song.sel % NTRK] = (int8_t)song.octave;     /* (Dah: the octave goes with the track) */
     song.octave = oct_trk[i % NTRK];
     song.sel = (uint8_t)i;
