@@ -13,6 +13,7 @@ enum { CLICK_OFF, CLICK_REC, CLICK_ON };
 static volatile uint8_t click_mode;         /* CLICK_*: when the beats click while the transport runs */
 static volatile uint8_t click_lvl = 1;      /* 0 LOW 1 MID 2 HIGH */
 static volatile uint8_t cin_bars;           /* COUNT-IN: 0 off, 1 or 2 bars */
+static volatile uint8_t click_mute;         /* (Dah) LIVE MODE: no click at all (beats, count-in, LOOP CUE) */
 static volatile uint8_t cin_wait;           /* (Dah) COUNT-IN NOTE: PLAY armed waits for a note (seq.c CIN_WAIT) */
 static volatile uint8_t click_req;          /* seq.c: 1 a beat, 2 the bar's first, (Dah) 3..5 REC's LOOP CUE's three
                                              * blips going down, 6 its ping (the loop's start); the next block starts it */
@@ -32,6 +33,8 @@ static __attribute__((noinline)) void click_render(int32_t *out, uint32_t n)
 {
     uint32_t i;
     int32_t s, c, k, env, g;
+    if (click_mute)
+        click_req = 0, clk.env = 0;
     if (click_req) {
         uint32_t down = click_req == 2u || click_req == 6u;
         clk.s = 0;                                  /* (from 0: no step at the start) */

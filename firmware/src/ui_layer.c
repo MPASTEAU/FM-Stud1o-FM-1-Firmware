@@ -442,8 +442,7 @@ static void rec_key(uint32_t p)
     uint32_t r = p - 1u, v;
     if (p == 0u)                                        /* (Dah: no CLEAR here: SEQ's) */
         return;
-    v = r == 1u ? !rp_get(RL_F[r]) : (rp_get(RL_F[r]) + 1u) % 3u;   /* the next value, round (Dah: the countdown ON
-                                                         * / OFF) */
+    v = (rp_get(RL_F[r]) + 1u) % 3u;                    /* the next value, round (Dah: COUNT-IN OFF / ON / NOTE) */
     rec_set(r, v);
     ui_say(r == 2u ? "CLICK LEVEL " : r ? "COUNT-IN " : "CLICK ", rl_name(r, v));
 }
@@ -683,7 +682,7 @@ static void layer_knob(uint32_t k, int32_t s)
             seq_row(s);
         } else if (k == 1u)
             rec_set(lys.sq_row, (uint32_t)clamp((int32_t)rl_get(lys.sq_row) + (s > 0 ? 1 : -1), 0,
-                                                 lys.sq_row == 1u || lys.sq_row >= 3u ? 1 : 2));
+                                                 lys.sq_row >= 3u ? 1 : 2));
     } else if (l == LAYER_SEQ && k == 0u) {            /* (Dah) SEQ: KNOB 1 the rows */
         seq_row(s);
     } else if (l == LAYER_SEQ && k == 1u) {            /* (Dah) .. KNOB 2 the row's value */
@@ -1079,7 +1078,7 @@ static int32_t ly_row(uint32_t k, lrow_t *r, char *b)
             ratio = g->max > g->min ? (song.g[GLO_G[k]] - g->min) * 1000 / (g->max - g->min) : 0;
         }
     } else if (ui.layer == LAYER_REC) {
-        uint32_t v = rl_get(k), n = k == 1u || k >= 3u ? 2u : 3u;
+        uint32_t v = rl_get(k), n = k >= 3u ? 2u : 3u;
         r->val = rl_name(k, v);
         if (n == 2u && k != 5u)                         /* (REC MODE: its word) */
             r->sw = (uint8_t)(1u + (v != 0u));

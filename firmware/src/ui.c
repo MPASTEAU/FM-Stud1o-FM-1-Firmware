@@ -148,6 +148,7 @@ static uint32_t rp_get(uint32_t f)                     /* a field as the MENU st
 static void rp_apply(void)                             /* the settings into click.c / seq.c (every frame: ui_input) */
 {
     click_mode = (uint8_t)rp_get(RP_CLICK);
+    click_mute = live_mode;
     click_lvl = (uint8_t)rp_get(RP_LEVEL);
     cin_bars = (uint8_t)(rp_get(RP_COUNTIN) == 1u);
     cin_wait = (uint8_t)(rp_get(RP_COUNTIN) == 2u);
