@@ -1922,6 +1922,16 @@ static __attribute__((noinline)) void seq_enter(track_t *t, uint32_t top, uint32
         if (top && rp[i].pass != 0xFFu)
             rp[i].took = 0xFF;                       /* (the pass from the top takes again too; from PLAY: seq_start) */
         rp[i].pass = (uint8_t)(top ? 0u : rp[i].pass + 1u);   /* (Dah: REC MODE REPLACE's passes) */
+        if (!top && rec_replace && rec_on(t) && !drum_track(t)) {   /* (Dah) REPLACE: the loop round, the keys held
+                                                     * end there (to its end, silent now): the take plays, a key
+                                                     * struck again takes anew */
+            while (t->rh_n) {
+                uint32_t n = t->rh_note[--t->rh_n];
+                arp_remove(t, n);
+                trk_note_off(t, n);
+            }
+            rp[i].go = rp[i].cm = 0;
+        }
     }
     if (loop_cue && i == song.sel && ((song.rec >> i) & 1u) && !chain.running) {   /* (Dah) REC's LOOP CUE: the last
                                                      * three beats of the selected track's pattern a blip each, going
