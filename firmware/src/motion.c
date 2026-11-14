@@ -514,10 +514,15 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
         motion_ramp_step(k, step);
     if (rec_on(t) && midi_bend_target[k])              /* (Dah) the wheel held off centre, recording: this step too */
         motion_bend_put(t, step, midi_bend_target[k] / 8, 1);
-    else if (mbend[k].on) {                             /* (Dah) a step without a BEND record: centred (a note
-                                                         * played after a bend plays straight) */
-        mbend[k].on = 0;
-        midi_bend_target[k] = 0;
+    else if (mbend[k].on) {                             /* (Dah) a step without a BEND record: a note starting there
+                                                         * plays straight (centred); else the bend held where it is */
+        const step_t *sp = seq_at(t, step);
+        uint32_t n = sp->n > 4u ? 4u : sp->n;
+        mbend[k].from = mbend[k].to;
+        if (st_kind(sp) == ST_NOTE && ((n && st_cont(sp) != (1u << n) - 1u) || sp->hit)) {
+            mbend[k].on = 0;
+            midi_bend_target[k] = 0;
+        }
     }
     if ((motion_hold >> k) & 1u) return;
     if (!((motion_base_valid >> k) & 1u)) {
