@@ -617,14 +617,20 @@ static uint32_t foot_keys(khint_t *kh, uint32_t *ok, char *ha, char *hb)
         return nk;
     }
     if (roll_view_page()) {                             /* (Dah) the roll: OCT+ held, its VIEW (as AUTOMATION's) */
-        kh[0] = (khint_t){KC_OCTUP, "(HOLD) VIEW"};
+        kh[0] = (khint_t){KC_OCTUP, drum_track(TSEL) ? "VIEW" : "(HOLD) VIEW"};
+        if (drum_track(TSEL)) {                         /* (Dah) DRUM: OCT- and a lane's key, the lane cleared */
+            kh[1] = (khint_t){KC_OCTDN, "+ PAD: CLEAR"};
+            *ok = 3u;
+            return 2u;
+        }
         *ok = 1u;
         return 1u;
     }
     if (grid_on() && !detail_on()) {
         kh[0] = (khint_t){KC_KEYS, grid_write() ? "STEPS" : "PLAY"};
-        *ok = 1u;
-        return 1u;
+        kh[1] = (khint_t){KC_OCTDN, "+ PAD: CLEAR"};
+        *ok = 3u;
+        return 2u;
     }
     return 0;
 }

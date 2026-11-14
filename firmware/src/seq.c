@@ -804,6 +804,14 @@ static uint8_t rp_lw[NTRK] __attribute__((section(".pool")));
 static uint8_t rp_wl[NTRK] __attribute__((section(".pool")));
 static void lane_out(step_t *s, uint32_t m)
 {
+    uint32_t k, j;
+    for (k = j = 0; k < s->n && k < 4u; k++)           /* (Dah) its notes struck on those lanes too (another key's, a
+                                                     * pad's: a GM drum on the lane) */
+        if (!((m >> (drum_lane(s->note[k]) % NLANE)) & 1u))
+            s->note[j++] = s->note[k];
+    for (k = j; k < 4u; k++)
+        s->note[k] = 0;
+    s->n = (uint8_t)j;
     s->hit &= (uint8_t)~m;
     s->acc &= (uint8_t)~m;
     if (!s->hit && !s->n && st_kind(s) == ST_NOTE) {
@@ -1010,32 +1018,17 @@ static __attribute__((noinline)) void cin_keep(track_t *t, uint32_t note, uint32
     cin_up[i] &= (uint8_t)~(1u << k);
 }
 
-/* (Dah) recording a DRUM track, a lane's key held LH_MS: that lane's hits all out (lh_m the lanes held, lh_trk their
- * track, lh_ms since when; lane_hold, every block) */
-#define LH_MS 1500u
-static uint8_t lh_m __attribute__((section(".pool"))), lh_trk __attribute__((section(".pool")));
-static uint32_t lh_ms[NLANE] __attribute__((section(".pool")));
-static __attribute__((noinline)) void lane_hold(void)
-{
-    uint32_t l;
-    for (l = 0; l < NLANE; l++)
-        if (((lh_m >> l) & 1u) && fm1_ms - lh_ms[l] >= LH_MS) {
-            lh_m &= (uint8_t)~(1u << l);
-            if (rec_on(&trk[lh_trk % NTRK]))
-                rec_wipe_lane(&trk[lh_trk % NTRK], 1u << l);
-        }
-}
+/* (Dah) a DRUM track, OCT- held (kb_octdn, the UI's every frame) and a lane's key or pad: that lane's hits all out, the
+ * note not played (lc_used: OCT- did something, its tap no octave; the UI says LANE CLEARED) */
+static volatile uint8_t kb_octdn __attribute__((section(".pool"))), lc_used __attribute__((section(".pool")));
 static void seq_start(void);
 static void input_on(track_t *t, uint32_t note, uint32_t vel)
 {
     last_note = (uint8_t)note;
-    if (drum_track(t) && rec_on(t) && note == DRUM_LANE_NOTE[drum_lane(note) % NLANE]) {
-        uint32_t l = drum_lane(note) % NLANE;
-        if (lh_trk != trk_index(t))
-            lh_m = 0;
-        lh_trk = (uint8_t)trk_index(t);
-        lh_m |= (uint8_t)(1u << l);
-        lh_ms[l] = fm1_ms;
+    if (kb_octdn && drum_track(t)) {               /* (any key or pad: the lane its note strikes) */
+        rec_wipe_lane(t, 1u << (drum_lane(note) % NLANE));
+        lc_used = 1;
+        return;
     }
     if (cin_left == CIN_WAIT && ((song.rec >> trk_index(t)) & 1u)) {   /* (Dah) COUNT-IN NOTE: this note starts it all,
                                                      * recorded on step 1 */
@@ -1059,8 +1052,6 @@ static int midi_note_held(const track_t *t, uint32_t note);
 static int midi_local_held(const track_t *t, uint32_t note);
 static void input_off(track_t *t, uint32_t note)
 {
-    if (drum_track(t) && note == DRUM_LANE_NOTE[drum_lane(note) % NLANE])
-        lh_m &= (uint8_t)~(1u << (drum_lane(note) % NLANE));
     if (midi_note_held(t, note))
         return;
     if (cin_left) {                                 /* a kept note let go before step 1: recorded, then let go */
@@ -2247,8 +2238,6 @@ static void events_block(uint32_t n)
         seq_tick(&trk[i], seq_n);
     if (song.playing)
         lf_block(seq_n);
-    if (lh_m)
-        lane_hold();
     if (cin_flush)
         cin_record();
     if (song.playing)

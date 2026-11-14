@@ -1732,6 +1732,12 @@ static uint32_t oct_taps(uint32_t pressed, int here)
     if (now == 3u)
         chord = 1;
     tap = down & ~now & 3u;
+    kb_octdn = (uint8_t)(now == 1u);                    /* (Dah) OCT- alone held: a DRUM lane's key clears it (seq.c) */
+    if (lc_used) {
+        lc_used = 0;
+        oct_dn_used = 1;
+        ui_message("LANE CLEARED");
+    }
     if (oct_up_used && (tap & 2u))
         tap &= ~2u;
     if (oct_dn_used && (tap & 1u))
