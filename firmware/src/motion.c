@@ -476,30 +476,35 @@ static void motion_bend_block(track_t *t, uint32_t pos, uint32_t cur)
     int32_t fr = cur ? (int32_t)((pos < cur ? pos : cur) * 256u / cur) : 0;
     midi_bend_target[k] = (mbend[k].from * 256 + (mbend[k].to - mbend[k].from) * fr) / 32;
 }
-/* .. recording (midi_control.c: the wheel moved, track t armed and playing): the step it is nearest has it */
+/* .. a BEND record v on track t's step idx (keep: one there already stays) */
+static void motion_bend_put(track_t *t, uint32_t idx, int32_t v, uint32_t keep)
+{
+    uint32_t i, place = MPLACE(trk_index(t), idx), f = motion_guard();
+    for (i = 0; i < motion.count && (motion.event[i].place != place || motion.event[i].param != MOTION_BEND); i++)
+        ;
+    if (i == MOTION_MAX)
+        motion_full = 1;
+    else if (!keep || i == motion.count) {
+        motion.event[i].place = (uint16_t)place;
+        motion.event[i].param = MOTION_BEND;
+        motion.event[i].value = (int8_t)clamp(v, -64, 63);
+        if (i == motion.count)
+            motion.count++;
+    }
+    motion_unguard(f);
+}
+/* .. recording (midi_control.c: the wheel moved, track t armed and playing): the step it is nearest has it; held off
+ * its centre, every step it goes into too (motion_step: a step with none plays the bend centred) */
 static void motion_bend_rec(track_t *t, int32_t bend)
 {
-    uint32_t k = trk_index(t), idx, len, i, place, f;
+    uint32_t idx, len;
     if (!rec_on(t))
         return;
     len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX);
     idx = t->seq_idx % len;
     if (t->seq_pos < 0x7FFFFFFFu && t->seq_pos > step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), idx) / 2u)
         idx = (idx + 1u) % len;
-    place = MPLACE(k, idx);
-    f = motion_guard();
-    for (i = 0; i < motion.count && (motion.event[i].place != place || motion.event[i].param != MOTION_BEND); i++)
-        ;
-    if (i == MOTION_MAX)
-        motion_full = 1;
-    else {
-        motion.event[i].place = (uint16_t)place;
-        motion.event[i].param = MOTION_BEND;
-        motion.event[i].value = (int8_t)(bend >> 7);
-        if (i == motion.count)
-            motion.count++;
-    }
-    motion_unguard(f);
+    motion_bend_put(t, idx, bend >> 7, 0);
 }
 /* step `step` of track t starts (seq.c seq_tick); play: it plays (its chance passed): its locks apply */
 static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, const motion_store_t *m, uint32_t play)
@@ -507,7 +512,13 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     uint32_t k = trk_index(t), i, w, any = 0, place = MPLACE(k, step);
     if (mramp[k].n)
         motion_ramp_step(k, step);
-    mbend[k].from = mbend[k].to;                        /* (Dah: the BEND's line arrived, held) */
+    if (rec_on(t) && midi_bend_target[k])              /* (Dah) the wheel held off centre, recording: this step too */
+        motion_bend_put(t, step, midi_bend_target[k] / 8, 1);
+    else if (mbend[k].on) {                             /* (Dah) a step without a BEND record: centred (a note
+                                                         * played after a bend plays straight) */
+        mbend[k].on = 0;
+        midi_bend_target[k] = 0;
+    }
     if ((motion_hold >> k) & 1u) return;
     if (!((motion_base_valid >> k) & 1u)) {
         memcpy(motion_base[k], t->p, sizeof t->p);
