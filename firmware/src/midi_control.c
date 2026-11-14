@@ -41,6 +41,9 @@ static void midi_expression(track_t *t, const midi_channel_t *c)
     if (drum_track(t))
         return;
     midi_bend_target[trk_index(t)] = (int32_t)c->bend * range / (c->bend < 0 ? 8192 : 8191);
+    mb_live[trk_index(t)] = (int16_t)midi_bend_target[trk_index(t)];
+    if (mb_live[trk_index(t)])
+        mbend[trk_index(t)].on = 0;                 /* (Dah: the records' line stops, the wheel plays) */
     motion_bend_rec(t, c->bend);                    /* (Dah: armed and playing: recorded) */
 }
 

@@ -168,6 +168,8 @@ static void motion_begin(void)
 /* (Dah) the recorded PITCH BEND playing (core.h MOTION_BEND): each track's line this step, from -> to (the wheel's
  * -64..63), on: one played since PLAY (STOP puts the bend back to its centre) */
 static struct { int8_t from, to; uint8_t on; } mbend[NTRK] __attribute__((section(".pool")));
+static volatile int16_t mb_live[NTRK] __attribute__((section(".pool")));   /* the wheel's own (Q8 semitones), off its
+                                                     * centre: it plays, the records not (recording or not) */
 static void motion_end(void)
 {
     for (uint32_t k = 0; k < NTRK; k++) {
@@ -512,8 +514,12 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     uint32_t k = trk_index(t), i, w, any = 0, place = MPLACE(k, step);
     if (mramp[k].n)
         motion_ramp_step(k, step);
-    if (rec_on(t) && midi_bend_target[k])              /* (Dah) the wheel held off centre, recording: this step too */
-        motion_bend_put(t, step, midi_bend_target[k] / 8, 1);
+    if (mb_live[k]) {                                   /* (Dah) the wheel held off centre: it plays; recording, this
+                                                         * step has it too */
+        mbend[k].on = 0;
+        if (rec_on(t))
+            motion_bend_put(t, step, mb_live[k] / 8, 1);
+    }
     else if (mbend[k].on) {                             /* (Dah) a step without a BEND record: a note starting there
                                                          * plays straight (centred); else the bend held where it is */
         const step_t *sp = seq_at(t, step);
@@ -536,8 +542,8 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
         uint32_t id = MOTION_ID(e);
-        if (e->place == place && e->param == MOTION_BEND && !rec_on(t))
-            motion_bend_at(t, step, m, e->value);       /* (Dah: armed, the wheel's own) */
+        if (e->place == place && e->param == MOTION_BEND && !mb_live[k])
+            motion_bend_at(t, step, m, e->value);       /* (Dah: the wheel off centre, its own) */
         if (e->place != place || ((e->param & MOTION_LOCK) && !play) || id >= P_COUNT || !motion_home_id(t, id))
             continue;                                   /* (FINE LEN: none; Dah: HOME's four only) */
         const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);
