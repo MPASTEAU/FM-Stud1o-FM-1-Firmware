@@ -13,9 +13,9 @@ static int motion_recording(void)
     t->p[P_REV] = 23; song.sel = 0; song.rec = 1;
     seq_start(); seq_tick(t, CTL); /* first real step */
     t->p[P_REV] = 92;
-    bad += check("motion records the selected armed track at its current step", !motion_capture(t, P_REV, 92) &&
+    bad += check("motion records the selected armed track at its current step", !motion_record(t, P_REV, 92) &&
         motion.count == 1u && motion.event[0].place == 0u && motion.event[0].value == 92);
-    t->p[P_REV] = 110; motion_capture(t, P_REV, 110);
+    t->p[P_REV] = 110; motion_record(t, P_REV, 110);
     bad += check("same step/parameter overwrites rather than consuming capacity", motion.count == 1u && motion.event[0].value == 110);
     bad += check("sounding values never replace the original patch base", t->p[P_REV] == 110 && motion_base_value(t, P_REV) == 23);
     project_t q; project_store_t packed;
@@ -30,16 +30,16 @@ static int motion_recording(void)
     bad += check("(Dah) held while a sound loads: the base back, the automation kept, none played", t->p[P_REV] == 23 &&
         motion_count(t) == 1u);
     motion_wait(t, 0); motion_step(t, 0, &motion, 1);
-    song.rec = 0; t->p[P_REV] = 37; motion_capture(t, P_REV, 37); seq_stop();
+    song.rec = 0; t->p[P_REV] = 37; motion_record(t, P_REV, 37); seq_stop();
     bad += check("manual edits outside recording become the new base", t->p[P_REV] == 37);
     song.rec = 3; seq_start(); seq_tick(t, CTL);
-    trk[1].p[P_REV] = 45; motion_capture(&trk[1], P_REV, 45);
+    trk[1].p[P_REV] = 45; motion_record(&trk[1], P_REV, 45);
     bad += check("only the selected track captures knob motion", motion_count(&trk[1]) == 0u);
     bad += check("transport and engine-switch parameters cannot be captured", !motion_param(P_SLEN) && !motion_param(P_AMODE) &&
         motion_set_event(t, 0, P_SLEN, 8) == 1);
     seq_stop(); motion_clear(t);
     t->p[P_REV] = 42; song.rec = 1; seq_start(); seq_tick(t, CTL);
-    motion_clear(t); t->p[P_REV] = 70; motion_capture(t, P_REV, 70); seq_stop();
+    motion_clear(t); t->p[P_REV] = 70; motion_record(t, P_REV, 70); seq_stop();
     bad += check("clearing then recording mid-play keeps the correct new base", t->p[P_REV] == 42);
     return bad;
 }
@@ -807,10 +807,10 @@ static int home_only(void)
     for (i = 0; i < 8u; i++) t->step[i] = (step_t){{60}, 1, ST_NOTE, 0, 100};
     t->p[P_REV] = 23; t->p[P_E4] = 10; song.sel = 0; song.rec = 1;
     seq_start(); seq_tick(t, CTL);
-    t->p[P_REV] = 92; motion_capture(t, P_REV, 92);
+    t->p[P_REV] = 92; motion_record(t, P_REV, 92);
     bad += check("HOME only: REV (not on HOME) turned while recording records nothing, the base its value",
         motion_count(t) == 0u && motion_base_value(t, P_REV) == 92);
-    t->p[P_E4] = 40; motion_capture(t, P_E4, 40);
+    t->p[P_E4] = 40; motion_record(t, P_E4, 40);
     bad += check("  E5 (HOME's KNOB 1) turned while recording: recorded", motion_count(t) == 1u && motion_find(t, 0, P_E4) >= 0);
     seq_stop(); song.rec = 0; motion_clear(t);
     t->p[P_REV] = 20; t->p[P_E4] = 10;
@@ -835,7 +835,7 @@ static int home_only(void)
     bad += check("  REV ASSIGN'd to a HOME knob: its records play (the event, the lock)", ok && t->p[P_REV] == 20);
     motion_clear(t); song.rec = 1;
     seq_start(); seq_tick(t, CTL);
-    t->p[P_REV] = 64; motion_capture(t, P_REV, 64);
+    t->p[P_REV] = 64; motion_record(t, P_REV, 64);
     ok = motion_count(t) == 1u && motion_find(t, 0, P_REV) >= 0;
     seq_stop(); song.rec = 0;
     bad += check("  .. and recorded; stop puts the base back", ok && t->p[P_REV] == 20);

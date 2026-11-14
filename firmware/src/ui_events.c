@@ -163,7 +163,7 @@ static void au_knob(uint32_t slot, int32_t s)
     d = track_desc(t, id);
     if (rec_on(t) && song.playing) {                    /* armed, playing: recorded where it plays (as HOME's knobs) */
         t->p[id] = (int16_t)param_turn(d, t->p[id], accel(EN_K1 + slot, s, d->fmt == F_ENUM ? 0 : d->max - d->min));
-        if (motion_capture(t, id, t->p[id]) == 2)
+        if (motion_record(t, id, t->p[id]) == 2)
             ui_message("AUTOMATION FULL");
         return;
     }

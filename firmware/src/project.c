@@ -254,7 +254,7 @@ static void motion_to_v10(motion_store_v10_t *o, const motion_store_t *m, uint32
             continue;
         {   /* (Dah: the ids as PROJ_NP_W counts them; the parameters it does not store, none) */
             uint32_t id = MOTION_ID(&m->event[i]);
-            if ((id >= PROJ_NP_W - 8u && id < P_E0) || m->event[i].param == MOTION_FINE)
+            if ((id >= PROJ_NP_W - 8u && id < P_E0) || m->event[i].param == MOTION_FINE || m->event[i].param == MOTION_BEND)
                 continue;                              /* (FINE LEN: FUN10 has none, whole steps there) */
             if (id >= P_E0)
                 id -= P_E0 - (PROJ_NP_W - 8u);

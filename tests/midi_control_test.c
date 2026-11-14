@@ -652,24 +652,15 @@ static int cc_map_test(void)
     bad += check("ROUT SEL: channel 10's CC7 sets the selected track's LEVEL", trk[2].p[P_LEVEL] == 5 && trk[0].p[P_LEVEL] != 5);
     song.g[G_ROUTE] = 0; song.sel = 0; events_block(CTL);
 
-    /* AUTOMATION: the selected track armed and playing records the CC as a knob move; else it is the new base */
+    /* (Dah) AUTOMATION: a CC is never recorded (the AUTOMATION page alone writes it): armed and playing, the new value */
     midi_test_reset();
     song.rec = 1; seq_start(); events_block(CTL);
     i = home_knob_id(&trk[0], 0); e = (uint32_t)trk[0].p[i];
-    queued(0xB0, 74, 127, 1);
-    for (j = 127; j-- > 0 && !motion.count;)       /* (pickup: down to the value) */
-        queued(0xB0, 74, j, 1);
-    bad += check("armed and playing: CC74 records a motion event of HOME's knob 1 on the selected track", motion.count == 1u &&
-                 motion.event[0].param == i && (motion.event[0].place >> 6) == 0u);
     for (j = 0; j <= 127u; j++)
-        queued(0xB1, 74, j, 1);
-    bad += check("  another track (channel 2, not selected): not recorded", motion.count == 1u);
+        queued(0xB0, 74, j, 1);
+    bad += check("armed and playing: CC74 sets HOME's knob 1, no motion event", motion.count == 0u && trk[0].p[i] != (int16_t)e);
     seq_stop(); events_block(CTL);
-    bad += check("  stopped: the patch's own value comes back", trk[0].p[i] == (int16_t)e);
     song.rec = 0;
-    for (j = 0; j <= 127u; j++)
-        queued(0xB0, 74, j, 1);
-    bad += check("not armed: the CC is the new value, no event", trk[0].p[i] != (int16_t)e && motion.count == 1u);
     return bad;
 }
 /* 1.5 (Discussion #170): MIDI LEARN. GLO + D4 on, a knob picks, a CC is learned; the map in favorites.factory[14] */

@@ -57,7 +57,8 @@ static int motion_valid(const motion_store_t *m)
     if (m->count > MOTION_MAX || (m->on & ~((1u << NTRK) - 1u))) return 0;
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
-        if (e->param == MOTION_FINE ? e->value < 1 || e->value > 9 : !motion_param(MOTION_ID(e)) || e->value < -64 || e->value > 127)
+        if (e->param == MOTION_FINE ? e->value < 1 || e->value > 9 : e->param == MOTION_BEND ? e->value > 63 :
+            !motion_param(MOTION_ID(e)) || e->value < -64 || e->value > 127)
             return 0;                                  /* (FINE LEN: its tenths, core.h) */
         if (e->place >= (NPAGE << 9)) return 0;
         for (j = 0; j < i; j++)
@@ -164,9 +165,17 @@ static void motion_begin(void)
     }
     motion_base_valid = (1u << NTRK) - 1u;
 }
+/* (Dah) the recorded PITCH BEND playing (core.h MOTION_BEND): each track's line this step, from -> to (the wheel's
+ * -64..63), on: one played since PLAY (STOP puts the bend back to its centre) */
+static struct { int8_t from, to; uint8_t on; } mbend[NTRK] __attribute__((section(".pool")));
 static void motion_end(void)
 {
-    for (uint32_t k = 0; k < NTRK; k++) motion_restore(&trk[k]);
+    for (uint32_t k = 0; k < NTRK; k++) {
+        motion_restore(&trk[k]);
+        if (mbend[k].on)
+            midi_bend_target[k] = 0;
+        mbend[k].on = 0;
+    }
     motion_base_valid = 0;
 }
 /* (Dah) automation always plays (its PLAY ON / OFF gone; the stores' on bits kept as they were, unread): track t's
@@ -316,7 +325,8 @@ static int motion_home_id(const track_t *t, uint32_t id)
             return 1;
     return 0;
 }
-static int motion_capture(track_t *t, uint32_t id, int16_t value)
+/* (Dah) the AUTOMATION page's VALUE turned (ui_events.c): armed and playing, recorded where it plays */
+static int motion_record(track_t *t, uint32_t id, int16_t value)
 {
     uint32_t k = trk_index(t), idx, len, period, f;
     if (!motion_param(id)) return 0;
@@ -338,6 +348,17 @@ static int motion_capture(track_t *t, uint32_t id, int16_t value)
     if ((motion_base_valid >> k) & 1u) motion_active[k][id / 32u] |= 1u << (id % 32u);
     motion_unguard(f);
     return motion_set_event(t, idx, id, value);
+}
+/* a knob turned: (Dah) never recorded (the AUTOMATION page alone writes automation: a sound moved while recording stays
+ * a move), the sound's new base, even when an earlier motion value is sounding (later events still override it) */
+static int motion_capture(track_t *t, uint32_t id, int16_t value)
+{
+    uint32_t k = trk_index(t), f;
+    if (!motion_param(id)) return 0;
+    f = motion_guard();
+    if ((motion_base_valid >> k) & 1u) motion_base[k][id] = value;
+    motion_unguard(f);
+    return 0;
 }
 /* step `step` starts: the locks of the step before go back to what sounds without them: the latest automation event
  * of track t's id at a step up to this one in this pass (motion_restore at step 0 starts each pass), else the sound's
@@ -437,12 +458,56 @@ static void motion_ramp_step(uint32_t k, uint32_t step)
     mramp[k].n = (uint8_t)n;
 }
 
+/* (Dah) a step of track t with a BEND record v: from it, in a line to the next step's (none: held) */
+static __attribute__((noinline)) void motion_bend_at(track_t *t, uint32_t step, const motion_store_t *m, int32_t v)
+{
+    uint32_t k = trk_index(t), i, len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), nx = MPLACE(k, (step + 1u) % len);
+    mbend[k].from = mbend[k].to = (int8_t)v;
+    mbend[k].on = 1;
+    for (i = 0; i < m->count; i++)
+        if (m->event[i].place == nx && m->event[i].param == MOTION_BEND)
+            mbend[k].to = m->event[i].value;
+    midi_bend_target[k] = v * 8;                       /* (Q8 semitones: 2 at 64) */
+}
+/* .. a block: where the line is (pos samples into a step of cur) */
+static void motion_bend_block(track_t *t, uint32_t pos, uint32_t cur)
+{
+    uint32_t k = trk_index(t);
+    int32_t fr = cur ? (int32_t)((pos < cur ? pos : cur) * 256u / cur) : 0;
+    midi_bend_target[k] = (mbend[k].from * 256 + (mbend[k].to - mbend[k].from) * fr) / 32;
+}
+/* .. recording (midi_control.c: the wheel moved, track t armed and playing): the step it is nearest has it */
+static void motion_bend_rec(track_t *t, int32_t bend)
+{
+    uint32_t k = trk_index(t), idx, len, i, place, f;
+    if (!rec_on(t))
+        return;
+    len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX);
+    idx = t->seq_idx % len;
+    if (t->seq_pos < 0x7FFFFFFFu && t->seq_pos > step_samples(t, div_samples((uint32_t)t->p[P_SDIV]), idx) / 2u)
+        idx = (idx + 1u) % len;
+    place = MPLACE(k, idx);
+    f = motion_guard();
+    for (i = 0; i < motion.count && (motion.event[i].place != place || motion.event[i].param != MOTION_BEND); i++)
+        ;
+    if (i == MOTION_MAX)
+        motion_full = 1;
+    else {
+        motion.event[i].place = (uint16_t)place;
+        motion.event[i].param = MOTION_BEND;
+        motion.event[i].value = (int8_t)(bend >> 7);
+        if (i == motion.count)
+            motion.count++;
+    }
+    motion_unguard(f);
+}
 /* step `step` of track t starts (seq.c seq_tick); play: it plays (its chance passed): its locks apply */
 static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, const motion_store_t *m, uint32_t play)
 {
     uint32_t k = trk_index(t), i, w, any = 0, place = MPLACE(k, step);
     if (mramp[k].n)
         motion_ramp_step(k, step);
+    mbend[k].from = mbend[k].to;                        /* (Dah: the BEND's line arrived, held) */
     if ((motion_hold >> k) & 1u) return;
     if (!((motion_base_valid >> k) & 1u)) {
         memcpy(motion_base[k], t->p, sizeof t->p);
@@ -455,6 +520,8 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     for (i = 0; i < m->count; i++) {
         const motion_event_t *e = &m->event[i];
         uint32_t id = MOTION_ID(e);
+        if (e->place == place && e->param == MOTION_BEND && !rec_on(t))
+            motion_bend_at(t, step, m, e->value);       /* (Dah: armed, the wheel's own) */
         if (e->place != place || ((e->param & MOTION_LOCK) && !play) || id >= P_COUNT || !motion_home_id(t, id))
             continue;                                   /* (FINE LEN: none; Dah: HOME's four only) */
         const param_desc_t *d = param_desc_of(eng_idx(t->eng_req), id);

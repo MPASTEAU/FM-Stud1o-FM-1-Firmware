@@ -304,6 +304,11 @@ typedef struct { uint16_t place; uint8_t param; int8_t value; } motion_event_t;
  * MOTION list / STEP_GET: whole steps there */
 #define MOTION_FINE 127u
 _Static_assert(P_COUNT < MOTION_FINE, "MOTION_FINE: an id no parameter has");
+/* (Dah) PITCH BEND recorded (live, MIDI IN's wheel): a record of id MOTION_BEND on a step, value the wheel there
+ * (-64..63 of its range, 2 semitones); played in a line to the next step's when it has one, else held (motion.c
+ * motion_bend_*). Not a parameter (as FINE LEN), not in FUN10 nor the editor's list */
+#define MOTION_BEND 126u
+_Static_assert(P_COUNT < MOTION_BEND, "MOTION_BEND: an id no parameter has");
 #define MPLACE(k, s) ((uint16_t)(((uint32_t)(s) >> 6) << 9 | (uint32_t)(k) << 6 | ((uint32_t)(s) & 63u)))
 #define MP_TRK(e) (((uint32_t)(e)->place >> 6) & 7u)
 #define MP_STEP(e) (((uint32_t)(e)->place >> 9) << 6 | ((uint32_t)(e)->place & 63u))

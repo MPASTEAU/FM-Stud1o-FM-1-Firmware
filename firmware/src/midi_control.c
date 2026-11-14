@@ -41,6 +41,7 @@ static void midi_expression(track_t *t, const midi_channel_t *c)
     if (drum_track(t))
         return;
     midi_bend_target[trk_index(t)] = (int32_t)c->bend * range / (c->bend < 0 ? 8192 : 8191);
+    motion_bend_rec(t, c->bend);                    /* (Dah: armed and playing: recorded) */
 }
 
 static void midi_expression_channel(uint32_t ch)
@@ -232,7 +233,7 @@ static int midi_track_held(uint32_t track)
 
 /* The standard CC map (#103): always on, these CCs only, on the track the channel plays (ROUT as notes). A CC
  * sets its parameter as a knob would, 0..127 over the parameter's range (64: the middle of a bipolar one), and
- * AUTOMATION records it as a knob move (motion_capture: the selected track, armed and playing). CC121 resets none
+ * (Dah) never recorded as AUTOMATION (its page alone writes it: motion_capture). CC121 resets none
  * of them (RP-015: they are the sound's). (Dah) CC70..77 are the MPK mini Plus's K1..K8 (midi_cc_map): no longer
  * the map's CC71..75 (RES REL ATK CUT DEC) */
 static const uint8_t MIDI_CC_MAP[][2] = {
@@ -341,6 +342,9 @@ static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint3
         uint32_t j = cc - 70u;
         if (last[j])
             midi_kt[j] += (int32_t)value - (int32_t)(last[j] - 1u);
+        if (last[j] && (value == 0u || value == 127u))  /* (Dah) at its end: the page's knob to its own (the CC
+                                                     * can go no further, the knob's range is more than its 127) */
+            midi_kt[j] += value ? 1000 : -1000;
         last[j] = (uint8_t)(value + 1u);
         return;
     }

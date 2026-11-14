@@ -791,7 +791,7 @@ static __attribute__((noinline)) void rec_wipe(track_t *t)
         }
     rec_wipe_req |= (uint8_t)(1u << k);
     for (j = n = 0; j < motion.count; j++)             /* (its FINE LENs too) */
-        if (motion.event[j].param != MOTION_FINE || MP_TRK(&motion.event[j]) != k)
+        if ((motion.event[j].param != MOTION_FINE && motion.event[j].param != MOTION_BEND) || MP_TRK(&motion.event[j]) != k)
             motion.event[n++] = motion.event[j];
     for (j = n; j < motion.count; j++)
         memset(&motion.event[j], 0, sizeof motion.event[j]);
@@ -1986,6 +1986,8 @@ static void seq_tick(track_t *t, uint32_t n)
         else
             seq_nd_start(t, period, len);
     }
+    if (mbend[(uint32_t)(t - trk) % NTRK].on)         /* (Dah: the recorded PITCH BEND's line) */
+        motion_bend_block(t, t->seq_pos, step_samples(t, period, t->seq_idx));
     if (mramp[(uint32_t)(t - trk) % NTRK].n)          /* (automation in lines, motion.c) */
         motion_ramp_block(t, t->seq_pos, step_samples(t, period, t->seq_idx));
     if (t->rat_left)
