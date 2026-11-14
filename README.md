@@ -332,3 +332,5 @@ same licence.
 "M-VAVE" and "FM-1" are trademarks of their respective owners; "Felucca" and "Hügelton Instruments" are names of
 Hügelton Instruments; "FL Studio" is a trademark of Image-Line. FM Stud1o is an independent project, not affiliated with
 or endorsed by any of them. The firmware never enables the FM-1's Bluetooth / Wi-Fi radio.
+
+You can also try FM Stud1o FM 1 Firmware in the browser, no flashing needed, in the free community [FM-1 Emulator](https://fm1-emulator.atst.tools/).
