@@ -496,11 +496,11 @@ static void motion_bend_put(track_t *t, uint32_t idx, int32_t v, uint32_t keep)
     motion_unguard(f);
 }
 /* .. recording (midi_control.c: the wheel moved, track t armed and playing): the step it is nearest has it; held off
- * its centre, every step it goes into too (motion_step: a step with none plays the bend centred) */
+ * its centre, every step it goes into too, a key held (motion_step: a step with none plays the bend centred) */
 static void motion_bend_rec(track_t *t, int32_t bend)
 {
     uint32_t idx, len;
-    if (!rec_on(t))
+    if (!rec_on(t) || !t->rh_n)                     /* (Dah) only with a key held: recorded with its note */
         return;
     len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX);
     idx = t->seq_idx % len;
@@ -517,7 +517,7 @@ static __attribute__((noinline)) void motion_step(track_t *t, uint32_t step, con
     if (mb_live[k]) {                                   /* (Dah) the wheel held off centre: it plays; recording, this
                                                          * step has it too */
         mbend[k].on = 0;
-        if (rec_on(t))
+        if (rec_on(t) && t->rh_n)
             motion_bend_put(t, step, mb_live[k] / 8, 1);
     }
     else if (mbend[k].on) {                             /* (Dah) a step without a BEND record: a note starting there
