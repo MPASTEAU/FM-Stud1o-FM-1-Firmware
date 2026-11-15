@@ -363,7 +363,7 @@ static void __attribute__((noinline)) midi_cc_map(track_t *t, uint32_t cc, uint3
 }
 
 /* (Dah) a controller's transport (the MPK mini Plus's STOP PLAY REC: CC 117 118 119, 127 pressed), any channel: 1 PLAY,
- * 2 STOP, 3 REC, for the main loop (ui_input.c midi_transport) */
+ * 2 STOP, 3 REC (4 + n: track n selected, a mixer's strip), for the main loop (ui_input.c midi_transport) */
 static volatile uint8_t midi_tp __attribute__((section(".pool")));
 static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
 {
@@ -424,9 +424,12 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         }
         break;
     default:                                       /* (Dah) SEL: channels 9..16's mix CCs (LEVEL PAN, the sends) tracks
-                                                     * 1..8's, a mixer's strips (tools/midi_hub.py) */
-        if (midi_base() == -1 && ch >= 8u && (cc == 7u || cc == 10u || cc - 91u < 4u)) {
-            if (ch - 8u < trk_count())
+                                                     * 1..8's, a mixer's strips (tools/midi_hub.py); CC102 on: the
+                                                     * track selected (the main loop: midi_tp 4 + track) */
+        if (midi_base() == -1 && ch >= 8u && (cc == 7u || cc == 10u || cc == 102u || cc - 91u < 4u)) {
+            if (cc == 102u && value)
+                midi_tp = (uint8_t)(ch - 4u);
+            else if (ch - 8u < trk_count() && cc != 102u)
                 midi_cc_map(&trk[ch - 8u], cc, value);
             break;
         }

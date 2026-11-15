@@ -1708,6 +1708,10 @@ static void track_select(uint32_t i)
     oct_trk[song.sel % NTRK] = (int8_t)song.octave;     /* (Dah: the octave goes with the track) */
     song.octave = oct_trk[i % NTRK];
     song.sel = (uint8_t)i;
+    fm1_irq_off();                                     /* (Dah) MIDI OUT CC102 on channel 9 + i: a mixer shows it (the
+                                                     * out ring is the audio ISR's) */
+    midi_out_event(0x0Bu | (0xB8u + i % NTRK) << 8 | 102u << 16 | 127u << 24);
+    fm1_irq_on();
     ui.entry_open = 0;
     ui.hot_t = 0;
     ui.cursor = 0;

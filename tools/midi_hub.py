@@ -10,6 +10,8 @@ selected track):
   fader        -> CC7  LEVEL           knob row 1 -> CC91 REV send
   knob row 2   -> CC94 DLY send        knob row 3 -> CC10 PAN
   MUTE button  -> the track's LEVEL to 0 and back (its LED lit while muted)
+  REC ARM      -> selects the track (CC102 on its channel); its LED lit, the others dark, the FM-1's own choice too
+                  (it sends CC102 on 9 + track as a track is selected). The MIDI Mix's LEDs are one colour (no RGB)
 
 Controllers plugged in or out while it runs are picked up (once a second).
     pip install mido python-rtmidi
@@ -25,6 +27,7 @@ MIX_KNOBS = ([16, 20, 24, 28, 46, 50, 54, 58],     # row 1
              [18, 22, 26, 30, 48, 52, 56, 60])     # row 3
 MIX_FADERS = [19, 23, 27, 31, 49, 53, 57, 61]
 MIX_MUTES = [1, 4, 7, 10, 13, 16, 19, 22]           # notes (their LEDs: the same notes back)
+MIX_ARMS = [3, 6, 9, 12, 15, 18, 21, 24]            # REC ARM: selects the track (CC102), its LED the one selected
 ROW_CC = (91, 94, 10)
 
 
@@ -33,6 +36,12 @@ class MidiMix:
         self.level = [100] * 8                      # each strip's fader (until it moves: the FM-1's default-ish)
         self.muted = [False] * 8
         self.led = mido.open_output(out_name) if out_name else None
+
+    def show(self, n):
+        """track n selected: its REC ARM LED lit, the others dark"""
+        if self.led:
+            for k, note in enumerate(MIX_ARMS):
+                self.led.send(mido.Message("note_on", note=note, velocity=127 if k == n else 0))
 
     def translate(self, msg):
         """the FM-1 messages for one MIDI Mix message"""
@@ -46,6 +55,10 @@ class MidiMix:
                 self.level[n] = msg.value
                 return [] if self.muted[n] else [mido.Message("control_change", channel=8 + n, control=7, value=msg.value)]
             return []
+        if msg.type == "note_on" and msg.velocity and msg.note in MIX_ARMS:
+            n = MIX_ARMS.index(msg.note)
+            self.show(n)
+            return [mido.Message("control_change", channel=8 + n, control=102, value=127)]
         if msg.type == "note_on" and msg.velocity and msg.note in MIX_MUTES:
             n = MIX_MUTES.index(msg.note)
             self.muted[n] = not self.muted[n]
@@ -65,7 +78,7 @@ def main():
     while True:
         try:
             outs = mido.get_output_names()
-            names = [n for n in mido.get_input_names() if a.fm1 not in n]
+            names = mido.get_input_names()           # (the FM-1's own: the track it selects, CC102 on 9 + n)
             if fm1 is None or fm1.name not in outs:
                 port = next((n for n in outs if a.fm1 in n), None)
                 if fm1 is not None:
@@ -93,6 +106,11 @@ def main():
                     for msg in port.iter_pending():
                         busy = True
                         if msg.type in ("clock", "active_sensing") or fm1 is None:
+                            continue
+                        if a.fm1 in n:                  # the FM-1 selected a track: the mixers' REC ARM LEDs
+                            if msg.type == "control_change" and msg.control == 102 and msg.channel >= 8:
+                                for mix in mixes.values():
+                                    mix.show(msg.channel - 8)
                             continue
                         for m in (mixes[n].translate(msg) if n in mixes else [msg]):
                             fm1.send(m)

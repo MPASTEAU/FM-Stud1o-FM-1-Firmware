@@ -2490,6 +2490,8 @@ static void ui_input(void)
             transport_req = 2;
         else if (m == 3u && !ui.confirm && !name_on())
             rec_tap();
+        else if (m >= 4u && m - 4u < trk_count() && !ui.confirm && !name_on())
+            track_select(m - 4u);                       /* (a mixer's strip: CC102 on channel 9 + track) */
     }
     if (ui.menu) {                                      /* (Dah) PLAY plays and stops, as in a layer (HOME: above) */
         if (ui.save_t0)
