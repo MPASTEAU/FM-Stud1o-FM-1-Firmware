@@ -8,11 +8,14 @@ translates an Akai MIDI Mix (factory mapping, all on channel 1) into the FM-1's 
 selected track):
 
   fader        -> CC7  LEVEL
-  knob row 1   -> CC103 LOW PASS (left: off, right: closed)
-  knob row 2   -> CC104 HIGH PASS (left: off, right: up to ~1.5 kHz)          knob row 3: nothing yet
+  knob row 1   -> nothing yet
+  knob row 2   -> CC103 LOW PASS (left: off, right: closed)
+  knob row 3   -> CC104 HIGH PASS (left: off, right: up to ~1.5 kHz)
   MUTE button  -> the track's LEVEL to 0 and back (its LED lit while muted)
   REC ARM      -> selects the track (CC102 on its channel); its LED lit, the others dark, the FM-1's own choice too
-                  (it sends CC102 on 9 + track as a track is selected). The MIDI Mix's LEDs are one colour (no RGB)
+                  (it sends CC102 on 9 + track as a track is selected). A track's notes (CC105 on 9 + track from the
+                  FM-1) flash its REC ARM, as LIVE's keys: the others lit a moment, the selected one dark a moment.
+                  The MIDI Mix's LEDs are on or off, one colour
 
 Controllers plugged in or out while it runs are picked up (once a second).
     pip install mido python-rtmidi
@@ -29,20 +32,42 @@ MIX_KNOBS = ([16, 20, 24, 28, 46, 50, 54, 58],     # row 1
 MIX_FADERS = [19, 23, 27, 31, 49, 53, 57, 61]
 MIX_MUTES = [1, 4, 7, 10, 13, 16, 19, 22]           # notes (their LEDs: the same notes back)
 MIX_ARMS = [3, 6, 9, 12, 15, 18, 21, 24]            # REC ARM: selects the track (CC102), its LED the one selected
-ROW_CC = (103, 104, None)
+ROW_CC = (None, 103, 104)
+FLASH = 0.07                                        # a note's flash, seconds
 
 
 class MidiMix:
     def __init__(self, out_name):
         self.level = [100] * 8                      # each strip's fader (until it moves: the FM-1's default-ish)
         self.muted = [False] * 8
+        self.sel = 0
+        self.until = [0.0] * 8                      # a strip's flash: until then
         self.led = mido.open_output(out_name) if out_name else None
+
+    def arm(self, k, on):
+        if self.led:
+            self.led.send(mido.Message("note_on", note=MIX_ARMS[k], velocity=127 if on else 0))
 
     def show(self, n):
         """track n selected: its REC ARM LED lit, the others dark"""
-        if self.led:
-            for k, note in enumerate(MIX_ARMS):
-                self.led.send(mido.Message("note_on", note=note, velocity=127 if k == n else 0))
+        self.sel = n
+        for k in range(8):
+            self.until[k] = 0.0
+            self.arm(k, k == n)
+
+    def hit(self, n):
+        """a note of track n (muted here: none): its REC ARM flashes"""
+        if n < 8 and not self.muted[n]:
+            if not self.until[n]:
+                self.arm(n, n != self.sel)
+            self.until[n] = time.time() + FLASH
+
+    def tick(self):
+        now = time.time()
+        for k in range(8):
+            if self.until[k] and now >= self.until[k]:
+                self.until[k] = 0.0
+                self.arm(k, k == self.sel)
 
     def translate(self, msg):
         """the FM-1 messages for one MIDI Mix message"""
@@ -109,14 +134,16 @@ def main():
                         if msg.type in ("clock", "active_sensing") or fm1 is None:
                             continue
                         if a.fm1 in n:                  # the FM-1 selected a track: the mixers' REC ARM LEDs
-                            if msg.type == "control_change" and msg.control == 102 and msg.channel >= 8:
+                            if msg.type == "control_change" and msg.channel >= 8 and msg.control in (102, 105):
                                 for mix in mixes.values():
-                                    mix.show(msg.channel - 8)
+                                    (mix.show if msg.control == 102 else mix.hit)(msg.channel - 8)
                             continue
                         for m in (mixes[n].translate(msg) if n in mixes else [msg]):
                             fm1.send(m)
                             if a.v:
                                 print(n, "->", m)
+                for mix in mixes.values():
+                    mix.tick()
                 if not busy:
                     time.sleep(0.001)
         except KeyboardInterrupt:

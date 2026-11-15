@@ -2139,6 +2139,10 @@ static void events_block(uint32_t n)
 {
     uint32_t i, pr, seq_n = n;
     uint32_t clock_mode = (uint32_t)song.g[G_CLOCK];
+    for (i = 0, pr = trk_hit_new, trk_hit_new = 0; pr; i++, pr >>= 1)   /* (Dah) a track's notes: MIDI OUT CC105 on
+                                                     * channel 9 + track (a mixer's strip lights: midi_hub.py) */
+        if ((pr & 1u) && !trk[i].p[P_MUTE])
+            midi_out_event(0x0Bu | (0xB8u + i) << 8 | 105u << 16 | 127u << 24);
     parts_prepare();
     if (midi_clock.mode != clock_mode) {
         seq_stop();
