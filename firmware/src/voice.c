@@ -405,6 +405,7 @@ static void mono_remove(track_t *t, uint32_t note)
 /* DUCK's triggers (fx.c duck_part): bit k, track k started a note in this block (a DRUM track: a KICK;
  * Dah: a SNARE or a CLAP too) */
 static volatile uint8_t duck_hit;
+static volatile uint32_t trk_hit_ms[NTRK] __attribute__((section(".pool")));   /* (Dah) each track's last note on */
 static volatile uint8_t perf_solo;                     /* (perform.c: the tracks soloed; the others take no note) */
 static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
 {
@@ -426,6 +427,7 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
         duck_hit |= (uint8_t)(1u << ((uint32_t)(t - trk) % NPART));
     if (perf_solo && !((perf_solo >> ((uint32_t)(t - trk) % NTRK)) & 1u))
         return;                                         /* (Dah) soloed out: off (fx.c trk_off), its DUCK as in the mix */
+    trk_hit_ms[(uint32_t)(t - trk) % NTRK] = fm1_ms;   /* (Dah: LIVE's track keys light) */
     for (i = 0; i < NVOICE; i++)
         any |= t->v[i].gate;
     if (!any) {                                        /* fresh phrase: LFO retrigger (TRIG NOTE) and fade */

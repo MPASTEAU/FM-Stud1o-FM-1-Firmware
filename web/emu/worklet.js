@@ -100,7 +100,7 @@ if (typeof registerProcessor === "function") {
       const ex = this.ex, mem = ex.memory.buffer;
       const msg = { type: "frame" };
       const leds = [ex.web_lit_buttons(), ex.web_lit_keys(), ex.web_dim_buttons(), ex.web_dim_keys(), ex.web_dim_level(),
-                    ex.web_breath_buttons(), ex.web_breath_keys(), ex.web_mid_keys ? ex.web_mid_keys() : 0];
+                    ex.web_breath_buttons(), ex.web_breath_keys(), ex.web_mid_keys ? ex.web_mid_keys() : 0, ex.web_half_keys ? ex.web_half_keys() : 0];
       const an = ex.web_anim_levels ? ex.web_anim_levels() : 0;   // the power-on sweep: each LED's level
       const anim = an ? Array.from(new Uint8Array(mem, an, 41)) : null;
       const key = leds.join(",") + (anim ? ";" + anim.join(",") : "");

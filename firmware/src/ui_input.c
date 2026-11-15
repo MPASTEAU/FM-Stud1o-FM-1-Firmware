@@ -380,18 +380,27 @@ static uint32_t key_leds(uint32_t *br)                 /* (*br: a layer's keys t
 /* (Dah) LIVE's keys (live_keys): the black keys of the project's tracks glow, the selected one's lit, the volume's two
  * glow, MUTE breathes while the track is muted and blinks while a change waits for the pattern's start; the white keys
  * the project's patterns (ps_list_all), one a key: they glow, the one playing lit. Lit (the return), *br breathing, *g glowing, *mid the mid level */
+static uint32_t lv_half __attribute__((section(".pool")));   /* (Dah) LIVE: the keys half lit (live_leds) */
 static uint8_t live_pat __attribute__((section(".pool")));   /* (Dah) LIVE: the pattern asked, waiting (0 none) */
 static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
 {
     const track_t *t = TSEL;
     uint8_t nums[PS_NUM];
     uint32_t k, p, m = 0, i = song.sel % NTRK, n = ps_list_all(nums), cur = ps_num(song.sel);
-    *br = *g = *mid = 0;
+    *br = *g = *mid = lv_half = 0;
     for (k = 0; k < 27u; k++) {
         p = key_place(k);
         if (key_black(k)) {
-            if (p < NTRK) {
-                m |= (uint32_t)(p == i) << k;
+            if (p < NTRK) {                             /* (Dah) a note of the track sounding (60 ms at least):
+                                                         * the selected one lit, the others half; idle, the selected
+                                                         * one half, the others glow; muted, no notes shown */
+                const track_t *u = &trk[p];
+                uint32_t j, on = 0;
+                for (j = 0; j < NVOICE; j++)
+                    on |= u->v[j].gate;
+                on = p < trk_count() && !u->p[P_MUTE] && (on || fm1_ms - trk_hit_ms[p] < 60u);
+                m |= (uint32_t)(p == i && on) << k;
+                lv_half |= (uint32_t)(p == i ? !on : on) << k;
                 *g |= (uint32_t)(p < trk_count()) << k;
             } else if (p < NTRK + 2u) {                 /* (Dah) a fade: asked ~4 Hz, running lit */
                 uint32_t b = 1u << (p - NTRK);
@@ -434,7 +443,7 @@ static uint32_t live_leds(uint32_t *br, uint32_t *g, uint32_t *mid)
  * glow first: an LED going from lit to dim never has a dark frame */
 static void ui_leds(void)
 {
-    uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0}, og[FM1_NCOL] = {0}, nb[FM1_NCOL] = {0};
+    uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0}, og[FM1_NCOL] = {0}, nb[FM1_NCOL] = {0}, nh[FM1_NCOL] = {0};
     uint8_t nm[FM1_NCOL] = {0}, sg[FM1_NCOL] = {0}, sm[FM1_NCOL] = {0}, iv[FM1_NCOL] = {0};
     uint32_t k, c, g, br, beat, sc, sr = 0;
     uint32_t fam = cur_fam(), mode = settings_leds, inv = leds_inv();   /* (1.5.6: INV LO 1, INV HI 2) */
@@ -479,6 +488,7 @@ static void ui_leds(void)
         keys_map = 1;
     }
     beat = 0;                                           /* (Dah: no beats of the grid brighter) */
+    lv_half = 0;
     if (song.grid == 4u && !ui.layer)                   /* (Dah) LIVE: its own picture */
         c = live_leds(&br, &g, &beat);
     sc = keys_map ? 0u : scale_leds(&sr);               /* SCALE LEDS: the scale's keys glow, the root's brighter */
@@ -488,6 +498,7 @@ static void ui_leds(void)
         led_put(keys_map ? own : nl, 14u + k, (int)((c >> k) & 1u));
         led_put(keys_map ? og : nd, 14u + k, keys_map ? (int)((g >> k) & 1u) : !sc || (mode == LEDS_INV && rt));
         led_put(nb, 14u + k, (int)((br >> k) & 1u));
+        led_put(nh, 14u + k, (int)((lv_half >> k) & 1u));
         if (!sc)
             continue;
         led_put(sg, 14u + k, mode == LEDS_INV ? !in && idle : (int)in);   /* (INV: the active ones dark) */
@@ -517,7 +528,7 @@ static void ui_leds(void)
     }
     if (mx_master && !ui.menu && !ui.confirm) {         /* (Dah) the MASTER: FX breathes, the rest dark */
         for (c = 0; c < FM1_NCOL; c++)
-            nl[c] = nd[c] = nm[c] = nb[c] = 0;
+            nl[c] = nd[c] = nm[c] = nb[c] = nh[c] = 0;
         led_put(nb, panel.btn[B_FX], 1);
     }
     if (song.playing || (seq_counting() && cin_pos < click_beat_len() / 4u))   /* counting in: green on each beat */
@@ -527,6 +538,7 @@ static void ui_leds(void)
         fm1_led_dim[c] = nd[c];
         fm1_led_breath[c] = nb[c];
         fm1_led_mid[c] = nm[c];
+        fm1_led_half[c] = nh[c];
     }
     for (c = 0; c < FM1_NCOL; c++)
         fm1_led[c] = nl[c];

@@ -183,6 +183,11 @@ static uint8_t fm1_led[FM1_NCOL];
 static uint8_t fm1_led_dim[FM1_NCOL];
 static uint8_t fm1_led_breath[FM1_NCOL];   /* breathing LEDs (see top): dark .. ~60 % of lit, in step */
 static uint8_t fm1_led_mid[FM1_NCOL];      /* a steady mid level (see top): lit 1 frame in FM1_LED_MID_N */
+#ifdef __MACH__                            /* (host tests: no Mach-O section of that name) */
+static uint8_t fm1_led_half[FM1_NCOL];
+#else
+static uint8_t fm1_led_half[FM1_NCOL] __attribute__((section(".pool")));
+#endif   /* (Dah) half lit: every other frame */
 
 /* scan diagnostics (console `inp`, read and cleared by the main loop): the gap between ticks
  * = the on-time of the column lit in it, in TIMER4 ticks (24 MHz) */
@@ -418,7 +423,7 @@ static void fm1_led_dim_level(uint32_t lo)
 }
 /* column c's lit lines this frame: lit, a breath's lit frame (not dim), the mid level's lit frame */
 #define FM1__LIT(c) (fm1_led[c] | (fm1__br_lit ? fm1_led_breath[c] & ~fm1_led_dim[c] : 0u) | \
-                     (!fm1__mid_ph ? fm1_led_mid[c] : 0u))
+                     (!fm1__mid_ph ? fm1_led_mid[c] : 0u) | (fm1__mid_ph & 1u ? 0u : fm1_led_half[c]))
 #if FM1_LED_DIM_DIV > 1
 static uint8_t fm1__dim_ph;
 #endif
@@ -507,7 +512,7 @@ static void fm1__anim_begin(uint32_t glow, uint32_t idle)
     for (i = 0; i < FM1_NKEY; i++)
         fm1__an_acc[i] = FM1_ANIM_FULL / 2u;
     for (c = 0; c < FM1_NCOL; c++)
-        fm1_led[c] = fm1_led_dim[c] = fm1_led_breath[c] = fm1_led_mid[c] = 0;
+        fm1_led[c] = fm1_led_dim[c] = fm1_led_breath[c] = fm1_led_mid[c] = fm1_led_half[c] = 0;
     fm1__an_glow = glow != 0u;
     fm1__an_idle = idle != 0u;
     fm1__an_f = 1;

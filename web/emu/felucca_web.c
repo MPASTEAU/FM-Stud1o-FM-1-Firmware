@@ -179,7 +179,7 @@ static const int8_t FM1_KEYMAP[6][FM1_NCOL] = {      /* as hal/fm1_input.h: key 
     { 0,  1, 15, 14, 17, 16, 19, 18, 20, 21, 22},
     {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1},
 };
-static uint8_t fm1_led[FM1_NCOL], fm1_led_dim[FM1_NCOL], fm1_led_breath[FM1_NCOL], fm1_led_mid[FM1_NCOL];
+static uint8_t fm1_led[FM1_NCOL], fm1_led_dim[FM1_NCOL], fm1_led_breath[FM1_NCOL], fm1_led_mid[FM1_NCOL], fm1_led_half[FM1_NCOL];
 static uint32_t web_dim_lo;
 static void fm1_led_dim_level(uint32_t lo) { web_dim_lo = lo; }
 /* the power-on LED sweep (hal/fm1_input.h fm1_led_anim_start, the picture hal/fm1_led_anim.h): its frame from the
@@ -196,6 +196,7 @@ static void fm1_led_anim_start(uint32_t glow)
     memset(fm1_led_dim, 0, sizeof fm1_led_dim);
     memset(fm1_led_breath, 0, sizeof fm1_led_breath);
     memset(fm1_led_mid, 0, sizeof fm1_led_mid);
+    memset(fm1_led_half, 0, sizeof fm1_led_half);
     web_anim_t0 = web_ticks;
     web_anim_glow = glow != 0u;
     web_anim_run = 1;
@@ -597,6 +598,7 @@ EXPORT uint32_t web_dim_level(void) { return web_dim_lo; }
 EXPORT uint32_t web_breath_buttons(void) { return led_buttons(fm1_led_breath); }   /* #119: dark .. ~60 % of lit */
 EXPORT uint32_t web_breath_keys(void) { return led_keys(fm1_led_breath); }
 EXPORT uint32_t web_mid_keys(void) { return led_keys(fm1_led_mid); }   /* the DRUM grid's beats: a steady mid level */
+EXPORT uint32_t web_half_keys(void) { return led_keys(fm1_led_half); }   /* (Dah) LIVE: the track keys half lit */
 /* the power-on sweep (or 1.2's idle animation) running: each LED's level now (hal/fm1_led_anim.h: 0..64 /64 of lit, | 0x80 the glow under
  * it), 0..13 the buttons by label, 14..40 the keys F3..G5; 0 when it is not */
 EXPORT uint8_t *web_anim_levels(void)

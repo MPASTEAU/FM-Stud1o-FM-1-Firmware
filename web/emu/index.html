@@ -54,6 +54,7 @@ a { color: inherit; }
 }
 /* the DRUM grid's beats (hal/fm1_input.h fm1_led_mid): a steady level between the glow and lit, ~15 % (DIM LO ~10 %) */
 .mid .slit { fill: #9a9a9e; }
+.half .slit { fill: #c4c4c8; }
 .dimlo .mid .slit { fill: #8a8a8e; }
 .held .face { stroke: var(--lit); stroke-width: 3; }
 .latched .face { stroke: #79b8ff; stroke-width: 3; }
@@ -430,7 +431,7 @@ function breathe(g, on) {
     g.querySelectorAll(".face, .slit").forEach((e) => { e.style.animationDelay = d; });
   }
 }
-function drawLights([litB, litK, dimB, dimK, dimLo = 0, brB = 0, brK = 0, midK = 0], anim = null) {
+function drawLights([litB, litK, dimB, dimK, dimLo = 0, brB = 0, brK = 0, midK = 0, halfK = 0], anim = null) {
   drawAnim(anim);
   document.documentElement.classList.toggle("dimlo", !!dimLo);   // (the breath's lower peak)
   for (const b of buttons) {
@@ -445,6 +446,7 @@ function drawLights([litB, litK, dimB, dimK, dimLo = 0, brB = 0, brK = 0, midK =
     k.g.classList.toggle("dim", !!(dimK & (1 << i)));
     breathe(k.g, !!(brK & (1 << i)));
     k.g.classList.toggle("mid", !!(midK & (1 << i)));
+    k.g.classList.toggle("half", !!(halfK & (1 << i)));
   });
 }
 
