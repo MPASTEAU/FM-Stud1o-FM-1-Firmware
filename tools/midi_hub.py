@@ -7,8 +7,9 @@ translates an Akai MIDI Mix (factory mapping, all on channel 1) into the FM-1's 
 (MIDI channel 8 + n: with MIDI IN SEL, the FM-1's default, channels 9..16 are tracks 1..8's mix, the keys playing the
 selected track):
 
-  fader        -> CC7  LEVEL           knob row 1 -> CC91 REV send
-  knob row 2   -> CC94 DLY send        knob row 3 -> CC10 PAN
+  fader        -> CC7  LEVEL
+  knob row 1   -> CC103 LOW PASS (left: off, right: closed)
+  knob row 2   -> CC104 HIGH PASS (left: off, right: up to ~1.5 kHz)          knob row 3: nothing yet
   MUTE button  -> the track's LEVEL to 0 and back (its LED lit while muted)
   REC ARM      -> selects the track (CC102 on its channel); its LED lit, the others dark, the FM-1's own choice too
                   (it sends CC102 on 9 + track as a track is selected). The MIDI Mix's LEDs are one colour (no RGB)
@@ -28,7 +29,7 @@ MIX_KNOBS = ([16, 20, 24, 28, 46, 50, 54, 58],     # row 1
 MIX_FADERS = [19, 23, 27, 31, 49, 53, 57, 61]
 MIX_MUTES = [1, 4, 7, 10, 13, 16, 19, 22]           # notes (their LEDs: the same notes back)
 MIX_ARMS = [3, 6, 9, 12, 15, 18, 21, 24]            # REC ARM: selects the track (CC102), its LED the one selected
-ROW_CC = (91, 94, 10)
+ROW_CC = (103, 104, None)
 
 
 class MidiMix:
@@ -47,7 +48,7 @@ class MidiMix:
         """the FM-1 messages for one MIDI Mix message"""
         if msg.type == "control_change":
             for row, ccs in enumerate(MIX_KNOBS):
-                if msg.control in ccs:
+                if msg.control in ccs and ROW_CC[row] is not None:
                     return [mido.Message("control_change", channel=8 + ccs.index(msg.control),
                                          control=ROW_CC[row], value=msg.value)]
             if msg.control in MIX_FADERS:

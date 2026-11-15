@@ -425,10 +425,13 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         break;
     default:                                       /* (Dah) SEL: channels 9..16's mix CCs (LEVEL PAN, the sends) tracks
                                                      * 1..8's, a mixer's strips (tools/midi_hub.py); CC102 on: the
-                                                     * track selected (the main loop: midi_tp 4 + track) */
-        if (midi_base() == -1 && ch >= 8u && (cc == 7u || cc == 10u || cc == 102u || cc - 91u < 4u)) {
+                                                     * track selected (the main loop: midi_tp 4 + track); CC103 104
+                                                     * its FILTER knobs */
+        if (midi_base() == -1 && ch >= 8u && (cc == 7u || cc == 10u || cc - 102u < 3u || cc - 91u < 4u)) {
             if (cc == 102u && value)
                 midi_tp = (uint8_t)(ch - 4u);
+            else if (cc > 102u)                     /* (CC103 LOW PASS, CC104 HIGH PASS: fx.c mx_lp mx_hp) */
+                (cc == 103u ? mx_lp : mx_hp)[ch - 8u] = (uint8_t)(value + (value == 127u));
             else if (ch - 8u < trk_count() && cc != 102u)
                 midi_cc_map(&trk[ch - 8u], cc, value);
             break;

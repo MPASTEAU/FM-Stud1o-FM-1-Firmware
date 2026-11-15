@@ -318,6 +318,11 @@ static volatile uint8_t lf_in[NTRK] __attribute__((section(".pool")));
 static volatile uint8_t lf_vc[NTRK] __attribute__((section(".pool")));
 static volatile uint8_t lf_fc[NTRK] __attribute__((section(".pool")));
 static int32_t lf_z[NTRK][4] __attribute__((section(".pool")));
+/* (Dah) a mixer's FILTER knobs (MIDI IN SEL, channel 9 + track: CC103 LOW PASS, CC104 HIGH PASS, midi_control.c;
+ * 0 none .. 128: all; not kept), mx_z the HIGH PASS's states as lf_z */
+static volatile uint8_t mx_lp[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t mx_hp[NTRK] __attribute__((section(".pool")));
+static int32_t mx_z[NTRK][4] __attribute__((section(".pool")));
 static int32_t trk_lvl(const track_t *t)
 {
     uint32_t k = (uint32_t)(t - trk) % NTRK;
@@ -1050,21 +1055,34 @@ static const uint16_t FX_ORDER[120] = {
     0x111A, 0x031A, 0x181A, 0x085A, 0x310A, 0x070A, 0x380A, 0x08CA};
 static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t->p[P_FXORD] < 120u ? (uint32_t)t->p[P_FXORD] : 0u]; }
 #include "fx_eq.c"                                      /* (Dah) the EQ, the chain's fourth unit */
-/* (Dah) the FILTER FADE on track k's samples b (s 0 the sum, 1 the side): 10 kHz (none) down to 30 Hz as lf_fc goes */
+/* (Dah) the FILTER FADE on track k's samples b (s 0 the sum, 1 the side): 10 kHz (none) down to 30 Hz as lf_fc goes
+ * (or a mixer's LOW PASS, the further); a mixer's HIGH PASS (12 dB): from 30 Hz (none) up to ~1.5 kHz */
 static __attribute__((noinline)) void lf_filter(uint32_t k, int32_t *b, uint32_t n, uint32_t s)
 {
-    uint32_t i, c = lf_fc[k];
-    int32_t g, a, *z = &lf_z[k][2u * s];
+    uint32_t i, c = lf_fc[k] > mx_lp[k] ? lf_fc[k] : mx_lp[k], h = mx_hp[k];
+    int32_t g, a, *z = &lf_z[k][2u * s], *y = &mx_z[k][2u * s];
     if (!c) {
         z[0] = z[1] = 0;
+    } else {
+        g = (int32_t)EQ_G[(128u - c) * EQ_TOP >> 7];
+        a = (g << 2) / ((65536 + g) >> 8);          /* g / (1 + g), Q10 (a loud sum's difference: no overflow) */
+        for (i = 0; i < n; i++) {
+            z[0] += ((b[i] - z[0]) * a) >> 10;
+            z[1] += ((z[0] - z[1]) * a) >> 10;
+            b[i] = z[1];
+        }
+    }
+    if (!h) {
+        y[0] = y[1] = 0;
         return;
     }
-    g = (int32_t)EQ_G[(128u - c) * EQ_TOP >> 7];
-    a = (g << 2) / ((65536 + g) >> 8);              /* g / (1 + g), Q10 (a loud sum's difference: no overflow) */
-    for (i = 0; i < n; i++) {
-        z[0] += ((b[i] - z[0]) * a) >> 10;
-        z[1] += ((z[0] - z[1]) * a) >> 10;
-        b[i] = z[1];
+    g = (int32_t)EQ_G[h * EQ_TOP * 3u >> 9];
+    a = (g << 2) / ((65536 + g) >> 8);
+    for (i = 0; i < n; i++) {                       /* (two one-pole HIGH PASSes: 12 dB) */
+        y[0] += ((b[i] - y[0]) * a) >> 10;
+        b[i] -= y[0];
+        y[1] += ((b[i] - y[1]) * a) >> 10;
+        b[i] -= y[1];
     }
 }
 #include "fx_comp.c"                                    /* (Dah) the COMPRESSOR, after the chain; the MASTER's */
