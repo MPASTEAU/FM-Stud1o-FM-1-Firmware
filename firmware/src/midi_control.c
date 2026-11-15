@@ -238,9 +238,9 @@ static int midi_track_held(uint32_t track)
  * sets its parameter as a knob would, 0..127 over the parameter's range (64: the middle of a bipolar one), and
  * (Dah) never recorded as AUTOMATION (its page alone writes it: motion_capture). CC121 resets none
  * of them (RP-015: they are the sound's). (Dah) CC70..77 are the MPK mini Plus's K1..K8 (midi_cc_map): no longer
- * the map's CC71..75 (RES REL ATK CUT DEC) */
+ * the map's CC71..75 (RES REL ATK CUT DEC). (Dah) CC92 MUTE (64 up: muted; its notes stop, its tails ring out) */
 static const uint8_t MIDI_CC_MAP[][2] = {
-    {5, P_GLIDE}, {7, P_LEVEL}, {10, P_PAN}, {91, P_REV}, {93, P_CHOR}, {94, P_DLY},
+    {5, P_GLIDE}, {7, P_LEVEL}, {10, P_PAN}, {91, P_REV}, {92, P_MUTE}, {93, P_CHOR}, {94, P_DLY},
 };
 /* a CC sets parameter id of track t as a knob would: 0..127 over its range */
 static void midi_cc_set(track_t *t, uint32_t id, uint32_t value)

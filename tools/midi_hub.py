@@ -11,7 +11,7 @@ selected track):
   knob row 1   -> nothing yet
   knob row 2   -> CC103 LOW PASS (left: off, right: closed)
   knob row 3   -> CC104 HIGH PASS (left: off, right: up to ~1.5 kHz)
-  MUTE button  -> the track's LEVEL to 0 and back (its LED lit while muted)
+  MUTE button  -> CC92 the track's MUTE on / off (its notes stop, its reverb / delay ring out; its LED lit while muted)
   REC ARM      -> selects the track (CC102 on its channel); its LED lit, the others dark, the FM-1's own choice too
                   (it sends CC102 on 9 + track as a track is selected). A track's notes (CC105 on 9 + track from the
                   FM-1) flash its REC ARM, as LIVE's keys: the others lit a moment, the selected one dark a moment.
@@ -38,7 +38,6 @@ FLASH = 0.07                                        # a note's flash, seconds
 
 class MidiMix:
     def __init__(self, out_name):
-        self.level = [100] * 8                      # each strip's fader (until it moves: the FM-1's default-ish)
         self.muted = [False] * 8
         self.sel = 0
         self.until = [0.0] * 8                      # a strip's flash: until then
@@ -56,8 +55,8 @@ class MidiMix:
             self.arm(k, k == n)
 
     def hit(self, n):
-        """a note of track n (muted here: none): its REC ARM flashes"""
-        if n < 8 and not self.muted[n]:
+        """a note of track n (a muted one plays none): its REC ARM flashes"""
+        if n < 8:
             if not self.until[n]:
                 self.arm(n, n != self.sel)
             self.until[n] = time.time() + FLASH
@@ -77,9 +76,7 @@ class MidiMix:
                     return [mido.Message("control_change", channel=8 + ccs.index(msg.control),
                                          control=ROW_CC[row], value=msg.value)]
             if msg.control in MIX_FADERS:
-                n = MIX_FADERS.index(msg.control)
-                self.level[n] = msg.value
-                return [] if self.muted[n] else [mido.Message("control_change", channel=8 + n, control=7, value=msg.value)]
+                return [mido.Message("control_change", channel=8 + MIX_FADERS.index(msg.control), control=7, value=msg.value)]
             return []
         if msg.type == "note_on" and msg.velocity and msg.note in MIX_ARMS:
             n = MIX_ARMS.index(msg.note)
@@ -90,7 +87,7 @@ class MidiMix:
             self.muted[n] = not self.muted[n]
             if self.led:
                 self.led.send(mido.Message("note_on", note=msg.note, velocity=127 if self.muted[n] else 0))
-            return [mido.Message("control_change", channel=8 + n, control=7, value=0 if self.muted[n] else self.level[n])]
+            return [mido.Message("control_change", channel=8 + n, control=92, value=127 if self.muted[n] else 0)]
         return []
 
 
