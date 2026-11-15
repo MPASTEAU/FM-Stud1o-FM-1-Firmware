@@ -7,6 +7,7 @@ import android.media.midi.MidiManager
 import android.media.midi.MidiReceiver
 import android.os.Handler
 import android.os.SystemClock
+import android.util.Log
 import java.io.ByteArrayOutputStream
 
 /*
@@ -42,6 +43,7 @@ object Hub {
     fun lines(): List<String> = synchronized(log) { log.toList() }
 
     fun say(s: String) {
+        Log.i("FM1Hub", s)
         synchronized(log) {
             log.addLast(s)
             while (log.size > LOG_N) log.removeFirst()
