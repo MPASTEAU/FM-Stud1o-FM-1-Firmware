@@ -145,7 +145,7 @@ def main():
                     time.sleep(0.001)
         except KeyboardInterrupt:
             break
-        except (IOError, OSError) as e:               # a port that went away mid-read: look again
+        except Exception as e:                        # a port that went away mid-read or mid-listing: look again
             print("port error:", e)
             time.sleep(0.5)
 
