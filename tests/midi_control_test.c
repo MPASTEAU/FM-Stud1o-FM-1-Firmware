@@ -648,8 +648,11 @@ static int cc_map_test(void)
     ok = !memcmp(before, trk[2].p, sizeof before) && trk[0].p[P_LEVEL] != 5 && trk[3].p[P_LEVEL] != 5;
     bad += check("ROUT CH1-4: mapped CCs on channels 5..16 reach no part", ok);
     song.g[G_ROUTE] = 1; song.sel = 2; events_block(CTL);
-    queued(0xB9, 7, 5, 2);
-    bad += check("ROUT SEL: channel 10's CC7 sets the selected track's LEVEL", trk[2].p[P_LEVEL] == 5 && trk[0].p[P_LEVEL] != 5);
+    queued(0xB0, 7, 5, 2);
+    bad += check("ROUT SEL: channel 1's CC7 sets the selected track's LEVEL", trk[2].p[P_LEVEL] == 5 && trk[0].p[P_LEVEL] != 5);
+    queued(0xB9, 7, 9, 2); queued(0xB8, 10, 0, 2);
+    bad += check("ROUT SEL: channels 9..16's mix CCs are tracks 1..8's (a mixer's strips)",
+                 trk[1].p[P_LEVEL] != 5 && trk[2].p[P_LEVEL] == 5 && trk[0].p[P_PAN] < 0);
     song.g[G_ROUTE] = 0; song.sel = 0; events_block(CTL);
 
     /* (Dah) AUTOMATION: a CC is never recorded (the AUTOMATION page alone writes it): armed and playing, the new value */

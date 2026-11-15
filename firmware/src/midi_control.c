@@ -423,7 +423,13 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
             midi_expression_channel(ch);
         }
         break;
-    default:
+    default:                                       /* (Dah) SEL: channels 9..16's mix CCs (LEVEL PAN, the sends) tracks
+                                                     * 1..8's, a mixer's strips (tools/midi_hub.py) */
+        if (midi_base() == -1 && ch >= 8u && (cc == 7u || cc == 10u || cc - 91u < 4u)) {
+            if (ch - 8u < trk_count())
+                midi_cc_map(&trk[ch - 8u], cc, value);
+            break;
+        }
         midi_cc_map(midi_track(ch), cc, value);
         break;
     }

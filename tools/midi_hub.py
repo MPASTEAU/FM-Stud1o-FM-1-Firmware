@@ -4,7 +4,8 @@
 Two USB devices on a hub cannot talk to each other: a host has to pass the messages on. This script is that host
 (the same idea as a phone app later). It forwards every other MIDI input to the FM-1 ("Felucca"), as is, and
 translates an Akai MIDI Mix (factory mapping, all on channel 1) into the FM-1's standard CC map, strip n -> track n
-(MIDI channel n):
+(MIDI channel 8 + n: with MIDI IN SEL, the FM-1's default, channels 9..16 are tracks 1..8's mix, the keys playing the
+selected track):
 
   fader        -> CC7  LEVEL           knob row 1 -> CC91 REV send
   knob row 2   -> CC94 DLY send        knob row 3 -> CC10 PAN
@@ -38,19 +39,19 @@ class MidiMix:
         if msg.type == "control_change":
             for row, ccs in enumerate(MIX_KNOBS):
                 if msg.control in ccs:
-                    return [mido.Message("control_change", channel=ccs.index(msg.control),
+                    return [mido.Message("control_change", channel=8 + ccs.index(msg.control),
                                          control=ROW_CC[row], value=msg.value)]
             if msg.control in MIX_FADERS:
                 n = MIX_FADERS.index(msg.control)
                 self.level[n] = msg.value
-                return [] if self.muted[n] else [mido.Message("control_change", channel=n, control=7, value=msg.value)]
+                return [] if self.muted[n] else [mido.Message("control_change", channel=8 + n, control=7, value=msg.value)]
             return []
         if msg.type == "note_on" and msg.velocity and msg.note in MIX_MUTES:
             n = MIX_MUTES.index(msg.note)
             self.muted[n] = not self.muted[n]
             if self.led:
                 self.led.send(mido.Message("note_on", note=msg.note, velocity=127 if self.muted[n] else 0))
-            return [mido.Message("control_change", channel=n, control=7, value=0 if self.muted[n] else self.level[n])]
+            return [mido.Message("control_change", channel=8 + n, control=7, value=0 if self.muted[n] else self.level[n])]
         return []
 
 
