@@ -14,7 +14,9 @@ import kotlin.math.tan
 /*
  * A take cleaned before it goes to the FM-1 (the phone's full-quality take, stereo): the rumble and DC away (a 40 Hz
  * high-pass), the steady noise (hiss, hum, room) taken out by a spectral gate learned from the take's quietest
- * moments, the silences at either end cut (short fades), the peak to -0.5 dBFS.
+ * moments, the silences at either end cut (short fades), the peak to -0.5 dBFS. A take with no sound in it (its
+ * loudest 20 ms not 20 dB above its quietest, or under -45 dBFS) is left as it is: normalised, its noise would be all
+ * it holds.
  */
 class Take(val l: FloatArray, val r: FloatArray, val rate: Int) {
     val n get() = l.size
@@ -29,9 +31,28 @@ class Take(val l: FloatArray, val r: FloatArray, val rate: Int) {
 }
 
 object Clean {
-    class Report(val noiseDb: Float, val cutDb: Float, val trimmed: Float)
+    class Report(val noiseDb: Float, val cutDb: Float, val trimmed: Float, val sound: Boolean, val peakDb: Float)
+
+    /* the loudest 20 ms against the quietest tenth of them, and the peak (dBFS) */
+    private fun sound(t: Take): Pair<Boolean, Float> {
+        val m = t.mono()
+        val w = t.rate / 50
+        val rms = (0 until m.size / w).map { f ->
+            var e = 0.0
+            for (i in f * w until (f + 1) * w) e += m[i] * m[i]
+            kotlin.math.sqrt(e / w)
+        }.sorted()
+        var pk = 0f
+        for (v in m) pk = max(pk, abs(v))
+        val pdb = (20 * log10(pk + 1e-9)).toFloat()
+        if (rms.size < 5) return false to pdb
+        return (rms.last() > 10 * rms[rms.size / 10] && rms.last() > 0.0056) to pdb   /* (20 dB, -45 dBFS: a quiet room's
+                                                     * clicks reach -55) */
+    }
 
     fun run(t: Take): Pair<Take, Report> {
+        val (snd, pdb) = sound(t)
+        if (!snd) return t.copy() to Report(pdb, 0f, 0f, false, pdb)
         val c = t.copy()
         highpass(c.l, c.rate, 40.0)
         highpass(c.r, c.rate, 40.0)
@@ -39,7 +60,7 @@ object Clean {
         val before = c.n
         val out = trim(c)
         normalize(out, 0.944f)                       // -0.5 dBFS
-        return out to Report(noise, cut, (before - out.n).toFloat() / c.rate)
+        return out to Report(noise, cut, (before - out.n).toFloat() / c.rate, true, pdb)
     }
 
     /* a 2nd-order Butterworth high-pass (bilinear) */
