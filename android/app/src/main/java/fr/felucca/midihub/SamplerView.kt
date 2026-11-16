@@ -41,6 +41,7 @@ class SamplerView(ctx: Context) : LinearLayout(ctx) {
     private var reverse = false
     @Volatile private var busy = false
     private var sentLen = 0L                           // the sample pushed, ms (ÉCOUTER's note)
+    private var report = ""                            // the take's cleaning, above what the sends say
 
     init {
         orientation = VERTICAL
@@ -68,7 +69,7 @@ class SamplerView(ctx: Context) : LinearLayout(ctx) {
             "Pour l'entendre sur le FM-1 : une piste en SAMPLE, SET USR1, sélectionnée.")
     }
 
-    private fun say(s: String) = post { status.text = s }
+    private fun say(s: String) = post { status.text = if (report.isEmpty()) s else "$report\n$s" }
 
     private fun labels() {
         bRec.text = if (rec.recording) "■ STOP" else "● REC"
@@ -95,6 +96,7 @@ class SamplerView(ctx: Context) : LinearLayout(ctx) {
 
     private fun startRec() {
         if (busy) return
+        report = ""
         val err = rec.start()
         if (err != null) { say(err); return }
         labels()
@@ -119,9 +121,10 @@ class SamplerView(ctx: Context) : LinearLayout(ctx) {
                     wave.set(clean, limit)
                     labels()
                 }
-                say("%s · %.1f s · bruit %.0f dBFS%s · silences −%.1f s".format(
+                report = "%s · %.1f s · bruit %.0f dBFS%s · silences −%.1f s".format(
                     if (raw.stereo()) "stéréo" else "mono", clean.n / clean.rate.toFloat(), rep.noiseDb,
-                    if (rep.cutDb > 0) " réduit" else " (rien à réduire)", rep.trimmed))
+                    if (rep.cutDb > 0) " réduit" else " (rien à réduire)", rep.trimmed)
+                say("")
                 busy = false
                 send()
             } catch (e: Exception) {
