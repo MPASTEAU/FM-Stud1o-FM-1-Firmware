@@ -190,11 +190,11 @@ int main(int argc, char **argv)
         const smp_set_t *s = &SMP_SETS[0];
         const smp_zone_t *z = &SMP_ZONES[s->z0];
         uint32_t bytes = 0, ok = s->nz == 5u;
-        check("PIANO: SET 0, its aliases 1 and 4 the same zones; FLUTE 2, SAX 3, USR1..3 5..7; 4 presets",
+        check("PIANO: SET 0, its aliases 1..4 (Dah: FLUTE, SAX gone) the same zones; USR1..3 5..7; 4 presets",
               SMP_NSETS == 5u && str_eq(SMP_SETS[0].name, "PIANO") && SMP_SETS[1].z0 == s->z0 && SMP_SETS[4].z0 == s->z0 &&
-              SMP_SETS[1].nz == s->nz && SMP_SETS[4].nz == s->nz && str_eq(SMP_SETS[2].name, "FLUTE") &&
-              str_eq(SMP_SETS[3].name, "SAX") && str_eq(SMP_ALL_NAMES[5], "USR1") && ENG_SAMPLE.edit[0].max == 7 &&
-              ENG_SAMPLE.npresets == 4u);
+              SMP_SETS[1].nz == s->nz && SMP_SETS[4].nz == s->nz && SMP_SETS[2].z0 == s->z0 && SMP_SETS[3].z0 == s->z0 &&
+              SMP_SET_ORIG[2] == 0u && SMP_SET_ORIG[3] == 0u && str_eq(SMP_ALL_NAMES[5], "USR1") &&
+              ENG_SAMPLE.edit[0].max == 7 && ENG_SAMPLE.npresets == 4u);
         for (i = 0; ok && i < 5u; i++) {
             bytes += (z[i].n + 1u) / 2u;
             ok &= z[i].rate == 32768u && z[i].root16 == ROOT[i] * 16u && z[i].lo == LO[i] && z[i].hi == HI[i] &&

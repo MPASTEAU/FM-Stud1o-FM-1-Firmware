@@ -91,11 +91,14 @@ static uint8_t slc_man_save;                     /* bit k: slot k's slices chang
 
 /* the SRC of a part's sound (0..4: a stored value out of range reads as the nearest) */
 static uint32_t slc_src_of(const int16_t *p) { return (uint32_t)clamp(p[P_E0], 0, SLC_NSRC - 1); }
-/* source 0 = BREAK, 1..3 = USR1..3, 4 = PIANO; 0 = no material (an empty or erased slot, no PIANO in the build) */
+/* source 0 = BREAK, 1..3 = USR1..3, 4 = PIANO; 0 = no material (an empty or erased slot, no PIANO in the build).
+ * (Dah) A build without BREAK (tools/gen_samples.py SLICE_BREAK): BREAK plays USR1, else PIANO */
 static const slc_src_t *slc_get(uint32_t src)
 {
+    if (!src && !SLC_BREAK.len)
+        return usr_nz[0] && slc_usr[0].len ? &slc_usr[0] : SLC_PIANO.len ? &SLC_PIANO : 0;
     if (!src)
-        return SLC_BREAK.len ? &SLC_BREAK : 0;
+        return &SLC_BREAK;
     if (src == SLC_SRC_PIANO)
         return SLC_PIANO.len ? &SLC_PIANO : 0;
     src--;

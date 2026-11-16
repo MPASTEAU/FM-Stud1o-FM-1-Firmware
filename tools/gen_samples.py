@@ -10,7 +10,8 @@ The ADPCM state at the loop start is stored so loops restart exactly.
 
 Libraries:
   cc0        assets/samples-cc0/ (tools/fetch_cc0.py, Versilian Studios, CC0):
-             PIANO, FLUTE, SAX (set 1, once TRANH, and set 4, once PERC, are aliases of PIANO).
+             PIANO (set 1, once TRANH, 2 and 3, once FLUTE and SAX (Dah), and set 4, once PERC, are aliases of
+             PIANO).
              PIANO is the 5-zone piano of 1.0 .. 1.1.5 (1.2 .. 1.4.1 built a reduced 2-zone
              one at 11,025 Hz; 1.5 went back to the full one, the same bytes as 1.1.5)
 SAMPLE's factory presets end before set 4 (SMP_PERC_SLOT); every sample set and SET / USR
@@ -70,7 +71,9 @@ TR = 22050                                   # stored sample rate
 # from the web editor). TRANH was removed (66 KB of flash); its index 1 stays, an alias of PIANO
 # ("alias": the set named). PERC (the GM kit) was removed (66 KB); its index 4 stays, an alias of
 # PIANO too (PERC_SLOT; its sounds load as the DRUM engine)
-CC0_SETS = [("PIANO", "oneshot"), ("PIANO", "alias"), ("FLUTE", "sus"), ("SAX", "sus"), ("PIANO", "alias")]
+# (Dah) FLUTE and SAX removed too (~63 KB: the flash is the new features'): their indices 2, 3 stay, aliases of PIANO
+CC0_SETS = [("PIANO", "oneshot"), ("PIANO", "alias"), ("PIANO", "alias"), ("PIANO", "alias"), ("PIANO", "alias")]
+SLICE_BREAK = False                          # (Dah) SLICE's BREAK not built (~22 KB): SRC BREAK plays USR1, else PIANO
 PERC_SLOT = 4                                # core.h SMP_SET_PERC: SAMPLE's factory presets end before it
 MEASURED_TUNING = ()                         # sets whose recordings are not at A440 (was TRANH, ~+35 ct)
 
@@ -456,7 +459,8 @@ def main(out):
             else:
                 b.cc0_set(name, kind)
     if slice_on():                                  # SLICE's BREAK: only when that engine is built
-        b.slice_break()                             # last: the sets' offsets stay as they were
+        if SLICE_BREAK:
+            b.slice_break()                         # last: the sets' offsets stay as they were
         b.slice_piano()                             # (no data of its own: the PIANO set's)
     text = b.header()
     Path(out).write_text(text)

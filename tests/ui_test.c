@@ -520,9 +520,9 @@ static int test_sound_loads(void)
     project_load(1);
     bad += check("a project load: every load closed", load_depth == 0);
     ui_power_on();
-    bad += check("SAMPLE factory browsing has four melodic presets and no PERC",
+    bad += check("SAMPLE factory browsing: PIANO (Dah: FLUTE, SAX gone, PIANO's aliases) and no PERC",
                  ENGINES[4]->npresets == 4u && str_eq(ENGINES[4]->presets[0].name, "PIANO") &&
-                 str_eq(ENGINES[4]->presets[3].name, "SAX"));
+                 str_eq(ENGINES[4]->presets[3].name, "PIANO"));
     {   /* TRANH (SET 1, preset 1) is gone: both are PIANO aliases, kept for old data, never offered */
         const param_desc_t *sd = &ENGINES[4]->edit[0];
         uint32_t all, pos, k, e, pos0, shown = 0;
@@ -3872,7 +3872,7 @@ static int test_quick_layers(void)
         }
         ok &= seen == (1u << tot) - 1u && TSEL->preset == 0u && !alias;
         btn_up(B_EDIT); frame();
-        bad += check("  #124 SAMPLE: KNOB 2 right PIANO, FLUTE, SAX (No. 1 2 3), both ways round the list, never the alias", ok);
+        bad += check("  #124 SAMPLE: KNOB 2 right and left round the list, never an alias (Dah: PIANO alone)", ok);
     }
     song.playing = 0;
     lay_combo(B_EDIT, white(LY_INIT));

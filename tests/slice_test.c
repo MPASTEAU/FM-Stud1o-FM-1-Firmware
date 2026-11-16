@@ -60,6 +60,10 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 }
 #include "../firmware/src/storage.c"
 #include "../firmware/src/slice_store.c"
+#ifndef SLC_BREAK_BPM   /* (Dah) a build without BREAK (tools/gen_samples.py SLICE_BREAK): the tests' BREAK is what SRC
+                         * BREAK plays, USR1 once loaded, else PIANO (eng_slice.c slc_get) */
+#define SLC_BREAK (*slc_get(0))
+#endif
 
 static int fails;
 static void check(const char *what, int ok, const char *fmt, ...)
@@ -473,7 +477,7 @@ int main(int argc, char **argv)
             trk_note_off(t, 60);
             blocks(FS / 20u / CTL);                        /* 50 ms after the note-off */
             after = v && v->active;
-            for (k = 0; k < FS / 4u / CTL && v && v->active; k++)
+            for (k = 0; k < FS / 2u / CTL && v && v->active; k++)   /* (Dah: up to 0.5 s, USR1's 312 ms slice) */
                 blocks(1);
             snprintf(msg, sizeof msg, "MODE %s: %s", MN[m], m == SLC_ONE ? "plays on after the note-off, ends at the slice end" :
                      m == SLC_GATE ? "stops at the note-off" : "loops while held, ends after the note-off");
