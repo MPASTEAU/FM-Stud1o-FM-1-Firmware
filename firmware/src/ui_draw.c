@@ -2398,6 +2398,22 @@ static void style_apply(void)
     }
 }
 
+/* (Dah) REC's CLICK OUT VISUAL / BOTH: each click (a beat, the count-in's, the LOOP CUE's) inverts the whole panel a
+ * moment, whatever the page (the bar's first and the cue's ping longer) */
+static __attribute__((noinline)) void click_flash(void)
+{
+    static uint32_t inv_t, inv_ms;
+    uint32_t c = click_seen;
+    if (c) {
+        click_seen = 0;
+        lcd_power(3u);
+        inv_t = fm1_ms;
+        inv_ms = c == 2u || c == 6u ? 120u : 50u;
+    } else if (inv_ms && fm1_ms - inv_t >= inv_ms) {
+        lcd_power(4u);
+        inv_ms = 0;
+    }
+}
 static void ui_draw_page(uint32_t counting);
 static void ui_draw(void)
 {
@@ -2408,6 +2424,7 @@ static void ui_draw(void)
         counting = (uint8_t)seq_counting();
         ui.force = 1;
     }
+    click_flash();
     if (!scr_frame())                                   /* MENU > SCREEN OFF: dark (or waking), nothing drawn */
         return;
     ui_draw_page(counting);
@@ -2425,7 +2442,9 @@ static void ui_draw_page(uint32_t counting)
         ui.force = 0;
         return;
     }
-    if (counting && !ui.confirm && !name_on()) {        /* the count-in: over the page (and a layer) */
+    if (counting && !ui.confirm && !name_on() && (cin_left == CIN_WAIT || !(click_out & 2u))) {   /* the count-in: over
+                                                         * the page (and a layer; Dah: CLICK OUT VISUAL / BOTH, the
+                                                         * page stays, the screen flashing its beats) */
         draw_countin();
         draw_head();
         return;

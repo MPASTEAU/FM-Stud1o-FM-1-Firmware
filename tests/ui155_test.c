@@ -436,7 +436,8 @@ static int menus_alike(void)
     i = menu_get(MI_LEDS);
     turn(EN_K2, 1);
     ok &= menu_get(MI_LEDS) == (i + 1u) % menu_n(MI_LEDS) || menu_get(MI_LEDS) == menu_n(MI_LEDS) - 1u;
-    ok &= menu_nvis() + 8u == MI_COUNT;                /* (every row but CLICK .. TUNE and T1..T4 CHANNEL: no tabs) */
+    ok &= menu_nvis() + 9u == MI_COUNT;                /* (every row but CLICK .. TUNE, T1..T4 CHANNEL and HELP (Dah:
+                                                         * gone): no tabs) */
     for (i = 0; i < menu_nvis(); i++)
         n += menu_pos(menu_vis(i)) == i;
     ok &= n == menu_nvis() && menu_vis(menu_nvis() - 1u) == MI_FACTORY;   /* (FACTORY RESET the last) */
@@ -485,8 +486,8 @@ static int menus_alike(void)
     ok &= lys.sq_row == 1u && (mr.dy != 0 || (ui_prefs & PREF_ANIM_OFF));
     turn(EN_K1, 5);
     ok &= lys.sq_row == 2u;                             /* (a step a turn, as the MENU's) */
-    for (i = 0; i < 5u; i++) turn(EN_K1, 1);
-    ok &= lys.sq_row == 4u;                             /* (the last, REC MODE: it stops; Dah: REC STARTS PLAY gone) */
+    for (i = 0; i < 7u; i++) turn(EN_K1, 1);
+    ok &= lys.sq_row == 6u;                             /* (the last, LIVE CLICK: it stops; Dah: REC STARTS PLAY gone) */
     press(B_LFO);
     ok &= !ui.layer;
     bad += check("  REC's list: KNOB 1 the row (gliding), stops at the last; another button closes it", ok);
@@ -812,7 +813,7 @@ static int rec_rows(void)
     int bad = 0, ok;
     ui_power_on();
     frame();
-    ok = ly_rows(LAYER_REC) == 5u && rl_get(3) == 1u && rl_get(4) == 0u && loop_cue && !rec_replace &&
+    ok = ly_rows(LAYER_REC) == 7u && rl_get(3) == 1u && rl_get(4) == 0u && loop_cue && !rec_replace &&
          str_eq(rl_name(4, 0), "OVERDUB") && str_eq(rl_name(4, 1), "REPLACE") && str_eq(REC_RL[3], "LOOP CUE");
     rec_set(3, 0);
     rec_set(4, 1);
@@ -823,6 +824,32 @@ static int rec_rows(void)
     frame();
     ok &= rl_get(3) == 0u && rl_get(4) == 1u;
     bad += check("REC layer: LOOP CUE ON, REC MODE OVERDUB by default; OFF / REPLACE set, kept through MENU > LEDS", ok);
+    /* (Dah) CLICK OUT (SOUND by default, VISUAL, BOTH) and LIVE CLICK (OFF by default: LIVE MODE clicks nothing) */
+    ok = rl_get(5) == 0u && rl_get(6) == 0u && click_out == 1u && str_eq(rl_name(5, 1), "VISUAL") &&
+         str_eq(REC_RL[6], "LIVE CLICK");
+    rec_set(5, 1);
+    frame();
+    ok &= rl_get(5) == 1u && click_out == 2u;
+    rec_set(5, 2);
+    live_mode = 1;
+    frame();
+    ok &= click_out == 0u;
+    rec_set(6, 1);
+    frame();
+    ok &= rl_get(6) == 1u && click_out == 3u;
+    menu_put(MI_LEDS, LEDS_ROWS - 1u);
+    menu_put(MI_LEDS, 0);
+    frame();
+    ok &= rl_get(5) == 2u && rl_get(6) == 1u && click_out == 3u;
+    click_seen = 2;                                     /* (a bar's first: the panel inverted, then back) */
+    frame();
+    ok &= !click_seen;
+    live_mode = 0;
+    rec_set(5, 0);
+    rec_set(6, 0);
+    frame();
+    ok &= click_out == 1u;
+    bad += check("REC layer: CLICK OUT SOUND by default, VISUAL / BOTH; LIVE CLICK OFF (LIVE: none), ON; kept through LEDS", ok);
     ui_leds_inv &= (uint8_t)~REC_BITS;
     frame();
     return bad;

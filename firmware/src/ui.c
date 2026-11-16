@@ -116,11 +116,14 @@ static uint32_t sel_mode(void) { return ((ui_prefs2 >> 4) & 1u) | ((ui_prefs2 >>
  * this byte no engine uses holds the level: 1 LO, 2 HI; 0 (every older setting) or another value = INV as before.
  * Saved with the settings; read only while LEDS is INV (menu_items.c leds_row) */
 #define ui_leds_inv (favorites.factory[15][25])
-#define LEDS_INV_LV (ui_leds_inv & 0x1Fu)            /* (its bits 5..7: REC's) */
+#define LEDS_INV_LV (ui_leds_inv & 0x03u)            /* (its bits 2..7: REC's) */
 #define REC_NOCUE 0x40u                                 /* (Dah) REC's layer > LOOP CUE OFF (seq.c seq_enter; 0: ON) */
 #define REC_REPLACE 0x20u                               /* (Dah) REC's layer > REC MODE REPLACE (seq.c rec_note; 0:
                                                          * OVERDUB) */
-#define REC_BITS 0xE0u
+#define REC_CLKOUT 0x0Cu                                /* (Dah) REC's layer > CLICK OUT: 0 SOUND, 1 VISUAL (the
+                                                         * screen flashes), 2 BOTH */
+#define REC_LIVECLK 0x10u                               /* (Dah) REC's layer > LIVE CLICK ON: LIVE MODE clicks too */
+#define REC_BITS 0xFCu
 #define REC_PLAY 0x80u                                  /* (Dah) REC's layer > PLAY ON: arming REC stopped starts the
                                                          * transport (OFF, the default: armed, it waits for PLAY) */
 static uint32_t leds_inv(void) { return settings_leds == LEDS_INV && LEDS_INV_LV - 1u < 2u ? LEDS_INV_LV : 0u; }
@@ -148,7 +151,7 @@ static uint32_t rp_get(uint32_t f)                     /* a field as the MENU st
 static void rp_apply(void)                             /* the settings into click.c / seq.c (every frame: ui_input) */
 {
     click_mode = (uint8_t)rp_get(RP_CLICK);
-    click_mute = live_mode;
+    click_out = (uint8_t)(live_mode && !(ui_leds_inv & REC_LIVECLK) ? 0u : ((ui_leds_inv & REC_CLKOUT) >> 2) + 1u);
     click_lvl = (uint8_t)rp_get(RP_LEVEL);
     cin_bars = (uint8_t)(rp_get(RP_COUNTIN) == 1u);
     cin_wait = (uint8_t)(rp_get(RP_COUNTIN) == 2u);
@@ -612,7 +615,8 @@ static void au_enter(void);
 /* 1.5 (Discussion #156): MENU > HELP ON: a page entered (here, go_home) shows its hint in the footer for ~2 s
  * (ui_help.c, ui_draw.c draw_foot) */
 #define HELP_FRAMES 160u                       /* (Dah: ~2.5 s, 16 ms a count: ui_draw.c) */
-static int help_on(void) { return (ui_prefs2 & (PREF_HELP >> 16)) == 0u; }   /* (Dah: the bit OFF; ON by default) */
+static int help_on(void) { return 0; }   /* (Dah) HELP gone: the flash is full (its hints, ui_help.c, built out; the
+                                         * MENU's row hidden; the bit kept: PREF_HELP) */
 /* 1.5.5 (#208): a MIDI IN note into track k lights its number cushion for MLIT_MS (the header's for the selected track,
  * HOME TRACKS / LEVELS, the MIXER); midi_lit_ms[k]: fm1_ms | 1 of the last (ui_input.c midi_take), 0 none */
 #define MLIT_MS 90u
