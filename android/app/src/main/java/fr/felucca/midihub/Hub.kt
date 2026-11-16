@@ -9,6 +9,10 @@ import android.os.Handler
 import android.os.SystemClock
 import android.util.Log
 import java.io.ByteArrayOutputStream
+import java.io.IOException
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 /*
  * The MIDI hub for the FM-1 (tools/midi_hub.py on a phone): every USB MIDI controller on the phone's hub plays the
@@ -37,6 +41,40 @@ object Hub {
     private var fm1: MidiInputPort? = null
     private val open = HashMap<Int, Attached>()     // MidiDeviceInfo id -> what is open on it
     private val opening = HashSet<Int>()            // .. asked for, not open yet (a device listed and added both)
+    private val replies = LinkedBlockingQueue<ByteArray>()   // the FM-1's SysEx answers (the sampler's requests)
+    private val HDR = byteArrayOf(0x7D, 0x46, 0x4C)            // the editor protocol's (web/EDITOR_PROTOCOL.md)
+
+    val fm1Here get() = fm1 != null
+
+    /* an editor protocol request (F0 7D 46 4C cmd args F7) -> its answer's bytes after cmd */
+    fun request(cmd: Int, args: ByteArray, timeoutMs: Long = 3000): ByteArray {
+        val out = fm1 ?: throw IOException("FM-1 non branché")
+        replies.clear()
+        val msg = byteArrayOf(0xF0.toByte()) + HDR + byteArrayOf(cmd.toByte()) + args + byteArrayOf(0xF7.toByte())
+        synchronized(lock) { out.send(msg, 0, msg.size) }
+        val end = SystemClock.uptimeMillis() + timeoutMs
+        while (true) {
+            val r = replies.poll(end - SystemClock.uptimeMillis(), TimeUnit.MILLISECONDS)
+                ?: throw TimeoutException("le FM-1 ne répond pas (commande $cmd)")
+            if (r.size >= 6 && r[1] == HDR[0] && r[2] == HDR[1] && r[3] == HDR[2] && r[4].toInt() == cmd)
+                return r.copyOfRange(5, r.size - 1)
+        }
+    }
+
+    /* the first request after the port opened can be lost: one answered, three tries */
+    fun ping() {
+        for (i in 0 until 3) try { request(1, byteArrayOf(), 1000); return } catch (_: TimeoutException) {}
+        throw TimeoutException("le FM-1 ne répond pas")
+    }
+
+    /* a note to the FM-1 on channel 1 (MIDI IN SEL: the selected track), note-off len ms later */
+    fun note(n: Int, vel: Int, len: Long) {
+        val out = fm1 ?: return
+        synchronized(lock) { runCatching { out.send(byteArrayOf(0x90.toByte(), n.toByte(), vel.toByte()), 0, 3) } }
+        handler?.postDelayed({
+            synchronized(lock) { runCatching { fm1?.send(byteArrayOf(0x80.toByte(), n.toByte(), 0), 0, 3) } }
+        }, len)
+    }
 
     private class Attached(val name: String, val dev: MidiDevice, val ports: List<AutoCloseable>, val mix: MidiMix?)
 
@@ -162,6 +200,10 @@ object Hub {
 
     /* a message from the FM-1: the track it selects (CC102) and a track's notes (CC105), on channel 9 + track */
     private fun fromFm1(msg: ByteArray) {
+        if (msg[0] == 0xF0.toByte()) {
+            replies.offer(msg)
+            return
+        }
         if (msg.size != 3) return
         val s = msg[0].toInt() and 0xFF
         val ch = s and 0x0F
