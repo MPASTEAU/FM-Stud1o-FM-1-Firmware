@@ -56,7 +56,7 @@ static uint8_t ep3tx[64] __attribute__((aligned(4)));
 static uint8_t ep3rx[64 + 4] __attribute__((aligned(4)));
 /* serial rings: in = host -> console (ISR writes), out = console -> host (ISR reads) */
 #define CI_N 256u
-#define CO_N 2048u
+#define CO_N 256u                /* (a full ring waits for the host: console.c con_putc) */
 static uint8_t cdc_in[CI_N], cdc_out[CO_N];
 static volatile uint32_t ci_w, ci_r, co_w, co_r;
 static struct {
@@ -78,7 +78,8 @@ static struct {
  * band: ~5.8 ms). Measured under load (65 % CPU): a 64..112 band started renders at
  * 48..119 with no glitch; one render was once seen 29 frames under the floor: a packet (46) must
  * still be in hand then. */
-#define UA_N 512u                /* ring, frames (16-bit L | R << 16); a power of two */
+#define UA_N 1024u               /* ring, frames (16-bit L | R << 16); a power of two. (Dah) 1024: a phone
+                                  * filming (S24) reads in bursts, 512 (10 ms at 48 kHz) overran ~1 a second */
 #define UA_PRIME 104u            /* silence ahead of the first rendered frame */
 #define UA_LO 80u                /* a render may start late: keep a packet and more in hand */
 #define UA_HI 128u
