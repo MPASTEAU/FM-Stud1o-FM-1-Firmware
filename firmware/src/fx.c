@@ -305,6 +305,16 @@ static int32_t lf_z[NTRK][4] __attribute__((section(".pool")));
 static volatile uint8_t mx_lp[NTRK] __attribute__((section(".pool")));
 static volatile uint8_t mx_hp[NTRK] __attribute__((section(".pool")));
 static int32_t mx_z[NTRK][4] __attribute__((section(".pool")));
+/* (Dah) a joystick that springs back (the MPK mini Plus's: MIDI IN CC12 left / right, CC2 up / down, 0 at its middle,
+ * 127 pushed either way; midi_control.c): CC12 closes the track's LOW PASS (as a mixer's, the further of them), CC2
+ * opens its DELAY and REVERB sends towards 100; let go, all as it was */
+static volatile uint8_t joy_lp[NTRK] __attribute__((section(".pool")));
+static volatile uint8_t joy_snd[NTRK] __attribute__((section(".pool")));
+static inline int32_t joy_send(const track_t *t, int32_t g)   /* a send (x 258) with the joystick's */
+{
+    int32_t j = joy_snd[(uint32_t)(t - trk) % NTRK];
+    return j && g < 100 * 258 ? g + (100 * 258 - g) * j / 127 : g;
+}
 static int32_t trk_lvl(const track_t *t)
 {
     uint32_t k = (uint32_t)(t - trk) % NTRK;
@@ -1041,7 +1051,8 @@ static inline uint32_t fx_order(const track_t *t) { return FX_ORDER[(uint32_t)t-
  * (or a mixer's LOW PASS, the further); a mixer's HIGH PASS (12 dB): from 30 Hz (none) up to ~1.5 kHz */
 static __attribute__((noinline)) void lf_filter(uint32_t k, int32_t *b, uint32_t n, uint32_t s)
 {
-    uint32_t i, c = lf_fc[k] > mx_lp[k] ? lf_fc[k] : mx_lp[k], h = mx_hp[k];
+    uint32_t i, c = lf_fc[k] > mx_lp[k] ? lf_fc[k] : mx_lp[k], h = mx_hp[k], j = joy_lp[k] * 7u / 8u;
+    c = j > c ? j : c;                              /* (the joystick: down to ~110, never silent) */
     int32_t g, a, *z = &lf_z[k][2u * s], *y = &mx_z[k][2u * s];
     if (!c) {
         z[0] = z[1] = 0;
@@ -1156,7 +1167,7 @@ static __attribute__((noinline)) void mix_spread(track_t *t, int32_t *b, uint32_
     int32_t gla = 4096 - (pa > 0 ? pa * 64 : 0), gra = 4096 + (pa < 0 ? pa * 64 : 0);
     int32_t glb = 4096 - (pb > 0 ? pb * 64 : 0), grb = 4096 + (pb < 0 ? pb * 64 : 0);
     int32_t glm = (gla + glb) >> 1, grm = (gra + grb) >> 1, gld = (gla - glb) >> 1, grd = (gra - grb) >> 1;
-    int32_t c = t->p[P_CHOR] * 258, dl = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+    int32_t c = t->p[P_CHOR] * 258, dl = joy_send(t, t->p[P_DLY] * 258), r = joy_send(t, t->p[P_REV] * 258), pk = t->peak;
     int32_t xmax = c > dl ? c : dl;
     xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);
     for (i = 0; i < n; i++)
@@ -1408,7 +1419,7 @@ static void mix_part(track_t *t, uint32_t n SM_DECL)
                                                          * them, no spill in the loop: the ISR's cost as before 1.5) */
         int32_t lvl = trk_lvl(t), pan = t->p[P_PAN];
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
-        int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+        int32_t c = t->p[P_CHOR] * 258, d = joy_send(t, t->p[P_DLY] * 258), r = joy_send(t, t->p[P_REV] * 258), pk = t->peak;
         int32_t xmax;
         uint32_t tp = send_taps(t);
         if (tp) {                                       /* (Dah: the sends placed in the chain: taken there) */

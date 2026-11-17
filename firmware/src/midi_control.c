@@ -375,6 +375,13 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         return;
     }
     switch (cc) {
+    case 2:                                        /* (Dah) a joystick's two axes (fx.c joy_lp joy_snd) */
+    case 12:
+        mask = midi_targets(ch);
+        for (i = 0; i < NTRK; i++)
+            if (mask & (1u << i))
+                (cc == 12u ? joy_lp : joy_snd)[i] = (uint8_t)value;
+        break;
     case 1:
         c->wheel = (uint8_t)value;
         mask = midi_targets(ch);                   /* (Dah) the vibrato's depth (voice.c vib_q8) */
@@ -406,7 +413,7 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
         mask = midi_targets(ch);
         for (i = 0; i < NTRK; i++)
             if (mask & (1u << i))
-                midi_vib[i] = 0;
+                midi_vib[i] = joy_lp[i] = joy_snd[i] = 0;
         c->rpn_msb = c->rpn_lsb = 127;
         midi_expression_channel(ch);
         midi_pedal_up(ch);
@@ -467,6 +474,8 @@ static void __attribute__((noinline)) midi_route_block(void)
                 midi_release(ch, note);
         c->pedal = c->wheel = 0;
         memset(midi_vib, 0, sizeof midi_vib);
+        memset((void *)joy_lp, 0, sizeof joy_lp);
+        memset((void *)joy_snd, 0, sizeof joy_snd);
         c->bend = 0;
         c->rpn_msb = c->rpn_lsb = 127;
     }
