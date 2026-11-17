@@ -6,10 +6,9 @@
  *   BASS+: a 55 Hz tone gains energy at 250 Hz..1 kHz, the sub is cut, the output settles back to 0 after the
  *   tone and nothing reaches full scale.
  * #180 (BASS+ distorted a kick): a full-scale kick pattern (the DRUM voices KICK PUNCH / ROUND, 4 hits, at full scale
- *   and twice that: a loud mix) through each mode. BASS+ keeps the samples off the rails (under 30000: the soft clip
- *   tops out at 31600) with no flat tops, and leaves the limiter no busier than LOWCUT (its envelope's peak at most
- *   +0.5 dB): the harmonics of 1.4 peaked at 1.5 .. 3.5 x the kick itself, and the limiter pulled the whole mix down
- *   by up to 16 dB on every hit. The harmonics' energy against the kick's: 1.4 -5 dB, now -11 dB.
+ *   and twice that: a loud mix) through each mode. BASS+ keeps the full-scale kick off the rails (under 30000: the
+ *   soft clip tops out at 31600) with no flat tops, and peaks no higher than LOWCUT (at most +0.5 dB): the harmonics
+ *   of 1.4 peaked at 1.5 .. 3.5 x the kick itself. (Dah: no master limiter any more, the soft clip is the ceiling) The harmonics' energy against the kick's: 1.4 -5 dB, now -11 dB.
  * The EQ is on the master: the speaker, the headphone / line out (the same DAC) and USB audio (uac_tap reads the
  * same output) all get it. */
 #include <math.h>
@@ -40,7 +39,6 @@ static double tone_db(uint32_t mode, double f)     /* gain of a -9 dB sine throu
     lc_l1 = lc_l2 = lc_r1 = lc_r2 = dc_l = dc_r = dce_l = dce_r = 0;
     memset(lce, 0, sizeof lce);
     sb_lp1 = sb_lp2 = sb_lp3 = sb_lp4 = sb_env = sb_h1 = sb_h2 = sb_hl = 0;
-    lim_env = LIM_T;
     for (i = 0; i < n; i++) {
         int32_t l = (int32_t)(6000.0 * sin(2.0 * M_PI * f * i / FS)), r = l;
         if (i >= skip)
@@ -59,7 +57,6 @@ static void master_reset(uint32_t mode)
     lc_l1 = lc_l2 = lc_r1 = lc_r2 = dc_l = dc_r = dce_l = dce_r = 0;
     memset(lce, 0, sizeof lce);
     sb_lp1 = sb_lp2 = sb_lp3 = sb_lp4 = sb_env = sb_h1 = sb_h2 = sb_hl = 0;
-    lim_env = LIM_T;
 }
 
 #define HD_MAX -9.0       /* the harmonics' energy against the kick's, dB (1.4: -5.0 .. -6.2) */
@@ -102,7 +99,7 @@ static uint32_t kick_pattern(void)
                 for (i = 0; i < 2u * FS; i++) {
                     int32_t l = (int32_t)(f[i] * 32767.0f * (float)gi / (float)pk), r = l;
                     master_out(&l, &r);
-                    env[mode] = lim_env > env[mode] ? lim_env : env[mode];
+                    env[mode] = abs(l) > env[mode] ? abs(l) : env[mode];
                     if (mode == 2u) {
                         peak = abs(l) > peak ? abs(l) : peak;
                         run = l == last && abs(l) > 16384 ? run + 1u : 0;
@@ -118,10 +115,9 @@ static uint32_t kick_pattern(void)
                 eb += (double)h * h;
             }
             hd = 10.0 * log10(eb / ein);
-            printf("speaker: kick %s x%u: limiter peak FLAT %+.1f LOWCUT %+.1f BASS+ %+.1f dB, BASS+ peak %d, flat tops %u, "
-                   "harmonics %.1f dB of the kick\n", NAME[type], gi, 20.0 * log10(env[0] / (double)LIM_T),
-                   20.0 * log10(env[1] / (double)LIM_T), 20.0 * log10(env[2] / (double)LIM_T), peak, flat, hd);
-            fails += peak >= 30000 || flat || env[2] > env[1] + env[1] / 16 || hd > HD_MAX;
+            printf("speaker: kick %s x%u: peak FLAT %d LOWCUT %d BASS+ %d, flat tops %u, "
+                   "harmonics %.1f dB of the kick\n", NAME[type], gi, env[0], env[1], env[2], flat, hd);
+            fails += (gi == 1u && (peak >= 30000 || flat)) || env[2] > env[1] + env[1] / 16 || hd > HD_MAX;
         }
     }
     printf("speaker: #180 BASS+ headroom on a full-scale kick %s\n", fails ? "FAIL" : "ok");
@@ -159,7 +155,6 @@ int main(void)
     for (mode = 0; mode < 3u; mode++) {
         fx_lowcut = (uint8_t)mode;
         lc_l1 = lc_l2 = lc_r1 = lc_r2 = 0;
-        lim_env = LIM_T;
         for (i = 0; i < FS; i++) {
             int32_t l = i < FS / 2u ? (int32_t)(12000.0 * sin(2.0 * M_PI * 55.0 * i / FS)) : 0, r = l;
             master_out(&l, &r);

@@ -68,7 +68,6 @@ static void fresh(uint32_t e, uint32_t pi)        /* the boot state (no FX tails
     for (k = 0; k < NTRK; k++)
         pf.mg[k] = 32768;
     perf_held = perf_latched = 0;
-    lim_env = LIM_T;
     dc_l = dc_r = dce_l = dce_r = 0;                      /* (the master's DC blockers: no residue of a run before) */
     vage = 0;                                             /* the seeds: every run the same (ANALOG's noise by age) */
     rng_state = 0x1234567u;

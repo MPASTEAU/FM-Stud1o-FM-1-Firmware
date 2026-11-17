@@ -183,11 +183,6 @@ static void track_dist(track_t *t, int32_t *b, uint32_t n)
     t->dist_hp = st[0]; t->dist_lp1 = st[1]; t->dist_lp2 = st[2];
 }
 
-/* master: peak limiter in front of the soft clipper. Fast attack (~0.1 ms),
- * ~150 ms release, threshold where tanh is still nearly linear, so chords
- * get quieter instead of crushed. */
-#define LIM_T 18000
-static int32_t lim_env = LIM_T;
 /* MENU > USB LEVEL FIXED (for #42: record over USB with the speaker turned down): the mix goes to master_out at the
  * full MASTER level, USB audio takes that (audio.c uac_tap), and only then does MASTER scale what the DAC gets
  * (usb_fixed_dac). MASTER (0, the default): MASTER before master_out, as always (USB follows the knob) */
@@ -262,7 +257,6 @@ static inline int32_t spk_bass(int32_t m)
 
 static inline void master_out(int32_t *l, int32_t *r)
 {
-    int32_t al, ar, a;
     *l = dc_block(*l, &dc_l, &dce_l);
     *r = dc_block(*r, &dc_r, &dce_r);
     if (fx_lowcut) {                  /* two one-pole high-passes, error feedback as dc_block (the */
@@ -273,20 +267,8 @@ static inline void master_out(int32_t *l, int32_t *r)
         *r = lowcut1(*r, &lc_r1, &lce[2], sh);
         *r = lowcut1(*r, &lc_r2, &lce[3], sh) + b;
     }
-    al = *l < 0 ? -*l : *l;
-    ar = *r < 0 ? -*r : *r;
-    a = al > ar ? al : ar;
-    if (a > lim_env)
-        lim_env += (a - lim_env) >> 2;
-    else if (lim_env > LIM_T)
-        lim_env -= ((lim_env - LIM_T) >> 12) + 1;
-    if (lim_env > LIM_T) {
-        int32_t g = (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)lim_env);   /* < 32768 */
-        *l = ((*l >> 4) * g) >> 11;                      /* >> 4 first: |l| may be far above Q15 */
-        *r = ((*r >> 4) * g) >> 11;
-    }
-    *l = softclip(*l);
-    *r = softclip(*r);
+    *l = softclip(*l);                /* (Dah) no limiter: its 0.1 ms attack cut a loud bass's every crest flat at */
+    *r = softclip(*r);                /* -6 dBFS, heard as a crackle. The tanh alone, the ceiling: round, no corner */
 }
 
 /* length of one division (N_DIV order) in samples at the song tempo */
@@ -1591,14 +1573,14 @@ static uint32_t mix_split(void)
 }
 #endif
 
-/* the mix and the returns the same value all through the block, each DC blocker settled on it (it gives 0), the
- * limiter at rest (the steps' remainders hold with 0 in), no LOWCUT nor BASS+: master_out would give 0 and stay as it
+/* the mix and the returns the same value all through the block, each DC blocker settled on it (it gives 0, the
+ * steps' remainders hold with 0 in), no LOWCUT nor BASS+: master_out would give 0 and stay as it
  * is. 1: so */
 static __attribute__((noinline)) int out_still(uint32_t n, int32_t mg)
 {
     uint32_t i;
-    int32_t l = mix_l[0] + wet[0], r = mix_r[0] + wet[0], a = lim_env - LIM_T;
-    a |= dc_l - ((((l >> 2) * mg) >> 10) << 6) | (dc_r - ((((r >> 2) * mg) >> 10) << 6));
+    int32_t l = mix_l[0] + wet[0], r = mix_r[0] + wet[0], a;
+    a = dc_l - ((((l >> 2) * mg) >> 10) << 6) | (dc_r - ((((r >> 2) * mg) >> 10) << 6));
     if (fx_lowcut)
         return 0;                                       /* (LOWCUT, BASS+: their states not checked, run) */
     for (i = 1; i < n && !a; i++)
