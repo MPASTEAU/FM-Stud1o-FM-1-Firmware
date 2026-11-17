@@ -674,6 +674,7 @@ static void test_resampler(void)
 /* ------------------------------------------------------------------ the ring at 48 kHz --- */
 static uint64_t k48, n0_48;
 static uint32_t bad48, zero48;
+static int32_t prev48;
 
 static void on_prime(void)
 {
@@ -706,9 +707,12 @@ static void take_packet48(void)
             k48 += from;
             continue;
         }
-        if (abs(l - s16r(ref_out(k48 - UA_PRIME48, ring_x, 0))) > 1 ||
-            abs(r - s16r(ref_out(k48 - UA_PRIME48, ring_xr, 0))) > 1)
+        /* (Dah) the rate follows the ring (rs_steer), not a fixed 160 / 147: the ramp in, a ramp out of slope
+         * ~0.92, each step 0 or 1 (2 at most); a lost or repeated stretch would jump. Not across its wrap */
+        if (k48 > UA_PRIME48 + UAC_FIR_N && abs(l) < 30000 && abs(prev48) < 30000 &&
+            (l - prev48 < 0 || l - prev48 > 2 || (int16_t)~(uint16_t)l != r))
             bad48++;
+        prev48 = l;
         k48++;
     }
 }
@@ -732,20 +736,20 @@ static void test_ring48(void)
     for (i = sum = 0; i < 64u; i++)
         sum += sizes[i] * i;
     mean = (double)sum / npk;
-    snprintf(s, sizeof s, "48 kHz, 10 s, random render times: sizes 47..49 (48:%u 49:%u 47:%u), mean %.4f", sizes[48],
-             sizes[49], sizes[47], mean);
-    check(s, sizes[47] + sizes[48] + sizes[49] == npk && mean > 48.0 && mean < 48.05);
-    snprintf(s, sizeof s, "  every frame = the resampled render, in order (%u off); no underrun / overrun", bad48);
+    snprintf(s, sizeof s, "48 kHz, 10 s, random render times: every packet 48 frames (%u of %u), the rate trimmed "
+             "%+.0f ppm", sizes[48], npk, rs.integ / 8 / 65536.0 / UAC_FIR_M * 1e6);
+    check(s, sizes[48] == npk && rs.integ / 8 > 3000 && rs.integ / 8 < 4700);   /* (I2S 400 ppm fast: 3855) */
+    snprintf(s, sizeof s, "  every frame the resampled render, in order (%u off); no underrun / overrun", bad48);
     check(s, bad48 == 0 && uac.underruns + uac.overruns == base_p);
     snprintf(s, sizeof s, "  fill at render start %u..%u (band %u..%u), adj up %u down %u (I2S %.1f Hz: fast)",
              uac.fill_lo, uac.fill_hi, UA_LO48, UA_HI48, uac.adj_up, uac.adj_down, FS_DEV);
-    check(s, uac.fill_lo >= UA_MAXF && uac.fill_hi + UA_REND48 <= UA_N && uac.adj_up > uac.adj_down);
+    check(s, uac.fill_lo >= UA_MAXF && uac.fill_hi + UA_REND48 <= UA_N && uac.adj_up + uac.adj_down == 0);
     for (i = 0; i < 1000u; i++)
         run(1, REND_MAX, 1, 1);
     snprintf(s, sizeof s, "  1000 packets, %.1f ms renders: no glitch", REND_MAX / 1e6);
     check(s, bad48 == 0 && uac.underruns + uac.overruns == base_p);
 
-    /* a slow I2S clock: the ring drains, packets one frame shorter now and then */
+    /* a slow I2S clock: the resampler's rate trimmed the other way */
     fs_dev = 44085.0;
     uac_stream(1);
     uac.flowing = 1;
@@ -759,9 +763,9 @@ static void test_ring48(void)
     for (i = sum = 0; i < 64u; i++)
         sum += sizes[i] * i;
     mean = (double)sum / npk;
-    snprintf(s, sizeof s, "48 kHz, I2S %.0f Hz (slow): mean %.4f, adj up %u down %u, no glitch", FS_DEV, mean,
-             uac.adj_up, uac.adj_down);
-    check(s, mean < 48.0 && mean > 47.95 && uac.adj_down > uac.adj_up && bad48 == 0 &&
+    snprintf(s, sizeof s, "48 kHz, I2S %.0f Hz (slow): mean %.4f, adj up %u down %u, trim %+.0f ppm, no glitch", FS_DEV,
+             mean, uac.adj_up, uac.adj_down, rs.integ / 8 / 65536.0 / UAC_FIR_M * 1e6);
+    check(s, mean == 48.0 && uac.adj_up + uac.adj_down == 0 && rs.integ / 8 < 0 && bad48 == 0 &&
                  uac.underruns + uac.overruns == base_p);
     fs_dev = 44117.6;
 

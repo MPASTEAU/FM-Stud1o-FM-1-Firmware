@@ -55,7 +55,7 @@ static uint8_t ep2tx[8] __attribute__((aligned(4)));
 static uint8_t ep3tx[64] __attribute__((aligned(4)));
 static uint8_t ep3rx[64 + 4] __attribute__((aligned(4)));
 /* serial rings: in = host -> console (ISR writes), out = console -> host (ISR reads) */
-#define CI_N 256u
+#define CI_N 128u
 #define CO_N 256u                /* (a full ring waits for the host: console.c con_putc) */
 static uint8_t cdc_in[CI_N], cdc_out[CO_N];
 static volatile uint32_t ci_w, ci_r, co_w, co_r;
@@ -129,6 +129,7 @@ static struct {
     int16_t l[2u * RS_H], r[2u * RS_H];   /* r right after l (the FIR loop reads both from one pointer) */
     uint32_t w;                  /* input frames written */
     uint32_t ph;                 /* the next output's phase, 0..159 (its newest input frame: the next written) */
+    int32_t trim, acc, integ;    /* (Dah) the rate held to the host's: trim, Q16 phase steps added per output */
 #if FELUCCA_UAC_TONE
     uint32_t tone;
 #endif
@@ -1009,6 +1010,22 @@ static void ep3_tx(void)                                /* <= 63 bytes per packe
 #endif
 
 #if FELUCCA_UAC
+#if FELUCCA_UAC_48K
+/* (Dah) 48 kHz: the packets are 48 frames, the host's rate exactly, and the resampler's rate follows the ring's
+ * fill instead (a PI loop, once a render): the I2S clock runs ~400 ppm fast (44,117.6 Hz), so the stream was
+ * 48,019 frames a second; a Mac took that, an Android phone dropped 1 ms packets every few seconds (clicks).
+ * trim: phase steps (1/160 input frame) added per output, Q16: + slower. Starts at the 400 ppm (0.0588) */
+#define RS_MID ((UA_LO48 + UA_HI48) / 2u)
+#define RS_INTEG0 30840                 /* trim = integ / 8: 3855, 0.0588 */
+static __attribute__((noinline)) void rs_steer(int32_t fill)
+{
+    int32_t e = fill - (int32_t)RS_MID, t;
+    t = rs.integ + e;
+    rs.integ = t > (1 << 20) ? 1 << 20 : t < -(1 << 20) ? -(1 << 20) : t;
+    t = e * 384 + rs.integ / 8;
+    rs.trim = t > 32768 ? 32768 : t < -32768 ? -32768 : t;   /* (+-0.5 step: +-3400 ppm) */
+}
+#endif
 /* ---- the audio input: audio.c produces (render start, then each block), TIMER5 consumes ---- */
 static __attribute__((noinline)) void uac_render_start(void)   /* audio ISR, before a half buffer renders */
 {
@@ -1028,6 +1045,9 @@ static __attribute__((noinline)) void uac_render_start(void)   /* audio ISR, bef
             for (i = 0; i < 2u * RS_H; i++)
                 rs.l[i] = rs.r[i] = 0;
             rs.w = rs.ph = 0;
+            rs.acc = 0;
+            rs.integ = RS_INTEG0;
+            rs.trim = RS_INTEG0 / 8;
         }
 #endif
         for (i = 0; i < prime; i++)
@@ -1041,6 +1061,10 @@ static __attribute__((noinline)) void uac_render_start(void)   /* audio ISR, bef
     }
     fill = ua_w - ua_r;
     uac.fill_min = fill;
+#if FELUCCA_UAC_48K
+    if (uac.ring48)
+        rs_steer((int32_t)fill);
+#endif
     if (fill < uac.fill_lo)
         uac.fill_lo = fill;
     if (fill > uac.fill_hi)
@@ -1101,6 +1125,14 @@ static __attribute__((noinline)) void uac_tap48(const int32_t *out, uint32_t n)
 #endif
             ua_ring[(w + k++) & (UA_N - 1u)] = (uint32_t)(uint16_t)yl | (uint32_t)(uint16_t)yr << 16;
             ph += UAC_FIR_M;
+            rs.acc += rs.trim;
+            if (rs.acc >= 65536) {
+                rs.acc -= 65536;
+                ph++;
+            } else if (rs.acc <= -65536) {
+                rs.acc += 65536;
+                ph--;
+            }
         } while (ph < UAC_FIR_L);
         ph -= UAC_FIR_L;
     }
@@ -1170,6 +1202,12 @@ static uint32_t uac_packet(uint32_t *d)
             d[i] = 0;
         return n;
     }
+#if FELUCCA_UAC_48K
+    if (uac.r48) {                                      /* (the resampler holds the fill: only far out of */
+        hi += 300u;                                     /* its band, a frame more or less) */
+        lo -= 60u;
+    }
+#endif
     if (uac.fill_min > hi) {
         n++;
         uac.adj_up++;
