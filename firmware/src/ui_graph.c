@@ -3066,27 +3066,63 @@ static void rack_spare(uint32_t c)
 }
 /* (Dah) the step ruler over the rows, the selected track's view: on top the whole track (a line) with the window shown
  * on it (a bar: where the view is, how much of it) and the step playing (a mark); under it a tick a step, longer a
- * beat; the step playing's number (the accent) over its column, nothing else written */
+ * beat; the step playing's number (the accent) over its column, nothing else written.
+ * (Dah) A longer pattern on another track (the phrase: 128 steps beside 16s): the line on top is it instead, a tick
+ * every 16 of its steps, how far it has played (a bar from its start) and its step playing (a mark); its step and its
+ * length at the right end ("97 | 128", where the step's number leaves room) */
+static uint32_t rk_phrase(const track_t **lt)          /* the longest pattern of the tracks on one */
+{
+    uint32_t c, n = trk_count(), best = 0, l;
+    *lt = 0;
+    for (c = 0; c < n && c < NTRK; c++) {
+        if ((seq_off >> c) & 1u && !chain.running)
+            continue;
+        l = (uint32_t)clamp(trk[c].p[P_SLEN], 1, LEN_MAX);
+        if (l > best)
+            best = l, *lt = &trk[c];
+    }
+    return best;
+}
 static void rack_ruler(void)
 {
     static uint32_t rsig;
-    const track_t *t = &trk[rk_sel() >= 0 ? (uint32_t)rk_sel() : 0u];
+    const track_t *t = &trk[rk_sel() >= 0 ? (uint32_t)rk_sel() : 0u], *lt;
     uint32_t p0, ph, i, nc = hv_cols(), len = (uint32_t)clamp(t->p[P_SLEN], 1, LEN_MAX), sig, vn;
-    int32_t x0, x1;
-    char b[4];
+    uint32_t pl = rk_phrase(&lt), pi = 0xFFFFu;
+    int32_t x0, x1, pw = 0;
+    char b[4], pb[12];
     rk_view(t, 1, &p0, &ph);
-    sig = p0 * 7u + ph * 131u + nc * 4099u + len * 104729u + (uint32_t)graph_y() * 3u + ux.gen;
+    if (pl <= len)
+        pl = 0;                                        /* (the selected track is the phrase: as before) */
+    else if (song.playing)
+        pi = lt->seq_idx % pl;
+    sig = p0 * 7u + ph * 131u + nc * 4099u + len * 104729u + (uint32_t)graph_y() * 3u + ux.gen + pl * 2246822519u +
+          pi * 3266489917u;
     if (!ui.force && sig == rsig)
         return;
     rsig = sig;
     cv_begin(TR_W, RK_RH, T_BG);
-    vn = p0 + nc < len ? nc : len - p0;                /* the overview: the track, the window on it */
     cv_rect(RK_SX, 1, RK_SW, 1, T_LINE);
-    x0 = RK_SX + (int32_t)p0 * RK_SW / (int32_t)len;
-    x1 = RK_SX + (int32_t)(p0 + vn) * RK_SW / (int32_t)len;
-    cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
-    if (ph != 0xFFu)
-        cv_rect(RK_SX + (int32_t)(p0 + ph) * RK_SW / (int32_t)len, 0, 2, 3, T_ACCENT);
+    if (pl) {                                          /* the phrase: its bars of 16, played so far, its step playing */
+        for (i = 16u; i < pl; i += 16u)
+            cv_rect(RK_SX + (int32_t)i * RK_SW / (int32_t)pl, 0, 1, 3, T_LINE);
+        if (pi != 0xFFFFu) {
+            x1 = RK_SX + (int32_t)pi * RK_SW / (int32_t)pl;
+            if (x1 > RK_SX)
+                cv_rect(RK_SX, 1, x1 - RK_SX, 1, T_MID);
+            cv_rect(x1, 0, 2, 3, T_ACCENT);
+            fmt_int(pb, (int32_t)pi + 1);              /* "97 | 128" (a "/" falls under the line: cut) */
+            fmt_int(pb + 6, (int32_t)pl);
+            pw = text_w(&AF_S, pb) + 7 + text_w(&AF_S, pb + 6);
+        }
+    } else {
+        vn = p0 + nc < len ? nc : len - p0;            /* the overview: the track, the window on it */
+        x0 = RK_SX + (int32_t)p0 * RK_SW / (int32_t)len;
+        x1 = RK_SX + (int32_t)(p0 + vn) * RK_SW / (int32_t)len;
+        cv_rect(x0, 0, x1 - x0 > 2 ? x1 - x0 : 2, 3, T_MID);
+        if (ph != 0xFFu)
+            cv_rect(RK_SX + (int32_t)(p0 + ph) * RK_SW / (int32_t)len, 0, 2, 3, T_ACCENT);
+    }
     for (i = 0; i < nc && p0 + i < len; i++) {         /* the ticks */
         int32_t x = RK_SX + (int32_t)i * RK_SW / (int32_t)nc, beat = (p0 + i) % 4u == 0u;
         cv_rect(x, RK_RH - (beat ? 3 : 1), 1, beat ? 3 : 1, beat ? T_MID : T_LINE);
@@ -3101,6 +3137,15 @@ static void rack_ruler(void)
         x0 = clamp((cx2 - (ib[0] + ib[2])) / 2, 0, TR_W - w);
         cv_rect(x0 - 1, 4, w + 2, RK_RH - 4, T_BG);
         cv_text(x0, 4 - AF_S_CAP_Y, &AF_S, b, T_ACCENT);
+        if (pw && x0 + w + 6 > RK_SX + RK_SW - pw)
+            pw = 0;                                    /* (no room by the step's number: the phrase's left out) */
+    }
+    if (pw) {                                          /* (its right end the line's) */
+        x0 = RK_SX + RK_SW - pw;
+        cv_rect(x0 - 1, 4, pw + 1, RK_RH - 4, T_BG);
+        x0 = cv_text(x0, 4 - AF_S_CAP_Y, &AF_S, pb, T_MID) + 3;
+        cv_rect(x0, 5, 1, RK_RH - 7, T_LINE);
+        cv_text(x0 + 4, 4 - AF_S_CAP_Y, &AF_S, pb + 6, T_DIM);
     }
     cv_blit(3, graph_y());
 }

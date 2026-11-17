@@ -377,6 +377,10 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
     switch (cc) {
     case 1:
         c->wheel = (uint8_t)value;
+        mask = midi_targets(ch);                   /* (Dah) the vibrato's depth (voice.c vib_q8) */
+        for (i = 0; i < NTRK; i++)
+            if (mask & (1u << i))
+                midi_vib[i] = (uint8_t)value;
         break;
     case 120:                                      /* All Sound Off: ignores the pedal */
         mask = midi_targets(ch);
@@ -399,6 +403,10 @@ static void midi_control(uint32_t ch, uint32_t cc, uint32_t value)
     case 121:                                      /* Reset All Controllers, keep bend sensitivity */
         c->bend = 0;
         c->wheel = 0;
+        mask = midi_targets(ch);
+        for (i = 0; i < NTRK; i++)
+            if (mask & (1u << i))
+                midi_vib[i] = 0;
         c->rpn_msb = c->rpn_lsb = 127;
         midi_expression_channel(ch);
         midi_pedal_up(ch);
@@ -458,6 +466,7 @@ static void __attribute__((noinline)) midi_route_block(void)
             if (midi_notes[ch][note])
                 midi_release(ch, note);
         c->pedal = c->wheel = 0;
+        memset(midi_vib, 0, sizeof midi_vib);
         c->bend = 0;
         c->rpn_msb = c->rpn_lsb = 127;
     }

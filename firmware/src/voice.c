@@ -702,6 +702,24 @@ static __attribute__((noinline)) void spread_sum(int32_t *out)
 /* render one block of a part into out (cleared here); returns the voices rendered */
 /* Channel bend is live performance state, outside projects/presets. Q8 semitones. */
 static int32_t midi_bend_q8[NTRK], midi_bend_target[NTRK];
+/* (Dah) the mod wheel (MIDI IN CC1, its channel's tracks: midi_control.c) a vibrato: its depth 0..127 (+-50 cents at
+ * 127), ~5.5 Hz, a sine (a parabola) per track; not drums */
+#ifdef __MACH__                            /* (host tests: no Mach-O section of that name) */
+static uint8_t midi_vib[NTRK];
+static uint16_t vib_ph[NTRK];
+#else
+static uint8_t midi_vib[NTRK] __attribute__((section(".pool")));
+static uint16_t vib_ph[NTRK] __attribute__((section(".pool")));
+#endif
+#define VIB_INC ((uint32_t)(5.5 * 65536.0 * CTL / FS + 0.5))   /* a block's step of the phase */
+static __attribute__((noinline)) int32_t vib_q8(uint32_t ti, uint32_t n)   /* this block's, Q8 semitones */
+{
+    int32_t x;
+    vib_ph[ti] = (uint16_t)(vib_ph[ti] + VIB_INC * (n / CTL ? n / CTL : 1u));
+    x = (int32_t)vib_ph[ti] - 32768;
+    x = x * (32768 - (x < 0 ? -x : x)) / 8192;          /* -32768 .. 32768 */
+    return (x * midi_vib[ti]) >> 15;                    /* (+-127: half a semitone) */
+}
 static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
 {
     const engine_t *e = ENGINES[t->engine];
@@ -710,9 +728,12 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
     int32_t lfo = mulq15(t->lfo_val, t->lfo_fade);
     int32_t tune = 0, tune_fine = 0, bend, bend16 = 0, bend_fine = 0;
     uint32_t ti = (uint32_t)(t - trk), act = 0;
+    int32_t vib = 0;
     if (ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM) {
         midi_bend_q8[ti] = midi_bend_target[ti] = 0;
     } else {
+        if (midi_vib[ti])
+            vib = vib_q8(ti, n);
         int32_t d = midi_bend_target[ti] - midi_bend_q8[ti];
         /* ~6 ms smoothing, with an exact landing (no permanent small offset). */
         midi_bend_q8[ti] += d > 0 ? (d < 4 ? d : (d + 3) / 4) : (d > -4 ? d : (d - 3) / 4);
@@ -723,7 +744,7 @@ static uint32_t track_render(track_t *t, int32_t *out, uint32_t n)
         /* TUNE in cents: whole 1/16 semitones in the pitch, the rest as a fine factor (no dead zone) */
         tune = song.g[G_TUNE] >= 0 ? song.g[G_TUNE] * 16 / 100 : -((-song.g[G_TUNE] * 16 + 99) / 100);
         tune_fine = (song.g[G_TUNE] * 16 - tune * 100) * 2367 / 16000;   /* rest, in 1/4096 (1 ct = 2.367) */
-        bend = midi_bend_q8[ti];
+        bend = midi_bend_q8[ti] + vib;
         bend16 = bend >= 0 ? bend / 16 : -((-bend + 15) / 16);
         bend_fine = (bend - bend16 * 16) * 2367 / 2560;
     }
