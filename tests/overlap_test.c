@@ -390,6 +390,63 @@ static int t_replace(uint32_t len, uint32_t a, uint32_t b, int drum, int replace
     return check(what, ok);
 }
 
+/* (Dah) a note held over the loop's end (REC, LEN 8: pressed in step 1, let go in the next pass's step 4): step 1 plays
+ * it again at the wrap, and letting go of the key leaves the take's note to the loop's end (it cut it: silent till
+ * then). MONO: a pattern's note struck again while it sounds starts again (N T T T N T T T: four starts in two loops) */
+static uint32_t hw_r;
+static void hw_keys(uint32_t at)
+{
+    if (at_in(at, 0)) input_on(rt, NA, 100);
+    if (at_in(at, hw_r)) input_off(rt, NA);
+}
+static int t_wrap(void)
+{
+    track_t *t = setup(8);
+    uint32_t j, ons = 0, off = 0, bad = 0, vm;
+    char msg[160];
+    rt = t;
+    hw_r = 11;
+    play();
+    ev_start(t);
+    run(t, CTL, 0);
+    song.rec = 1;
+    blk_hook = hw_keys;
+    run(t, 16u * S - 2u * CTL, 1024u);
+    blk_hook = 0;
+    song.rec = 0;
+    for (j = 0; j < nev; j++)
+        if (ev[j].note == NA && ev[j].on)
+            ons++;
+        else if (ev[j].note == NA && !off)
+            off = ev[j].at;
+    stop(t);
+    pg_service();
+    snprintf(msg, sizeof msg, "held over the loop's end: started again at step 1 (%u starts), let go in the next pass: "
+             "the take's note on to the loop's end (first off at step %.1f)", ons, (double)off / S);
+    bad += check(msg, ons == 2u && !off);
+    for (vm = V_POLY; vm <= V_MONO; vm++) {
+        t = setup(8);
+        t->p[P_VOICE] = (int16_t)vm;
+        put(t, 0, NA);
+        put(t, 4, NA);
+        for (j = 1; j < 8u; j++)
+            if (j != 4u) {
+                step_t *x = ed_st(t, j);
+                memset(x, 0, sizeof *x);
+                x->time = ST_TIE;
+            }
+        play();
+        ev_start(t);
+        run(t, 16u * S, 1024u);
+        stop(t);
+        for (j = ons = 0; j < nev; j++)
+            ons += ev[j].note == NA && ev[j].on;
+        snprintf(msg, sizeof msg, "%s: N T T T N T T T, the same note: %u starts in two loops", vm ? "MONO" : "POLY", ons);
+        bad += check(msg, ons == 4u);
+    }
+    return bad;
+}
+
 int main(void)
 {
     int bad = 0;
@@ -401,6 +458,7 @@ int main(void)
     bad += t_project(16, 0);
     bad += t_project(128, 60);
     bad += t_mono();
+    bad += t_wrap();
     bad += t_replace(16, 2, 6, 0, 1);
     bad += t_replace(16, 2, 6, 0, 0);
     bad += t_replace(128, 100, 5, 0, 1);

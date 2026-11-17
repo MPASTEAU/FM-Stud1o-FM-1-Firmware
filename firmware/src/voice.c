@@ -462,8 +462,10 @@ static void trk_note_on(track_t *t, uint32_t note, uint32_t vel)
             mono_remove(t, t->mono_stack[0]);
         t->mono_stack[t->nmono++] = (uint8_t)note;
         want = mono_pick(t);
-        if (sounding && want == t->mono_note)
-            return;                                     /* LOW / HIGH priority: this key does not win */
+        if (sounding && want == t->mono_note && want != note)
+            return;                                     /* LOW / HIGH priority: this key does not win (Dah: the note
+                                                     * sounding struck again does: MONO starts it again, the loop's
+                                                     * step 1 after its last step tied on) */
         if (mode == V_MONO)                             /* MONO: always retrigger, glide when GLIDE is set */
             mono_play(t, want, vel, 1, t->p[P_GLIDE] != 0 || t->slide_glide);
         else                                            /* LEGATO / UNISON: glide only between held notes */

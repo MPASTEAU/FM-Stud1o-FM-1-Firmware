@@ -1050,6 +1050,19 @@ static void input_on(track_t *t, uint32_t note, uint32_t vel)
 
 static int midi_note_held(const track_t *t, uint32_t note);
 static int midi_local_held(const track_t *t, uint32_t note);
+/* (Dah) the pattern plays note on track t now (its step's notes, not through the ARP): a key of that note let go
+ * leaves it to the pattern (a note held over the loop's end, recorded, played again from step 1: let go in that pass,
+ * it cut the take's own note, silent to the loop's end) */
+static __attribute__((noinline)) int seq_sounds(const track_t *t, uint32_t note)
+{
+    uint32_t i;
+    if (!song.playing || t->p[P_AMODE])
+        return 0;
+    for (i = 0; i < t->seq_n && i < 4u; i++)
+        if (t->seq_notes[i] == note)
+            return 1;
+    return 0;
+}
 static void input_off(track_t *t, uint32_t note)
 {
     if (midi_note_held(t, note))
@@ -1062,7 +1075,8 @@ static void input_off(track_t *t, uint32_t note)
     }
     rec_release(t, note);
     arp_remove(t, note);                            /* both: the note may have started in the */
-    trk_note_off(t, note);                          /* other mode (ARP switched while held) */
+    if (!seq_sounds(t, note))                       /* other mode (ARP switched while held) */
+        trk_note_off(t, note);
 }
 
 /* the effect of key k in the FX layer (PF_N none): the white keys F3 .. G5 the map's (perf_map: the settings,
